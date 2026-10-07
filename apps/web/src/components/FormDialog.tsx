@@ -1,0 +1,53 @@
+import { useState } from 'react';
+import { Dialog } from './Dialog';
+import { FormFields, createInitialValues, type FormField } from './FormFields';
+import { ErrorNotice } from './Feedback';
+import { useMutation } from '../hooks/useMutation';
+import { text } from '../i18n/catalog';
+import type { FormValues } from '../lib/formValues';
+
+export function FormDialog<T>({
+  title,
+  fields,
+  onSubmit,
+  onSaved,
+  onClose,
+  submitLabel = text.save,
+}: {
+  title: string;
+  fields: FormField[];
+  onSubmit: (values: FormValues) => Promise<T>;
+  onSaved: (value: T) => void;
+  onClose: () => void;
+  submitLabel?: string;
+}) {
+  const [values, setValues] = useState(() => createInitialValues(fields));
+  const mutation = useMutation();
+  return (
+    <Dialog title={title} onClose={onClose} busy={mutation.pending}>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void mutation
+            .run(async () => ({ saved: await onSubmit(values) }))
+            .then((saved) => {
+              if (saved) onSaved(saved.saved);
+            });
+        }}
+      >
+        <fieldset disabled={mutation.pending}>
+          <FormFields fields={fields} values={values} onChange={setValues} />
+        </fieldset>
+        <ErrorNotice message={mutation.error} />
+        <footer>
+          <button type="button" className="button" onClick={onClose} disabled={mutation.pending}>
+            {text.cancel}
+          </button>
+          <button className="button primary" disabled={mutation.pending}>
+            {mutation.pending ? text.loading : submitLabel}
+          </button>
+        </footer>
+      </form>
+    </Dialog>
+  );
+}

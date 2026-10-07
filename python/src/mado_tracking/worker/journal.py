@@ -1,0 +1,88 @@
+"""Private worker snapshots and acknowledged log cursors survive worker restart."""
+
+from __future__ import annotations
+
+import fcntl
+import os
+from pathlib import Path
+from typing import Any, TextIO
+
+from ..errors import ConfigurationError
+from .contracts import WorkerJob
+from .host_state import read_json, write_json
+
+
+def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
+    return {
+        "job": job.job,
+        "run": job.run,
+        "target": job.target,
+        "codeVersion": job.code_version,
+        "modelVersion": job.model_version,
+        "inputDatasets": job.input_datasets,
+    }
+
+
+class JobJournal:
+    def __init__(self, directory: Path):
+        self.directory = directory
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if directory.is_symlink():
+            raise ConfigurationError("Worker state directory must not be a symlink")
+        directory.chmod(0o700)
+        self.lock: TextIO | None = None
+
+    def acquire_worker_lock(self) -> None:
+        self.lock = (self.directory / "worker.lock").open("a")
+        try:
+            fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self.lock.close()
+            self.lock = None
+            raise ConfigurationError("Another worker already owns this state directory") from None
+
+    def close(self) -> None:
+        if self.lock is not None:
+            self.lock.close()
+            self.lock = None
+
+    def save(
+        self,
+        job: WorkerJob,
+        *,
+        offsets: dict[str, int] | None = None,
+        step: int = 0,
+        completion: dict[str, Any] | None = None,
+    ) -> None:
+        write_json(
+            self.directory / f"{job.id}.json",
+            {
+                "snapshot": snapshot_payload(job),
+                "offsets": offsets or {"stdout": 0, "stderr": 0},
+                "step": step,
+                "completion": completion,
+            },
+        )
+
+    def load(self, job_id: str) -> dict[str, Any]:
+        path = self.directory / f"{job_id}.json"
+        return read_json(path) if path.exists() else {"offsets": {"stdout": 0, "stderr": 0}, "step": 0}
+
+    def pending(self) -> list[WorkerJob]:
+        return [WorkerJob.parse(read_json(path)["snapshot"]) for path in self.directory.glob("*.json")]
+
+    def forget(self, job_id: str) -> None:
+        (self.directory / f"{job_id}.json").unlink(missing_ok=True)
+
+    def record_rejection(self, job: WorkerJob) -> None:
+        write_json(
+            self.directory / f"{job.id}.rejected",
+            {"jobId": job.id, "reason": "Lease rejected; no new execution was started"},
+        )
+        self.forget(job.id)
+
+    def archive_path(self, job_id: str) -> Path:
+        path = self.directory / f"{job_id}.source"
+        descriptor = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+        os.close(descriptor)
+        return path
