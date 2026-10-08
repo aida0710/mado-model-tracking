@@ -563,6 +563,77 @@ describe.skipIf(!testDatabaseUrl)('MLflow Artifact転送（隔離PostgreSQL）',
     expect(await download.text()).toBe('backend');
   });
 
+  it('SDKが送った音声のContent-Typeを全体取得・Rangeの206・nativeのinline表示で保つ', async () => {
+    const fixture = await artifactFixture(harness);
+    const wave = pcmWaveBytes(64);
+    // Python's mimetypes reports audio/x-wav for .wav; the official SDK sends that value as is.
+    for (const [path, mimeType] of [
+      ['audio/sample.wav', 'audio/x-wav'],
+      ['audio/sample.flac', 'audio/flac'],
+    ] as const) {
+      const url = transferUrl(fixture.mlflowPath, fixture.runRoot, path);
+      expect(
+        (
+          await request(fixture.app, url, {
+            method: 'PUT',
+            cookie: fixture.editor.cookie,
+            binary: wave,
+            headers: { 'Content-Type': mimeType },
+          })
+        ).status,
+      ).toBe(200);
+      const whole = await request(fixture.app, url, { cookie: fixture.viewer.cookie });
+      expect(whole.status).toBe(200);
+      expect(whole.headers.get('Content-Type')).toBe(mimeType);
+      expect(Buffer.from(await whole.arrayBuffer()).equals(wave)).toBe(true);
+      const header = await request(fixture.app, url, {
+        cookie: fixture.viewer.cookie,
+        headers: { Range: 'bytes=0-11' },
+      });
+      expect(header.status).toBe(206);
+      expect(header.headers.get('Content-Type')).toBe(mimeType);
+      expect(header.headers.get('Content-Range')).toBe(`bytes 0-11/${wave.length}`);
+      expect(Buffer.from(await header.arrayBuffer()).equals(wave.subarray(0, 12))).toBe(true);
+    }
+    const {
+      rows: [stored],
+    } = await harness.database.query<{ id: string }>(
+      "SELECT id FROM artifacts WHERE path='audio/sample.wav'",
+    );
+    const nativeUrl = `${fixture.basePath}/artifacts/${stored!.id}/content`;
+    const preview = await request(harness.app, nativeUrl, {
+      cookie: fixture.viewer.cookie,
+      headers: { Range: 'bytes=44-' },
+    });
+    expect(preview.status).toBe(206);
+    expect(preview.headers.get('Content-Type')).toBe('audio/x-wav');
+    expect(preview.headers.get('Content-Disposition')).toMatch(/^inline;/);
+    expect(preview.headers.get('Content-Range')).toBe(`bytes 44-${wave.length - 1}/${wave.length}`);
+  });
+
+  it('汎用のContent-Typeで送った音声は拡張子からaudio/flacとaudio/wavを推定する', async () => {
+    const fixture = await artifactFixture(harness);
+    // MLflow falls back to application/octet-stream when the client's mimetypes table lacks .flac.
+    for (const [path, inferred] of [
+      ['fallback/sample.flac', 'audio/flac'],
+      ['fallback/sample.wav', 'audio/wav'],
+    ] as const) {
+      const url = transferUrl(fixture.mlflowPath, fixture.runRoot, path);
+      await request(fixture.app, url, {
+        method: 'PUT',
+        cookie: fixture.editor.cookie,
+        binary: pcmWaveBytes(16),
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+      const ranged = await request(fixture.app, url, {
+        cookie: fixture.viewer.cookie,
+        headers: { Range: 'bytes=-4' },
+      });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get('Content-Type')).toBe(inferred);
+    }
+  });
+
   it('multipart uploadのmpu/create・complete・abortは公式SDKがPUTへ戻る501を返す', async () => {
     const fixture = await artifactFixture(harness);
     // Copied from mlflow.exceptions._UnsupportedMultipartUploadException.MESSAGE on purpose:
@@ -589,3 +660,25 @@ describe.skipIf(!testDatabaseUrl)('MLflow Artifact転送（隔離PostgreSQL）',
     expect(anonymous.status).toBe(401);
   });
 });
+
+/** A 16-bit mono PCM WAV with a canonical 44-byte header, so Range offsets match real files. */
+function pcmWaveBytes(sampleCount: number): Uint8Array<ArrayBuffer> {
+  const dataSize = sampleCount * 2;
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0, 'ascii');
+  header.writeUInt32LE(36 + dataSize, 4);
+  header.write('WAVEfmt ', 8, 'ascii');
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(16000, 24);
+  header.writeUInt32LE(32000, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36, 'ascii');
+  header.writeUInt32LE(dataSize, 40);
+  const samples = Buffer.alloc(dataSize);
+  for (let index = 0; index < sampleCount; index += 1)
+    samples.writeInt16LE(Math.round(Math.sin(index / 4) * 8000), index * 2);
+  return new Uint8Array(Buffer.concat([header, samples]));
+}

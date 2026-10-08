@@ -120,9 +120,21 @@ artifacts/verification/mlflow3-venv/bin/python scripts/verify_mlflow3.py
 
 Run・nested Run、paramsの不変性、メトリクス履歴/検索、6MiB・空・日本語pathのArtifact転送とhash一致、入力Dataset、Logged Modelの保存/読み込み、Model Registry/alias、scikit-learn autologを公式SDKのまま検証します。モデル登録で自動評価Jobを起動し、実CPU workerから同じRunへSDKで結果を記録します。readonly・Project制限・無効tokenの拒否も確認します。
 
+あわせて次も確認します。
+
+- `mlflow.models.evaluate`のmetricsがRunとLogged Modelに入り、`eval_results_table.json`が一覧に出る
+- 評価ルールを付けた登録モデルへ版を登録すると、`python/examples/mlflow_evaluation.py`がCPUのJobで動き、実行記録が1件、評価結果がJobのRunだけに入る（新しいRunを作らない）
+- `log_table`・`log_image`・`log_dict`・`log_text`・`log_figure`の一覧と内容。wav・flacのContent-Typeの保持とRangeの206、nativeのcontent URLでのinline表示
+- 自作pyfuncの複数ファイルモデルを`models:/名前@alias`で読み込んだ予測値の一致、`download_artifacts("models:/名前@alias")`のhash一致、`mlflow.search_runs`のpandas出力
+- 見送ったAPIの挙動。webhooksと`search_traces`が404 `ENDPOINT_NOT_FOUND`の`MlflowException`になること、`@mlflow.trace`を付けた関数を含むRunが正常に終わること。評価とautologがTracingのAPIを呼んだかどうかも結果に記録する
+
+各確認の結果は[MLflowの手順の確認状況](mlflow.md#公式sdkでの確認状況)にまとめています。
+
 検証終了時に一時tokenを失効し、ルールを無効化します。結果は`artifacts/verification/<日付>/mlflow3/sdk-integration.json`へ保存します。`MMT_VERIFY_API_URL`を省略するとWebの`/api` proxyを通るため、通常は省略します。専用test schemaで試す場合は`MMT_TEST_DATABASE_URL`を設定して`node_modules/.bin/tsx scripts/serve_mlflow_verification.ts`を起動し、検証APIをloopback4184へ指定します。停止すると専用schemaを削除します。
 
 2026-10-08にはPython 3.13.15でMLflow 3.0.0＋scikit-learn 1.6.1、MLflow 3.17.0＋scikit-learn 1.9.1の両方を検証しました。版別の結果は`sdk-3.0-integration.json`と`sdk-3.17-integration.json`です。未検証の他ライブラリ・実HF/TFモデル・実GPUの動作はこの結果に含めません。
+
+評価・表/画像/音声・自作pyfunc・見送ったAPIの確認は、同日に両方の版で再実行して全件成功しました。このときは開発APIではなく専用test schemaのAPIをloopbackの47120で起動し、`MMT_VERIFY_API_URL`で指定しました。
 
 TypeScriptの公式protobuf検証2件は、上記の`artifacts/verification/mlflow3-venv/bin/python`を使います。別のSDK環境を使う場合は`MMT_TEST_MLFLOW_PYTHON`にそのPythonの絶対パスを指定して`npm test`を実行します。SDKが未インストールの場合はこの2件だけskipします。
 
