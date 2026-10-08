@@ -45,7 +45,20 @@ export function ProjectMembers({
             items={items}
             rowKey={(member) => member.user.id}
             columns={[
-              { key: 'name', label: text.name, render: (member) => member.user.displayName },
+              {
+                key: 'name',
+                label: text.name,
+                render: (member) => (
+                  <span className="member-name">
+                    {member.user.displayName}
+                    {member.user.status === 'disabled' && (
+                      <span className="user-status disabled" title={text.memberDisabledHint}>
+                        {text.memberDisabled}
+                      </span>
+                    )}
+                  </span>
+                ),
+              },
               { key: 'email', label: text.email, render: (member) => member.user.email },
               { key: 'role', label: text.effectiveRole, render: (member) => text[member.role] },
               {
@@ -65,7 +78,7 @@ export function ProjectMembers({
                 ? [
                     {
                       key: 'actions',
-                      label: text.details,
+                      label: text.actions,
                       render: (member: ProjectMember) =>
                         hasDirectGrant(member) ? (
                           <div className="access-actions">

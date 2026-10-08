@@ -3,6 +3,9 @@ export const adminText = {
   administration: '全体管理',
   adminTabStorage: 'ストレージ',
   adminTabUsers: 'ユーザー',
+  adminTabAudit: '監査ログ',
+  adminAuditDescription:
+    'すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など）を新しい順に表示します。',
   adminUsers: 'ユーザー',
   newLocalUser: 'ローカルユーザーを作成',
   userSearch: 'ユーザーを検索',
@@ -15,6 +18,7 @@ export const adminText = {
   userAuthLocal: 'ローカル',
   userAuthSso: 'SSO',
   userAuthNone: '開発用',
+  userAuthServiceToken: 'API tokenのみ',
   userGlobalAdmin: '全体管理者',
   userIsAdmin: '管理者',
   userIsNotAdmin: '—',

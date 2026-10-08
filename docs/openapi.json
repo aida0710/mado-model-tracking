@@ -39543,6 +39543,12 @@
               }
             ]
           },
+          "actorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "actorTokenId": {
             "anyOf": [
               {
@@ -39585,6 +39591,12 @@
               }
             ]
           },
+          "projectName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "details": {
             "$ref": "#/components/schemas/JsonObject"
           },
@@ -39606,12 +39618,14 @@
           "occurredAt",
           "actorType",
           "actorUserId",
+          "actorName",
           "actorTokenId",
           "action",
           "outcome",
           "resourceType",
           "resourceId",
           "projectId",
+          "projectName",
           "details",
           "ip",
           "userAgent"

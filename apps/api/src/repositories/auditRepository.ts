@@ -49,8 +49,10 @@ export interface AuditEventFilter {
   limit: number;
 }
 
-const auditEventColumns = `id,occurred_at,actor_type,actor_user_id,actor_token_id,action,outcome,
-  resource_type,resource_id,project_id,details,ip,user_agent`;
+// Names are joined at read time: a renamed user or Project shows its current name in old events.
+const auditEventColumns = `a.id,a.occurred_at,a.actor_type,a.actor_user_id,u.display_name AS actor_name,
+  a.actor_token_id,a.action,a.outcome,a.resource_type,a.resource_id,a.project_id,
+  p.name AS project_name,a.details,a.ip,a.user_agent`;
 
 // Keyset pagination on (occurred_at,id) stays stable while new events are appended.
 export async function listAuditEvents(
@@ -59,11 +61,12 @@ export async function listAuditEvents(
 ): Promise<AuditEvent[]> {
   return rows<AuditEvent>(
     connection,
-    `SELECT ${auditEventColumns} FROM audit_events
-    WHERE ($1::uuid IS NULL OR project_id=$1) AND ($2::text IS NULL OR action=$2)
-      AND ($3::uuid IS NULL OR actor_user_id=$3) AND ($4::text IS NULL OR outcome=$4)
-      AND ($5::uuid IS NULL OR (occurred_at,id) < (SELECT occurred_at,id FROM audit_events WHERE id=$5))
-    ORDER BY occurred_at DESC,id DESC LIMIT $6`,
+    `SELECT ${auditEventColumns} FROM audit_events a
+    LEFT JOIN users u ON u.id=a.actor_user_id LEFT JOIN projects p ON p.id=a.project_id
+    WHERE ($1::uuid IS NULL OR a.project_id=$1) AND ($2::text IS NULL OR a.action=$2)
+      AND ($3::uuid IS NULL OR a.actor_user_id=$3) AND ($4::text IS NULL OR a.outcome=$4)
+      AND ($5::uuid IS NULL OR (a.occurred_at,a.id) < (SELECT occurred_at,id FROM audit_events WHERE id=$5))
+    ORDER BY a.occurred_at DESC,a.id DESC LIMIT $6`,
     [
       filter.projectId ?? null,
       filter.action ?? null,

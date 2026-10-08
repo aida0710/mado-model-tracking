@@ -5,6 +5,7 @@ import { first, transaction, type Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { hashSecret, randomSecret } from '../auth/secrets.js';
 import {
+  recordLogin,
   tokenIdentity,
   upsertIdentity,
   withdrawOidcIdentityAccess,
@@ -156,6 +157,7 @@ export class AuthService {
         authMethod: 'development',
         absoluteSeconds: this.config.session.absoluteSeconds,
       });
+      await recordLogin(connection, user.id);
       await writeAuditEvent(connection, {
         ...loginAudit('development', metadata),
         actorType: 'user',

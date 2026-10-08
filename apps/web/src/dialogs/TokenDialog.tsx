@@ -54,7 +54,7 @@ export function TokenDialog({
       <Dialog title={title} onClose={onClose}>
         <p className="notice">{text.tokenOnce}</p>
         <label className="field">
-          <span>{text.tokens}</span>
+          <span>{text.issuedTokenValue}</span>
           <input
             className="mono"
             readOnly

@@ -16,12 +16,11 @@ export function AppShell() {
   const auth = useAuth();
   const projects = useQuery('projects', administrationApi.projects);
   const userCanCreateProject = canCreateProject(auth.user);
+  // A Project id from the URL that the user cannot open gets no Project navigation or alerts.
+  const openProject = projects.value?.find((project) => project.id === projectId);
   return (
     <div className="app-shell">
-      <TopBar
-        projectId={projectId}
-        projectRole={projects.value?.find((project) => project.id === projectId)?.role}
-      />
+      <TopBar projectId={openProject?.id} projectRole={openProject?.role} />
       <Resource query={projects}>
         {(items) => {
           const project = items.find((item) => item.id === projectId);
@@ -58,6 +57,7 @@ export function AppShell() {
               ) : (
                 <main id="content" className="page">
                   <PageHeader title={text.settings} />
+                  {projectId && <p className="notice error">{text.projectNotAccessible}</p>}
                   {items.length === 0 && (
                     <>
                       <p className="muted">{text.noProjects}</p>

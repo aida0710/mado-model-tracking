@@ -278,7 +278,7 @@ try {
     0,
   );
   await page.getByRole('heading', { name: '監査ログ', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'トークンを作成', exact: true }).click();
+  await page.getByRole('button', { name: 'API tokenを発行', exact: true }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('browser-test-token');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
   await page.getByText(/トークンは一度だけ表示/).waitFor();

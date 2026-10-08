@@ -15,6 +15,7 @@ import { DataTable } from './DataTable';
 import { ErrorNotice, Resource } from './Feedback';
 import { StatusBadge } from './StatusBadge';
 import { formatBytes, formatDate } from '../lib/format';
+import { targetCheckHintFor, targetCheckItemLabel } from '../lib/computeTargetDisplay';
 import {
   detectedCandidates,
   hasCandidateChanges,
@@ -22,11 +23,7 @@ import {
   type TargetCandidates,
 } from '../lib/targetCheckCandidates';
 import { text } from '../i18n/catalog';
-import {
-  targetCheckCodeHints,
-  targetCheckItemLabels,
-  targetCheckOutcomeLabels,
-} from '../i18n/compute';
+import { targetCheckCodeHints, targetCheckOutcomeLabels } from '../i18n/compute';
 import { runtimeLabels } from '../i18n/runtime';
 
 // The worker polls for checks every 5 seconds and probes for up to two minutes.
@@ -76,7 +73,7 @@ export function TargetCheckPanel({
           {text.checkTarget}
         </button>
       </div>
-      <p className="muted">{text.targetCheckHint}</p>
+      <p className="muted">{targetCheckHintFor(target.executor)}</p>
       <ErrorNotice message={mutation.error} />
       <Resource query={checks}>
         {() =>
@@ -136,7 +133,9 @@ function TargetCheckDetails({
       {check.failureReason === 'claim_timeout' && (
         <p className="notice error">{text.targetCheckClaimTimeout}</p>
       )}
-      {check.result && <TargetCheckItems items={check.result.items} />}
+      {check.result && (
+        <TargetCheckItems items={check.result.items} executor={target.executor} />
+      )}
       {check.result?.gpus && <DetectedGpus gpus={check.result.gpus} />}
       {candidates && (
         <TargetCandidateEditor
@@ -150,13 +149,23 @@ function TargetCheckDetails({
   );
 }
 
-function TargetCheckItems({ items }: { items: TargetCheckItem[] }) {
+function TargetCheckItems({
+  items,
+  executor,
+}: {
+  items: TargetCheckItem[];
+  executor: ComputeTarget['executor'];
+}) {
   return (
     <DataTable
       items={items}
       rowKey={(item) => item.name}
       columns={[
-        { key: 'item', label: text.targetCheckItem, render: (item) => targetCheckItemLabels[item.name] },
+        {
+          key: 'item',
+          label: text.targetCheckItem,
+          render: (item) => targetCheckItemLabel(item.name, executor),
+        },
         {
           key: 'outcome',
           label: text.targetCheckOutcome,

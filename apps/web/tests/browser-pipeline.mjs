@@ -364,9 +364,9 @@ try {
     await dialog().getByLabel('Role', { exact: false }).selectOption('admin');
     await dialog().getByRole('button', { name: '保存', exact: true }).click();
     await dialog().waitFor({ state: 'hidden' });
-    await page.getByRole('row').filter({ hasText: 'browser-worker' }).getByRole('button', { name: 'tokenを発行' }).click();
+    await page.getByRole('row').filter({ hasText: 'browser-worker' }).getByRole('button', { name: 'API tokenを発行' }).click();
     await dialog().getByLabel('名前', { exact: false }).fill('browser worker');
-    await dialog().getByLabel('Scopes', { exact: false }).selectOption(['read', 'worker:execute', 'artifacts:write', 'registry:write']);
+    await dialog().getByLabel('Scope', { exact: false }).selectOption(['read', 'worker:execute', 'artifacts:write', 'registry:write']);
     await dialog().getByRole('button', { name: '保存', exact: true }).click();
     const tokenField = dialog().getByLabel('API tokens');
     await tokenField.waitFor();

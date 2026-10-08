@@ -71,7 +71,7 @@ try {
   if (outputDirectory)
     await card.screenshot({ path: `${outputDirectory}/02-connection-card-details.png` });
 
-  await card.getByRole('button', { name: 'このProject用のtokenを発行' }).click();
+  await card.getByRole('button', { name: 'このProject用のAPI tokenを発行' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
   const selected = await dialog
@@ -98,7 +98,7 @@ try {
 
   const viewer = await openSettings('viewer');
   assert.equal(
-    await viewer.card.getByRole('button', { name: 'このProject用のtokenを発行' }).count(),
+    await viewer.card.getByRole('button', { name: 'このProject用のAPI tokenを発行' }).count(),
     0,
   );
   await viewer.context.close();

@@ -69,7 +69,7 @@ export const textTemplates = {
   ...savedViewsTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
-    `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
+    `「${tokenName}」を失効させます。このAPI tokenを使うクライアントは、以後APIへ接続できなくなります。`,
 };
 
 export const text = {
@@ -152,6 +152,7 @@ export const text = {
   noProjectsCreateHint:
     '「プロジェクトを作成」から始めてください。作成後も、設定の「Projects」で一覧と作成ができます。',
   noProjectsAskAdmin: 'プロジェクトの管理者に、メンバーへの追加を依頼してください。',
+  projectNotAccessible: 'このプロジェクトは存在しないか、参加していないため開けません。',
   newExperiment: '実験を作成',
   filterExperiments: '実験を検索',
   newRun: 'Runを作成',
@@ -186,6 +187,8 @@ export const text = {
   previousPage: '前のページ',
   nextPage: '次のページ',
   details: '詳細',
+  // Header of a table column that holds the row's buttons.
+  actions: '操作',
   artifacts: 'Artifacts',
   systemMetrics: 'System metrics',
   logs: 'Logs',
@@ -322,6 +325,8 @@ export const text = {
   retryEvents: 'イベントを再送',
   queuedEvents: 'イベントをキューに追加しました',
   pluginVersion: 'Plugin version',
+  pluginsAdminOnly:
+    'Pluginの接続はProject adminと全体管理者が管理します。変更が必要な場合はProject adminに依頼してください。',
   capabilities: 'Capabilities',
   storageMetrics: 'Storage metrics',
   refreshMetrics: 'メトリクスを更新',
@@ -349,16 +354,16 @@ export const text = {
   viewer: 'Viewer',
   editor: 'Editor',
   admin: 'Admin',
-  tokens: 'API tokens',
-  newToken: 'トークンを作成',
+  issuedTokenValue: 'API tokenの値',
+  newToken: 'API tokenを発行',
   tokenKind: 'トークン種別',
   personal: 'Personal',
   service: 'Service',
-  scopes: 'Scopes',
+  scopes: 'Scope',
   expiry: '有効期限',
   revoke: '失効',
-  revokeToken: 'トークンを失効させる',
-  tokenOnce: 'トークンは一度だけ表示されます。閉じる前に安全な場所へ保存してください。',
+  revokeToken: 'API tokenを失効させる',
+  tokenOnce: 'API tokenは一度だけ表示されます。閉じる前に安全な場所へ保存してください。',
   copy: 'コピー',
   copied: 'コピーしました',
   copyFailed: 'コピーできませんでした',

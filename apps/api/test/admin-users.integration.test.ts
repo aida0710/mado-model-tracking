@@ -169,6 +169,18 @@ describe.skipIf(!testDatabaseUrl)('全体管理者のユーザー管理（独立
     );
   });
 
+  it('開発用ログインでも最終ログインの日時が記録される', async () => {
+    const administrator = await login(harness);
+    const member = await login(harness, 'dev-member@example.test');
+    const listed = await entity<{ items: AdminUser[] }>(
+      await adminRequest(administrator.cookie, '/users?query=dev-member'),
+      200,
+    );
+    expect(listed.items.map((user) => [user.id, user.lastLoginAt !== null])).toEqual([
+      [member.userId, true],
+    ]);
+  });
+
   it('ローカルアカウントを作成すると、初回loginでパスワード変更が求められる', async () => {
     const administrator = await login(harness);
     const created = await createLocalUser(administrator.cookie, { username: 'Alice.Local' });

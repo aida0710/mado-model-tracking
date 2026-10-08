@@ -12,6 +12,37 @@
 .settings-section:last-child {
   grid-column: 1 / -1;
 }
+/* Sections whose tables have many columns take the full width, one below another. */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-top: 28px;
+}
+.settings-stack .access-actions {
+  flex-wrap: nowrap;
+}
+.settings-stack .access-actions .button,
+.settings-stack .member-sources li,
+.settings-stack /* Names in the audit log stay on one line; the resource and details columns take the wrapping. */
+.audit-label {
+  white-space: nowrap;
+}
+.member-name {
+  white-space: nowrap;
+}
+/* Free text such as a Service Account description wraps by words, never one letter per line. */
+.settings-stack td {
+  min-width: 6em;
+}
+.member-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.member-name .user-status {
+  font-size: 11px;
+}
 .plugin-search {
   display: flex;
   gap: 12px;

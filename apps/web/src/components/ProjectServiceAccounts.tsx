@@ -70,7 +70,7 @@ export function ProjectServiceAccounts({ access }: { access: ServiceAccountsStat
               },
               {
                 key: 'actions',
-                label: text.details,
+                label: text.actions,
                 render: (account) => (
                   <div className="access-actions">
                     <button className="button small" onClick={() => setEditing(account)}>

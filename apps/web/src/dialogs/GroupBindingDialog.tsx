@@ -4,20 +4,25 @@ import { Dialog } from '../components/Dialog';
 import { ErrorNotice } from '../components/Feedback';
 import { ProjectRoleSelect } from '../components/ProjectRoleSelect';
 import { useMutation } from '../hooks/useMutation';
+import { findExistingGroupBinding } from '../lib/groupBindingInput';
 import { text } from '../i18n/catalog';
+import { projectAccessTextTemplates } from '../i18n/projectAccess';
 
 /**
  * Grants a role to an Authentik group, or changes the role of an existing binding.
- * The group name is the binding's key, so it can only be chosen when adding.
+ * The group name is the binding's key, so it can only be chosen when adding, and adding a name
+ * that is already in `existingBindings` is refused instead of overwriting its role.
  */
 export function GroupBindingDialog({
   binding,
+  existingBindings,
   groupNameCandidates,
   onSave,
   onSaved,
   onClose,
 }: {
   binding?: ProjectGroupBinding;
+  existingBindings: readonly ProjectGroupBinding[];
   groupNameCandidates: string[];
   onSave: (group: string, role: ProjectRole) => Promise<unknown>;
   onSaved: () => void;
@@ -39,6 +44,11 @@ export function GroupBindingDialog({
           event.preventDefault();
           void mutation
             .run(async () => {
+              const existing = binding ? undefined : findExistingGroupBinding(existingBindings, group);
+              if (existing)
+                throw new Error(
+                  projectAccessTextTemplates.groupBindingExists(existing.group, text[existing.role]),
+                );
               await onSave(group.trim(), role);
               return true;
             })

@@ -14,7 +14,7 @@ export const serviceAccountsText = {
   serviceAccountRoleMissing: 'Roleなし',
   disableServiceAccount: '無効化',
   enableServiceAccount: '有効化',
-  issueToken: 'tokenを発行',
+  issueToken: 'API tokenを発行',
   personalTokens: '自分のAPI token',
   projectTokens: 'Projectのtoken一覧',
   projectTokensDescription:

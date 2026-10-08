@@ -12,9 +12,27 @@ import { RegistryLayout } from '../components/RegistryLayout';
 import { PluginPanel } from '../components/PluginPanel';
 import { PluginDialog } from '../dialogs/PluginDialog';
 import { getPluginConnectionKey } from '../lib/pluginConnection';
+import { canManagePlugins, isGlobalAdmin } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 
+/**
+ * Plugin connections of the Project. The navigation hides this screen from members the API would
+ * refuse; opening the URL directly shows why instead of a 403 that retrying cannot fix.
+ */
 export function PluginsPage() {
+  const { project } = useProject();
+  const { user } = useAuth();
+  if (!canManagePlugins(project.role, isGlobalAdmin(user)))
+    return (
+      <section className="page">
+        <PageHeader title={text.plugins} eyebrow={project.name} />
+        <p className="notice">{text.pluginsAdminOnly}</p>
+      </section>
+    );
+  return <PluginConnections />;
+}
+
+function PluginConnections() {
   const { project } = useProject();
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
