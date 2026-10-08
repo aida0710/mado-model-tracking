@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UploadSource } from './droppedFiles';
-import { datasetPathsOf, planDatasetFolder } from './datasetFolder';
+import { datasetFolderProgress, datasetPathsOf, planDatasetFolder } from './datasetFolder';
 
 const source = (relativePath: string): UploadSource => ({
   file: new File(['x'], relativePath.split('/').pop()!),
@@ -34,5 +34,32 @@ describe('planDatasetFolder', () => {
       datasetPath: 'train/a.wav',
       artifactPath: 'datasets/dataset-1/upload-1/train/a.wav',
     });
+  });
+});
+
+describe('datasetFolderProgress', () => {
+  const entries = planDatasetFolder([source('corpus/a.wav'), source('corpus/sub/big.bin')], {
+    datasetId: 'dataset-1',
+    uploadId: 'upload-1',
+  });
+  const [wav, big] = entries.map((entry) => entry.artifactPath);
+
+  it('取消したファイルがあると版の作成へ進まず、そのファイルを残りとして返す', () => {
+    const progress = datasetFolderProgress(entries, [
+      { id: '1', path: wav!, status: 'completed', artifact: { id: 'artifact-a' } },
+      { id: '2', path: big!, status: 'canceled', artifact: null },
+    ]);
+    expect(progress.isUploaded).toBe(false);
+    expect(progress.unfinishedItemIds).toEqual(['2']);
+    expect([...progress.storedArtifactIds.values()]).toEqual(['artifact-a']);
+  });
+
+  it('残りを除いた一覧では、保存済みのファイルだけで版を作れる', () => {
+    const progress = datasetFolderProgress(entries.slice(0, 1), [
+      { id: '1', path: wav!, status: 'completed', artifact: { id: 'artifact-a' } },
+      { id: '2', path: big!, status: 'canceled', artifact: null },
+    ]);
+    expect(progress.isUploaded).toBe(true);
+    expect(progress.unfinishedItemIds).toEqual([]);
   });
 });

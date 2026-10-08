@@ -173,6 +173,8 @@ export interface RunMediaPageQuery {
   kind?: RunMediaKind;
   stepFrom?: number;
   stepTo?: number;
+  /** The media that point at this Artifact, e.g. the table a file in the Artifact tree belongs to. */
+  artifactId?: string;
   cursor?: string;
   limit: number;
 }
@@ -191,6 +193,7 @@ export async function listRunMediaPage(
        AND ($5::bigint IS NULL OR m.step>=$5) AND ($6::bigint IS NULL OR m.step<=$6)
        AND ($7::bigint IS NULL OR (m.step,m.key COLLATE "C",m.created_at,m.id)
             > ($7::bigint,$8::text COLLATE "C",$9::timestamptz,$10::uuid))
+       AND ($12::uuid IS NULL OR m.artifact_id=$12)
      ORDER BY m.step,m.key COLLATE "C",m.created_at,m.id LIMIT $11`,
     [
       query.projectId,
@@ -204,6 +207,7 @@ export async function listRunMediaPage(
       after?.createdAt ?? null,
       after?.id ?? null,
       query.limit + 1,
+      query.artifactId ?? null,
     ],
   );
   const page = listed.slice(0, query.limit);

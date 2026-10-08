@@ -81,6 +81,17 @@ export const runMediaApi = {
       throw invalidResponseError();
     return grid;
   },
+  /** The table media stored as this Artifact, or null when the file is not a logged table. */
+  tableOfArtifact: async (
+    projectId: string,
+    target: { runId: string; artifactId: string },
+    signal?: AbortSignal,
+  ): Promise<RunMedia | null> => {
+    const parameters = new URLSearchParams({ kind: 'table', artifactId: target.artifactId, limit: '1' });
+    const page = await request<RunMediaPage>(`${runMediaPath(projectId, target.runId)}?${parameters}`, { signal });
+    if (!Array.isArray(page.items)) throw invalidResponseError();
+    return page.items[0] ?? null;
+  },
   table: async (
     projectId: string,
     target: { runId: string; mediaId: string },

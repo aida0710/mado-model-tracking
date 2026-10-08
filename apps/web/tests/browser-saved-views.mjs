@@ -159,7 +159,7 @@ try {
   );
   await toggleColumn(owner, '説明');
   await toggleColumn(owner, 'tags.model');
-  await toggleColumn(owner, 'Created');
+  await toggleColumn(owner, '作成日時');
   // Description moves two places left with the keyboard; loss gets 48px wider.
   const descriptionLabel = owner.locator('th[data-column="description"] .run-column-label');
   await descriptionLabel.focus();

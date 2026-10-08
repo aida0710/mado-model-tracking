@@ -9,6 +9,8 @@ import {
   handoffPosition,
   nearestStep,
   parseStepList,
+  parseStepParam,
+  parseStepsParam,
   playbackHandoffFrom,
   stepIndexAfterKey,
 } from './mediaSteps';
@@ -139,5 +141,21 @@ describe('聴き比べの再生位置の受け渡し', () => {
     expect(gridPositionAfterKey(size, { row: 1, column: 1 }, 'End')).toEqual({ row: 1, column: 2 });
     expect(gridPositionAfterKey(size, { row: 0, column: 2 }, 'ArrowLeft')).toEqual({ row: 0, column: 1 });
     expect(gridPositionAfterKey(size, { row: 0, column: 0 }, 'a')).toBeNull();
+  });
+});
+
+describe('URLに残したstep', () => {
+  it('stepは0以上の整数だけを受け取り、壊れた値は最新のstepに戻す（null）', () => {
+    expect(parseStepParam('29')).toBe(29);
+    expect(parseStepParam('0')).toBe(0);
+    expect(parseStepParam(null)).toBeNull();
+    expect(parseStepParam('-1')).toBeNull();
+    expect(parseStepParam('abc')).toBeNull();
+  });
+
+  it('比較のstep一覧は並べ直して読み、壊れた一覧は各Runの最新（空）にする', () => {
+    expect(parseStepsParam('59,9,29')).toEqual([9, 29, 59]);
+    expect(parseStepsParam('9,x')).toEqual([]);
+    expect(parseStepsParam(null)).toEqual([]);
   });
 });

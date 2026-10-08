@@ -255,7 +255,7 @@ async function newestVersion(minimumCount) {
     if (versions.length >= minimumCount)
       return versions.toSorted((left, right) => Number(right.version) - Number(left.version))[0];
     // The Task registers the version once the training Run has finished on the worker.
-    await page.getByText('Finished').first().waitFor({ timeout: SCREEN_POLL_MS }).catch(() => {});
+    await page.getByText('完了').first().waitFor({ timeout: SCREEN_POLL_MS }).catch(() => {});
   }
   throw new Error(`The Task did not register version ${minimumCount}`);
 }
@@ -264,10 +264,10 @@ async function waitForAutomation(versionId) {
   await openVersionPage(versionId);
   const automation = page.getByRole('region', { name: '自動実行' });
   // Inference and the chained evaluation both end Finished on the CPU worker.
-  await waitOnScreen(automation.getByRole('row').filter({ hasText: 'Evaluation' }).filter({ hasText: 'Finished' }), {
+  await waitOnScreen(automation.getByRole('row').filter({ hasText: '評価' }).filter({ hasText: '完了' }), {
     reload: reloadVersionPage,
   });
-  await waitOnScreen(automation.getByRole('row').filter({ hasText: 'Inference' }).filter({ hasText: 'Finished' }), {
+  await waitOnScreen(automation.getByRole('row').filter({ hasText: '推論' }).filter({ hasText: '完了' }), {
     reload: reloadVersionPage,
   });
   const results = page.getByRole('region', { name: '評価結果' });
@@ -477,7 +477,7 @@ try {
 
   await stage('first_run_to_evaluation', '学習を実行→CPU workerで完了→版の自動登録→推論・評価がFinishedでmetricsが出る', async () => {
     await launchTask();
-    await waitOnScreen(page.getByRole('row').filter({ hasText: 'Finished' }));
+    await waitOnScreen(page.getByRole('row').filter({ hasText: '完了' }));
     const version = await newestVersion(1);
     ids.firstVersionId = version.id;
     await waitForAutomation(version.id);

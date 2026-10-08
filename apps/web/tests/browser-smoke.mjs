@@ -92,7 +92,7 @@ try {
   await page.getByRole('button', { name: 'test-upload.txt', exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Logs', exact: true }).click();
   await page.getByText('Browser test log', { exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'Details', exact: true }).click();
+  await page.getByRole('tab', { name: '詳細', exact: true }).click();
   await page.getByRole('button', { name: 'Runを編集' }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('edited-training-test');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
@@ -365,7 +365,7 @@ try {
   );
   await page.getByRole('link', { name: 'Authentik', exact: true }).click();
   await page.waitForURL(base + returnPath);
-  await page.getByRole('tab', { name: 'Details', exact: true }).waitFor();
+  await page.getByRole('tab', { name: '詳細', exact: true }).waitFor();
   assert.deepEqual(pageErrors, []);
   assert.equal(
     api.state.calls.some((call) => call.path.includes('/worker/')),

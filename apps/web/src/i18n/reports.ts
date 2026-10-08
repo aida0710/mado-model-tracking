@@ -87,6 +87,7 @@ export const reportsText = {
   reportMediaTableRun: 'Run',
   reportMediaTable: '表',
   reportMediaTableNone: 'このRunに表はありません',
+  reportRunNoneWithTable: '表を記録したRunはありません',
   reportTitleRequired: '題名を入力してください',
 } as const;
 
@@ -133,4 +134,5 @@ export const reportsTextTemplates = {
   reportSelectedRunCount: (count: number, max: number) => `${count} / ${max} 件を選択`,
   reportChartMetrics: (keys: string) => `メトリクス: ${keys}`,
   reportMediaTableOption: (key: string, step: number) => `${key}（step ${step}）`,
+  reportMediaTableSource: (runName: string, key: string, step: number) => `${runName} · ${key}（step ${step}）`,
 };

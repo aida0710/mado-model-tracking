@@ -59,6 +59,12 @@ describe('artifactTree', () => {
     ]);
   });
 
+  it('step-9 のような数字入りのフォルダは数値の順に並ぶ', () => {
+    const steps = ['step-19/', 'step-29/', 'step-59/', 'step-9/'].map((name) => `media/${name}`);
+    const rows = artifactDirectoryRows(tree('media/', steps), []);
+    expect(rows.map((row) => row.name)).toEqual(['step-9', 'step-19', 'step-29', 'step-59']);
+  });
+
   it('同名のファイルとフォルダは両方を、別のkeyで表示する', () => {
     const rows = artifactDirectoryRows(tree('', ['data/']), [artifact('1', 'data')]);
     expect(rows.map((row) => [row.kind, row.name])).toEqual([

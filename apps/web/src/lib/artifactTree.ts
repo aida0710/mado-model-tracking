@@ -33,18 +33,24 @@ function directoryName(directory: ArtifactDirectoryEntry, prefix: string): strin
   return artifactEntryName(directory.prefix, prefix).replace(/\/$/, '');
 }
 
+// Digits compare as numbers, so step-9 comes before step-19 as file managers show them.
+const directoryNameCollator = new Intl.Collator('en', { numeric: true });
+
 /**
  * Directories first, then files, as file managers show them. A file and a directory with the
- * same name are both listed; their keys differ by kind.
+ * same name are both listed; their keys differ by kind. Directories arrive all at once and are
+ * re-sorted by name; files keep the API's page order so loading the next page only appends.
  */
 export function artifactDirectoryRows(tree: ArtifactTree, files: Artifact[]): ArtifactBrowserRow[] {
   return [
-    ...tree.directories.map((directory): ArtifactBrowserRow => ({
-      kind: 'directory',
-      key: `directory:${directory.prefix}`,
-      name: directoryName(directory, tree.prefix),
-      directory,
-    })),
+    ...tree.directories
+      .map((directory): ArtifactBrowserRow & { kind: 'directory' } => ({
+        kind: 'directory',
+        key: `directory:${directory.prefix}`,
+        name: directoryName(directory, tree.prefix),
+        directory,
+      }))
+      .sort((left, right) => directoryNameCollator.compare(left.name, right.name)),
     ...files.map((artifact): ArtifactBrowserRow => ({
       kind: 'file',
       key: `file:${artifact.id}`,

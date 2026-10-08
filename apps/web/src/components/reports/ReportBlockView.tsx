@@ -12,7 +12,7 @@ import { MediaTableView } from '../media/MediaTableView';
 import { MediaCell } from '../media/MediaCell';
 import { RunTable } from '../runs/RunTable';
 import { Empty, ErrorNotice, Loading } from '../Feedback';
-import { useLiveBlockData } from '../../hooks/useReportBlockData';
+import { useLiveBlockData, useMediaTableSource } from '../../hooks/useReportBlockData';
 import { useExclusiveAudio } from '../../hooks/useExclusiveAudio';
 import { CHART_ROW_HEIGHT_PX } from '../charts/ChartPanel';
 import { formatSnapshotTime, reportChartSeries, snapshotRunLabels } from '../../lib/reportBlocks';
@@ -50,6 +50,7 @@ export function ReportBlockView({ projectId, block, snapshot, snapshotState, pre
     <figure className="report-embed" data-block-type={block.type}>
       <figcaption className="report-embed-header">
         <span className="report-embed-type">{reportBlockTypeLabels[block.type]}</span>
+        {block.type === 'media_table' && <MediaTableSource projectId={projectId} block={block} />}
         <EmbedModeMark block={block} snapshot={drawsSnapshot ? snapshot : undefined} />
       </figcaption>
       <BlockErrorBoundary key={JSON.stringify(block)}>
@@ -70,6 +71,17 @@ export function ReportBlockView({ projectId, block, snapshot, snapshotState, pre
         )}
       </BlockErrorBoundary>
     </figure>
+  );
+}
+
+/** The Run and step of an embedded table; a snapshot's table rows alone do not say which they are. */
+function MediaTableSource({ projectId, block }: { projectId: string; block: Extract<ReportEmbedBlock, { type: 'media_table' }> }) {
+  const source = useMediaTableSource(projectId, block);
+  if (!source) return null;
+  return (
+    <span className="report-embed-source" data-testid="report-media-table-source">
+      {textTemplates.reportMediaTableSource(source.runName, source.key, source.step)}
+    </span>
   );
 }
 

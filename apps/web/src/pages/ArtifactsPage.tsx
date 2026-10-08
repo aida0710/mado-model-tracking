@@ -39,10 +39,11 @@ export function ArtifactsPage() {
     query: params.get('query') ?? '',
     mimeType: params.get('mimeType') ?? '',
     runId: params.get('runId') ?? '',
+    modelId: params.get('modelId') ?? '',
     modelVersionId: params.get('modelVersionId') ?? '',
     includePreviousVersions: params.get('versions') === 'all',
   };
-  const modelId = params.get('modelId') ?? '';
+  const { modelId } = filter;
   const [searchInput, setSearchInput] = useState(filter.query);
   const [selected, setSelected] = useState<Artifact>();
   const catalog = useProjectArtifactCatalog(project.id, filter);
@@ -156,7 +157,7 @@ export function ArtifactsPage() {
               value={filter.modelVersionId}
               onChange={(event) => updateParams({ modelVersionId: event.target.value })}
             >
-              <option value="">{text.none}</option>
+              <option value="">{text.artifactAllModelVersions}</option>
               {modelVersions.value?.map((version) => (
                 <option key={version.id} value={version.id}>
                   {version.version}
@@ -216,7 +217,7 @@ export function ArtifactsPage() {
               {
                 key: 'size',
                 label: text.size,
-                className: 'mono',
+                className: 'mono nowrap',
                 render: (item) => formatBytes(item.size),
               },
               {

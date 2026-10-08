@@ -45,6 +45,7 @@ export const artifactCatalogQuerySchema = z.object({
     .optional(),
   runId: uuidSchema.optional(),
   modelVersionId: uuidSchema.optional(),
+  modelId: uuidSchema.optional(),
   // The catalog listed every upload before versions existed; keep that as the default.
   versions: versionsSchema.default('all'),
 });

@@ -59,3 +59,31 @@ export function datasetFileTreeEntry(file: DatasetVersionFile, projectId: string
     createdAt: '',
   };
 }
+
+/** The part of an upload queue row that tells whether a folder file is stored. */
+export interface DatasetFolderUploadState {
+  id: string;
+  path: string;
+  status: string;
+  artifact: { id: string } | null;
+}
+
+/**
+ * Which planned files are stored (their Artifact IDs by Artifact path) and which queue rows still
+ * stand between the folder and its version: failed, paused, canceled, or still running.
+ */
+export function datasetFolderProgress(entries: readonly DatasetFolderEntry[], items: readonly DatasetFolderUploadState[]) {
+  const itemsByPath = new Map(items.map((item) => [item.path, item]));
+  const storedArtifactIds = new Map<string, string>();
+  const unfinishedItemIds: string[] = [];
+  for (const entry of entries) {
+    const item = itemsByPath.get(entry.artifactPath);
+    if (item?.status === 'completed' && item.artifact) storedArtifactIds.set(entry.artifactPath, item.artifact.id);
+    else if (item) unfinishedItemIds.push(item.id);
+  }
+  return {
+    storedArtifactIds,
+    unfinishedItemIds,
+    isUploaded: entries.length > 0 && storedArtifactIds.size === entries.length,
+  };
+}

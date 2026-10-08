@@ -6,7 +6,7 @@ export const workbenchText = {
   newTask: 'Taskを作成',
   editTask: 'Taskを編集',
   noTasks: 'Taskはまだありません',
-  taskRevision: 'Task revision',
+  taskRevision: 'Taskの版',
   taskHistory: '実行履歴',
   noTaskRuns: 'このTaskの実行履歴はまだありません',
   launchRun: '通常実行',

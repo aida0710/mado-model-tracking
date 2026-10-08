@@ -59,7 +59,7 @@ try {
     await screenshot('run-real-detail');
     const audio = demoRuns.find((run) => run.name === 'Generated audio sample');
     await page.goto(`${base}/projects/${demo.id}/runs/${audio.id}?tab=artifacts`);
-    await page.locator('audio').waitFor();
+    await page.locator('audio').waitFor({ state: 'attached' });
     await page.waitForFunction(() => document.querySelector('audio')?.duration === 1);
     console.log('Real API: metrics chart and streamed one-second audio passed');
   }

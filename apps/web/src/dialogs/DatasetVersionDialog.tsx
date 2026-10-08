@@ -122,7 +122,6 @@ function FolderVersionDialog({
   const folder = useDatasetFolderVersion({ projectId: project.id, dataset, onCreated: onSaved });
   const { queue } = folder;
   const busy = queue.isActive || folder.isCreating;
-  const hasFailedUpload = queue.items.some((item) => item.status === 'failed');
 
   function start() {
     let metadata;
@@ -198,7 +197,24 @@ function FolderVersionDialog({
           onRetryFailed={queue.retryFailed}
         />
         {queue.isActive && <p className="muted">{text.uploadInProgressNotice}</p>}
-        {hasFailedUpload && !queue.isActive && <p className="muted">{text.datasetFolderWaitingFailed}</p>}
+        {folder.isWaitingForChoice && (
+          <div className="notice dataset-folder-choice" role="status">
+            <p>{textTemplates.datasetFolderUnfinished(folder.unfinishedCount, folder.storedCount)}</p>
+            <div className="upload-pickers">
+              <button type="button" className="button small" onClick={folder.resendUnfinished}>
+                {text.datasetFolderResendUnfinished}
+              </button>
+              <button
+                type="button"
+                className="button small primary"
+                disabled={folder.storedCount === 0}
+                onClick={folder.createWithoutUnfinished}
+              >
+                {text.datasetFolderCreateWithoutUnfinished}
+              </button>
+            </div>
+          </div>
+        )}
         {folder.isCreating && <p className="muted">{text.datasetFolderCreating}</p>}
         <ErrorNotice message={folder.creationError} />
         <footer>

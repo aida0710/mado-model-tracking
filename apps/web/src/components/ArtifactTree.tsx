@@ -65,6 +65,7 @@ export function ArtifactTree({
           {
             key: 'name',
             label: text.artifactName,
+            className: 'artifact-tree-name',
             render: (row) =>
               row.kind === 'directory' ? (
                 <button

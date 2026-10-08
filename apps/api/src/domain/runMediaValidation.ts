@@ -52,6 +52,7 @@ export const runMediaListQuerySchema = z
     kind: runMediaKindSchema.optional(),
     stepFrom: queryStepSchema.optional(),
     stepTo: queryStepSchema.optional(),
+    artifactId: uuidSchema.transform((id) => id.toLowerCase()).optional(),
     cursor: z.string().min(1).max(1000).optional(),
     limit: z.coerce.number().int().min(1).max(MAX_MEDIA_PAGE_LIMIT).default(DEFAULT_MEDIA_PAGE_LIMIT),
   })

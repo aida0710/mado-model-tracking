@@ -227,6 +227,8 @@ export interface ProjectArtifactQuery {
    * (inference and evaluation Runs record it as their modelVersionId).
    */
   modelVersionId?: string;
+  /** Same as modelVersionId over every version of the Model. */
+  modelId?: string;
   versions: ArtifactListVersions;
   cursor?: string;
 }
@@ -255,6 +257,10 @@ export async function listProjectArtifacts(
             WHERE version.id=$5 AND version.project_id=a.project_id AND version.artifact_id=a.id)
          OR EXISTS(SELECT 1 FROM runs run
             WHERE run.id=a.run_id AND run.project_id=a.project_id AND run.model_version_id=$5))
+       AND ($10::uuid IS NULL OR EXISTS(SELECT 1 FROM model_versions version
+            WHERE version.model_id=$10 AND version.project_id=a.project_id AND version.artifact_id=a.id)
+         OR EXISTS(SELECT 1 FROM runs run JOIN model_versions version ON version.id=run.model_version_id
+            WHERE run.id=a.run_id AND run.project_id=a.project_id AND version.model_id=$10))
        AND ($6::timestamptz IS NULL OR (a.created_at,a.id)<($6,$7::uuid))
        AND ($8='all' OR ${currentRunArtifactCondition('a')})
        -- Server-side previews are Runless Artifacts the viewer reads through /previews, not catalog items.
@@ -271,6 +277,7 @@ export async function listProjectArtifacts(
       after?.id ?? null,
       query.versions,
       query.limit + 1,
+      query.modelId ?? null,
     ],
   );
   return toPage(listed, query.limit, (last) => ({

@@ -270,7 +270,7 @@ try {
   evaluationStage = 2;
   await automation()
     .locator('tr', { hasText: '評価rule' })
-    .getByText('Finished')
+    .getByText('完了')
     .first()
     .waitFor({ timeout: POLL_TIMEOUT_MS });
   await automation().getByText('起動せず（学習Runが失敗・停止）').waitFor();
