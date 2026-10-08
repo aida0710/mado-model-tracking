@@ -33,6 +33,7 @@ import { TargetService } from './services/targetService.js';
 import { JobService } from './services/jobService.js';
 import { WorkerService } from './services/workerService.js';
 import { TokenService } from './services/tokenService.js';
+import { EvaluationService } from './services/evaluationService.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
 import { requireScope } from './services/accessService.js';
@@ -48,6 +49,7 @@ import { artifactRoutes } from './routes/artifactRoutes.js';
 import { jobRoutes, targetRoutes, workerRoutes } from './routes/executionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
+import { evaluationRoutes } from './routes/evaluationRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -88,6 +90,7 @@ export function createApplication(options: ApplicationOptions) {
   const registry = new RegistryService(database, automation);
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
+  const evaluation = new EvaluationService(database);
   const plugins = new PluginService({
     database,
     registry,
@@ -188,6 +191,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
+  app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
@@ -219,6 +223,7 @@ export function createApplication(options: ApplicationOptions) {
       worker,
       tokens,
       plugins,
+      evaluation,
     },
   };
 }

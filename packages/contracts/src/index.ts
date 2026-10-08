@@ -15,6 +15,14 @@ export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';
+export type {
+  EvaluationComparison,
+  EvaluationComparisonStatus,
+  MetricComparison,
+  MetricValueSource,
+  MetricValueStatus,
+} from './evaluation.js';
+export { DEFAULT_BASELINE_ALIAS } from './evaluation.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 
@@ -74,6 +82,8 @@ export interface Run {
   executionMode?: ExecutionMode;
   executionSnapshot?: ExecutionSnapshot | null;
   inputDatasetVersionIds: string[];
+  // Subset of inputDatasetVersionIds produced by an upstream Run; fixed at creation.
+  upstreamDatasetVersionIds: string[];
   outputDatasetVersionIds: string[];
   outputModelVersionIds: string[];
   parentRunId: string | null;

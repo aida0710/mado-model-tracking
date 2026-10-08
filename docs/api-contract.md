@@ -103,6 +103,18 @@ ModelVersion登録のtransaction内で、同じ系列の有効ruleを判定し�
 
 自動Runはruleの固定CodeVersion/設定を使い、`sourceRunId`を`parentRunId`へ関連付ける。`tags['automation.ruleId']`と`environment.automationRuleId`にrule ID、`environment.runtime`に固定runtimeを保存する。executionの`status`は登録時の結果（queued/failed/skipped）で、実行後も変わらない。`runStatus`と`jobStatus`で現在の実行状態を返し、Run/Jobを作らなかった場合はnullになる。
 
+## 評価結果の比較
+
+Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`の部分集合で、上流Run（推論など）の出力にあたる入力を示す。Run作成時に決まり変更できない（DBのCHECKとtriggerで拒否）。native/MLflowのRun作成APIからは指定できず、自動実行の連鎖が設定する。手動のRunは空。正解セット＝`inputDatasetVersionIds`−`upstreamDatasetVersionIds`（集合）。Runを返すすべての応答にこのfieldが付く。
+
+- `GET /projects/:p/models/:id/versions/:v/evaluation-comparison?baselineAlias=&baselineVersionId=&referenceDatasetVersionIds=&codeVersionId=&evaluationRuleId=&metrics=` → EvaluationComparison。`:v`は候補のModelVersion ID。viewerと`read` scope。
+- 基準は`baselineAlias`か`baselineVersionId`（同じModelの版）のどちらか一方。両方は422 `invalid_request`。どちらも省略すると`production` alias。
+- `referenceDatasetVersionIds`と`metrics`はカンマ区切りまたは繰り返し。空の`referenceDatasetVersionIds=`は「正解セットなし」を指定する。省略した条件（正解セット、`codeVersionId`）は、候補版の最新の評価Runから取る。
+- 比べる評価Runは、同じProject・`kind=evaluation`・`status=finished`・削除されていない・正解セットが集合として一致・`codeVersionId`が一致（nullどうしも一致）のRun。`evaluationRuleId`を指定すると、そのruleの自動実行（model_automation_executions.run_id）が作ったRunに限る。複数あれば`endedAt`、idの降順で最初のRun。
+- 応答`{status,modelId,candidateVersionId,baselineAlias,baselineVersionId,candidateRunId,baselineRunId,referenceDatasetVersionIds,codeVersionId,evaluationRuleId,metrics:MetricComparison[]}`。statusは`ok`/`baseline_missing`（aliasが未設定）/`candidate_not_evaluated`/`baseline_not_evaluated`で、比較できなくてもエラーにしない。
+- MetricComparison `{key,candidate,baseline,candidateStatus,baselineStatus,delta,relativeDelta,source:{candidate,baseline}}`。値は`present`/`missing`/`not_finite`（NaN・無限大。値はnull）。delta=候補−基準、relativeDelta=delta÷|基準|（基準0はnull）。sourceは`dataset_context`（MLflowの点で`mlflow_dataset_digest`が正解セットのDatasetVersion digestと一致する最新の点。step→timestampの順）か`run_latest`（`latestMetrics`へのfallback）。`metrics`を省略すると両側のmetric名の和集合を名前順に返す。
+- 他ProjectのModel・ModelVersion・DatasetVersion・CodeVersion・ruleの指定は404。内部の判定（昇格policy）は認可を除いた`compareToBaselineInternal(connection, projectId, request)`を同じtransaction内で呼ぶ。詳細は[評価と基準版との比較](evaluation.md)。
+
 ## 監査ログ
 
 認証・Project・token・権限などの操作を`audit_events`へ記録する。AuditEventは`{id,occurredAt,actorType:'user'|'token'|'system',actorUserId,actorTokenId,action,outcome:'success'|'denied'|'failed',resourceType,resourceId,projectId,details,ip,userAgent}`。成功の記録は業務と同じtransactionでINSERTし、業務がrollbackすれば記録も残らない。拒否・失敗の記録は業務のtransactionの外で書く。`details`へpassword・token・secretの値を入れない。`ip`はAPIが受けたsocketの接続元で、転送ヘッダーは信頼しない。
