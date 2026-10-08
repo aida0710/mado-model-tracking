@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Principal } from '../../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../../db/database.js';
 import { conflict, notFound } from '../../domain/errors.js';
+import { findReservedRunTag, reservedRunTagMessage } from '../../domain/reservedRunTags.js';
 import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
 import { findRun } from '../../repositories/registryRepository.js';
@@ -9,7 +10,7 @@ import { runColumns } from '../../repositories/runListProjection.js';
 import { requireProject } from '../../services/accessService.js';
 import type { RunCompletionService } from '../../services/runCompletionService.js';
 import type { RegistryService } from '../../services/registryService.js';
-import type { RunService } from '../../services/runService.js';
+import { assertRunRecordsWritable, type RunService } from '../../services/runService.js';
 import { logDatasetInputs } from './datasetInputs.js';
 import { findTrackingExperiment, resolveExperimentId } from './experimentService.js';
 import { logRunModels } from './runModels.js';
@@ -32,6 +33,12 @@ import { invalidParameter } from './trackingValidation.js';
 const RUN_NAME_ID_LENGTH = 8;
 // Parent edits have their own namespace so they cannot block dataset registration locks.
 const PARENT_RUN_LOCK_NAMESPACE = 4184;
+
+// MLflow reports user input errors as INVALID_PARAMETER_VALUE rather than native 422 reserved_tag.
+function rejectReservedTags(keys: string[]): void {
+  const reserved = findReservedRunTag(keys);
+  if (reserved !== undefined) invalidParameter(reservedRunTagMessage(reserved));
+}
 
 export class RunTrackingService {
   private readonly database: Database;
@@ -60,6 +67,7 @@ export class RunTrackingService {
       tags: KeyValue[];
     },
   ) {
+    rejectReservedTags(input.tags.map((tag) => tag.key));
     return transaction(this.database, async (connection) => {
       await requireProject(connection, principal, {
         projectId,
@@ -204,7 +212,8 @@ export class RunTrackingService {
           });
         return serializeRunInfo(updated);
       },
-      { lockForStatusChange: true },
+      // The Job's lifecycle guard in resolveTrackingLifecycle already covers finalized Runs.
+      { lockForStatusChange: true, allowFinalizedJobRun: true },
     );
   }
   async batch(
@@ -212,6 +221,7 @@ export class RunTrackingService {
     projectId: string,
     input: TrackingBatch & { runId: string },
   ): Promise<void> {
+    rejectReservedTags(input.tags.map((tag) => tag.key));
     const hasParentTag = input.tags.some((tag) => tag.key === 'mlflow.parentRunId');
     await this.write(
       { principal, projectId, runId: input.runId },
@@ -257,6 +267,7 @@ export class RunTrackingService {
     projectId: string,
     input: { runId: string; key: string },
   ): Promise<void> {
+    rejectReservedTags([input.key]);
     await this.write({ principal, projectId, runId: input.runId }, async (connection, run) => {
       if (!Object.hasOwn(run.tags, input.key)) notFound('Run Tag');
       await connection.query(
@@ -286,7 +297,7 @@ export class RunTrackingService {
           input.lifecycleStage,
         ]);
       },
-      { allowDeleted: true },
+      { allowDeleted: true, allowFinalizedJobRun: true },
     );
   }
   async history(
@@ -393,6 +404,8 @@ export class RunTrackingService {
       lockParentage?: boolean;
       modelIds?: string[];
       lockForStatusChange?: boolean;
+      // Only lifecycle operations pass; every record write freezes once a Job-owned Run ends.
+      allowFinalizedJobRun?: boolean;
     } = {},
   ): Promise<T> {
     const { principal, projectId, runId } = reference;
@@ -429,6 +442,7 @@ export class RunTrackingService {
       if (!run) notFound('Run');
       if (!options.allowDeleted && run.lifecycleStage !== 'active')
         invalidParameter('削除済みRunは変更できません');
+      if (!options.allowFinalizedJobRun) await assertRunRecordsWritable(connection, run);
       const modelIds = [...new Set(options.modelIds ?? [])].sort();
       if (modelIds.length) {
         const models = await rows<{ id: string }>(

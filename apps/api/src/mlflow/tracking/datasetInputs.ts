@@ -125,6 +125,7 @@ export async function logDatasetInputs(
     `UPDATE runs SET input_dataset_version_ids=$2::uuid[] WHERE id=$1 RETURNING ${runColumns}`,
     [request.run.id, [...versionIds]],
   ))!;
+  // Only Job-less Runs reach here after ending; Job-owned Runs are rejected as run_finalized.
   if (
     isTerminalStatus(updated.status) &&
     versionIds.size !== request.run.inputDatasetVersionIds.length

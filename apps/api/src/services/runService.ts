@@ -10,6 +10,7 @@ import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError } from '../domain/errors.js';
 import { createExecutionSnapshot } from '../domain/executionSnapshot.js';
+import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import type { RunCreate, RunPatch } from '../domain/validation.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { validatePinnedRuntime } from '../domain/runtimeCompatibility.js';
@@ -32,6 +33,20 @@ import {
 } from '../repositories/telemetryRepository.js';
 import { requireProject } from './accessService.js';
 import type { RunCompletionService } from './runCompletionService.js';
+
+/**
+ * Job-owned Runs are the evidence automation and evaluation compare, so their records freeze once
+ * the Run is terminal. Runs without a Job stay writable after they end, as in MLflow.
+ */
+export async function assertRunRecordsWritable(
+  connection: Connection,
+  run: Pick<Run, 'id' | 'status'>,
+): Promise<void> {
+  if (!isTerminalStatus(run.status)) return;
+  const job = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
+  if (job)
+    throw new DomainError(409, 'Jobが終了したRunには記録を追加・変更できません', 'run_finalized');
+}
 
 export class RunService {
   constructor(
@@ -71,6 +86,7 @@ export class RunService {
   }
 
   async create(principal: Principal, projectId: string, input: RunCreate): Promise<Run> {
+    assertNoReservedRunTags(input.tags);
     return transaction(this.database, async (connection) => {
       await requireProject(connection, principal, {
         projectId,
@@ -153,6 +169,8 @@ export class RunService {
     projectId: string,
     registration: { runId: string; input: RunPatch },
   ): Promise<Run> {
+    const input = registration.input;
+    if (input.tags) assertNoReservedRunTags(input.tags);
     return transaction(this.database, async (connection) => {
       await requireProject(connection, principal, {
         projectId,
@@ -160,7 +178,7 @@ export class RunService {
         scope: 'runs:write',
       });
       const run = await findRun(connection, { projectId, id: registration.runId, lock: true });
-      const input = registration.input;
+      if (input.tags || input.parameters) await assertRunRecordsWritable(connection, run);
       const isMlflowManaged = (run as Run & { mlflowManaged?: boolean }).mlflowManaged === true;
       if (isMlflowManaged && input.parameters) {
         for (const [key, value] of Object.entries(input.parameters)) {
@@ -233,6 +251,7 @@ export class RunService {
     await this.writeTelemetry(principal, {
       projectId,
       runId: registration.runId,
+      isRunRecord: true,
       append: (connection) => appendMetrics(connection, registration.runId, registration.metrics),
     });
   }
@@ -250,6 +269,7 @@ export class RunService {
     await this.writeTelemetry(principal, {
       projectId,
       runId: registration.runId,
+      isRunRecord: false,
       append: (connection) => appendLogs(connection, registration.runId, registration.entries),
     });
   }
@@ -259,6 +279,8 @@ export class RunService {
     request: {
       projectId: string;
       runId: string;
+      // Logs are diagnostics nothing compares, so only records (metrics) freeze with the Job.
+      isRunRecord: boolean;
       append: (connection: Connection) => Promise<void>;
     },
   ): Promise<void> {
@@ -268,7 +290,12 @@ export class RunService {
         role: 'editor',
         scope: 'runs:write',
       });
-      await findRun(connection, { projectId: request.projectId, id: request.runId, lock: true });
+      const run = await findRun(connection, {
+        projectId: request.projectId,
+        id: request.runId,
+        lock: true,
+      });
+      if (request.isRunRecord) await assertRunRecordsWritable(connection, run);
       await request.append(connection);
     });
   }

@@ -77,6 +77,11 @@ JobのあるRunの開始・終了状態はworkerが正本。SDKのstart/end操�
 
 MLflow 3の実験記録・モデル保存/登録を対象とし、Tracing/GenAI/Gateway/Prompt Registryは対象外。未知の検索構文とAPIは明示エラーを返す。接続と検証の例は[MLflow手順](mlflow.md)を参照する。
 
+## Runの予約tagと終端後の記録
+
+- 予約tag: `automation.`と`mmt.`で始まるRunのtagはサーバーが付ける（例: 自動実行の`automation.ruleId`）。利用者はnative・MLflowのどちらからも付け外しできない。対象はnativeの`POST /projects/:p/runs`と`PATCH /projects/:p/runs/:r`のtags（422 `reserved_tag`）、MLflowの`runs/create`のtags、`runs/set-tag`、`runs/delete-tag`、`runs/log-batch`のtags（400 `INVALID_PARAMETER_VALUE`）。`mlflow.`で始まるsystem tagは従来どおり書ける。予約tagを持つ既存Runはそのまま残す。自動化の判定はtagではなく`model_automation_executions.run_id`で行う。
+- 終端後の記録: Jobが付いたRunが終端（finished/failed/canceled）になった後は、metrics・params・tags・Dataset入力への書き込みを409 `run_finalized`で拒否する（MLflowは`INVALID_STATE`）。対象はnativeの`POST /runs/:r/metrics`とPATCHのtags/parameters、MLflowの`log-metric`、`log-parameter`、`log-batch`、`set-tag`、`delete-tag`、`log-inputs`、`runs/outputs`、`log-model`。名前の変更、logs、MLflowの`runs/update`（状態はworkerが正本のまま）とsoftdelete/restoreは受け付ける。Jobが付かないRunはMLflowと同じく終端後も書ける。
+
 ## コンテナのCodeVersion
 
 `runtime`は省略時に`{kind:'python'}`へ正規化する。既存CodeVersionとtargetもmigrationでPythonへ移行する。版はruntimeを含めて更新不可。
