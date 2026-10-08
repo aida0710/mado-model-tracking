@@ -8,6 +8,7 @@ import {
   roleSchema,
 } from '../domain/validation.js';
 import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
+import { requestMetadata } from '../http/requestMetadata.js';
 
 export function projectRoutes(projects: ProjectService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
@@ -37,8 +38,12 @@ export function projectRoutes(projects: ProjectService): Hono<ApiEnvironment> {
     const input = await jsonBody(context, z.strictObject({ role: roleSchema }));
     const { role, ...user } = await projects.setMember(
       principal(context),
-      uuidParam(context, 'p'),
-      { userId: uuidParam(context, 'userId'), role: input.role },
+      {
+        projectId: uuidParam(context, 'p'),
+        userId: uuidParam(context, 'userId'),
+        role: input.role,
+      },
+      requestMetadata(context),
     );
     return context.json({ user, role });
   });
