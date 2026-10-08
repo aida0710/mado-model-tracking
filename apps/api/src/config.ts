@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AuthMode } from '@mmt/contracts';
+import { createOidcRolePolicy, type OidcRolePolicy } from './domain/oidcRolePolicy.js';
 
 const optionalSetting = z.preprocess(
   (value) => (value === '' ? undefined : value),
@@ -15,6 +16,9 @@ const optionalSshPath = z.preprocess(
     .refine((value) => value.startsWith('/') && !/[\x00-\x1f\x7f]/.test(value))
     .optional(),
 );
+
+// Same default as Mado: the identity, display name and email claims the login needs.
+const DEFAULT_OIDC_SCOPES = 'openid profile email';
 
 // Idle and absolute limits keep the previous 12-hour session while ending unattended browsers after 8 hours.
 const DEFAULT_SESSION_IDLE_SECONDS = 8 * 60 * 60;
@@ -55,7 +59,14 @@ const environmentSchema = z.object({
   OIDC_ISSUER_URL: optionalSetting,
   OIDC_CLIENT_ID: optionalSetting,
   OIDC_CLIENT_SECRET: optionalSetting,
-  OIDC_ADMIN_GROUP: z.string().default('mmt-admins'),
+  OIDC_ALLOWED_GROUPS: optionalSetting,
+  OIDC_ROLE_MAPPING_JSON: optionalSetting,
+  OIDC_DEFAULT_ROLE: optionalSetting,
+  // Shorthand for {"<group>":"admin"}; without it and the mapping, mmt-admins stays the admin group.
+  OIDC_ADMIN_GROUP: optionalSetting,
+  // Off by default: linking by email would let an IdP account take over a same-email local account.
+  OIDC_AUTO_LINK_VERIFIED_EMAIL: z.enum(['true', 'false']).default('false'),
+  OIDC_SCOPES: z.string().default(DEFAULT_OIDC_SCOPES),
   OIDC_LABEL: z.string().min(1).max(100).default('Authentik'),
   OIDC_ALLOW_INSECURE_HTTP: z.enum(['true', 'false']).default('false'),
   DEVELOPMENT_ADMIN_EMAIL: z
@@ -100,7 +111,9 @@ export interface ApiConfig {
     issuer: string;
     clientId: string;
     clientSecret?: string;
-    adminGroup: string;
+    rolePolicy: OidcRolePolicy;
+    autoLinkVerifiedEmail: boolean;
+    scopes: string;
     label: string;
     allowInsecureHttp: boolean;
   } | null;
@@ -165,11 +178,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
         'OIDC issuer requires HTTPS; insecure HTTP is permitted only for an explicit loopback test provider',
       );
     }
+    const scopes = settings.OIDC_SCOPES.split(/\s+/).filter(Boolean);
+    if (!scopes.includes('openid')) throw new Error('OIDC_SCOPES must include openid');
     oidc = {
       issuer: settings.OIDC_ISSUER_URL,
       clientId: settings.OIDC_CLIENT_ID,
       clientSecret: settings.OIDC_CLIENT_SECRET,
-      adminGroup: settings.OIDC_ADMIN_GROUP,
+      rolePolicy: createOidcRolePolicy({
+        allowedGroups: settings.OIDC_ALLOWED_GROUPS,
+        roleMappingJson: settings.OIDC_ROLE_MAPPING_JSON,
+        defaultRole: settings.OIDC_DEFAULT_ROLE,
+        adminGroup: settings.OIDC_ADMIN_GROUP,
+      }),
+      autoLinkVerifiedEmail: settings.OIDC_AUTO_LINK_VERIFIED_EMAIL === 'true',
+      scopes: scopes.join(' '),
       label: settings.OIDC_LABEL,
       allowInsecureHttp,
     };

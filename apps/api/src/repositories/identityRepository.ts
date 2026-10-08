@@ -9,16 +9,6 @@ export const userColumns = `u.id,u.email,u.display_name,u.is_admin,u.username,u.
   ]::text[],NULL) AS auth_sources`;
 export const tokenColumns = 'id,name,kind,project_id,scopes,expires_at,last_used_at,created_at';
 
-export interface OidcLoginIdentity {
-  issuer: string;
-  subject: string;
-  email: string;
-  emailVerified: boolean;
-  groups: string[];
-  displayName: string;
-  isAdmin: boolean;
-}
-
 export interface LocalCredential {
   userId: string;
   passwordHash: string;
@@ -50,46 +40,144 @@ export async function findUser(connection: Connection, userId: string): Promise<
   return first<User>(connection, `SELECT ${userColumns} FROM users u WHERE u.id=$1`, [userId]);
 }
 
-// Finds the user linked to an OIDC subject, creating it on first login. The caller holds a transaction.
-export async function upsertOidcUser(
+export interface OidcIdentityLogin {
+  issuer: string;
+  subject: string;
+  userId: string;
+  email: string;
+  emailVerified: boolean;
+  groups: string[];
+}
+
+export interface LockedAccount {
+  id: string;
+  email: string;
+  displayName: string;
+  isAdmin: boolean;
+  status: User['status'];
+}
+
+export interface AutoLinkCandidate {
+  id: string;
+  // Global admin or admin of any project: linking such an account by email would hand it over.
+  isPrivileged: boolean;
+}
+
+export async function findOidcIdentityUserId(
   connection: Connection,
-  identity: OidcLoginIdentity,
-): Promise<User> {
+  identity: { issuer: string; subject: string },
+): Promise<string | undefined> {
   const linked = await first<{ userId: string }>(
     connection,
     'SELECT user_id FROM user_oidc_identities WHERE issuer=$1 AND subject=$2 FOR UPDATE',
     [identity.issuer, identity.subject],
   );
-  const profile = [identity.email, identity.displayName, identity.isAdmin];
-  const user = linked
-    ? await first<User>(
-        connection,
-        `UPDATE users u SET email=$2,display_name=$3,is_admin=$4,last_login_at=now(),updated_at=now()
-        WHERE u.id=$1 RETURNING ${userColumns}`,
-        [linked.userId, ...profile],
-      )
-    : await first<User>(
-        connection,
-        `INSERT INTO users AS u(email,display_name,is_admin,last_login_at) VALUES($1,$2,$3,now())
-        RETURNING ${userColumns}`,
-        profile,
-      );
+  return linked?.userId;
+}
+
+// Local accounts with this email that no SSO identity has claimed yet.
+export async function findAutoLinkCandidates(
+  connection: Connection,
+  email: string,
+): Promise<AutoLinkCandidate[]> {
+  return rows<AutoLinkCandidate>(
+    connection,
+    `SELECT u.id,(u.is_admin OR EXISTS(SELECT 1 FROM project_members m WHERE m.user_id=u.id AND m.role='admin')) AS is_privileged
+    FROM users u WHERE lower(u.email)=lower($1)
+    AND EXISTS(SELECT 1 FROM user_local_credentials c WHERE c.user_id=u.id)
+    AND NOT EXISTS(SELECT 1 FROM user_oidc_identities i WHERE i.user_id=u.id)
+    ORDER BY u.id FOR UPDATE OF u`,
+    [email],
+  );
+}
+
+export async function insertOidcUser(
+  connection: Connection,
+  profile: { email: string; displayName: string },
+): Promise<string> {
+  const user = await first<{ id: string }>(
+    connection,
+    'INSERT INTO users(email,display_name) VALUES($1,$2) RETURNING id',
+    [profile.email, profile.displayName],
+  );
+  return user!.id;
+}
+
+export async function lockAccount(
+  connection: Connection,
+  userId: string,
+): Promise<LockedAccount | undefined> {
+  return first<LockedAccount>(
+    connection,
+    'SELECT id,email,display_name,is_admin,status FROM users WHERE id=$1 FOR UPDATE',
+    [userId],
+  );
+}
+
+// Every change that can remove a global administrator takes this lock before reading the admins,
+// so two concurrent demotions cannot both see the other as the remaining admin. An advisory
+// lock avoids deadlocks with transactions that already hold their own user row.
+const GLOBAL_ADMIN_INVARIANT_LOCK = 'mmt.global_admin_invariant';
+
+export async function lockActiveGlobalAdminIds(connection: Connection): Promise<string[]> {
+  await connection.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
+    GLOBAL_ADMIN_INVARIANT_LOCK,
+  ]);
+  const admins = await rows<{ id: string }>(
+    connection,
+    "SELECT id FROM users WHERE is_admin AND status='active' ORDER BY id",
+  );
+  return admins.map((admin) => admin.id);
+}
+
+export async function updateOidcUserProfile(
+  connection: Connection,
+  profile: { userId: string; email: string; displayName: string; isAdmin: boolean },
+): Promise<void> {
+  await connection.query(
+    'UPDATE users SET email=$2,display_name=$3,is_admin=$4,updated_at=now() WHERE id=$1',
+    [profile.userId, profile.email, profile.displayName, profile.isAdmin],
+  );
+}
+
+export async function recordOidcIdentityLogin(
+  connection: Connection,
+  login: OidcIdentityLogin,
+): Promise<void> {
   await connection.query(
     `INSERT INTO user_oidc_identities(issuer,subject,user_id,email_at_login,email_verified,groups_at_login,last_login_at)
     VALUES($1,$2,$3,$4,$5,$6,now())
     ON CONFLICT(issuer,subject) DO UPDATE SET email_at_login=EXCLUDED.email_at_login,
     email_verified=EXCLUDED.email_verified,groups_at_login=EXCLUDED.groups_at_login,last_login_at=now()`,
-    [
-      identity.issuer,
-      identity.subject,
-      user!.id,
-      identity.email,
-      identity.emailVerified,
-      identity.groups,
-    ],
+    [login.issuer, login.subject, login.userId, login.email, login.emailVerified, login.groups],
   );
-  // The identity row exists before the user's columns are read, so auth_sources includes oidc.
-  return (await findUser(connection, user!.id))!;
+}
+
+export async function listUserGroups(connection: Connection, userId: string): Promise<string[]> {
+  const groups = await rows<{ groupName: string }>(
+    connection,
+    'SELECT group_name FROM user_groups WHERE user_id=$1 ORDER BY group_name',
+    [userId],
+  );
+  return groups.map((group) => group.groupName);
+}
+
+// Makes user_groups equal to groups and refreshes synced_at, also for groups that did not change.
+export async function replaceUserGroups(
+  connection: Connection,
+  userId: string,
+  groups: string[],
+): Promise<void> {
+  await connection.query(
+    'DELETE FROM user_groups WHERE user_id=$1 AND NOT (group_name = ANY($2::text[]))',
+    [userId, groups],
+  );
+  await connection.query(
+    `INSERT INTO user_groups(user_id,group_name,source,synced_at)
+    SELECT $1,group_name,'oidc',now() FROM unnest($2::text[]) AS g(group_name)
+    ON CONFLICT(user_id,group_name) DO UPDATE SET synced_at=now()`,
+    [userId, groups],
+  );
 }
 
 export async function findLocalCredentialByUsername(

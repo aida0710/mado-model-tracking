@@ -20,6 +20,7 @@ describe.skipIf(!testDatabaseUrl)(
         AUTH_MODE: 'oidc',
         OIDC_ISSUER_URL: provider.issuer,
         OIDC_CLIENT_ID: 'mmt-test',
+        OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
         OIDC_CLIENT_SECRET: 'mock-client-secret',
         OIDC_ALLOW_INSECURE_HTTP: 'true',
       });
