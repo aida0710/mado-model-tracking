@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Play, RefreshCw, Upload } from 'lucide-react';
+import type { Run } from '@mmt/contracts';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
@@ -13,6 +14,7 @@ import { RunLogs } from '../components/RunLogs';
 import { RunArtifacts } from '../components/RunArtifacts';
 import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { RunOutputModels } from '../components/RunOutputModels';
+import { RunCheckpointList } from '../components/RunCheckpointList';
 import { DetailsList, KeyValues } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
 import { ArtifactUploadDialog } from '../dialogs/ArtifactUploadDialog';
@@ -21,9 +23,18 @@ import { getFieldValue, parseStringMap } from '../lib/formValues';
 import { formatDate, formatDuration } from '../lib/format';
 import { isSystemMetric } from '../lib/metricSeries';
 import { getRunParameters } from '../lib/runParameters';
-import { text } from '../i18n/catalog';
+import { getResumeCheckpointRecord } from '../lib/checkpointResume';
+import { text, textTemplates } from '../i18n/catalog';
 
-const tabs = ['metrics', 'artifacts', 'systemMetrics', 'logs', 'details', 'executionSnapshot'] as const;
+const tabs = [
+  'metrics',
+  'artifacts',
+  'checkpoints',
+  'systemMetrics',
+  'logs',
+  'details',
+  'executionSnapshot',
+] as const;
 export function RunDetailPage() {
   const { project, canEdit } = useProject();
   const { runId = '' } = useParams();
@@ -85,6 +96,7 @@ export function RunDetailPage() {
                   <span>{item.executionMode === 'test' ? text.testMode : text.runMode}</span>
                   {item.taskId && <Link to={`${base}/tasks?id=${item.taskId}`}>{text.taskRevision}: {item.taskRevision}</Link>}
                   <span>{formatDuration(item.startedAt, item.endedAt)}</span>
+                  <ResumedFromCheckpoint run={item} />
                 </>
               }
               actions={
@@ -162,6 +174,7 @@ export function RunDetailPage() {
                   <RunArtifacts projectId={project.id} runId={runId} revision={artifactRevision} />
                 </>
               )}
+              {tab === 'checkpoints' && <RunCheckpointList run={item} canEdit={canEdit} />}
               {tab === 'details' && (
                 <div className="details-grid">
                   <section>
@@ -293,5 +306,19 @@ export function RunDetailPage() {
         />
       )}
     </section>
+  );
+}
+
+/** For a Run that continues from a checkpoint: the step it starts from and the Run that saved it. */
+function ResumedFromCheckpoint({ run }: { run: Run }) {
+  const resume = getResumeCheckpointRecord(run);
+  if (!resume) return null;
+  return (
+    <>
+      <span>{textTemplates.checkpointResumedFromStep(resume.step)}</span>
+      <Link to={`/projects/${run.projectId}/runs/${resume.sourceRunId}?tab=checkpoints`}>
+        {text.checkpointSourceRun}
+      </Link>
+    </>
   );
 }

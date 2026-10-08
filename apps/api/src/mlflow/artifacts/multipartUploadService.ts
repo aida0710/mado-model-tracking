@@ -24,6 +24,7 @@ import {
 } from './mlmodelCapture.js';
 import { partEtag } from './multipartProtocol.js';
 import { MultipartUploadUnsupportedError } from './multipartUnsupported.js';
+import type { CheckpointService } from '../../services/checkpointService.js';
 
 // The finalizer polls every second, so a shorter interval only adds queries.
 const FINALIZE_POLL_MS = 250;
@@ -44,6 +45,8 @@ export class MlflowMultipartUploadService {
       uploads: ArtifactUploadService;
       /** MMT_UPLOAD_FINALIZE_WAIT_MS: complete answers 503 when verification takes longer. */
       finalizeWaitMs: number;
+      // Same checkpoint registration as a single PUT of checkpoints/step-<N>/ files.
+      checkpoints?: CheckpointService;
     },
   ) {}
 
@@ -153,6 +156,13 @@ export class MlflowMultipartUploadService {
       throw new DomainError(409, 'Artifactのsource Runが変更されました', 'conflict');
     await requireNonconflictingArtifactPath(connection, access);
     await replaceArtifactPath(connection, { ...access, artifact, runId });
+    if (owner.kind === 'run')
+      await this.options.checkpoints?.recordMlflowArtifact(connection, {
+        projectId: upload.projectId,
+        runId: owner.id,
+        artifact,
+        artifactPath: access.path,
+      });
     if (owner.kind === 'model' && access.path === 'MLmodel')
       await saveLoggedModelMlmodel(connection, {
         projectId: upload.projectId,

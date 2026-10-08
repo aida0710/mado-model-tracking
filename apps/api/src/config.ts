@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { AuthMode } from '@mmt/contracts';
 import { createOidcRolePolicy, type OidcRolePolicy } from './domain/oidcRolePolicy.js';
 import { parseSecretKey, type SecretKey } from './security/secretEncryption.js';
+import { DEFAULT_CHECKPOINT_KEEP_COUNT } from '@mmt/contracts';
 
 const optionalSetting = z.preprocess(
   (value) => (value === '' ? undefined : value),
@@ -107,6 +108,11 @@ const environmentSchema = z.object({
     .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
   // base64 of 32 bytes. Without it, storage backends that need a secret cannot be created.
   MMT_STORAGE_SECRET_KEY: optionalSetting,
+  MMT_CHECKPOINT_KEEP_COUNT: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .default(DEFAULT_CHECKPOINT_KEEP_COUNT),
 });
 
 export interface ApiConfig {
@@ -145,6 +151,8 @@ export interface ApiConfig {
   uploadFinalizeWaitMs: number;
   // Encrypts storage backend secrets in the DB; null when MMT_STORAGE_SECRET_KEY is unset.
   storageSecretKey: SecretKey | null;
+  // Checkpoints per Run shown by default; older ones get retained=false (their files are kept).
+  checkpointKeepCount: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -259,5 +267,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     },
     uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
     storageSecretKey,
+    checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
   };
 }

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
+from ..checkpoint_archive import is_safe_relative_path
 from ..errors import ConfigurationError
 from ..execution_runtime import RUNTIME_KINDS
 from ..execution_snapshot import resolve_execution_snapshot
@@ -16,6 +17,7 @@ TERMINAL_STATUSES = {"finished", "failed", "canceled"}
 ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Job tokens are what the Job's own code authenticates with; the worker token never reaches it.
 JOB_TOKEN = re.compile(r"^mmtj_[A-Za-z0-9_-]+$")
+SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
 
 def require_uuid(value: object, field: str) -> str:
@@ -38,6 +40,8 @@ class WorkerJob:
     input_datasets: list[dict[str, Any]]
     # Only claim/resume of a not-yet-started Job carries one; the journal keeps it afterwards.
     job_token: str | None = field(default=None, repr=False)
+    # The checkpoint the Run continues from; staged and verified before the entrypoint starts.
+    resume_checkpoint: dict[str, Any] | None = None
 
     @classmethod
     def parse(cls, payload: dict[str, Any]) -> WorkerJob:
@@ -50,6 +54,7 @@ class WorkerJob:
                 payload["modelVersion"],
                 payload["inputDatasets"],
                 payload.get("jobToken"),
+                payload.get("resumeCheckpoint"),
             )
             snapshot.validate()
         except (KeyError, TypeError, AttributeError):
@@ -141,3 +146,50 @@ class WorkerJob:
         for name, value in self.code_version["environment"].items():
             if not ENVIRONMENT_NAME.fullmatch(name) or not isinstance(value, str) or "\x00" in value:
                 raise ConfigurationError("Invalid CodeVersion environment")
+        if self.resume_checkpoint is not None:
+            validate_resume_checkpoint(self.resume_checkpoint, run=self.run)
+
+
+def _is_file_entry(entry: Any) -> bool:
+    return (
+        isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and is_safe_relative_path(entry["path"])
+        and isinstance(entry.get("sha256"), str)
+        and SHA256.fullmatch(entry["sha256"]) is not None
+        and isinstance(entry.get("size"), int)
+        and not isinstance(entry["size"], bool)
+        and entry["size"] >= 0
+    )
+
+
+def validate_resume_checkpoint(checkpoint: dict[str, Any], *, run: dict[str, Any]) -> None:
+    """The checkpoint must be the one pinned to the Run, with Artifacts the worker can verify."""
+    if not isinstance(checkpoint, dict):
+        raise ConfigurationError("WorkerJob resumeCheckpoint must be an object")
+    require_uuid(checkpoint.get("id"), "resumeCheckpoint.id")
+    require_uuid(checkpoint.get("runId"), "resumeCheckpoint.runId")
+    if checkpoint["id"] != run.get("resumeCheckpointId"):
+        raise ConfigurationError("WorkerJob resumeCheckpoint is not the Run's pinned checkpoint")
+    step = checkpoint.get("step")
+    if isinstance(step, bool) or not isinstance(step, int) or step < 0:
+        raise ConfigurationError("resumeCheckpoint.step must be a non-negative integer")
+    source, artifacts = checkpoint.get("source"), checkpoint.get("artifacts")
+    if source not in {"native", "mlflow"} or not isinstance(artifacts, list) or not artifacts:
+        raise ConfigurationError("resumeCheckpoint has an unknown source or no Artifacts")
+    if source == "native" and len(artifacts) != 1:
+        raise ConfigurationError("A native checkpoint is exactly one archive Artifact")
+    for artifact in artifacts:
+        if not _is_file_entry(artifact):
+            raise ConfigurationError("resumeCheckpoint has an invalid Artifact")
+        require_uuid(artifact.get("id"), "resumeCheckpoint.artifacts.id")
+    manifest = checkpoint.get("manifest")
+    files = manifest.get("files") if isinstance(manifest, dict) else None
+    if not isinstance(files, list) or not files or not all(_is_file_entry(file) for file in files):
+        raise ConfigurationError("resumeCheckpoint has an invalid manifest")
+    if source == "mlflow" and sorted((a["path"], a["sha256"], a["size"]) for a in artifacts) != sorted(
+        (file["path"], file["sha256"], file["size"]) for file in files
+    ):
+        raise ConfigurationError("MLflow checkpoint Artifacts do not match its manifest")
+    if not isinstance(checkpoint.get("metadata", {}), dict):
+        raise ConfigurationError("resumeCheckpoint.metadata must be an object")

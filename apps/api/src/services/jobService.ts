@@ -25,6 +25,12 @@ import { JobTokenService } from './jobTokenService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 import { runColumns } from '../repositories/runListProjection.js';
+import type { JobRetryInput } from '../domain/checkpointValidation.js';
+import {
+  findWorkerResumeCheckpoint,
+  pinResumeCheckpoint,
+  selectRetryCheckpoint,
+} from './checkpointResume.js';
 
 export class JobService {
   private readonly database: Database;
@@ -176,11 +182,13 @@ export class JobService {
     return canceled;
   }
 
+  /** A retry is a new Run; with a checkpoint it continues from that step instead of step 0. */
   async retry(
     principal: Principal,
     projectId: string,
-    jobId: string,
+    request: { jobId: string; input: JobRetryInput },
   ): Promise<{ run: Run; job: Job }> {
+    const { jobId, input: retryRequest } = request;
     return transaction(this.database, async (connection) => {
       await requireProject(connection, principal, {
         projectId,
@@ -193,16 +201,26 @@ export class JobService {
         `SELECT ${jobColumns()} FROM jobs WHERE retry_of_job_id=$1`,
         [previousJob.id],
       );
-      if (existingRetry)
-        return {
-          job: existingRetry,
-          run: await findRun(connection, { projectId, id: existingRetry.runId }),
-        };
+      const previousRun = await findRun(connection, { projectId, id: previousJob.runId });
+      if (existingRetry) {
+        const retryRun = await findRun(connection, { projectId, id: existingRetry.runId });
+        await this.assertSameRetryCheckpoint(connection, {
+          projectId,
+          previousRun,
+          retryRun,
+          request: retryRequest,
+        });
+        return { job: existingRetry, run: retryRun };
+      }
       if (!isTerminalStatus(previousJob.status))
         conflict('実行中または状態未確認のJobは再実行できません');
       if (previousJob.attempt >= previousJob.maxAttempts) conflict('Jobの最大試行回数に達しました');
-      const previousRun = await findRun(connection, { projectId, id: previousJob.runId });
-      const run = await this.runs.insertRun(connection, {
+      const checkpointId = await selectRetryCheckpoint(connection, {
+        projectId,
+        previousRun,
+        request: retryRequest,
+      });
+      const insertedRun = await this.runs.insertRun(connection, {
         projectId,
         createdBy: principal.user.id,
         ...(previousRun.taskId && previousRun.taskRevision
@@ -225,6 +243,9 @@ export class JobService {
         // so promotion and baseline comparison still match it against the rule's inputs.
         upstreamDatasetVersionIds: previousRun.upstreamDatasetVersionIds,
       });
+      const run = checkpointId
+        ? await pinResumeCheckpoint(connection, { run: insertedRun, checkpointId })
+        : insertedRun;
       const job = await this.insertJob(connection, {
         run,
         input: {
@@ -241,6 +262,18 @@ export class JobService {
       ]);
       return { run, job };
     });
+  }
+
+  // Resending the same retry returns the Run it created; asking for another checkpoint is refused.
+  private async assertSameRetryCheckpoint(
+    connection: Connection,
+    retry: { projectId: string; previousRun: Run; retryRun: Run; request: JobRetryInput },
+  ): Promise<void> {
+    const { request } = retry;
+    if (!request.checkpointId && !request.resumeFromLatestCheckpoint) return;
+    const requested = await selectRetryCheckpoint(connection, retry);
+    if ((retry.retryRun.resumeCheckpointId ?? null) !== requested)
+      throw new DomainError(409, 'このJobは別の条件で再実行済みです', 'job_already_retried');
   }
 
   async getWorkerJob(connection: Connection, job: Job): Promise<WorkerJob> {
@@ -275,8 +308,18 @@ export class JobService {
       projectId: job.projectId,
       ids: run.inputDatasetVersionIds,
     });
+    const resumeCheckpoint = await findWorkerResumeCheckpoint(connection, run);
     const jobToken = await this.jobTokens.issueForWorker(connection, job);
-    return { job, run, target, codeVersion, modelVersion, inputDatasets, jobToken };
+    return {
+      job,
+      run,
+      target,
+      codeVersion,
+      modelVersion,
+      inputDatasets,
+      jobToken,
+      resumeCheckpoint,
+    };
   }
 
   async reserveJob(

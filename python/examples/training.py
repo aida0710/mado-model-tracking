@@ -1,4 +1,10 @@
-"""Train a CPU linear model, or fine-tune a pinned model's real input weights."""
+"""Train a CPU linear model, or fine-tune a pinned model's real input weights.
+
+The optimizer is SGD with momentum. With --checkpoint-every N (or the checkpoint_every parameter)
+the weights, the momentum buffers and the step are saved as a checkpoint every N steps, and a Job
+that resumes from one continues with exactly the saved state, so its result equals an
+uninterrupted run.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +13,67 @@ import json
 import math
 import os
 from contextlib import nullcontext
+from dataclasses import dataclass
 from pathlib import Path
 
 # Every Run adds the next numbered version (1, 2, 3, ...) to this one Model; the Run lists it
 # in outputModelVersionIds.
 OUTPUT_MODEL_NAME = "cpu-linear"
+EXAMPLES = [(-1.0, -1.0), (0.0, 1.0), (1.0, 3.0), (2.0, 5.0)]
+# 0.5 converges in the default 40 steps; momentum close to 1 would still oscillate there.
+DEFAULT_MOMENTUM = 0.5
+# 0 saves no checkpoints, so a plain run needs no upload sessions.
+DEFAULT_CHECKPOINT_EVERY = 0
+MODEL_STATE_FILE = "model.json"
+OPTIMIZER_STATE_FILE = "optimizer.json"
+CHECKPOINT_FRAMEWORK = "python-sgd-momentum"
+
+
+@dataclass
+class TrainingState:
+    weight: float
+    bias: float
+    velocity_weight: float = 0.0
+    velocity_bias: float = 0.0
+    # Number of completed optimizer steps; a resumed run continues with this step index.
+    step: int = 0
+
+    def optimizer_state(self) -> dict:
+        return {"velocity_weight": self.velocity_weight, "velocity_bias": self.velocity_bias}
+
+
+def save_checkpoint(state: TrainingState, directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / MODEL_STATE_FILE).write_text(
+        json.dumps({"family": "linear", "weight": state.weight, "bias": state.bias})
+    )
+    write_optimizer_state(state, directory / OPTIMIZER_STATE_FILE)
+
+
+def write_optimizer_state(state: TrainingState, path: Path) -> None:
+    path.write_text(json.dumps({**state.optimizer_state(), "step": state.step}))
+
+
+def load_checkpoint(directory: Path, *, step: int) -> TrainingState:
+    model = json.loads((directory / MODEL_STATE_FILE).read_text())
+    optimizer = json.loads((directory / OPTIMIZER_STATE_FILE).read_text())
+    if optimizer.get("step") != step:
+        raise ValueError("Checkpoint optimizer step does not match the resume step")
+    return TrainingState(
+        weight=float(model["weight"]),
+        bias=float(model["bias"]),
+        velocity_weight=float(optimizer["velocity_weight"]),
+        velocity_bias=float(optimizer["velocity_bias"]),
+        step=step,
+    )
+
+
+def resume_checkpoint(run=None):
+    if run is not None:
+        return run.resume_checkpoint()
+    from mado_tracking.checkpoints import resume_checkpoint_from_environment
+
+    return resume_checkpoint_from_environment()
 
 
 def initial_weights(*, kind: str, directory: Path, run=None) -> tuple[float, float]:
@@ -47,27 +109,42 @@ def initial_weights(*, kind: str, directory: Path, run=None) -> tuple[float, flo
 
 
 def train(
-    *, steps: int, learning_rate: float, output: Path, initial_weight: float, initial_bias: float, run=None
+    *,
+    steps: int,
+    learning_rate: float,
+    momentum: float,
+    output: Path,
+    state: TrainingState,
+    checkpoint_every: int,
+    fail_at_step: int | None = None,
+    run=None,
 ) -> dict:
-    examples = [(-1.0, -1.0), (0.0, 1.0), (1.0, 3.0), (2.0, 5.0)]
-    weight, bias = initial_weight, initial_bias
-    print(f"initial_weight={weight:.6f} initial_bias={bias:.6f}", flush=True)
-    for step in range(steps):
-        errors = [weight * x + bias - y for x, y in examples]
-        loss = sum(error * error for error in errors) / len(examples)
-        weight -= (
-            learning_rate
-            * 2
-            * sum(error * pair[0] for error, pair in zip(errors, examples, strict=True))
-            / len(examples)
-        )
-        bias -= learning_rate * 2 * sum(errors) / len(examples)
+    initial_weight, initial_bias = state.weight, state.bias
+    print(f"start_step={state.step} weight={state.weight:.6f} bias={state.bias:.6f}", flush=True)
+    for step in range(state.step, steps):
+        if step == fail_at_step:
+            raise RuntimeError(f"Simulated interruption at step {step}")
+        errors = [state.weight * x + state.bias - y for x, y in EXAMPLES]
+        loss = sum(error * error for error in errors) / len(EXAMPLES)
+        gradient_weight = 2 * sum(error * pair[0] for error, pair in zip(errors, EXAMPLES, strict=True))
+        gradient_weight /= len(EXAMPLES)
+        gradient_bias = 2 * sum(errors) / len(EXAMPLES)
+        state.velocity_weight = momentum * state.velocity_weight + gradient_weight
+        state.velocity_bias = momentum * state.velocity_bias + gradient_bias
+        state.weight -= learning_rate * state.velocity_weight
+        state.bias -= learning_rate * state.velocity_bias
+        state.step = step + 1
         print(f"step={step} loss={loss:.6f}", flush=True)
         if run is not None:
+            # The metric step continues the saved one after a resume, so the curve has no restart.
             run.log_metrics({"train.loss": loss}, step=step)
-    model = {"family": "linear", "weight": weight, "bias": bias, "steps": steps}
+        if checkpoint_every and state.step % checkpoint_every == 0 and state.step < steps:
+            write_checkpoint(state, output=output, run=run)
+    model = {"family": "linear", "weight": state.weight, "bias": state.bias, "steps": steps}
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(model), encoding="utf-8")
+    # Kept next to the weights so a continuation (or a comparison) has the full training state.
+    write_optimizer_state(state, output.parent / OPTIMIZER_STATE_FILE)
     if run is not None:
         artifact = run.log_artifact(output, path="model/weights.json", mime_type="application/json")
         run.register_output_model(
@@ -75,7 +152,7 @@ def train(
             family="linear",
             artifact_id=artifact["id"],
             metadata={
-                "algorithm": "gradient descent",
+                "algorithm": "gradient descent with momentum",
                 "steps": steps,
                 "initial_weight": initial_weight,
                 "initial_bias": initial_bias,
@@ -84,11 +161,30 @@ def train(
     return model
 
 
+def write_checkpoint(state: TrainingState, *, output: Path, run=None) -> None:
+    """Save locally under checkpoints/step-N; a tracked Run also uploads it as its checkpoint."""
+    directory = output.parent / "checkpoints" / f"step-{state.step}"
+    save_checkpoint(state, directory)
+    if run is not None:
+        run.log_checkpoint(
+            directory,
+            step=state.step,
+            includes_optimizer=True,
+            framework=CHECKPOINT_FRAMEWORK,
+            metadata={"momentum": True},
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Short CPU training / finetuning example")
     parser.add_argument("--steps", type=int, default=40)
     parser.add_argument("--learning-rate", type=float, default=0.1)
     parser.add_argument("--output", type=Path, default=Path("outputs/weights.json"))
+    parser.add_argument("--momentum", type=float, default=DEFAULT_MOMENTUM)
+    parser.add_argument("--checkpoint-every", type=int, default=DEFAULT_CHECKPOINT_EVERY)
+    parser.add_argument(
+        "--fail-at-step", type=int, default=None, help="Stop with an error at this step (resume demo)"
+    )
     parser.add_argument("--offline", action="store_true", help="Run locally without the tracking API")
     arguments = parser.parse_args()
     parameters = {}
@@ -96,8 +192,13 @@ def main() -> None:
         parameters = json.loads(Path(os.environ["MMT_PARAMETERS_FILE"]).read_text())
     steps = int(parameters.get("steps", arguments.steps))
     learning_rate = float(parameters.get("learning_rate", arguments.learning_rate))
+    momentum = float(parameters.get("momentum", arguments.momentum))
+    checkpoint_every = int(parameters.get("checkpoint_every", arguments.checkpoint_every))
+    fail_at_step = parameters.get("fail_at_step", arguments.fail_at_step)
     if steps <= 0 or not 0 < learning_rate < 0.5:
         raise ValueError("steps must be positive; learning_rate must be between 0 and 0.5")
+    if not 0 <= momentum < 1 or checkpoint_every < 0:
+        raise ValueError("momentum must be in [0, 1); checkpoint_every must not be negative")
     if arguments.offline:
         context = nullcontext(None)
     else:
@@ -107,19 +208,26 @@ def main() -> None:
             name=None if os.environ.get("MMT_RUN_ID") else "CPU linear training / finetuning",
             kind=os.environ.get("MMT_JOB_KIND", "training"),
             model_version_id=os.environ.get("MMT_MODEL_VERSION_ID") or None,
-            parameters={"steps": steps, "learning_rate": learning_rate},
+            parameters={"steps": steps, "learning_rate": learning_rate, "momentum": momentum},
         )
     with context as run:
         kind = run.entity["kind"] if run is not None else os.environ.get("MMT_JOB_KIND", "training")
         if os.environ.get("MMT_JOB_KIND") and kind != os.environ["MMT_JOB_KIND"]:
             raise ValueError("MMT_JOB_KIND does not match Run.kind")
-        weight, bias = initial_weights(kind=kind, directory=arguments.output.parent, run=run)
+        checkpoint = resume_checkpoint(run)
+        if checkpoint is not None:
+            state = load_checkpoint(checkpoint.path, step=checkpoint.step)
+        else:
+            weight, bias = initial_weights(kind=kind, directory=arguments.output.parent, run=run)
+            state = TrainingState(weight=weight, bias=bias)
         model = train(
             steps=steps,
             learning_rate=learning_rate,
+            momentum=momentum,
             output=arguments.output,
-            initial_weight=weight,
-            initial_bias=bias,
+            state=state,
+            checkpoint_every=checkpoint_every,
+            fail_at_step=None if fail_at_step is None else int(fail_at_step),
             run=run,
         )
     print(f"weight={model['weight']:.6f} bias={model['bias']:.6f}", flush=True)

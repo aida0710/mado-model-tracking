@@ -60,6 +60,7 @@ import { AutomationChainHandler } from './services/automationChainHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { RunNoteService } from './services/runNoteService.js';
 import { RunResumeService } from './services/runResumeService.js';
+import { CheckpointService } from './services/checkpointService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { SweepController } from './services/sweepController.js';
@@ -93,6 +94,7 @@ import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { runResumeRoutes } from './routes/runResumeRoutes.js';
+import { checkpointRoutes } from './routes/checkpointRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
@@ -153,11 +155,13 @@ export function createApplication(options: ApplicationOptions) {
   const artifactUploads = new ArtifactUploadService(database, stores, {
     maxBytes: config.artifactMaxBytes,
   });
+  const checkpoints = new CheckpointService(database, { keepCount: config.checkpointKeepCount });
   const mlflowMultipartUploads = new MlflowMultipartUploadService({
     database,
     stores,
     uploads: artifactUploads,
     finalizeWaitMs: config.uploadFinalizeWaitMs,
+    checkpoints,
   });
   // Mapping stays on when MLflow multipart is turned off so sessions already open still complete.
   const artifactUploadFinalizer = new ArtifactUploadFinalizer({
@@ -316,6 +320,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', promotionRoutes(promotion));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', runResumeRoutes(runResumes));
+  app.route('/api/projects', checkpointRoutes(checkpoints));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/targets', targetRoutes(targets));
@@ -331,6 +336,7 @@ export function createApplication(options: ApplicationOptions) {
       database,
       artifacts,
       multipart: config.mlflowMultipart.uploadsEnabled ? mlflowMultipartUploads : undefined,
+      checkpoints,
     }),
   );
   app.route('/api/admin', storageBackendRoutes(storageBackends));
@@ -375,6 +381,7 @@ export function createApplication(options: ApplicationOptions) {
       promotion,
       runNotes,
       runResumes,
+      checkpoints,
       commentTargets,
       comments,
       storageBackends,

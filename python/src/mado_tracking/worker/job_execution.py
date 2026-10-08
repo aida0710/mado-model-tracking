@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 
 from ..execution_snapshot import resolve_runner_execution_snapshot
-from .container_layout import prepare_container_layout, verify_container_inputs
+from .container_layout import (
+    install_resume_checkpoint,
+    prepare_container_layout,
+    verify_container_inputs,
+)
 from .docker_container import DockerContainer
 from .host_execution import CommandExecution, ExecutionCanceled
 from .host_state import write_json
@@ -22,6 +26,8 @@ def execute_registered_code(
     if specification.get("recoverOnly"):
         # Recovery observes/removes the existing daemon container without repeating setup or start.
         return DockerContainer(workspace, specification, execution).run([], recover_only=True)
+    # A checkpoint that fails verification fails the Job before any of its code runs.
+    install_resume_checkpoint(workspace, specification)
     source_directory = workspace / "source"
     source_directory.mkdir(mode=0o700, exist_ok=True)
     source = specification["codeVersion"]["source"]

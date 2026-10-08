@@ -33,6 +33,7 @@ import {
 } from '../repositories/telemetryRepository.js';
 import { requireProject } from './accessService.js';
 import type { RunCompletionService } from './runCompletionService.js';
+import { pinResumeCheckpoint } from './checkpointResume.js';
 
 /**
  * Job-owned Runs are the evidence automation and evaluation compare, so their records freeze once
@@ -93,7 +94,14 @@ export class RunService {
         role: 'editor',
         scope: 'runs:write',
       });
-      return this.insertRun(connection, { projectId, createdBy: principal.user.id, input });
+      const run = await this.insertRun(connection, {
+        projectId,
+        createdBy: principal.user.id,
+        input,
+      });
+      return input.resumeCheckpointId
+        ? pinResumeCheckpoint(connection, { run, checkpointId: input.resumeCheckpointId })
+        : run;
     });
   }
 

@@ -1,8 +1,9 @@
-"""Download container inputs before launch and relay verified, complete bytes to the target."""
+"""Download Job inputs before launch and relay verified, complete bytes to the target."""
 
 from __future__ import annotations
 
 import os
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,12 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from ..checkpoint_archive import (
+    CheckpointArchiveError,
+    file_sha256,
+    verify_checkpoint_archive,
+    write_checkpoint_archive,
+)
 from ..errors import ApiError, ConfigurationError
 from ..http import REQUEST_TIMEOUT_SECONDS
 from .api import WorkerApi
@@ -84,3 +91,70 @@ async def stage_container_inputs(
             executor.staged_inputs[kind] = descriptor
         finally:
             path.unlink(missing_ok=True)
+
+
+async def stage_job_inputs(
+    job: WorkerJob,
+    *,
+    api: WorkerApi,
+    executor: JobExecutor,
+    transfer_path: Callable[[str], Path],
+) -> None:
+    """Container runtimes need their image and weights; any runtime may resume from a checkpoint."""
+    if job.runtime["kind"] != "python":
+        await stage_container_inputs(job, api=api, executor=executor, transfer_path=transfer_path)
+    if job.resume_checkpoint is not None:
+        await stage_resume_checkpoint(job, api=api, executor=executor, transfer_path=transfer_path)
+
+
+async def _download_verified_artifact(
+    api: WorkerApi, *, project_id: str, artifact: dict[str, Any], destination: Path
+) -> None:
+    with destination.open("wb") as output:
+        descriptor = await api.download_artifact(project_id, artifact["id"], output)
+        output.flush()
+        os.fsync(output.fileno())
+    if descriptor["sha256"] != artifact["sha256"] or descriptor["size"] != artifact["size"]:
+        raise CheckpointArchiveError(f"Checkpoint Artifact sha256 or size mismatch: {artifact['path']}")
+
+
+async def stage_resume_checkpoint(
+    job: WorkerJob,
+    *,
+    api: WorkerApi,
+    executor: JobExecutor,
+    transfer_path: Callable[[str], Path],
+) -> None:
+    """Download the checkpoint, verify every file against its manifest and send it as one tar.
+
+    A native checkpoint already is that tar. An MLflow checkpoint's files are packed into one
+    after each is verified. Any mismatch fails the Job before its entrypoint is started.
+    """
+    checkpoint = job.resume_checkpoint
+    assert checkpoint is not None
+    project_id = job.job["projectId"]
+    archive_path = transfer_path("checkpoint")
+    try:
+        if checkpoint["source"] == "native":
+            await _download_verified_artifact(
+                api, project_id=project_id, artifact=checkpoint["artifacts"][0], destination=archive_path
+            )
+        else:
+            with tempfile.TemporaryDirectory(dir=archive_path.parent) as staging:
+                files = []
+                for index, artifact in enumerate(checkpoint["artifacts"]):
+                    local = Path(staging) / str(index)
+                    await _download_verified_artifact(
+                        api, project_id=project_id, artifact=artifact, destination=local
+                    )
+                    files.append((artifact["path"], local))
+                with archive_path.open("wb") as archive:
+                    write_checkpoint_archive(files, archive)
+        verify_checkpoint_archive(archive_path, checkpoint["manifest"]["files"])
+        checksum, size = file_sha256(archive_path)
+        uploaded = await executor.command("upload-checkpoint", stdin_file=archive_path)
+        if uploaded.get("sha256") != checksum or uploaded.get("size") != size:
+            raise ConfigurationError("Resume checkpoint changed during transfer")
+        executor.staged_inputs["checkpoint"] = {"sha256": checksum, "size": size}
+    finally:
+        archive_path.unlink(missing_ok=True)

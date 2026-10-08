@@ -1,0 +1,23 @@
+/* Run checkpoint tab and the resume actions on the Jobs page. */
+.checkpoint-hidden-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--muted);
+}
+.checkpoint-list .status-badge {
+  margin-left: 8px;
+}
+.checkpoint-artifacts {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+.job-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.resumed-run-badge {
+  margin-left: 6px;
+}

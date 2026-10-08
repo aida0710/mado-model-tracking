@@ -44,7 +44,7 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET|POST /targets` (ComputeTargetのidを除く。作成はglobal admin)。`runtimeKinds`は重複のないPython/Docker/Singularity/Apptainerの一覧で、省略時は`['python']`。取得時に鍵パス等を一般viewerへ出さない。executor=localはdevelopmentの明示許可のみ。
 - `PATCH /targets/:id` → ComputeTarget。全体管理者が設定・有効状態を変更する。queued/claimed/runningのJobが参照中なら接続先・Runtime・GPU等の変更を409で拒否する。有効切替は可能で、無効targetは新規claimの候補から外す。実行中Jobのleaseを取り消さない。
 - `GET /projects/:p/jobs` / `POST /projects/:p/jobs` (runId,targetId,gpuIds?,maxAttempts?)。Run kindとCodeVersion taskTypes、モデル系列、固定runtimeとtargetの対応runtime、GPU一覧、参照projectを検証。
-- `POST /projects/:p/jobs/:j/cancel` / `POST /projects/:p/jobs/:j/retry`。retryは新Run/Jobを作り`{run,job}`。生きているleaseのGPUを解放しない。
+- `POST /projects/:p/jobs/:j/cancel` / `POST /projects/:p/jobs/:j/retry`。retryは新Run/Jobを作り`{run,job}`。生きているleaseのGPUを解放しない。retryの本文は省略可で、`{checkpointId}`か`{resumeFromLatestCheckpoint:true}`でcheckpointから再開する（「学習の途中再開」節）。
 - `GET|POST /tokens` (POST:name,kind,projectId,scopes,expiresAt?; `{token:string,item:TokenSummary}`一度だけ返す)。`DELETE /tokens/:id`。tokenはhashのみ保存。scope候補は`read`,`runs:write`,`registry:write`,`artifacts:write`,`jobs:write`,`worker:execute`,`admin`。worker tokenは設定されたprojectのみclaim可能。
 - `GET /auth/token` → CurrentApiToken `{id,projectId,scopes,job}`。認証に使ったAPI token自身の情報（Job tokenは`job=true`）。sessionでは400 `api_token_required`、未認証は401。`mado-tracking-worker doctor`がworker tokenのscopeを確かめるために使う。
 - `GET|POST /projects/:p/plugins` (POST:name,baseUrl,tokenEnv,enabled?)。登録は全体管理者に限定し、plugin secretは環境変数参照。Project adminは登録済みのpluginを利用する。`POST /projects/:p/plugins/:id/check` → manifest。`POST /projects/:p/plugins/:id/datasets/search` ({query}) → `{items:PluginDataset[]}`。
@@ -203,6 +203,18 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - MLflow: Jobの無い終端Runへの`runs/update` `status=RUNNING`（`start_run(run_id=)`。SDK 3.0.0と3.17.0はどちらも前回の`end_time`を付けて送る）は同じ再開として扱い、`source='mlflow'`のイベントを入れ、`end_time`を消し`error`もNULLにする。Job付きRunは従来どおり状態を変えず、イベントも入れない。runningへのRUNNINGもイベントを入れない。
 - `run_resume_events`は追記専用（UPDATE/DELETEはtriggerで拒否）。再開したRunが再び終端になると、終端handler（出力登録、保留自動実行など）は新しい終端遷移として再び呼ばれる。
 
+## 学習の途中再開（checkpoint）
+
+- RunCheckpoint `{id,projectId,runId,step,source:'native'|'mlflow',artifactIds,artifacts:[{id,path,size,sha256}],manifest:{files:[{path,sha256,size}],includesOptimizer,framework|null},metadata,retained,totalSize,createdAt}`。`native`はSDKが登録したtar 1個（manifestはtarの中身）、`mlflow`は`checkpoints/step-<N>/`の下のファイルごとのArtifact（`artifacts[].path`とmanifestのpathは`step-<N>/`からの相対path）。版は不変で、UPDATE・DELETEはtriggerで拒否する（例外は`retained`のtrue→falseと、終わる前のMLflow checkpointへのファイル追加）。
+- `POST /projects/:p/runs/:r/checkpoints` ({step,artifactId,manifest:{files,includesOptimizer?,framework?},metadata?}) → 201 RunCheckpoint。editor＋`runs:write`。Job限定tokenは自分のRunだけ（guardで403）。worker tokenは自分がleaseを持つclaimed/runningのJobのRunだけ（それ以外403 `checkpoint_forbidden`）。Runはtraining/finetuningだけ（422 `checkpoint_run_kind`）、Jobの終わったRunは409 `run_finalized`。`artifactId`は同じProjectの保存済みArtifact（無ければ404）で、同じRunのもの（違えば422 `checkpoint_artifact_run`）。manifestは1〜10000件、pathはArtifact pathと同じ規則で重複なし、sha256は64桁hex、metadataは64KiBまで。同じRunとstepは409 `checkpoint_exists`。
+- `GET /projects/:p/runs/:r/checkpoints?includeHidden=true|false` → `{items:RunCheckpoint[]}`をstep降順。viewer＋`read`。既定は`retained=true`だけ。
+- 保持数: Runごとに新しい（stepの大きい）`MMT_CHECKPOINT_KEEP_COUNT`件（既定5）を超えたcheckpointへ`retained=false`を付ける。Artifactは消さない（削除はArtifactのlifecycle GCの担当）。`retained=false`でも再開に使える。
+- MLflowの自動登録: training/finetuningのRunへMLflowのArtifact API（単一PUTとmultipart upload）で`checkpoints/step-<整数>/<path>`を保存すると、保存と同じtransactionで、そのstepの最初のファイルならcheckpoint（`source='mlflow'`）を作り、以降は同じpathを置き換えつつmanifestへ足す。Runが終端になった後（終端のまま、または終端後に再開したRunで終端前に作ったcheckpoint）はファイルを足せず409 `checkpoint_finalized`（MLflowの形式の応答）。同じstepにnativeのcheckpointがあれば、MLflowのファイルは通常のArtifactのまま。ほかのkindのRunでは何もしない。
+- 再開の指定: `POST /projects/:p/jobs/:j/retry`の`{checkpointId}`、`{resumeFromLatestCheckpoint:true}`（retryするRunの最大stepのcheckpoint。無ければそのRunの`resumeCheckpointId`、それも無ければ422 `checkpoint_not_found`。両方の指定は422）、`POST /projects/:p/tasks/:t/launch`と`POST /projects/:p/runs`の`resumeCheckpointId`。本文なしのretryは従来どおり最初から。同じJobのretryの再送は作成済みのRunを返し、別のcheckpointを指定すると409 `job_already_retried`。
+- 再開の検証: checkpointは同じProject（別Projectは404）。新しいRunのkindが元のRunと同じtraining/finetuning（違えば422 `checkpoint_kind_mismatch`。inferenceなども同じ）、CodeVersionが元のRunと同じCodeの版（版は違ってよい。違うCodeやCodeVersionの無い元Runは422 `checkpoint_code_mismatch`）、checkpointのArtifactがすべて保存済み（422 `checkpoint_artifact_missing`）。
+- 記録: 新しいRunの`resumeCheckpointId`、`environment.resume={checkpointId,sourceRunId,step}`、`parentRunId`（指定が無ければcheckpointのRun。retryでは従来どおりretryしたRun）。`resume_checkpoint_id`はRun作成中（Jobを作る前）に一度だけ設定でき、以後はtriggerで変更を拒否する。`environment.resume`はサーバーが持つ値で、PATCHのenvironmentで送っても元の値を保ち、checkpointの無いRunでは削除する。Job開始後のenvironment変更は従来どおり409。元のRunは変えない。
+- Run一覧（summary）とrun searchにも`resumeCheckpointId`が入る。
+
 ## Sweeps
 
 - 型は`packages/contracts/src/sweeps.ts`（Sweep、SweepTrial、SweepCreate、SweepPatch、SweepCancel）。探索空間・aggregation・hyperbandの意味は[Sweep](sweeps.md)。
@@ -266,6 +278,11 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
   - native: `PATCH /projects/:p/runs/:r`、`POST .../runs/:r/metrics`、`POST .../runs/:r/logs`、`PUT .../runs/:r/artifacts`（`:r`がtokenのRun）。`POST /projects/:p/artifact-uploads`（`body.runId`がtokenのRun）と、そのsessionの`PUT .../parts/:n`・`POST .../complete`・`DELETE /artifact-uploads/:u`（sessionの`run_id`がtokenのRun）。`POST /projects/:p/models`。`POST .../models/:m/versions`と`POST .../datasets/:d/versions`（`body.sourceRunId`がtokenのRun）。
   - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
 - workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
+
+### 再開元checkpointの受け渡し
+
+- `WorkerJob.resumeCheckpoint:{id,runId,step,source,artifacts:[{id,path,size,sha256}],manifest,metadata}|null`（claim/resume）。Runが`resumeCheckpointId`を持つときだけ値が入る。workerはRunの`resumeCheckpointId`との一致を確かめ、Artifactを`GET /projects/:p/artifacts/:a/content`（Range再開）で取得してsha256・sizeとmanifestを照合し、targetの`inputs/checkpoint`へread-onlyで展開してから実行コードを起動する。照合に失敗したらentrypointを起動せずJobを`failed`で完了する。
+- 実行コードへの環境変数: `MMT_RESUME_CHECKPOINT_DIR`（host pythonはworkspaceの`inputs/checkpoint`、コンテナは`/mmt/inputs/checkpoint`）、`MMT_RESUME_STEP`、`MMT_RESUME_CHECKPOINT_FILE`（`resume-checkpoint.json`。`{checkpointId,sourceRunId,step,source,files,includesOptimizer,framework,metadata}`。コンテナは`/mmt/context/resume-checkpoint.json`）。再開しないJobには付かない。
 
 ### 上流Runの受け渡し
 

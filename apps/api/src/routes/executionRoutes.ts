@@ -14,7 +14,21 @@ import {
   workerMetricSchema,
 } from '../domain/validation.js';
 import { workerOutputsSchema } from '../domain/workerOutputValidation.js';
-import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
+import { jobRetryRequestSchema, type JobRetryInput } from '../domain/checkpointValidation.js';
+import {
+  jsonBody,
+  principal,
+  uuidParam,
+  type ApiContext,
+  type ApiEnvironment,
+} from '../http/request.js';
+
+// Clients from before checkpoints send the retry without a body; that means "from scratch".
+async function retryRequestBody(context: ApiContext): Promise<JobRetryInput> {
+  const declaredLength = context.req.header('content-length');
+  if (!context.req.header('content-type') && (!declaredLength || declaredLength === '0')) return {};
+  return jsonBody(context, jobRetryRequestSchema);
+}
 
 export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
@@ -61,7 +75,10 @@ export function jobRoutes(jobs: JobService): Hono<ApiEnvironment> {
   );
   routes.post('/:p/jobs/:j/retry', async (context) =>
     context.json(
-      await jobs.retry(principal(context), uuidParam(context, 'p'), uuidParam(context, 'j')),
+      await jobs.retry(principal(context), uuidParam(context, 'p'), {
+        jobId: uuidParam(context, 'j'),
+        input: await retryRequestBody(context),
+      }),
       201,
     ),
   );

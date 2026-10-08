@@ -19,7 +19,7 @@ from .contracts import TERMINAL_STATUSES, WorkerJob
 from .event_wait import wait_interval
 from .journal import JobJournal
 from .runtime import JobExecutor
-from .session_inputs import stage_container_inputs
+from .session_inputs import stage_job_inputs
 from .session_outputs import forward_container_outputs, forward_source_snapshot
 from .source_tree import MAX_SOURCE_ARCHIVE_BYTES
 
@@ -135,8 +135,8 @@ class JobSession:
                     return
                 finally:
                     archive_path.unlink(missing_ok=True)
-            if self.job.runtime["kind"] != "python":
-                if not await self.prepare_container_inputs():
+            if self.job.runtime["kind"] != "python" or self.job.resume_checkpoint is not None:
+                if not await self.prepare_job_inputs():
                     return
             # Bootstrap/download may be slow. Validate ownership immediately before launching.
             if self.lease_rejected.is_set():
@@ -171,11 +171,11 @@ class JobSession:
                 "Job %s start report failed: %s", self.job.id, self.executor.masker.mask(str(error))
             )
 
-    async def prepare_container_inputs(self) -> bool:
+    async def prepare_job_inputs(self) -> bool:
         try:
             await self.transfer_before_start(
                 lambda: self.retry_transport(
-                    lambda: stage_container_inputs(
+                    lambda: stage_job_inputs(
                         self.job,
                         api=self.api,
                         executor=self.executor,

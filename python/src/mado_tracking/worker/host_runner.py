@@ -17,7 +17,15 @@ from typing import Any
 from ..execution_runtime import validate_runtime
 from ..execution_snapshot import resolve_runner_execution_snapshot
 from ..security import SecretMasker, secret_values
-from .container_layout import UPSTREAM_RUN_FILENAME, host_environment, upstream_environment
+from .container_layout import (
+    RESUME_CHECKPOINT_ARCHIVE,
+    RESUME_CHECKPOINT_DIRECTORY,
+    RESUME_CHECKPOINT_FILENAME,
+    UPSTREAM_RUN_FILENAME,
+    host_environment,
+    resume_checkpoint_environment,
+    upstream_environment,
+)
 from .container_outputs import RESULT_FILENAME, read_output_chunk, validate_results
 from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned_process_group
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
@@ -220,6 +228,14 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
     )
     upstream_run_file = workspace / UPSTREAM_RUN_FILENAME
     environment.update(upstream_environment(specification["context"], str(upstream_run_file)))
+    resume_checkpoint_file = workspace / RESUME_CHECKPOINT_FILENAME
+    environment.update(
+        resume_checkpoint_environment(
+            specification["context"],
+            checkpoint_directory=str(workspace / "inputs" / RESUME_CHECKPOINT_DIRECTORY),
+            document_file=str(resume_checkpoint_file),
+        )
+    )
     write_json(workspace / "context.json", specification["context"])
     write_json(workspace / "parameters.json", specification["context"]["parameters"])
     # Separate JSON files are objects even when a Run has no model / datasets.
@@ -230,6 +246,8 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
     # A spec saved before upstream inputs existed has no upstreamRun key.
     if specification["context"].get("upstreamRun") is not None:
         write_json(upstream_run_file, specification["context"]["upstreamRun"])
+    if specification["context"].get("resumeCheckpoint") is not None:
+        write_json(resume_checkpoint_file, specification["context"]["resumeCheckpoint"])
     return environment
 
 
@@ -300,6 +318,7 @@ def receive_archive(workspace: Path, *, kind: str = "source") -> dict[str, Any]:
         "source": workspace / "source.archive",
         "sif": workspace / "runtime.sif",
         "weights": workspace / "inputs/weights",
+        "checkpoint": workspace / RESUME_CHECKPOINT_ARCHIVE,
     }
     path = destinations[kind]
     path.parent.mkdir(mode=0o700, exist_ok=True)
@@ -331,7 +350,7 @@ def main() -> None:
     if command == "serve":
         serve(workspace)
         return
-    if command in {"upload", "upload-sif", "upload-weights"}:
+    if command in {"upload", "upload-sif", "upload-weights", "upload-checkpoint"}:
         response = receive_archive(
             workspace, kind=command.removeprefix("upload-") if command != "upload" else "source"
         )
