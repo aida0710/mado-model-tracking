@@ -178,6 +178,52 @@ with Client() as client:
 - `run.resume_checkpoint()`: 再開Jobならcheckpointの展開先（read-only）とstepを`ResumeCheckpoint`で返す。再開でなければNone。APIなしでは`mado_tracking.checkpoints.resume_checkpoint_from_environment()`。
 - 再開後もmetricの`step`は続きの値（checkpointのstepから）で記録する。
 
+### Runの再開・オフライン記録・システムメトリクス
+
+```python
+import mado_tracking
+
+# 同じRunに追記する。'must'は既存Runだけ、'allow'は無ければそのIDで作る。
+run = mado_tracking.start_run(project_id="project-id", run_id="run-id", resume="must")
+run.log_metrics({"loss": 0.12})  # stepを省略すると、keyごとに前回の最大step+1で記録する
+run.finish()
+
+# APIに届かない計算機ではローカルに記録し、後で送る。
+with mado_tracking.start_run(
+    project_id="project-id", experiment_id="experiment-id", name="offline", mode="offline",
+    system_metrics=True,
+) as run:
+    run.log_metrics({"loss": 0.5}, step=1)
+    run.log_artifact("model.bin")
+```
+
+```bash
+mado-tracking sync                    # MMT_OFFLINE_DIR（既定 ~/.local/share/mado-tracking/offline）の全Run
+mado-tracking sync DIR --dry-run      # 送る予定の件数だけ表示（APIに接続しない）
+mado-tracking sync --project-id P --prune   # Project Pの分だけ送り、送り終えたRunのspoolを消す
+```
+
+- **再開**: `start_run(run_id=, resume='never'|'allow'|'must')`。既定の`'never'`は従来どおり新しいRunを作る（`run_id`だけを渡すと`ConfigurationError`）。`'must'`は`POST /projects/:p/runs/:r/resume`で終わったRunをrunningへ戻し、Runが無ければ`ConfigurationError`。`'allow'`はRunが無ければ`PUT /projects/:p/sync/runs/:runId`でそのIDのRunを作る（`experiment_id`と`name`が要る。指定できる属性は`parameters`・`tags`・`parent_run_id`）。再開ごとにAPIへ再開イベントが残り、Runの区間（segments）として表示される。
+- **stepの続き（挙動の変更）**: 再開したRunでは、`log_metrics`の`step`を省略するとkeyごとに前回の最大step+1を使う（初めてのkeyは0）。`run.last_step(key)`で今の最大stepを読める。新しく作ったRunで`step`を省略した場合は、従来どおり0のまま。
+- **workerのRunは再開しない**: `MMT_RUN_ID`か`MMT_JOB_ID`がある環境での`resume`と、Jobが付いたRun（API の409 `run_finalized`）は`ConfigurationError`。Jobのcheckpointからretryし、`run.resume_checkpoint()`で続ける（「学習の途中再開（checkpoint）」）。
+- **モード**: `start_run(mode=)`、無ければ環境変数`MMT_MODE`（既定`online`）。`offline`はAPIに一度も接続せず、`MMT_API_URL`・`MMT_API_TOKEN`も要らない。Run IDはSDKがUUIDで決める。`auto`はonlineで始め、接続できない（接続失敗、または5xxの再試行切れ）と、そのRunだけofflineに切り替えて記録を続け、終了時に`mado-tracking sync`の案内を出す。切り替え前にAPIへ送れた分はspoolに書かない。切り替えのきっかけになった1件は、APIに届いていた可能性があっても送り直す（失うより重複を選ぶ）。Runの作成そのものが届かなければ、最初からofflineで記録する。workerのJob内（`MMT_JOB_ID`がある）では`offline`を拒否する。
+- **offlineで使えないもの**: Run作成時の`model_version_id`などsyncで送れない属性、再開、モデル・データセットの登録、checkpoint。いずれも`ConfigurationError`。
+- **spool**: `MMT_OFFLINE_DIR/<runId>/`に`run.json`（作成情報）、`batches/<sequence>-<batchId>.jsonl`（1行1レコード）、`artifacts.jsonl`、`media.jsonl`、`status.json`、`sync-state.json`を置く。ファイルは600、ディレクトリは700。tokenは書かない（logの本文も従来どおりsecretを伏せる）。batchの各行は書くたびにflushし、fsyncは50行（`SPOOL_FSYNC_EVERY`）ごとと、Runの終了時に行う。電源断で失うのは最後の数十行まで。batchは5000行か16MiBで次のファイルに分かれる（APIの1 batchの上限より小さい）。
+- **Artifact**: offlineの`log_artifact`は既定でspoolの`artifact-files/<sha256>`へ複製する（spoolのディレクトリごと別の計算機へ移してsyncできる）。`copy=False`は元のファイルのpathとsha256だけを記録し、syncのときに中身が変わっていればそのRunの送信を止める。
+- **media**: `media.jsonl`の1行は`{id, key, step, kind, artifactPath, caption, metadata}`。`artifactPath`は同じRunで`log_artifact`したpath。syncは`POST /projects/:p/runs/:r/media`へ`id`付きで送る。
+- **sync**: Runごとに`PUT /sync/runs/:id` → batchをsequence順に → `artifacts/check`でpresentと返らなかったArtifactを再開可能なupload sessionで → media → 最後に終了状態。終了状態を最後に送るので、Run終了時の自動処理（出力登録など）はArtifactが揃ってから動く。各段階のあとに`sync-state.json`を更新するので、途中で失敗しても次の`mado-tracking sync`はそこから続く。同じディレクトリを2回syncしてもAPI側は増えない（Run ID・batchId・Artifactのsha256・media idで重複を判定する。`sync-state.json`を失っても送り直すだけで済む）。記録中のRun（書き込み側がlockを持っている）は飛ばす。終了状態の無いRunは送るがrunningのまま残し、完了扱いにしない。tokenには`runs:write`と`artifacts:write`が要る。失敗したRunがあれば終了コードは1。
+- **システムメトリクス**: `start_run(system_metrics=True, system_metrics_interval=None)`で、GPU/CPU/メモリ/ディスク/ネットワークを`system.*`のmetricとして一定間隔（既定15秒、最短1秒）で記録する。送り先はRunと同じ（offlineならspool）。`finish`と`with`の終了で止まり、終了状態のあとに標本は届かない。`MMT_SYSTEM_METRICS=false`で止められる。workerのJob内（`MMT_JOB_ID`がある）ではworkerのtelemetryと重なるので起動しない。`run.start_system_metrics()`で後から始めることもできる。stepは0から数えるので、再開したRunでは`system.*`のstepが前の区間と重なる。
+
+| やりたいこと | Mado | W&B | MLflow |
+| --- | --- | --- | --- |
+| 同じRunに追記 | `start_run(run_id=..., resume="must")` | `wandb.init(id=..., resume="must")` | `mlflow.start_run(run_id=...)` |
+| 無ければ作る | `resume="allow"` | `resume="allow"` | （無い） |
+| 再開の記録 | 再開イベント（`source:'native'`） | — | 同じ再開イベント（`source:'mlflow'`） |
+| オフライン記録 | `mode="offline"`または`MMT_MODE=offline` | `WANDB_MODE=offline` | （無い） |
+| 後で送る | `mado-tracking sync [DIR]` | `wandb sync [DIR]` | （無い） |
+| システムメトリクス | `start_run(system_metrics=True)` | 既定で有効 | `mlflow.enable_system_metrics_logging()` |
+| 既定と止め方 | 既定で無効。`MMT_SYSTEM_METRICS=false`でコードの指定も止める | 既定で有効。`wandb.init(settings=...)`で止める | 既定で無効（`MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING`で切替） |
+
 ### Sweep
 
 - 学習コードで試行のparametersを読む: `from mado_tracking import trial_parameters` → `trial_parameters({"lr": 0.05})`。`MMT_PARAMETERS_JSON`（無ければ`MMT_PARAMETERS_FILE`）をdefaultsに上書きして返す。workerの外ではdefaultsをそのまま返す。値はJSONの型のまま。

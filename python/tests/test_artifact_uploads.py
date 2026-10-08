@@ -245,7 +245,7 @@ def test_a_file_changed_after_hashing_is_reported_and_its_state_dropped(weights,
 def test_log_artifact_switches_to_a_session_at_the_threshold(weights, monkeypatch):
     api = FakeUploadApi()
     size = weights.stat().st_size
-    monkeypatch.setattr("mado_tracking.run.SESSION_UPLOAD_THRESHOLD_BYTES", size)
+    monkeypatch.setattr("mado_tracking.offline.transport.SESSION_UPLOAD_THRESHOLD_BYTES", size)
     small = weights.with_name("small.txt")
     small.write_bytes(b"x" * (size - 1))
     with client_for(api) as client:

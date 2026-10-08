@@ -15,6 +15,7 @@ telemetry = ["psutil>=5.9,<8", "nvidia-ml-py>=12,<14"]
 test = ["pytest>=8,<10", "mypy>=1.11,<2", "ruff>=0.9,<1"]
 
 [project.scripts]
+mado-tracking = "mado_tracking.cli:main"
 mado-tracking-worker = "mado_tracking.worker.cli:main"
 
 [tool.setuptools.packages.find]
