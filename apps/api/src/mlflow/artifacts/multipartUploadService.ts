@@ -25,6 +25,7 @@ import {
 import { partEtag } from './multipartProtocol.js';
 import { MultipartUploadUnsupportedError } from './multipartUnsupported.js';
 import type { CheckpointService } from '../../services/checkpointService.js';
+import { indexMlflowMediaArtifact } from '../../services/runMediaIndexer.js';
 
 // The finalizer polls every second, so a shorter interval only adds queries.
 const FINALIZE_POLL_MS = 250;
@@ -156,13 +157,21 @@ export class MlflowMultipartUploadService {
       throw new DomainError(409, 'Artifactのsource Runが変更されました', 'conflict');
     await requireNonconflictingArtifactPath(connection, access);
     await replaceArtifactPath(connection, { ...access, artifact, runId });
-    if (owner.kind === 'run')
+    if (owner.kind === 'run') {
       await this.options.checkpoints?.recordMlflowArtifact(connection, {
         projectId: upload.projectId,
         runId: owner.id,
         artifact,
         artifactPath: access.path,
       });
+      // Same media index as a single PUT, so a large log_image file shows up without a backfill.
+      await indexMlflowMediaArtifact(connection, {
+        projectId: upload.projectId,
+        runId: owner.id,
+        artifactId: artifact.id,
+        path: access.path,
+      });
+    }
     if (owner.kind === 'model' && access.path === 'MLmodel')
       await saveLoggedModelMlmodel(connection, {
         projectId: upload.projectId,

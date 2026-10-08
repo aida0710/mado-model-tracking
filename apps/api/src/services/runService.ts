@@ -34,6 +34,7 @@ import {
 import { requireProject } from './accessService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import { pinResumeCheckpoint } from './checkpointResume.js';
+import { assertDatasetVersionsNotArchived } from './registryService.js';
 
 /**
  * Job-owned Runs are the evidence automation and evaluation compare, so their records freeze once
@@ -122,6 +123,10 @@ export class RunService {
     await lockActiveExperiment(connection, { projectId, id: input.experimentId });
     await assertProjectReferences(connection, {
       table: 'dataset_versions',
+      projectId,
+      ids: input.inputDatasetVersionIds,
+    });
+    await assertDatasetVersionsNotArchived(connection, {
       projectId,
       ids: input.inputDatasetVersionIds,
     });

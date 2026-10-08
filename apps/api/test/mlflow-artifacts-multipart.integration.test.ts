@@ -69,6 +69,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow multipart upload（独立PostgreSQL）
       ownerRoot?: string;
       directory?: string;
       numParts?: number;
+      localPath?: string;
       app?: Hono<ApiEnvironment>;
     } = {},
   ) {
@@ -83,7 +84,10 @@ describe.skipIf(!testDatabaseUrl)('MLflow multipart upload（独立PostgreSQL）
       {
         method: 'POST',
         cookie: fixture.editor.cookie,
-        body: { path: '/home/trainer/out/model.bin', num_parts: options.numParts ?? 2 },
+        body: {
+          path: options.localPath ?? '/home/trainer/out/model.bin',
+          num_parts: options.numParts ?? 2,
+        },
       },
     );
   }
@@ -134,16 +138,26 @@ describe.skipIf(!testDatabaseUrl)('MLflow multipart upload（独立PostgreSQL）
     fixture: Fixture,
     created: CreateResponse,
     etags: string[],
-    options: { ownerRoot?: string; app?: Hono<ApiEnvironment> } = {},
+    options: {
+      ownerRoot?: string;
+      directory?: string;
+      localPath?: string;
+      app?: Hono<ApiEnvironment>;
+    } = {},
   ) {
     return request(
       options.app ?? harness.app,
-      mpuUrl(fixture, 'complete', options.ownerRoot ?? fixture.runRoot, 'weights'),
+      mpuUrl(
+        fixture,
+        'complete',
+        options.ownerRoot ?? fixture.runRoot,
+        options.directory ?? 'weights',
+      ),
       {
         method: 'POST',
         cookie: fixture.editor.cookie,
         body: {
-          path: '/home/trainer/out/model.bin',
+          path: options.localPath ?? '/home/trainer/out/model.bin',
           upload_id: created.upload_id,
           parts: etags.map((etag, index) => ({ part_number: index + 1, etag, url: null })),
         },
@@ -241,6 +255,26 @@ describe.skipIf(!testDatabaseUrl)('MLflow multipart upload（独立PostgreSQL）
     expect((await putPart(second, partBytes(2))).status).toBe(409);
     // A retried complete after a lost response reports success again.
     expect((await completeMultipart(fixture, created, etags)).status).toBe(200);
+  });
+
+  it('mpuで保存したlog_imageの画像は、通常のPUTと同じくその場でRunのmediaに索引される', async () => {
+    const fixture = await artifactFixture(harness);
+    // MLflow 3.17.0's log_image(key=, step=) name; the SDK sends the local file path.
+    const fileName = 'sample+step+3+timestamp+1728370000123+b1b2c3d4-0000-4000-8000-000000000001.png';
+    const options = { directory: 'images', localPath: `/tmp/mlflow/${fileName}` };
+    const created = await entity<CreateResponse>(await createMultipart(fixture, options), 200);
+    const etags = await putAllParts(created);
+    const completed = await completeWhileFinalizing(
+      completeMultipart(fixture, created, etags, options),
+    );
+    expect(completed.status).toBe(200);
+    const media = await entity<{ items: { key: string; step: number; kind: string }[] }>(
+      await request(harness.app, `${fixture.basePath}/runs/${fixture.run.id}/media`, {
+        cookie: fixture.viewer.cookie,
+      }),
+      200,
+    );
+    expect(media.items).toMatchObject([{ key: 'sample', step: 3, kind: 'image' }]);
   });
 
   it('abortでsessionを閉じ、受け取ったpartを保存先に残さない', async () => {

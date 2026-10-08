@@ -18,6 +18,19 @@ import type {
 } from '../domain/validation.js';
 import type { DatasetVersionRequest } from '../domain/datasetContentValidation.js';
 import { DomainError, notFound } from '../domain/errors.js';
+import type {
+  DatasetListQuery,
+  DatasetPatch,
+  ModelPatch,
+} from '../domain/registryLifecycleValidation.js';
+import type { RequestMetadata } from '../http/requestMetadata.js';
+import { writeAuditEvent } from '../repositories/auditRepository.js';
+import {
+  auditActor,
+  NO_REQUEST_METADATA,
+  recordDenial,
+  type AuditEventDraft,
+} from './auditService.js';
 import {
   assertProjectReference,
   codeSelect,
@@ -43,6 +56,35 @@ import {
 import type { ModelAliasEventQuery } from '../domain/modelAliasValidation.js';
 import { manualAliasGuard } from './aliasProtectionService.js';
 
+/**
+ * Refuses archived Datasets as inputs of a new Run. Existing Runs and Jobs keep their references;
+ * only creation calls this. FOR SHARE makes a concurrent archive wait for the Run's transaction.
+ */
+export async function assertDatasetVersionsNotArchived(
+  connection: Connection,
+  reference: { projectId: string; ids: string[] },
+): Promise<void> {
+  if (!reference.ids.length) return;
+  // Lock every input Dataset, not only archived ones, so an archive cannot slip in before commit.
+  const datasets = await rows<{ name: string; archivedAt: string | null }>(
+    connection,
+    `SELECT d.name,d.archived_at FROM datasets d
+    WHERE d.project_id=$1
+      AND d.id IN (SELECT dataset_id FROM dataset_versions WHERE project_id=$1 AND id=ANY($2::uuid[]))
+    ORDER BY d.id FOR SHARE OF d`,
+    [reference.projectId, reference.ids],
+  );
+  const archivedNames = datasets
+    .filter((dataset) => dataset.archivedAt)
+    .map((dataset) => dataset.name);
+  if (archivedNames.length)
+    throw new DomainError(
+      422,
+      `archive済みDatasetの版は新しいRunの入力に使えません: ${archivedNames.join(', ')}`,
+      'dataset_archived',
+    );
+}
+
 // Browser sessions are the Web UI; API tokens are scripts and the SDK's native client.
 function nativeAliasSource(principal: Principal): ModelAliasEventSource {
   return principal.method === 'session' ? 'web' : 'api';
@@ -64,6 +106,46 @@ export class RegistryService {
       this.database,
       `${modelSelect} WHERE m.project_id=$1 AND ($2::text IS NULL OR m.name=$2) ORDER BY m.created_at DESC`,
       [projectId, filter.name ?? null],
+    );
+  }
+
+  async model(principal: Principal, projectId: string, modelId: string): Promise<Model> {
+    await this.requireReadAccess(principal, projectId);
+    const model = await first<Model>(
+      this.database,
+      `${modelSelect} WHERE m.project_id=$1 AND m.id=$2`,
+      [projectId, modelId],
+    );
+    if (!model) notFound('Model');
+    return model;
+  }
+
+  async updateModel(
+    principal: Principal,
+    change: { projectId: string; modelId: string; input: ModelPatch },
+    request: RequestMetadata = NO_REQUEST_METADATA,
+  ): Promise<Model> {
+    const { projectId, modelId, input } = change;
+    const draft = this.changeDraft(principal, {
+      action: 'model.update',
+      resourceType: 'model',
+      resourceId: modelId,
+      projectId,
+      details: { fields: Object.keys(input) },
+      request,
+    });
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await this.requireWriteAccess(connection, principal, projectId);
+        const updated = await first(
+          connection,
+          'UPDATE models SET description=COALESCE($3,description) WHERE project_id=$1 AND id=$2 RETURNING id',
+          [projectId, modelId, input.description ?? null],
+        );
+        if (!updated) notFound('Model');
+        await writeAuditEvent(connection, { ...draft, outcome: 'success' });
+        return (await first<Model>(connection, `${modelSelect} WHERE m.id=$1`, [modelId]))!;
+      }),
     );
   }
 
@@ -97,6 +179,21 @@ export class RegistryService {
       `${modelVersionSelect} WHERE v.project_id=$1 AND v.model_id=$2 ORDER BY v.created_at DESC`,
       [projectId, modelId],
     );
+  }
+
+  // Same version as GET /model-versions/:id, but a version of another Model is not found.
+  async modelVersion(
+    principal: Principal,
+    reference: { projectId: string; modelId: string; versionId: string },
+  ): Promise<ModelVersion> {
+    await this.requireReadAccess(principal, reference.projectId);
+    const version = await first<ModelVersion>(
+      this.database,
+      `${modelVersionSelect} WHERE v.project_id=$1 AND v.model_id=$2 AND v.id=$3`,
+      [reference.projectId, reference.modelId, reference.versionId],
+    );
+    if (!version) notFound('ModelVersion');
+    return version;
   }
 
   async createModelVersion(
@@ -302,12 +399,68 @@ export class RegistryService {
     });
   }
 
-  async datasets(principal: Principal, projectId: string): Promise<Dataset[]> {
+  async datasets(
+    principal: Principal,
+    projectId: string,
+    filter: DatasetListQuery = {},
+  ): Promise<Dataset[]> {
     await this.requireReadAccess(principal, projectId);
+    const archived = filter.archived === undefined ? null : filter.archived === 'true';
     return rows(
       this.database,
-      `${datasetSelect} WHERE d.project_id=$1 ORDER BY d.created_at DESC`,
-      [projectId],
+      `${datasetSelect} WHERE d.project_id=$1 AND ($2::boolean IS NULL OR (d.archived_at IS NOT NULL)=$2)
+      ORDER BY d.created_at DESC`,
+      [projectId, archived],
+    );
+  }
+
+  async dataset(principal: Principal, projectId: string, datasetId: string): Promise<Dataset> {
+    await this.requireReadAccess(principal, projectId);
+    const dataset = await first<Dataset>(
+      this.database,
+      `${datasetSelect} WHERE d.project_id=$1 AND d.id=$2`,
+      [projectId, datasetId],
+    );
+    if (!dataset) notFound('Dataset');
+    return dataset;
+  }
+
+  /**
+   * Archiving keeps the first archive time when repeated; versions are never deleted. The row
+   * lock waits for Runs being created with this Dataset (see assertDatasetVersionsNotArchived).
+   */
+  async updateDataset(
+    principal: Principal,
+    change: { projectId: string; datasetId: string; input: DatasetPatch },
+    request: RequestMetadata = NO_REQUEST_METADATA,
+  ): Promise<Dataset> {
+    const { projectId, datasetId, input } = change;
+    const draft = this.changeDraft(principal, {
+      action: 'dataset.update',
+      resourceType: 'dataset',
+      resourceId: datasetId,
+      projectId,
+      details: {
+        fields: Object.keys(input),
+        ...(input.archived === undefined ? {} : { archived: input.archived }),
+      },
+      request,
+    });
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await this.requireWriteAccess(connection, principal, projectId);
+        const updated = await first(
+          connection,
+          `UPDATE datasets SET description=COALESCE($3,description),
+            archived_at=CASE WHEN $4::boolean IS NULL THEN archived_at
+              WHEN $4 THEN COALESCE(archived_at,now()) ELSE NULL END
+          WHERE project_id=$1 AND id=$2 RETURNING id`,
+          [projectId, datasetId, input.description ?? null, input.archived ?? null],
+        );
+        if (!updated) notFound('Dataset');
+        await writeAuditEvent(connection, { ...draft, outcome: 'success' });
+        return (await first<Dataset>(connection, `${datasetSelect} WHERE d.id=$1`, [datasetId]))!;
+      }),
     );
   }
 
@@ -415,6 +568,17 @@ export class RegistryService {
       externalRef: input.externalRef,
       actor: { type: 'callerAuthorized' },
     });
+  }
+
+  private changeDraft(
+    principal: Principal,
+    change: Pick<
+      AuditEventDraft,
+      'action' | 'resourceType' | 'resourceId' | 'projectId' | 'details'
+    > & { request: RequestMetadata },
+  ): AuditEventDraft {
+    const { request, ...event } = change;
+    return { ...auditActor(principal), ...request, ...event };
   }
 
   private async requireReadAccess(principal: Principal, projectId: string): Promise<void> {

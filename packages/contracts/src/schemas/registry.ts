@@ -97,6 +97,7 @@ export const datasetSchema = namedContractSchema(
     namespace: z.string(),
     description: z.string(),
     latestVersion: z.string().nullable(),
+    archivedAt: timestampSchema.nullable(),
     createdAt: timestampSchema,
   }),
 );

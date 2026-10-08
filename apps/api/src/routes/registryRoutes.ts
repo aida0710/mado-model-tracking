@@ -22,6 +22,12 @@ import {
   datasetVersionRequestSchema,
 } from '../domain/datasetContentValidation.js';
 import {
+  datasetListQuerySchema,
+  datasetPatchSchema,
+  modelPatchSchema,
+} from '../domain/registryLifecycleValidation.js';
+import { requestMetadata } from '../http/requestMetadata.js';
+import {
   jsonBody,
   parse,
   principal,
@@ -66,6 +72,24 @@ export function registryRoutes(
       201,
     ),
   );
+  routes.get('/:p/models/:id', async (context) =>
+    context.json(
+      await registry.model(principal(context), uuidParam(context, 'p'), uuidParam(context, 'id')),
+    ),
+  );
+  routes.patch('/:p/models/:id', async (context) =>
+    context.json(
+      await registry.updateModel(
+        principal(context),
+        {
+          projectId: uuidParam(context, 'p'),
+          modelId: uuidParam(context, 'id'),
+          input: await jsonBody(context, modelPatchSchema),
+        },
+        requestMetadata(context),
+      ),
+    ),
+  );
   routes.get('/:p/models/:id/versions', async (context) =>
     context.json({
       items: await registry.modelVersions(
@@ -82,6 +106,15 @@ export function registryRoutes(
         input: await jsonBody(context, modelVersionSchema),
       }),
       201,
+    ),
+  );
+  routes.get('/:p/models/:id/versions/:v', async (context) =>
+    context.json(
+      await registry.modelVersion(principal(context), {
+        projectId: uuidParam(context, 'p'),
+        modelId: uuidParam(context, 'id'),
+        versionId: uuidParam(context, 'v'),
+      }),
     ),
   );
   routes.put('/:p/models/:id/aliases/:alias', async (context) => {
@@ -145,7 +178,13 @@ export function registryRoutes(
     ),
   );
   routes.get('/:p/datasets', async (context) =>
-    context.json({ items: await registry.datasets(principal(context), uuidParam(context, 'p')) }),
+    context.json({
+      items: await registry.datasets(
+        principal(context),
+        uuidParam(context, 'p'),
+        parse(datasetListQuerySchema, context.req.query()),
+      ),
+    }),
   );
   routes.post('/:p/datasets', async (context) =>
     context.json(
@@ -155,6 +194,24 @@ export function registryRoutes(
         await jsonBody(context, datasetCreateSchema),
       ),
       201,
+    ),
+  );
+  routes.get('/:p/datasets/:id', async (context) =>
+    context.json(
+      await registry.dataset(principal(context), uuidParam(context, 'p'), uuidParam(context, 'id')),
+    ),
+  );
+  routes.patch('/:p/datasets/:id', async (context) =>
+    context.json(
+      await registry.updateDataset(
+        principal(context),
+        {
+          projectId: uuidParam(context, 'p'),
+          datasetId: uuidParam(context, 'id'),
+          input: await jsonBody(context, datasetPatchSchema),
+        },
+        requestMetadata(context),
+      ),
     ),
   );
   routes.get('/:p/datasets/:id/versions', async (context) =>
