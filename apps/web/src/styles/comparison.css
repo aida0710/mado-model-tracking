@@ -1,0 +1,27 @@
+/* Run comparison table on the Compare page. */
+
+/*
+ * The table scrolls sideways inside its box. On narrow screens the row names wrap and stay pinned
+ * to the left edge, so each value can still be read against its parameter or metric name.
+ */
+@media (width < 900px) {
+  .comparison-table th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 10em;
+    max-width: 45vw;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    box-shadow: 1px 0 0 var(--border);
+  }
+  /* Values are numbers and ids: they stay on one line and the table scrolls to show them. */
+  .comparison-table td {
+    white-space: nowrap;
+  }
+  .comparison-table thead th {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 7em;
+  }
+}

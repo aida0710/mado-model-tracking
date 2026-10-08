@@ -6,6 +6,7 @@ import {
   isWithinBrush,
   moveAxis,
   numericValue,
+  parallelPlotWidth,
   rampColor,
   selectRowIndexes,
   type AxisDefinition,
@@ -116,5 +117,22 @@ describe('軸の並べ替えと色', () => {
     expect(rampColor(1, 'light')).toBe('#0d366b');
     expect(rampColor(1, 'dark')).toBe('#cde2fb');
     expect(rampColor(null, 'light')).toBe('#9a9a96');
+  });
+});
+
+describe('狭い幅での平行座標の描画幅', () => {
+  const sizes = { minAxisSpacing: 148, horizontalMargin: 120 };
+  it('軸が収まる幅では、与えられた幅いっぱいに描く', () => {
+    expect(parallelPlotWidth({ ...sizes, availableWidth: 1200, axisCount: 4 })).toBe(1200);
+  });
+  it('スマートフォン幅では軸の最小間隔を保つ幅まで広げ、図の中で横スクロールさせる', () => {
+    // 6 axes on a 358px panel: 120 + 5 * 148, scrolled inside the chart instead of overlapping.
+    expect(parallelPlotWidth({ ...sizes, availableWidth: 358, axisCount: 6 })).toBe(860);
+  });
+  it('軸が1本なら与えられた幅のまま', () => {
+    expect(parallelPlotWidth({ ...sizes, availableWidth: 358, axisCount: 1 })).toBe(358);
+  });
+  it('幅を測るまでは描かない', () => {
+    expect(parallelPlotWidth({ ...sizes, availableWidth: 0, axisCount: 6 })).toBe(0);
   });
 });

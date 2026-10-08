@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { SweepObjective, SweepTrial, SweepTrialState } from '@mmt/contracts';
 import { formatNumber, formatValue } from '../../lib/format';
 import { sortTrials, trialParameterNames, type SweepTrialOrder } from '../../lib/sweepTrials';
-import { DataTable, type TableColumn } from '../DataTable';
+import { ResponsiveTable, type ResponsiveTableColumn } from '../ResponsiveTable';
 import { sweepTrialStateLabels } from '../../i18n/sweeps';
 import { text, textTemplates } from '../../i18n/catalog';
 
@@ -30,25 +30,85 @@ function SweepTrialStateBadge({ trial }: { trial: SweepTrial }) {
   );
 }
 
+interface SweepTrialTableInput {
+  projectId: string;
+  trials: SweepTrial[];
+  objective: SweepObjective;
+  bestTrialId: string | null;
+}
+
+/**
+ * The trial table's columns. On narrow screens a row keeps the trial index, objective and state;
+ * parameters and the Run/Job links open beneath it.
+ */
+export function sweepTrialColumns({
+  projectId,
+  trials,
+  objective,
+  bestTrialId,
+}: SweepTrialTableInput): ResponsiveTableColumn<SweepTrial>[] {
+  const parameterColumns: ResponsiveTableColumn<SweepTrial>[] = trialParameterNames(trials).map((name) => ({
+    key: `parameter:${name}`,
+    header: <span className="mono">{name}</span>,
+    className: 'mono',
+    priority: 'secondary',
+    render: (trial) => formatParameter(trial.parameters[name]),
+  }));
+  return [
+    {
+      key: 'trial',
+      header: text.sweepTrialIndex,
+      className: 'mono',
+      priority: 'primary',
+      render: (trial) => textTemplates.sweepTrialRunName(trial.trialIndex),
+    },
+    ...parameterColumns,
+    {
+      key: 'objective',
+      header: `${text.sweepObjectiveValue}（${objective.metric}）`,
+      className: 'mono',
+      priority: 'primary',
+      render: (trial) => (
+        <>
+          {trial.objectiveValue === null ? '—' : formatNumber(trial.objectiveValue)}
+          {trial.id === bestTrialId && <small className="sweep-best-marker">{text.sweepBestTrial}</small>}
+        </>
+      ),
+    },
+    {
+      key: 'state',
+      header: text.sweepTrialState,
+      priority: 'primary',
+      render: (trial) => <SweepTrialStateBadge trial={trial} />,
+    },
+    {
+      key: 'run',
+      header: text.sweepTrialRun,
+      priority: 'secondary',
+      render: (trial) => <Link to={`/projects/${projectId}/runs/${trial.runId}`}>{text.automationRun}</Link>,
+    },
+    {
+      key: 'job',
+      header: text.sweepTrialJob,
+      priority: 'secondary',
+      render: (trial) => (
+        <>
+          <Link to={`/projects/${projectId}/jobs?job=${trial.jobId}`}>{text.automationJob}</Link>
+          {trial.jobCancelRequested && <small> {text.cancelRequested}</small>}
+        </>
+      ),
+    },
+  ];
+}
+
 /** One row per trial: its parameters, objective, state and the Run/Job it ran as. */
 export function SweepTrialsTable({
   projectId,
   trials,
   objective,
   bestTrialId,
-}: {
-  projectId: string;
-  trials: SweepTrial[];
-  objective: SweepObjective;
-  bestTrialId: string | null;
-}) {
+}: SweepTrialTableInput) {
   const [order, setOrder] = useState<SweepTrialOrder>('trial_index');
-  const parameterColumns: TableColumn<SweepTrial>[] = trialParameterNames(trials).map((name) => ({
-    key: `parameter:${name}`,
-    label: <span className="mono">{name}</span>,
-    className: 'mono',
-    render: (trial) => formatParameter(trial.parameters[name]),
-  }));
   return (
     <div className="sweep-trials" data-testid="sweep-trials">
       <label className="chart-selector">
@@ -58,37 +118,11 @@ export function SweepTrialsTable({
           <option value="objective">{text.sweepSortByObjective}</option>
         </select>
       </label>
-      <DataTable
-        items={sortTrials(trials, order, objective.goal)}
+      <ResponsiveTable
+        rows={sortTrials(trials, order, objective.goal)}
         rowKey={(trial) => trial.id}
-        isSelected={(trial) => trial.id === bestTrialId}
         empty={text.sweepNoTrials}
-        columns={[
-          { key: 'trial', label: text.sweepTrialIndex, className: 'mono', render: (trial) => textTemplates.sweepTrialRunName(trial.trialIndex) },
-          ...parameterColumns,
-          {
-            key: 'objective',
-            label: `${text.sweepObjectiveValue}（${objective.metric}）`,
-            className: 'mono',
-            render: (trial) => (trial.objectiveValue === null ? '—' : formatNumber(trial.objectiveValue)),
-          },
-          { key: 'state', label: text.sweepTrialState, render: (trial) => <SweepTrialStateBadge trial={trial} /> },
-          {
-            key: 'run',
-            label: text.sweepTrialRun,
-            render: (trial) => <Link to={`/projects/${projectId}/runs/${trial.runId}`}>{text.automationRun}</Link>,
-          },
-          {
-            key: 'job',
-            label: text.sweepTrialJob,
-            render: (trial) => (
-              <>
-                <Link to={`/projects/${projectId}/jobs?job=${trial.jobId}`}>{text.automationJob}</Link>
-                {trial.jobCancelRequested && <small> {text.cancelRequested}</small>}
-              </>
-            ),
-          },
-        ]}
+        columns={sweepTrialColumns({ projectId, trials, objective, bestTrialId })}
       />
     </div>
   );

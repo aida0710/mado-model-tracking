@@ -1,0 +1,34 @@
+/* The Run list on the Experiments page: row selection and the toolbar menus on narrow screens. */
+
+/* The selection checkbox of a Run row; on narrow (touch) screens its label is the tap target. */
+.run-select-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (width < 900px) {
+  .run-select-target {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    margin: -10px -8px;
+  }
+  /* The toolbar wraps, so the column menu may start anywhere on a line: its list opens across the
+     whole toolbar instead of from the menu's right edge, which could lie off screen. */
+  .run-toolbar {
+    position: relative;
+  }
+  .run-toolbar .column-menu {
+    position: static;
+  }
+  .run-toolbar .column-menu > .popover {
+    left: 0;
+    right: 0;
+    min-width: 0;
+  }
+  .run-toolbar .popover > label,
+  .run-toolbar .column-menu > summary,
+  .run-toolbar .toolbar-select {
+    min-height: var(--tap-target);
+  }
+}

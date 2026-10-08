@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type MouseEvent } from 'react';
+import { useId, useMemo, useState, type PointerEvent } from 'react';
 import {
   CartesianGrid,
   ComposedChart,
@@ -284,7 +284,7 @@ function ChartPlotLayer({
   );
   if (!scales || !invertX || !plotArea) return null;
 
-  const pointerX = (event: MouseEvent<SVGRectElement>) => {
+  const pointerX = (event: PointerEvent<SVGRectElement>) => {
     const svgBox = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
     return {
       pixelX: event.clientX - (svgBox?.left ?? 0),
@@ -294,7 +294,7 @@ function ChartPlotLayer({
   };
   const dataX = (pixelX: number) => Number(invertX(pixelX));
 
-  function finishDrag(event: MouseEvent<SVGRectElement>) {
+  function finishDrag(event: PointerEvent<SVGRectElement>) {
     if (dragStartPixelX === null) return;
     const { pixelX } = pointerX(event);
     setDragStartPixelX(null);
@@ -383,19 +383,24 @@ function ChartPlotLayer({
         y={plotArea.y}
         width={plotArea.width}
         height={plotArea.height}
-        onMouseMove={(event) => {
+        onPointerMove={(event) => {
           const position = pointerX(event);
           onHover({ ...position, x: dataX(position.pixelX) });
         }}
-        onMouseLeave={() => {
+        onPointerLeave={(event) => {
           setDragStartPixelX(null);
-          onHover(null);
+          // A finger lifts off right after a tap; the values it asked for stay until the next tap.
+          if (event.pointerType !== 'touch') onHover(null);
         }}
-        onMouseDown={(event) => {
+        onPointerDown={(event) => {
           event.preventDefault();
-          setDragStartPixelX(pointerX(event).pixelX);
+          event.currentTarget.setPointerCapture(event.pointerId);
+          const position = pointerX(event);
+          setDragStartPixelX(position.pixelX);
+          onHover({ ...position, x: dataX(position.pixelX) });
         }}
-        onMouseUp={finishDrag}
+        onPointerUp={finishDrag}
+        onPointerCancel={() => setDragStartPixelX(null)}
       />
     </g>
   );

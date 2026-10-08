@@ -187,6 +187,7 @@
   .chart-panel-cell {
     grid-column: 1 / -1 !important;
     grid-row: auto !important;
-    height: calc(var(--chart-row-height) * 2);
+    /* A legend that wraps to more lines grows the panel instead of spilling onto the next one. */
+    min-height: calc(var(--chart-row-height) * 2);
   }
 }

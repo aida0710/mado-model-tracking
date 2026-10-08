@@ -148,3 +148,17 @@
   background: #5a4220;
   color: #f6cf8e;
 }
+/* The best trial is named in its objective cell, which stays visible on narrow screens too. */
+.sweep-best-marker {
+  color: var(--teal-strong);
+}
+@media (width < 900px) {
+  /* Padding instead of a flex box keeps the summary's open/closed marker. */
+  .sweep-search-space > summary {
+    padding-block: 11px;
+  }
+  /* The full-screen dialog already has its margin; the fieldset padding would only narrow fields. */
+  .sweep-create-form > fieldset {
+    padding: 0;
+  }
+}

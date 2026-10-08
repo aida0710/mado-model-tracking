@@ -183,7 +183,7 @@ function ComparisonDetails({
         </label>
       </div>
       <div className="table-scroll">
-        <table>
+        <table className="comparison-table">
           <thead>
             <tr>
               <th>{text.details}</th>

@@ -333,7 +333,7 @@ tr.selected td {
     border-bottom: 1px solid var(--border);
   }
   .experiment-item {
-    min-height: 35px;
+    min-height: var(--tap-target);
     padding-top: 8px;
     padding-bottom: 8px;
   }

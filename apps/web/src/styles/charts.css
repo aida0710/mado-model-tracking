@@ -152,6 +152,8 @@
 .chart-pointer-area {
   fill: transparent;
   cursor: crosshair;
+  /* A vertical swipe still scrolls the page; a sideways drag selects the range to zoom into. */
+  touch-action: pan-y;
 }
 
 .chart-tooltip {
@@ -187,4 +189,18 @@
 .chart-tooltip-more {
   margin-top: 4px;
   color: var(--muted);
+}
+
+/* Narrow screens: the legend moves under the plot so the plot starts right below the title. */
+@media (width < 900px) {
+  .metrics-chart > .chart-legend {
+    order: 1;
+    max-height: calc(var(--tap-target) * 2);
+  }
+  .metrics-chart > .metrics-chart-footer {
+    order: 2;
+  }
+  .chart-legend-item {
+    min-height: var(--tap-target);
+  }
 }
