@@ -86,6 +86,8 @@ print(loaded.predict(features))
 
 入力Datasetのname・digest・source・schema・contextをDatasetVersionとRunへ結び付け、lineageに残します。Datasetのsource URLからデータ本体を自動取得する処理はありません。Model Registryへの登録は既存のモデル版登録処理を通り、生成元Run、親モデル、Artifactの参照を固定します。
 
+MLflowのCreateModelVersionとネイティブの`POST /projects/:p/models/:id/versions`（version省略時）は、Modelごとに同じ番号の系列から採番します。交互に登録しても番号は重複せず、削除した版の番号は再利用しません（MLflowと同じ）。明示した整数版で登録した場合は、続きの番号がその版の次まで進みます。整数でない版（`v1`など）と19桁以上の数字は採番の計算から除外します。
+
 MLflowから登録した版は、モデル一式のArtifactを版ごとに固定して読み出します。元のRunのファイルを上書きしたり、Logged Modelを削除したりしても、登録した版の内容は変わりません。モデルの読み込みは`models:/名前/版`または`models:/名前@alias`を使います。lineage画面には入力Dataset、生成元Run、Logged Model、登録したモデル版の関係を表示します。
 
 Logged Modelの取得・検索では全メトリクスを返します。メトリクスの条件検索は過去の評価も含む保存点の一致で判定し、並び替えにはtimestamp、stepの順で選ぶ最新評価を使います。Runの最新値を選ぶ規則とは分けています。

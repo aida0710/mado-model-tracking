@@ -3,6 +3,10 @@ import type { ApiError } from '@mmt/contracts';
 // Client-side failure codes. They never come from the API and are translated in lib/errorMessage.ts.
 export const NETWORK_ERROR_CODE = 'network_error';
 export const INVALID_RESPONSE_CODE = 'invalid_response';
+// A front proxy may answer 413 with HTML before the API sees the upload, so the client names it.
+export const ARTIFACT_TOO_LARGE_CODE = 'artifact_too_large';
+// Artifact content is fetched as raw bytes, so a failure carries no API error body to show.
+export const ARTIFACT_CONTENT_UNAVAILABLE_CODE = 'artifact_content_unavailable';
 
 /**
  * A failed API call. It carries only what the API (or the transport) reported;

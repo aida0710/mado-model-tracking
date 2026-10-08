@@ -48,7 +48,7 @@ CPUだけで実行を試す場合は`MMT_ALLOW_LOCAL_EXECUTOR=true`にし、loca
 
 ## 設定と検証
 
-[運用・Authentik・保存先](docs/operations.md)、[コンテナ・モデルの自動実行](docs/containers-automation.md)、[API契約](docs/api-contract.md)、[plugin仕様](docs/plugins.md)、[検証手順](docs/verification.md)を参照してください。Python SDKの使用例は`python/examples/`にあります。
+[運用・Authentik・保存先](docs/operations.md)、[コンテナ・モデルの自動実行](docs/containers-automation.md)、[API契約](docs/api-contract.md)、[plugin仕様](docs/plugins.md)、[検証手順](docs/verification.md)、[Webの実装規約](docs/web.md)を参照してください。Python SDKの使用例は`python/examples/`にあります。
 
 MLflow 3の接続先・API token・Runとモデルの記録・autolog・workerでの使用方法は[MLflow 3の手順](docs/mlflow.md)を参照してください。
 

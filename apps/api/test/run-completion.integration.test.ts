@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Dataset, PluginConnection, RunStatus } from '@mmt/contracts';
+import type { Dataset, ModelVersion, PluginConnection, Run, RunStatus } from '@mmt/contracts';
 import type { Principal } from '../src/auth/principal.js';
 import { jobCreateSchema } from '../src/domain/validation.js';
 import { RunTrackingService } from '../src/mlflow/tracking/runTrackingService.js';
@@ -315,6 +315,123 @@ describe.skipIf(!testDatabaseUrl)('Run終端handlerの共通入口（独立Postg
       });
     } finally {
       consoleError.mockRestore();
+    }
+  });
+
+  async function finishedEventOutputModels(runId: string): Promise<unknown[]> {
+    const stored = await harness.database.query<{ ids: unknown }>(
+      `SELECT event->'run'->'outputModelVersionIds' AS ids FROM plugin_outbox
+      WHERE event->'run'->>'id'=$1 AND event->>'type'='run.finished' ORDER BY created_at`,
+      [runId],
+    );
+    return stored.rows.map((row) => row.ids);
+  }
+
+  function outputModelRecorder(): RunCompletionHandler & { outputs: string[][] } {
+    const outputs: string[][] = [];
+    return {
+      name: 'output-models',
+      outputs,
+      async handle(_connection, { run }) {
+        outputs.push(run.outputModelVersionIds);
+      },
+    };
+  }
+
+  it('作成・PATCHの応答と終端handlerに渡るRunは出力モデル版を持つ', async () => {
+    const fixture = await setup();
+    const handler = outputModelRecorder();
+    const services = servicesWith([handler]);
+    const run = await fixture.newRun('Training', 'training');
+    expect(run.outputModelVersionIds).toEqual([]);
+    const version = await entity<ModelVersion>(
+      await request(harness.app, `${fixture.basePath}/models/${fixture.model.id}/versions`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { sourceRunId: run.id },
+      }),
+    );
+    const running = await services.runs.patch(fixture.editorPrincipal, fixture.project.id, {
+      runId: run.id,
+      input: { status: 'running' },
+    });
+    expect(running.outputModelVersionIds).toEqual([version.id]);
+    const finished = await entity<Run>(
+      await request(harness.app, `${fixture.basePath}/runs/${run.id}`, {
+        method: 'PATCH',
+        cookie: fixture.editor.cookie,
+        body: { status: 'finished' },
+      }),
+      200,
+    );
+    expect(finished.outputModelVersionIds).toEqual([version.id]);
+    await services.runs.patch(fixture.editorPrincipal, fixture.project.id, {
+      runId: run.id,
+      input: { tags: { note: 'after' } },
+    });
+    expect(await finishedEventOutputModels(run.id)).toEqual([[version.id]]);
+    expect(handler.outputs).toEqual([]);
+
+    const second = await fixture.newRun('Training 2', 'training');
+    const secondVersion = await entity<ModelVersion>(
+      await request(harness.app, `${fixture.basePath}/models/${fixture.model.id}/versions`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { sourceRunId: second.id },
+      }),
+    );
+    await services.runs.patch(fixture.editorPrincipal, fixture.project.id, {
+      runId: second.id,
+      input: { status: 'finished' },
+    });
+    expect(handler.outputs).toEqual([[secondVersion.id]]);
+  });
+
+  it('出力モデル版の登録中にMLflow UpdateRunで終端にすると、登録の確定を待ってから版入りで終端になる', async () => {
+    const fixture = await setup();
+    const handler = outputModelRecorder();
+    const services = servicesWith([handler]);
+    const created = await services.tracking.create(fixture.editorPrincipal, fixture.project.id, {
+      experiment_id: fixture.experiment.id,
+      tags: [],
+    });
+    const runId = created.info.run_id;
+    const registration = await harness.database.connect();
+    try {
+      await registration.query('BEGIN');
+      const version = await harness.services.registry.registerModelVersion(registration, {
+        projectId: fixture.project.id,
+        modelId: fixture.model.id,
+        sourceRunId: runId,
+        parentVersionIds: [],
+        metadata: {},
+        actor: { type: 'principal', principal: fixture.editorPrincipal },
+      });
+      const registrationPid = (
+        await registration.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')
+      ).rows[0]!.pid;
+      let isFinished = false;
+      const finishing = services.tracking
+        .update(fixture.editorPrincipal, fixture.project.id, { runId, status: 'FINISHED' })
+        .finally(() => {
+          isFinished = true;
+        });
+      await vi.waitFor(async () => {
+        const blocked = await harness.database.query<{ count: number }>(
+          'SELECT count(*)::int AS count FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid))',
+          [registrationPid],
+        );
+        expect(blocked.rows[0]!.count).toBe(1);
+      });
+      expect(isFinished).toBe(false);
+      await registration.query('COMMIT');
+      await finishing;
+      expect(handler.outputs).toEqual([[version.id]]);
+      // The registration saw a running Run, so only the terminal transition wrote run.finished.
+      expect(await finishedEventOutputModels(runId)).toEqual([[version.id]]);
+    } finally {
+      await registration.query('ROLLBACK').catch(() => undefined);
+      registration.release();
     }
   });
 });

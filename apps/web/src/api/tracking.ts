@@ -7,18 +7,26 @@ import type {
   Run,
 } from '@mmt/contracts';
 import type { CreateRun, UpdateRun } from './inputs';
-import { text } from '../i18n/catalog';
-import { encodeId, jsonRequest, projectPath, request, RequestError, requestItems } from './http';
+import {
+  ARTIFACT_CONTENT_UNAVAILABLE_CODE,
+  ARTIFACT_TOO_LARGE_CODE,
+  encodeId,
+  jsonRequest,
+  projectPath,
+  request,
+  RequestError,
+  requestItems,
+} from './http';
 
 const HTTP_PAYLOAD_TOO_LARGE = 413;
 
-// A front proxy can reject before the API and reply with HTML, so the status decides the message.
+// A front proxy can reject before the API and reply with HTML, so the status decides the code.
 async function withArtifactSizeMessage<T>(upload: Promise<T>): Promise<T> {
   try {
     return await upload;
   } catch (error) {
     if (error instanceof RequestError && error.status === HTTP_PAYLOAD_TOO_LARGE)
-      throw new RequestError(text.artifactTooLarge, error.status, 'artifact_too_large');
+      throw new RequestError({ status: error.status, code: ARTIFACT_TOO_LARGE_CODE });
     throw error;
   }
 }
@@ -76,7 +84,7 @@ export const trackingApi = {
       signal,
     });
     if (!response.ok)
-      throw new RequestError(`${text.contentError} (${response.status})`, response.status);
+      throw new RequestError({ status: response.status, code: ARTIFACT_CONTENT_UNAVAILABLE_CODE });
     return response.text();
   },
   artifact: (projectId: string, artifactId: string, signal?: AbortSignal) =>

@@ -16,6 +16,7 @@ import { appendLogs, appendMetrics } from '../repositories/telemetryRepository.j
 import { requireWorker } from './accessService.js';
 import type { JobService } from './jobService.js';
 import type { RunCompletionService } from './runCompletionService.js';
+import { runColumns } from '../repositories/runListProjection.js';
 
 // A busy target should not block claims for other targets in the same queue.
 const CLAIM_CANDIDATE_LIMIT = 100;
@@ -215,7 +216,7 @@ export class WorkerService {
       ))!;
       const run = (await first<Run>(
         connection,
-        'UPDATE runs SET status=$2,error=$3,ended_at=now() WHERE id=$1 RETURNING *',
+        `UPDATE runs SET status=$2,error=$3,ended_at=now() WHERE id=$1 RETURNING ${runColumns}`,
         [job.runId, request.status, request.error ?? null],
       ))!;
       await connection.query('DELETE FROM gpu_reservations WHERE job_id=$1', [job.id]);

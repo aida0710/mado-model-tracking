@@ -34,3 +34,8 @@ export function canManageAutomationRules(role: ProjectRole, globalAdmin: boolean
 export function canCreateProject(user: Pick<User, 'status'>): boolean {
   return user.status !== 'disabled';
 }
+
+/** Only users with a local credential have a password here; SSO users change theirs in the IdP. */
+export function canChangeOwnPassword(user: Pick<User, 'authSources'>): boolean {
+  return user.authSources.includes('local');
+}

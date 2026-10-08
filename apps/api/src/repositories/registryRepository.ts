@@ -1,7 +1,7 @@
 import type { CodeVersion, DatasetVersion, ModelVersion, Run } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
 import { conflict, notFound } from '../domain/errors.js';
-import { outputModelVersionIdsColumn } from './runListProjection.js';
+import { runColumns } from './runListProjection.js';
 
 // models.next_version is the internal numbering counter and is not part of the Model contract.
 export const modelColumns = 'id,project_id,name,family,description,created_at';
@@ -112,7 +112,7 @@ export async function findRun(
 ): Promise<Run> {
   const run = await first<Run>(
     connection,
-    `SELECT *,${outputModelVersionIdsColumn} FROM runs WHERE project_id=$1 AND id=$2 ${reference.lock ? 'FOR UPDATE' : ''}`,
+    `SELECT ${runColumns} FROM runs WHERE project_id=$1 AND id=$2 ${reference.lock ? 'FOR UPDATE' : ''}`,
     [reference.projectId, reference.id],
   );
   if (!run) notFound('Run');

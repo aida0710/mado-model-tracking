@@ -1,12 +1,5 @@
-import type { AuditEvent } from '@mmt/contracts';
-import { projectPath, request } from './http';
-import { text } from '../i18n/catalog';
-
-// Not in @mmt/contracts yet; the parent moves it there when merging this wave.
-export interface AuditEventPage {
-  items: AuditEvent[];
-  nextCursor: string | null;
-}
+import type { AuditEventPage } from '@mmt/contracts';
+import { invalidResponseError, projectPath, request } from './http';
 
 // Matches the API default so each "load more" fetches one server page.
 export const AUDIT_EVENT_PAGE_SIZE = 50;
@@ -25,7 +18,7 @@ export const auditApi = {
       !Array.isArray(page.items) ||
       (page.nextCursor !== null && typeof page.nextCursor !== 'string')
     )
-      throw new Error(text.invalidResponse);
+      throw invalidResponseError();
     return page;
   },
 };

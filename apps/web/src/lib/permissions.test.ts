@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRole } from '@mmt/contracts';
 import {
+  canChangeOwnPassword,
   canCreateProject,
   canEditProject,
   canManageAutomationRules,
@@ -49,5 +50,14 @@ describe('Projectの権限判定', () => {
   it('無効化されたユーザーはProjectを作成できない', () => {
     expect(canCreateProject({ status: 'active' })).toBe(true);
     expect(canCreateProject({ status: 'disabled' })).toBe(false);
+  });
+
+  it.each([
+    [['local'], true],
+    [['local', 'oidc'], true],
+    [['oidc'], false],
+    [[], false],
+  ] as const)('ログイン手段が%sならパスワード変更=%sになる', (authSources, expected) => {
+    expect(canChangeOwnPassword({ authSources: [...authSources] })).toBe(expected);
   });
 });

@@ -1,4 +1,4 @@
-import type { AuditEvent } from '@mmt/contracts';
+import type { AuditEventPage } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { Database } from '../db/database.js';
 import type { AuditEventQuery, ProjectAuditEventQuery } from '../domain/auditValidation.js';
@@ -12,12 +12,6 @@ import {
   type AuditEventInput,
 } from '../repositories/auditRepository.js';
 import { requireGlobalAdmin, requireProject } from './accessService.js';
-
-// Not in @mmt/contracts yet; the parent adds it when merging this wave.
-export interface AuditEventPage {
-  items: AuditEvent[];
-  nextCursor: string | null;
-}
 
 // Internal callers such as the demo seed have no HTTP request to attribute.
 export const NO_REQUEST_METADATA: RequestMetadata = { ip: null, userAgent: null };

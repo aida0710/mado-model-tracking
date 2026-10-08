@@ -9,6 +9,9 @@ export function createBrowserApi() {
     email: 'ui-test@example.invalid',
     displayName: 'UI検証担当',
     isAdmin: true,
+    username: 'ui-test',
+    status: 'active',
+    authSources: ['local'],
   };
   const project = {
     id: id(),
@@ -111,6 +114,7 @@ export function createBrowserApi() {
     codeVersionId: null,
     inputDatasetVersionIds: [],
     outputDatasetVersionIds: [],
+    outputModelVersionIds: [],
     parentRunId: null,
     environment: {},
     createdBy: user.id,
@@ -259,19 +263,28 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (path === '/auth/config')
       return reply({
         mode: state.authMode,
-        label: state.authMode === 'oidc' ? 'Authentik' : 'Development',
-        loginUrl: '/api/auth/login',
+        methods: {
+          local: state.authMode === 'local' || state.authMode === 'hybrid',
+          oidc:
+            state.authMode === 'oidc' || state.authMode === 'hybrid'
+              ? { label: 'Authentik', loginUrl: '/api/auth/login' }
+              : null,
+        },
       });
     if (path === '/auth/login') {
       state.loggedIn = true;
       return route.fulfill({ status: 302, headers: { location: url.origin + '/' }, body: '' });
     }
     if (path === '/auth/me')
-      return state.loggedIn ? reply({ user }) : reply({ error: 'Unauthorized' }, 401);
+      return state.loggedIn
+        ? reply({ user, mustChangePassword: false })
+        : reply({ error: 'Unauthorized' }, 401);
     if (path === '/auth/dev-login') {
       state.loggedIn = true;
-      return reply({ user });
+      return reply({ user, mustChangePassword: false });
     }
+    if (path === '/auth/change-password' && method === 'POST')
+      return route.fulfill({ status: 204, body: '' });
     if (path === '/auth/logout') {
       state.loggedIn = false;
       return reply({ ok: true });
@@ -339,6 +352,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     }
     if (resource === 'automation-executions' && method === 'GET')
       return list(state.automationExecutions);
+    if (resource === 'audit-events' && method === 'GET') return reply({ items: [], nextCursor: null });
     if (resource === 'members') {
       if (method === 'GET') return list([{ user, role: project.role }]);
       return reply({ ...user, role: body.role });

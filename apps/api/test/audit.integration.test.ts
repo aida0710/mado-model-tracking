@@ -1,13 +1,8 @@
-import type { AuditEvent, Project, TokenSummary } from '@mmt/contracts';
+import type { AuditEvent, AuditEventPage, Project, TokenSummary } from '@mmt/contracts';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashSecret } from '../src/auth/secrets.js';
 import { projectFixture } from './fixtures.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
-
-interface AuditEventPage {
-  items: AuditEvent[];
-  nextCursor: string | null;
-}
 
 describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立PostgreSQL）', () => {
   let harness: Harness;
@@ -303,8 +298,14 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
       }),
       200,
     );
-    const projects = new Set(all.items.map((event) => event.projectId));
-    expect(projects).toEqual(new Set([fixture.project.id, other.id]));
+    const projectScoped = all.items.filter((event) => event.projectId !== null);
+    expect(new Set(projectScoped.map((event) => event.projectId))).toEqual(
+      new Set([fixture.project.id, other.id]),
+    );
+    // Login events belong to no Project, so only the global list can show them.
+    const projectless = all.items.filter((event) => event.projectId === null);
+    expect(projectless.length).toBeGreaterThan(0);
+    expect(projectless.every((event) => event.action.startsWith('auth.'))).toBe(true);
     const filtered = await entity<AuditEventPage>(
       await request(harness.app, `/api/audit-events?projectId=${other.id}`, {
         cookie: fixture.administrator.cookie,

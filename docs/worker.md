@@ -63,7 +63,7 @@ with Client() as client:
         run.log("checkpoint saved")
         artifact = run.log_artifact("weights.bin", path="model/weights.bin")
         run.register_output_model(
-            name="example-model", family="example-family", version="v1",
+            model_name="example-model", family="example-family",
             artifact_id=artifact["id"],
         )
 ```
@@ -72,7 +72,9 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 `create_run()`は`queued`のRunを作る。workerに渡すRunをSDKで`start()`しないこと。workerが供給する`MMT_RUN_ID`があれば、引数なしの`start_run()`でそのRunへ接続する。このcontextの状態はworkerが終了時に確定する。job実行開始後の`log_params()`はAPIに拒否されるため、実行設定はRun作成時に渡す。
 
-`register_model()` / `register_dataset()`は通常の版登録、`register_output_model()` / `register_output_dataset()`はRunの出力登録。出力は`sourceRunId`と親の版IDを保存する。出力モデルは`training` / `finetuning`で登録できる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。
+`register_model()` / `register_dataset()`は通常の版登録、`register_output_model()` / `register_output_dataset()`はRunの出力登録。出力は`sourceRunId`と親の版IDを保存する。出力モデルは`training` / `finetuning`で登録できる。
+
+`register_model()` / `register_output_model()`は`model_name=`で既存のModelを名前で探して再利用し、無ければ作成する（`GET /projects/:p/models?name=`で探し、無ければPOST、同時作成で409になったら再GET）。既存Modelのfamilyが`family=`と違う場合は`ConfigurationError`になる。`version`を省略するとAPIが整数で採番する（1, 2, 3, …）。従来の`name=`も同じ動作の別名として受け付ける。出力モデルはRunの`outputModelVersionIds`に登録順で現れ、版を削除すると外れる。sourceRunがtraining/finetuning以外なら422 `output_model_kind`、削除済みRunなら422 `source_run_deleted`になる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。
 
 `run.download_input_model("inputs/weights.json")`は、workerが渡したModelVersion metadataをRunの固定された`modelVersionId`とprojectへ照合してから、Artifactをstreamで取得する。ローカルの`file://` URIにも対応する。worker外で使う場合は`model_version=...`に登録済みModelVersionのmetadataを渡す。ダウンロード完了後にファイルを置き換え、通信失敗で部分的な重みを残さない。
 
@@ -235,7 +237,7 @@ export MMT_ALLOW_LOCAL_EXECUTOR=true
 python/.venv/bin/mado-tracking-worker --once
 ```
 
-training例はゼロから初期化してlossを記録し、weights.jsonをArtifactへ保存して出力ModelVersionを登録する。終了後にRunの`outputModelVersionId`タグを取り出し、表示されたinferenceCodeVersionIdとともに新しいinference Runへ指定する。inference例は固定されたモデル版のArtifactから重みを読み、予測結果をArtifactと出力DatasetVersionに保存する。
+training例はゼロから初期化してlossを記録し、weights.jsonをArtifactへ保存して、固定のModel `cpu-linear`に自動採番で出力ModelVersionを足す。終了後にRunの`outputModelVersionIds`から版IDを取り出し、表示されたinferenceCodeVersionIdとともに新しいinference Runへ指定する。inference例は固定されたモデル版のArtifactから重みを読み、予測結果をArtifactと出力DatasetVersionに保存する。
 
 同じtrainingコードを`kind="finetuning"`のRunで実行すると、入力ModelVersionの`weight`と`bias`から学習を続ける。Runの`modelVersionId`へ固定された入力モデル版を指定する。重みは`MMT_MODEL_FILE`があればそのファイルから、なければSDKの`download_input_model()`で読み込む。familyは`linear`、weight/biasは有限の数値であることを確認し、入力なし・不正な重みは失敗させる。出力ModelVersionには親版IDと、実際に使った初期weight/biasを記録する。kindは接続したRunから判断し、`MMT_JOB_KIND`が指定されている場合は一致も確認する。
 

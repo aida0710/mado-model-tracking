@@ -4,25 +4,27 @@ import { PageHeader } from '../components/PageHeader';
 import { ProjectSettings } from '../components/ProjectSettings';
 import { ProjectMembers } from '../components/ProjectMembers';
 import { ProjectTokens } from '../components/ProjectTokens';
-import { AuditEventsTable, auditText } from '../components/AuditEventsTable';
+import { ProjectList } from '../components/ProjectList';
+import { AuditEventsTable } from '../components/AuditEventsTable';
 import { ErrorNotice, Loading } from '../components/Feedback';
 import { text } from '../i18n/catalog';
 
 export function SettingsPage() {
-  const { project, isProjectAdmin } = useProject();
+  const { project, projects, reloadProjects, isProjectAdmin } = useProject();
   // The API refuses non-administrators, so they never request the log.
   const audit = useAuditEvents(isProjectAdmin ? project.id : null);
   return (
     <section className="page">
       <PageHeader title={text.settings} eyebrow={project.name} />
       <div className="settings-grid">
+        <ProjectList projects={projects} onCreated={reloadProjects} />
         <ProjectSettings />
         <ProjectMembers />
         <ProjectTokens />
         {isProjectAdmin && (
           <section className="settings-section">
             <div className="section-heading">
-              <h2>{auditText('auditEvents')}</h2>
+              <h2>{text.auditEvents}</h2>
             </div>
             <ErrorNotice message={audit.error} retry={audit.reload} />
             {audit.loading && !audit.items.length ? (

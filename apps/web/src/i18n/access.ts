@@ -1,4 +1,4 @@
-// Local login and password change labels. auth-local-accounts-and-mode owns the entries.
+// Sign-in, password change and audit log labels.
 export const accessText = {
   username: 'ユーザー名',
   password: 'パスワード',
@@ -19,4 +19,21 @@ export const accessText = {
   localAccountRequired: 'ローカルアカウントのパスワードだけを変更できます',
   changePassword: 'パスワードを変更',
   passwordChanged: 'パスワードを変更しました。ほかの端末のログインは終了しました。',
+  auditEvents: '監査ログ',
+  auditOccurredAt: '日時',
+  auditActor: '操作者',
+  auditAction: '操作',
+  auditOutcome: '結果',
+  auditResource: '対象',
+  auditDetails: '詳細',
+  auditEmpty: '監査ログはまだありません',
+  auditLoadMore: 'さらに読む',
+  auditActorToken: 'API token',
+  auditActorSystem: 'システム',
+  auditOutcomeSuccess: '成功',
+  auditOutcomeDenied: '拒否',
+  auditOutcomeFailed: '失敗',
+  auditActionProjectMemberSet: 'メンバーの権限変更',
+  auditActionTokenCreate: 'API tokenの発行',
+  auditActionTokenRevoke: 'API tokenの失効',
 } as const;

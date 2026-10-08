@@ -28,6 +28,18 @@ describe('formatErrorMessage', () => {
   it('応答形式の不一致は契約不一致の文言にする', () => {
     expect(formatErrorMessage(invalidResponseError())).toBe(text.invalidResponse);
   });
+  it('413はAPIでも前段proxyでも同じ上限超過の文言にする', () => {
+    expect(
+      formatErrorMessage(
+        new RequestError({ status: 413, code: 'artifact_too_large', serverMessage: 'too large' }),
+      ),
+    ).toBe(text.artifactTooLarge);
+  });
+  it('Artifactの中身を取れなかったときはプレビュー失敗の文言にステータスを添える', () => {
+    expect(
+      formatErrorMessage(new RequestError({ status: 404, code: 'artifact_content_unavailable' })),
+    ).toBe(`${text.contentError} (404)`);
+  });
   it('理由のない失敗応答はステータスを添えて表示する', () => {
     expect(formatErrorMessage(new RequestError({ status: 502 }))).toBe(
       `${text.requestError} (502)`,

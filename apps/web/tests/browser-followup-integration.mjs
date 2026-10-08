@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { openProjectCreation } from './projectCreation.mjs';
 
 const { chromium } = await import(pathToFileURL(process.env.MMT_PLAYWRIGHT_MODULE).href);
 const base = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182';
@@ -77,10 +78,10 @@ try {
     (project) => project.name === projectName,
   );
   if (!project) {
-    await projectAdminPage
-      .getByRole('button', { name: 'プロジェクトを作成', exact: true })
-      .first()
-      .click();
+    await openProjectCreation(projectAdminPage, {
+      base,
+      projects: (await getJson(projectAdminPage, '/projects')).items,
+    });
     await projectAdminPage.getByRole('dialog').getByLabel('名前').fill(projectName);
     await projectAdminPage
       .getByRole('dialog')

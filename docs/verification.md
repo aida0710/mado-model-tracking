@@ -2,6 +2,8 @@
 
 DBテストは専用の`mmt_test`へ接続し、テスト専用schema内でmigrationを適用します。開発DBや既存Mado DBを渡さないでください。
 
+`npm test`は、DBを使うAPIのintegration test（`apps/api/test/*.integration.test.ts`）を同時に6ファイルまでに抑え、ほかのテストを先に並列で実行します（`vitest.config.ts`）。ファイルごとに接続poolとschemaを作るため、CPU数のまま並列にすると`mmt_test`の接続上限（100）やlock表を使い切り、`too many clients already`や`out of shared memory`で落ちていました。別のworktreeから同じ`mmt_test`へ同時にテストを流すと、この上限を超えることがあります。
+
 ```bash
 npm run typecheck
 npm run build

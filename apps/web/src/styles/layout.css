@@ -67,6 +67,10 @@
   font-weight: 650;
   color: #fff;
 }
+.topbar a.avatar:hover {
+  background: #00a19b;
+  text-decoration: none;
+}
 .projectbar {
   min-height: 43px;
   padding: 6px 18px;

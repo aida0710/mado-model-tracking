@@ -2,7 +2,11 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './hooks/useAuth';
 import { AppShell } from './layout/AppShell';
+import { AccountShell } from './layout/AccountShell';
+import { ACCOUNT_PASSWORD_PATH } from './layout/TopBar';
 import { Loading } from './components/Feedback';
+// Already in the main bundle because AuthGate shows it for a required change.
+import { ChangePasswordPage } from './pages/ChangePasswordPage';
 const ExperimentsPage = lazy(() =>
   import('./pages/ExperimentsPage').then((module) => ({ default: module.ExperimentsPage })),
 );
@@ -46,6 +50,12 @@ export function App() {
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<AppShell />} />
+          <Route element={<AccountShell />}>
+            <Route
+              path={ACCOUNT_PASSWORD_PATH}
+              element={<ChangePasswordPage isRequired={false} />}
+            />
+          </Route>
           <Route path="/projects/:projectId" element={<AppShell />}>
             <Route index element={<Navigate replace to="experiments" />} />
             <Route path="experiments" element={<ExperimentsPage />} />

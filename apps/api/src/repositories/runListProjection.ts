@@ -6,6 +6,9 @@ export const outputModelVersionIdsColumn = `ARRAY(
   WHERE v.project_id=runs.project_id AND v.source_run_id=runs.id AND vm.deleted_at IS NULL
   ORDER BY v.created_at,v.id) AS output_model_version_ids`;
 
+// Every statement that returns a whole Run (SELECT or RETURNING) uses this so the field is never missing.
+export const runColumns = `*,${outputModelVersionIdsColumn}`;
+
 // Polling lists retain execution identity; code text and code environment belong to detail reads.
 export const runSummarySelect = `SELECT
   id,project_id,experiment_id,name,kind,status,parameters,tags,latest_metrics,

@@ -1,92 +1,27 @@
-import { Link, Navigate, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LogOut, Moon, Sun } from 'lucide-react';
+import { Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { administrationApi } from '../api/administration';
-import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
-import { useTheme } from '../hooks/useTheme';
 import { useQuery } from '../hooks/useQuery';
-import { useMutation } from '../hooks/useMutation';
 import { ProjectContext } from '../hooks/useProject';
-import { ErrorNotice, Resource } from '../components/Feedback';
+import { Resource } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { ProjectList } from '../components/ProjectList';
-import { canCreateProject, canManagePlugins, isGlobalAdmin } from '../lib/permissions';
+import { canCreateProject } from '../lib/permissions';
 import { text } from '../i18n/catalog';
-
-const screens = [
-  'experiments',
-  'tasks',
-  'models',
-  'codes',
-  'datasets',
-  'lineage',
-  'jobs',
-  'compute',
-  'plugins',
-  'settings',
-] as const;
+import { TopBar } from './TopBar';
 
 export function AppShell() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const auth = useAuth();
-  const theme = useTheme();
   const projects = useQuery('projects', administrationApi.projects);
-  const mutation = useMutation();
   const userCanCreateProject = canCreateProject(auth.user);
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#content">
-        {text.skipContent}
-      </a>
-      <header className="topbar">
-        <Link to="/" className="brand">
-          {text.appName}
-        </Link>
-        <nav aria-label={text.navigation}>
-          {projectId &&
-            screens
-              .filter(
-                (screen) =>
-                  screen !== 'plugins' ||
-                  canManagePlugins(
-                    projects.value?.find((project) => project.id === projectId)?.role,
-                    isGlobalAdmin(auth.user),
-                  ),
-              )
-              .map((screen) => (
-                <NavLink key={screen} to={`/projects/${projectId}/${screen}`}>
-                  {text[screen]}
-                </NavLink>
-              ))}
-        </nav>
-        <div className="topbar-actions">
-          <button
-            className="icon-button"
-            onClick={theme.toggle}
-            aria-label={theme.theme === 'light' ? text.darkTheme : text.lightTheme}
-          >
-            {theme.theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-          </button>
-          <span className="avatar" title={auth.user.displayName}>
-            {auth.user.displayName.slice(0, 2).toUpperCase()}
-          </span>
-          <button
-            className="icon-button"
-            disabled={mutation.pending}
-            aria-label={text.logout}
-            onClick={() =>
-              void mutation.run(async () => {
-                await authApi.logout();
-                auth.reload();
-              })
-            }
-          >
-            <LogOut size={17} />
-          </button>
-        </div>
-      </header>
-      <ErrorNotice message={mutation.error} />
+      <TopBar
+        projectId={projectId}
+        projectRole={projects.value?.find((project) => project.id === projectId)?.role}
+      />
       <Resource query={projects}>
         {(items) => {
           const project = items.find((item) => item.id === projectId);

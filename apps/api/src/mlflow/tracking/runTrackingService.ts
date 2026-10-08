@@ -5,6 +5,7 @@ import { conflict, notFound } from '../../domain/errors.js';
 import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
 import { findRun } from '../../repositories/registryRepository.js';
+import { runColumns } from '../../repositories/runListProjection.js';
 import { requireProject } from '../../services/accessService.js';
 import type { RunCompletionService } from '../../services/runCompletionService.js';
 import type { RegistryService } from '../../services/registryService.js';
@@ -116,7 +117,7 @@ export class RunTrackingService {
       });
       const started = (await first<TrackingRun>(
         connection,
-        "UPDATE runs SET status='running',started_at=$2,mlflow_managed=true,mlflow_user_id=$3 WHERE id=$1 RETURNING *",
+        `UPDATE runs SET status='running',started_at=$2,mlflow_managed=true,mlflow_user_id=$3 WHERE id=$1 RETURNING ${runColumns}`,
         [
           run.id,
           new Date(input.start_time ?? Date.now()).toISOString(),
@@ -179,28 +180,32 @@ export class RunTrackingService {
     projectId: string,
     input: { runId: string; status?: MlflowRunStatus; end_time?: number | null; run_name?: string },
   ) {
-    return this.write({ principal, projectId, runId: input.runId }, async (connection, run) => {
-      const job = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
-      const { status, startedAt, endedAt } = resolveTrackingLifecycle(run, {
-        status: input.status,
-        endTime: input.end_time,
-        hasJob: !!job,
-      });
-      const tags = { ...run.tags };
-      if (input.run_name !== undefined) tags['mlflow.runName'] = input.run_name;
-      const updated = (await first<TrackingRun>(
-        connection,
-        `UPDATE runs SET name=COALESCE($2,name),tags=$3::jsonb,status=$4,ended_at=$5,
-        started_at=$6 WHERE id=$1 RETURNING *`,
-        [run.id, input.run_name, JSON.stringify(tags), status, endedAt, startedAt],
-      ))!;
-      if (status !== run.status)
-        await this.runCompletion.recordStatusChange(connection, {
-          previousStatus: run.status,
-          run: updated,
+    return this.write(
+      { principal, projectId, runId: input.runId },
+      async (connection, run) => {
+        const job = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
+        const { status, startedAt, endedAt } = resolveTrackingLifecycle(run, {
+          status: input.status,
+          endTime: input.end_time,
+          hasJob: !!job,
         });
-      return serializeRunInfo(updated);
-    });
+        const tags = { ...run.tags };
+        if (input.run_name !== undefined) tags['mlflow.runName'] = input.run_name;
+        const updated = (await first<TrackingRun>(
+          connection,
+          `UPDATE runs SET name=COALESCE($2,name),tags=$3::jsonb,status=$4,ended_at=$5,
+          started_at=$6 WHERE id=$1 RETURNING ${runColumns}`,
+          [run.id, input.run_name, JSON.stringify(tags), status, endedAt, startedAt],
+        ))!;
+        if (status !== run.status)
+          await this.runCompletion.recordStatusChange(connection, {
+            previousStatus: run.status,
+            run: updated,
+          });
+        return serializeRunInfo(updated);
+      },
+      { lockForStatusChange: true },
+    );
   }
   async batch(
     principal: Principal,
@@ -383,7 +388,12 @@ export class RunTrackingService {
   private async write<T>(
     reference: { principal: Principal; projectId: string; runId: string },
     operation: (connection: Connection, run: TrackingRun) => Promise<T>,
-    options: { allowDeleted?: boolean; lockParentage?: boolean; modelIds?: string[] } = {},
+    options: {
+      allowDeleted?: boolean;
+      lockParentage?: boolean;
+      modelIds?: string[];
+      lockForStatusChange?: boolean;
+    } = {},
   ): Promise<T> {
     const { principal, projectId, runId } = reference;
     return transaction(this.database, async (connection) => {
@@ -407,9 +417,13 @@ export class RunTrackingService {
           existingRun.experimentId,
         ]);
       // Artifact uploads also lock Run before model; NO KEY UPDATE permits Registry's Run FK lock.
+      // A status change instead takes FOR UPDATE, which waits for output model registration (it
+      // holds the Run FOR KEY SHARE), so the terminal event always lists the registered versions.
+      // It locks no model afterwards, so the Run-then-model order of outputs cannot deadlock it.
+      const runLock = options.lockForStatusChange ? 'FOR UPDATE' : 'FOR NO KEY UPDATE';
       const run = await first<TrackingRun>(
         connection,
-        'SELECT * FROM runs WHERE project_id=$1 AND id=$2 FOR NO KEY UPDATE',
+        `SELECT * FROM runs WHERE project_id=$1 AND id=$2 ${runLock}`,
         [projectId, runId],
       );
       if (!run) notFound('Run');

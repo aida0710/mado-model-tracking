@@ -23,6 +23,7 @@ import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { requireProject } from './accessService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
+import { runColumns } from '../repositories/runListProjection.js';
 
 export class JobService {
   private readonly database: Database;
@@ -151,7 +152,7 @@ export class JobService {
       ))!;
       const run = (await first<Run>(
         connection,
-        "UPDATE runs SET status='canceled',ended_at=now() WHERE id=$1 RETURNING *",
+        `UPDATE runs SET status='canceled',ended_at=now() WHERE id=$1 RETURNING ${runColumns}`,
         [job.runId],
       ))!;
       await this.runCompletion.recordStatusChange(connection, {
@@ -285,7 +286,7 @@ export class JobService {
       );
     const run = (await first<Run>(
       connection,
-      "UPDATE runs SET status='running',started_at=COALESCE(started_at,now()) WHERE id=$1 RETURNING *",
+      `UPDATE runs SET status='running',started_at=COALESCE(started_at,now()) WHERE id=$1 RETURNING ${runColumns}`,
       [job.runId],
     ))!;
     await this.runCompletion.recordStatusChange(connection, {

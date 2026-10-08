@@ -33,6 +33,7 @@ import { enqueueRunEvent } from './outboxEvents.js';
 import type { ModelAutomationService } from './modelAutomationService.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { registerModelVersion, type ModelVersionRegistration } from './modelVersionRegistration.js';
+import { runColumns } from '../repositories/runListProjection.js';
 
 export class RegistryService {
   constructor(
@@ -330,7 +331,7 @@ export class RegistryService {
     if (sourceRun) {
       const updatedRun = await first<Run>(
         connection,
-        'UPDATE runs SET output_dataset_version_ids=array_append(output_dataset_version_ids,$2::uuid) WHERE id=$1 RETURNING *',
+        `UPDATE runs SET output_dataset_version_ids=array_append(output_dataset_version_ids,$2::uuid) WHERE id=$1 RETURNING ${runColumns}`,
         [sourceRun.id, version.id],
       );
       // A late registration must refresh external lineage in the same transaction.

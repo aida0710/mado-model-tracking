@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { openProjectCreation } from './projectCreation.mjs';
 
 const { chromium } = await import(pathToFileURL(process.env.MMT_PLAYWRIGHT_MODULE).href);
 const base = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182';
@@ -64,7 +65,7 @@ try {
   }
 
   console.log('Real API: create project and experiment');
-  await page.getByRole('button', { name: 'プロジェクトを作成', exact: true }).first().click();
+  await openProjectCreation(page, { base, projects: (await json('/projects')).items });
   const projectName = `Web UI verification ${new Date().toISOString()}`;
   await fill('名前', projectName);
   await fill('説明', 'ブラウザからの登録・保存・再読み込みを確認するローカル検証記録');

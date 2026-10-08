@@ -8,6 +8,7 @@ import { requireScope } from '../../services/accessService.js';
 import { isTerminalStatus } from '../../domain/runTransitions.js';
 import type { TrackingDataset, TrackingDatasetInput } from './trackingTypes.js';
 import { invalidParameter } from './trackingValidation.js';
+import { runColumns } from '../../repositories/runListProjection.js';
 
 // Dataset identity locks use a namespace separate from schema migration and parent Run locks.
 const DATASET_REGISTRATION_LOCK_NAMESPACE = 4183;
@@ -121,7 +122,7 @@ export async function logDatasetInputs(
   }
   const updated = (await first<Run>(
     connection,
-    'UPDATE runs SET input_dataset_version_ids=$2::uuid[] WHERE id=$1 RETURNING *',
+    `UPDATE runs SET input_dataset_version_ids=$2::uuid[] WHERE id=$1 RETURNING ${runColumns}`,
     [request.run.id, [...versionIds]],
   ))!;
   if (

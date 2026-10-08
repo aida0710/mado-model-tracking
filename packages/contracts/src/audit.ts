@@ -18,3 +18,9 @@ export interface AuditEvent {
   ip: string | null;
   userAgent: string | null;
 }
+
+/** One keyset page of audit events, newest first. nextCursor is the id to pass as `cursor` next. */
+export interface AuditEventPage {
+  items: AuditEvent[];
+  nextCursor: string | null;
+}

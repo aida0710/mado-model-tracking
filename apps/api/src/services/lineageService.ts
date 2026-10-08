@@ -11,7 +11,7 @@ import type { Principal } from '../auth/principal.js';
 import { rows, type Database } from '../db/database.js';
 import { datasetVersionSelect } from '../repositories/registryRepository.js';
 import { getMlflowLineage } from '../repositories/mlflowLineageRepository.js';
-import { outputModelVersionIdsColumn } from '../repositories/runListProjection.js';
+import { runColumns } from '../repositories/runListProjection.js';
 import { requireProject } from './accessService.js';
 
 export class LineageService {
@@ -22,7 +22,7 @@ export class LineageService {
     const [runs, models, datasets, codes, mlflow] = await Promise.all([
       rows<Run>(
         this.database,
-        `SELECT *,${outputModelVersionIdsColumn} FROM runs WHERE project_id=$1`,
+        `SELECT ${runColumns} FROM runs WHERE project_id=$1`,
         [projectId],
       ),
       rows<ModelVersion & { name: string }>(

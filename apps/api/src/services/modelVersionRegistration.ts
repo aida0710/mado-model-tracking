@@ -114,8 +114,8 @@ export async function registerModelVersion(
   ))!;
   await automation.processRegistration(connection, { projectId, modelVersionId: inserted.id });
   if (sourceRun) {
-    // Re-read after the insert: a transition committed meanwhile without a FOR UPDATE lock
-    // could not see this version, so a late registration refreshes external lineage here.
+    // Terminal transitions lock the Run FOR UPDATE, so they either wait for this transaction and
+    // list the version themselves, or committed before it; only then does the event need resending.
     const currentRun = await findRun(connection, { projectId, id: sourceRun.id });
     if (isTerminalStatus(currentRun.status)) await enqueueRunEvent(connection, currentRun);
   }

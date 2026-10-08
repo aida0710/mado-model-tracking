@@ -270,6 +270,14 @@ try {
 
   console.log('Browser check: tokens');
   await page.goto(`${projectBase}/settings`);
+  // Project creation lives in the settings "Projects" section, not in the project bar.
+  await page.getByRole('heading', { name: 'Projects', exact: true }).waitFor();
+  await page.getByRole('link', { name: api.state.project.name, exact: true }).waitFor();
+  assert.equal(
+    await page.locator('.projectbar').getByRole('button', { name: 'プロジェクトを作成' }).count(),
+    0,
+  );
+  await page.getByRole('heading', { name: '監査ログ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'トークンを作成', exact: true }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('browser-test-token');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
@@ -283,6 +291,15 @@ try {
   await page.getByRole('dialog').getByText(/browser-test-token.*失効/).waitFor();
   await page.getByRole('dialog').getByRole('button', { name: '失効', exact: true }).click();
   await page.getByText('browser-test-token', { exact: true }).waitFor({ state: 'hidden' });
+
+  console.log('Browser check: password change');
+  await page.getByRole('link', { name: 'パスワードを変更', exact: true }).click();
+  await page.waitForURL(`${base}/account/password`);
+  await page.getByLabel('現在のパスワード').fill('current-password-value');
+  await page.getByLabel('新しいパスワード', { exact: true }).fill('new-password-value');
+  await page.getByLabel('新しいパスワード（確認）').fill('new-password-value');
+  await page.getByRole('button', { name: 'パスワードを変更', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'パスワードを変更しました' }).waitFor();
 
   console.log('Browser check: launch');
   await page.goto(`${projectBase}/jobs`);

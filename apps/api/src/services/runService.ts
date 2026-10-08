@@ -14,7 +14,7 @@ import type { RunCreate, RunPatch } from '../domain/validation.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { validatePinnedRuntime } from '../domain/runtimeCompatibility.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
-import { runSummarySelect } from '../repositories/runListProjection.js';
+import { runColumns, runSummarySelect } from '../repositories/runListProjection.js';
 import { isTerminalStatus, validateRunTransition } from '../domain/runTransitions.js';
 import {
   assertProjectReference,
@@ -121,7 +121,7 @@ export class RunService {
     return (await first<Run>(
       connection,
       `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${runColumns}`,
       [
         projectId,
         input.experimentId,
@@ -200,7 +200,7 @@ export class RunService {
         connection,
         `UPDATE runs SET name=COALESCE($2,name),tags=tags||COALESCE($3::jsonb,'{}'::jsonb),environment=COALESCE($4::jsonb,environment),parameters=parameters||COALESCE($7::jsonb,'{}'::jsonb),
         status=$5, started_at=CASE WHEN $5='running' THEN COALESCE(started_at,now()) ELSE started_at END,
-        ended_at=CASE WHEN $6 THEN COALESCE(ended_at,now()) ELSE ended_at END WHERE id=$1 RETURNING *`,
+        ended_at=CASE WHEN $6 THEN COALESCE(ended_at,now()) ELSE ended_at END WHERE id=$1 RETURNING ${runColumns}`,
         [
           run.id,
           name,

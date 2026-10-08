@@ -15,7 +15,7 @@
 
 Web sessionはidle期限`AUTH_SESSION_IDLE_SECONDS`（既定28800=8時間）とabsolute期限`AUTH_SESSION_ABSOLUTE_SECONDS`（既定43200=12時間）の早い方で切れます。idleがabsoluteを超える設定は起動時に拒否します。SSOボタンの表示名は`OIDC_LABEL`（既定`Authentik`）です。
 
-ローカルアカウントのパスワードはArgon2id（memory 19456KiB、time 2、parallelism 1）で保存し、12〜1024 byteを受け付けます。ログインは接続元ごとに1分30回、同じユーザー名への失敗は15分10回、パスワード変更時の現在のパスワード確認はユーザーごとに15分10回までで、超えると429と`Retry-After`を返します。回数はAPIプロセスのメモリにあり、再起動で戻ります。Argon2の同時計算は4件までです。存在しないユーザー名、誤ったパスワード、無効化したユーザーは同じ401を返します。ログイン・ログアウト・パスワード変更は監査ログ（`audit_events`の`auth.login`、`auth.logout`、`auth.password.change`）に残り、パスワードやOIDCのcode・stateは記録しません。
+ローカルアカウントのパスワードはArgon2id（memory 19456KiB、time 2、parallelism 1）で保存し、12〜1024 byteを受け付けます。ログインは接続元ごとに1分30回、同じユーザー名への失敗は15分10回、パスワード変更時の現在のパスワード確認はユーザーごとに15分10回までで、超えると429と`Retry-After`を返します。回数はAPIプロセスのメモリにあり、再起動で戻ります。Argon2の同時計算は4件までです。存在しないユーザー名、誤ったパスワード、無効化したユーザーは同じ401を返します。ログイン・ログアウト・パスワード変更・初期管理者の作成は監査ログ（`audit_events`の`auth.login`、`auth.logout`、`auth.password.change`、`auth.bootstrap_admin`）に残り、パスワードやOIDCのcode・stateは記録しません。回数制限で429になった試行は記録しません。
 
 ### 初期管理者（bootstrap-admin）
 
@@ -25,7 +25,7 @@ API serverの端末で対話的に実行します。ユーザー名とパスワ�
 npm run bootstrap-admin -w @mmt/api
 ```
 
-同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。
+同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。ローカルアカウントの利用者は、上部バーのユーザー表示から`/account/password`を開いていつでも変更できます。
 
 ### SSOへの移行手順
 
@@ -34,6 +34,12 @@ npm run bootstrap-admin -w @mmt/api
 3. 確認できたら`AUTH_MODE=oidc`へ変えて再起動します。Local Adminのログインは404になります。SSOが止まったときは`hybrid`へ戻すとLocal Adminでログインできます。
 
 migration 010はsessionに`auth_method`を必須で追加します。migration後は新しいAPIへ入れ替えてください（古いAPIはsessionを作れません）。
+
+## 監査ログ
+
+認証（上記）、Projectメンバーの権限変更（`project.member.set`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
+
+Project adminは設定画面の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
 
 ## Authentik
 
@@ -69,9 +75,25 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 
 S3は`S3_BUCKET`を設定するとProjectの保存先に選べます。`S3_ENDPOINT`未指定ならAWS S3です。互換サービスでは`S3_ENDPOINT`と必要に応じて`S3_FORCE_PATH_STYLE=true`を設定します。AWS SDKの標準credential provider、または対になった`S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`を使います。必要権限は対象prefix内のPut/Get/Delete、multipart uploadとabortです。
 
+S3では、upload中に送信元が失敗するとmultipart uploadを中断しますが、中断の完了を待たずに失敗を返します。その間にAPIが止まるとpartが残るため、実bucketにはAbortIncompleteMultipartUploadのlifecycle ruleを設定してください。実bucketでの保存・取得の確認手順は[検証手順](verification.md)の「実S3の保存・取得を確認する」にあります。
+
 保存先の変更は以後のuploadに効きます。既存Artifactは保存したbackendを記録しているので、元のストレージも読み取り可能な状態にします。uploadはstreamingでSHA-256を計算し、DB登録に失敗したblobを削除します。mediaのseekはHTTP Rangeを使います。HTML/SVG等はダウンロード扱いにします。
 
 DBとArtifactsは同時点でバックアップします。DBだけのrestoreでは重み・画像・音声を戻せません。
+
+### uploadの上限とtimeout
+
+- 1件の上限は`MMT_ARTIFACT_MAX_BYTES`（既定200GiB = 214748364800）です。超えるとnativeは413 `artifact_too_large`、MLflow経路は413 `RESOURCE_EXHAUSTED`を返します。Content-Length付きなら保存を始める前に、chunk転送なら超えた時点で中断し、書きかけのblobを消します。
+- `MMT_UPLOAD_REQUEST_TIMEOUT_MS`（既定0 = 無効）はrequest全体の締め切りです。0以外にすると、その時間を超えるuploadは408で切れます。Nodeの既定は300000（5分）で、以前はこれが効いて5分を超える単一PUTが切れていました（2026-10-08に実測）。
+- `MMT_UPLOAD_IDLE_TIMEOUT_MS`（既定120000）は、socketが無通信のまま続いたら切る時間です。download中にブラウザが読み込みを止めた場合も切れますが、ブラウザはRange付きで取り直します。
+- headerの受信は常に60秒以内です（slowloris対策）。
+- 前段proxyには、request全体のtimeoutを設けず、無通信のtimeoutをAPIと同じ120秒程度にし、bodyをbufferせずstreamでAPIへ渡す設定が必要です。同梱の`deploy/nginx.conf`は`client_max_body_size 0`、`proxy_request_buffering off`、`client_body_timeout 120s`、`proxy_send_timeout 120s`、`proxy_read_timeout 3600s`です。
+- 開発用Web（Vite、port5182）もMLflowの`MLFLOW_TRACKING_URI`としてuploadの経路になるため、Viteのdev/preview serverのrequestTimeoutを0にしています。検証で別のAPIを指すときは`MMT_WEB_API_PROXY_TARGET`でproxy先を変えられます（既定`http://127.0.0.1:4182`）。
+
+### 配信
+
+- `GET /projects/:p/artifacts/:a/content`は`ETag: "sha256-<hex>"`と`Cache-Control: private, max-age=31536000, immutable`を返します。`If-None-Match`が一致すれば304、`If-Range`が一致しなければRangeを無視して200です。MLflow経路のdownloadはpathの付け替えがあるため`no-store`のままです（ETagは同じ形式）。
+- upload時のContent-Typeが空か`application/octet-stream`なら、拡張子からMIMEを推定します（wav、flac、mp3、ogg、opus、m4a、aac、webm、mp4、mov、png、jpg、webp、avif、gif、csv、tsv、jsonl、txt、npy、parquet）。HTML・SVG・XML・JSは推定しません。既存のArtifactのMIMEは書き換えません。
 
 ## SSH/GPU worker
 
@@ -82,6 +104,22 @@ workerにはProject限定のService Account tokenを渡します。`read`、`wor
 GPU予約はこのアプリ内のJob間で排他にします。ほかのSSH shellや別schedulerが同じGPUを使うことまでは防げません。共有GPUではアプリ専用のGPU一覧・作業directoryを設定してください。
 
 worker identityとstate directoryは再起動後も保持します。APIやSSHの応答が失われても、実行状態を確認するまで同じJobを二重起動しません。状態未確認のJobのGPUを自動解放しません。停止要求後はworkerから終了が報告されてから再実行します。
+
+## Run終端の後処理が失敗したとき
+
+Runが終端（finished/failed/canceled）になったときの後処理（出力モデルの登録、保留中の自動実行など。handlerは今後追加します）は、handlerごとにSAVEPOINTを張って実行します。handlerが例外を出すと、そのhandlerの変更だけを戻し、Run/Jobの終端とGPU予約の解放は確定し、後続のhandlerも実行します。
+
+失敗はAPIの標準エラー出力に1行のJSONで出ます。
+
+```json
+{"event":"run_completion_handler_failed","handler":"<handler名>","runId":"<Run ID>","message":"<例外のmessage>"}
+```
+
+この行が出たら、そのRunの後処理（登録記録・自動実行の記録など）が欠けていないかを確認してください。自動では再実行しません。失敗を記録として残す必要があるhandler（出力登録、昇格判定）は、各handlerが自分の表に残します。
+
+MLflowのRunは終端から`RUNNING`へ戻して再び終端にできるため、同じRunでhandlerが2回以上呼ばれることがあります。handlerは二重に処理しないように作ります。
+
+plugin outboxへのイベント投入はhandlerではありません。状態が変わるたび（run.startedを含む）と、終端Runへの出力・Dataset追加の再送で積まれ、失敗するとRunの変更ごと戻ります。終端への遷移はRunを`FOR UPDATE`でlockするので、同じRunへの出力モデル登録と直列になり、終端イベントの`run.outputModelVersionIds`には確定済みの版が入ります。
 
 ## Gitのファイルをエディタへ読み込む
 
