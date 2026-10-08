@@ -293,7 +293,8 @@ try {
   await page.getByText('browser-test-token', { exact: true }).waitFor({ state: 'hidden' });
 
   console.log('Browser check: password change');
-  await page.getByRole('link', { name: 'パスワードを変更', exact: true }).click();
+  await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'パスワードを変更', exact: true }).click();
   await page.waitForURL(`${base}/account/password`);
   await page.getByLabel('現在のパスワード').fill('current-password-value');
   await page.getByLabel('新しいパスワード', { exact: true }).fill('new-password-value');

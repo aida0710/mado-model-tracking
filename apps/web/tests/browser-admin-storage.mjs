@@ -107,7 +107,7 @@ try {
   await page.goto(`${webUrl}/projects/${api.state.project.id}/experiments`);
   await page.getByRole('link', { name: '全体管理' }).click();
   await page.waitForURL(/\/admin$/);
-  await page.getByRole('tab', { name: 'ストレージ' }).waitFor();
+  await page.getByRole('tab', { name: 'ストレージ' }).click();
   await page.getByRole('cell', { name: '/var/lib/mmt/artifacts' }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/01-admin-storage.png`, fullPage: true });
 
@@ -171,10 +171,10 @@ try {
   await page.screenshot({ path: `${outputDirectory}/07-new-project-default.png` });
   await projectDialog.getByRole('button', { name: 'キャンセル' }).click();
 
-  // Someone who is not a global administrator gets no link and a refusal on /admin.
+  // Someone who is not a global administrator gets no link, and /admin sends them back.
   api.state.user.isAdmin = false;
   await page.goto(`${webUrl}/admin`);
-  await page.getByText('この画面は全体管理者だけが開けます。').waitFor();
+  await page.waitForURL(/\/projects\/[^/]+\/experiments$/);
   assert.equal(await page.getByRole('link', { name: '全体管理' }).count(), 0);
   await page.screenshot({ path: `${outputDirectory}/08-non-admin.png` });
 

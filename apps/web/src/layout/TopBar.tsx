@@ -6,7 +6,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useMutation } from '../hooks/useMutation';
 import { ErrorNotice } from '../components/Feedback';
-import { canChangeOwnPassword, canManagePlugins, isGlobalAdmin } from '../lib/permissions';
+import { canManagePlugins, isGlobalAdmin } from '../lib/permissions';
+import { UserMenu } from '../components/UserMenu';
 import { text } from '../i18n/catalog';
 
 const screens = [
@@ -23,7 +24,7 @@ const screens = [
   'settings',
 ] as const;
 
-export const ACCOUNT_PASSWORD_PATH = '/account/password';
+export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
 export const ADMIN_PATH = '/admin';
 
 /** The header: screen navigation for the open Project, theme, the signed-in user and logout. */
@@ -37,7 +38,6 @@ export function TopBar({
   const auth = useAuth();
   const theme = useTheme();
   const mutation = useMutation();
-  const initials = auth.user.displayName.slice(0, 2).toUpperCase();
   return (
     <>
       <a className="skip-link" href="#content">
@@ -69,20 +69,7 @@ export function TopBar({
           >
             {theme.theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
           </button>
-          {canChangeOwnPassword(auth.user) ? (
-            <Link
-              to={ACCOUNT_PASSWORD_PATH}
-              className="avatar"
-              title={`${auth.user.displayName} - ${text.changePasswordTitle}`}
-              aria-label={text.changePasswordTitle}
-            >
-              {initials}
-            </Link>
-          ) : (
-            <span className="avatar" title={auth.user.displayName}>
-              {initials}
-            </span>
-          )}
+          <UserMenu />
           <button
             className="icon-button"
             disabled={mutation.pending}

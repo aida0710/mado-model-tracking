@@ -113,6 +113,11 @@ import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
 import { sweepRoutes } from './routes/sweepRoutes.js';
+import { UserAdministrationService } from './services/userAdministrationService.js';
+import { AccountService } from './services/accountService.js';
+import { adminUserRoutes } from './routes/adminUserRoutes.js';
+import { accountRoutes } from './routes/accountRoutes.js';
+import { argon2idPasswordHasher } from './auth/passwordHasher.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -369,6 +374,13 @@ export function createApplication(options: ApplicationOptions) {
     }),
   );
   app.route('/api/admin', storageBackendRoutes(storageBackends));
+  app.route(
+    '/api/admin',
+    adminUserRoutes(
+      new UserAdministrationService({ database, passwordHasher: argon2idPasswordHasher }),
+    ),
+  );
+  app.route('/api/account', accountRoutes(new AccountService(database)));
   app.get('/api/storage/backends', async (context) => {
     requireScope(principal(context), 'read');
     await stores.ensureLoaded();

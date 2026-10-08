@@ -387,6 +387,14 @@ API serverはSSH鍵を持たないので、Compute targetの接続確認はそ�
 - Webの音声viewerは64MiBを超えるファイルでpreviewが`ready`なら、peaks JSONとスペクトログラム画像で全体を表示し、クリックでその位置へ移動する（拡大・チャンネル選択・melは使えない）。再生は従来どおりRangeのstream。生成中は5秒ごとに状態を読み直す。
 - preview workerの設定: `MMT_DATABASE_URL`、保存先の環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）、DB由来の保存先がある場合は`MMT_STORAGE_SECRET_KEY`をAPIと同じ値で渡す。`MMT_PREVIEW_FFMPEG_PATH`／`MMT_PREVIEW_FFPROBE_PATH`（既定`ffmpeg`／`ffprobe`）、`MMT_PREVIEW_POLL_INTERVAL_MS`（既定5000）、`MMT_PREVIEW_TOOL_TIMEOUT_MS`（ffprobe/ffmpeg 1回の上限。既定30分、最大40分）、`MMT_PREVIEW_WORK_DIR`（一時ディレクトリの親。最大のArtifactが入る容量が要る。既定はOSの一時ディレクトリ）。起動は`npm run preview-worker -w @mmt/api`。
 - この機能より前に登録したArtifactは対象にならない（backfillは未実装）。
+## 全体管理: ユーザーとアカウント
+
+- `/admin/users`はすべて全体管理者のbrowser sessionだけが使える。API tokenは全体管理者の`admin` scopeでも403 `session_required`、全体管理者でなければ403 `admin_required`。403と409は監査ログに`denied`で残し、成功した操作は`admin.user.create`／`admin.user.update`／`admin.user.password_reset`で残す（パスワードは記録しない）。ユーザーは物理削除しない。
+- `GET /admin/users?query&status&kind` → `{items:AdminUser[]}`。`query`はusername・email・表示名の部分一致（大文字小文字を区別しない）、`status`は`active|disabled`、`kind`は`human|service`。表示名順で最大500件。`AdminUser`はUserに`kind`、`lastLoginAt`、`createdAt`を加えたもの。
+- `POST /admin/users` (AdminUserCreate: username, displayName, email?, password, isAdmin) → 201 AdminUser。ローカルアカウントを作り、初回loginでパスワード変更を求める（`mustChangePassword=true`）。usernameは小文字に正規化し`^[a-z0-9][a-z0-9_.-]{0,63}$`。同じusernameは409 `username_taken`。passwordが12〜1024 byteでなければ422 `weak_password`。AUTH_MODEに関係なく作れる（local loginが無効なmodeでは使えない）。
+- `PATCH /admin/users/:id` (AdminUserPatch: status?, displayName?, isAdmin?) → AdminUser。`status:'disabled'`にするとそのUserの全sessionを即失効し、API token（MLflow互換APIを含む）は`users.status`の条件で即401になる。`active`へ戻すとtokenは使えるようになるが、失効したsessionは戻らない。最後の有効な全体管理者を無効化・降格すると409 `last_global_admin`。SSO identityを持つUserの`isAdmin`と`displayName`は次回loginでIdP（`OIDC_ROLE_MAPPING_JSON`）から上書きされるため、変更は422 `admin_role_managed_by_sso`／`profile_managed_by_sso`。`kind:'service'`を全体管理者にすると422 `service_account_admin_forbidden`。
+- `POST /admin/users/:id/reset-password` → `{temporaryPassword}`。一時パスワードはこの応答で1回だけ返し、次回loginで変更を求め、そのUserの全sessionを失効させる。ローカルアカウントを持たないUserは422 `local_account_required`。
+- `GET /account` → `Account {user:AdminUser, groups, groupsSyncedAt, sessionAuthMethod}`。呼び出したUser自身の情報。`groups`は最後のSSO loginで同期したgroup（Authentikが正本で読み取り専用）、`sessionAuthMethod`はsessionのlogin方式（API tokenならnull）。tokenは`read` scopeが必要。自分のAPI token一覧は`GET /tokens`、パスワード変更は`POST /auth/change-password`を使う。
 
 ## Platform保存API（親担当）
 

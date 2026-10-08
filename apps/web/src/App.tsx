@@ -3,7 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './hooks/useAuth';
 import { AppShell } from './layout/AppShell';
 import { AccountShell } from './layout/AccountShell';
-import { ACCOUNT_PASSWORD_PATH, ADMIN_PATH } from './layout/TopBar';
+import { ACCOUNT_PASSWORD_PATH, ACCOUNT_PATH, ADMIN_PATH } from './layout/TopBar';
 import { Loading } from './components/Feedback';
 // Already in the main bundle because AuthGate shows it for a required change.
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
@@ -49,6 +49,9 @@ const PluginsPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
 );
+const AccountPage = lazy(() =>
+  import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })),
+);
 const AdminPage = lazy(() =>
   import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })),
 );
@@ -64,6 +67,7 @@ export function App() {
               path={ACCOUNT_PASSWORD_PATH}
               element={<ChangePasswordPage isRequired={false} />}
             />
+            <Route path={ACCOUNT_PATH} element={<AccountPage />} />
             <Route path={ADMIN_PATH} element={<AdminPage />} />
           </Route>
           <Route path="/projects/:projectId" element={<AppShell />}>
