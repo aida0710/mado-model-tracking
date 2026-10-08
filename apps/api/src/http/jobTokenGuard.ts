@@ -195,6 +195,8 @@ export const JOB_TOKEN_WRITE_RULES: readonly JobTokenRule[] = [
 // The POST entries are searches that only read.
 export const JOB_TOKEN_READ_RULES: readonly JobTokenRule[] = [
   { methods: ['GET', 'HEAD'], route: '/api/health', allows: allowWithinProject },
+  // The token's own scopes and job flag (CurrentApiToken), so code can tell it holds a Job token.
+  { methods: ['GET', 'HEAD'], route: '/api/auth/token', allows: allowWithinProject },
   { methods: ['GET', 'HEAD'], route: NATIVE, allows: allowWithinProject },
   { methods: ['GET', 'HEAD'], route: `${NATIVE}/*`, allows: allowWithinProject },
   { methods: ['GET', 'HEAD'], route: '/api/mlflow/projects/:p/*', allows: allowWithinProject },
@@ -282,7 +284,8 @@ export function jobTokenGuard(database: Database): MiddlewareHandler<ApiEnvironm
     // only the artifact path itself is decoded, the same way its route decodes it.
     const path = new URL(context.req.url).pathname;
     for (const { rule, params } of matchingRules(context.req.method, path)) {
-      if (!sameId(params.p, projectId)) continue;
+      // Routes outside a Project (health, the token's own description) have no :p to compare.
+      if (params.p !== undefined && !sameId(params.p, projectId)) continue;
       const allowed = await rule.allows({
         projectId,
         job,

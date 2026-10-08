@@ -1204,7 +1204,7 @@
           "kind": "signedIn",
           "scope": "read"
         },
-        "x-mmt-job-token": "forbidden",
+        "x-mmt-job-token": "read",
         "parameters": [],
         "responses": {
           "200": {
@@ -1250,8 +1250,7 @@
             "description": "権限がない",
             "x-mmt-error-codes": [
               "password_change_required",
-              "insufficient_scope",
-              "job_token_forbidden"
+              "insufficient_scope"
             ],
             "content": {
               "application/json": {

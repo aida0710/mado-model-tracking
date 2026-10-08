@@ -6,14 +6,21 @@ import pg from 'pg';
 import type { Hono } from 'hono';
 import { createArtifactStoresFromEnv } from '@mmt/platform';
 import { createApplication } from '../src/app.js';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, type ApiConfig } from '../src/config.js';
 import { migrate } from '../src/db/migrate.js';
 import type { ApiEnvironment } from '../src/http/request.js';
 
 export const testDatabaseUrl =
   process.env.MMT_TEST_DATABASE_URL ?? process.env.MMT_DATABASE_URL_TEST;
 
-export async function createHarness(options: { applyMigrations?: boolean } = {}) {
+export async function createHarness(
+  options: {
+    applyMigrations?: boolean;
+    // Verification servers (for example a local-login browser check) start from other settings.
+    environment?: NodeJS.ProcessEnv;
+    configure?: (config: ApiConfig) => ApiConfig;
+  } = {},
+) {
   if (!testDatabaseUrl) throw new Error('MMT_TEST_DATABASE_URL is required for integration tests');
   const url = new URL(testDatabaseUrl);
   if (
@@ -30,12 +37,14 @@ export async function createHarness(options: { applyMigrations?: boolean } = {})
     max: 12,
   });
   const artifactDirectory = await mkdtemp(path.join(tmpdir(), 'mmt-api-artifacts-'));
-  const config = loadConfig({
+  const loadedConfig = loadConfig({
     MMT_DATABASE_URL: testDatabaseUrl,
     AUTH_MODE: 'development',
     MMT_ALLOW_LOCAL_EXECUTOR: 'true',
     MMT_ALLOW_SEED: 'true',
+    ...options.environment,
   });
+  const config = options.configure ? options.configure(loadedConfig) : loadedConfig;
   const stores = createArtifactStoresFromEnv({ ARTIFACT_FILESYSTEM_ROOT: artifactDirectory });
   try {
     if (options.applyMigrations !== false) await migrate(database);

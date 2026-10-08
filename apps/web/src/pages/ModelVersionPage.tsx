@@ -10,6 +10,8 @@ import type { QueryState } from '../hooks/useQuery';
 import { useProject } from '../hooks/useProject';
 import { useModelVersionDetail } from '../hooks/useModelVersionDetail';
 import { useModelVersionEvaluations } from '../hooks/useModelVersionEvaluations';
+import { useEvaluationComparison } from '../hooks/useEvaluationComparison';
+import { usePromotionChoices } from '../hooks/usePromotionChoices';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { ModelVersionSummary } from '../components/ModelVersionSummary';
@@ -33,6 +35,15 @@ export function ModelVersionPage() {
   const { modelId = '', versionId = '' } = useParams();
   const { detail, sourceRun, rules, executions } = useModelVersionDetail(project.id, versionId);
   const evaluations = useModelVersionEvaluations(project.id, detail.value);
+  // Loaded here rather than in their panels so that the reload button refreshes them too: an
+  // evaluation that ends after the page opened changes both the comparison and the decisions.
+  const evaluationComparison = useEvaluationComparison({
+    projectId: project.id,
+    modelId,
+    candidateVersionId: versionId,
+    aliases: detail.value?.model.aliases ?? {},
+  });
+  const promotionChoices = usePromotionChoices(project.id, modelId, versionId);
   const reloadAll = () => {
     detail.reload();
     sourceRun.reload();
@@ -40,6 +51,8 @@ export function ModelVersionPage() {
     evaluations.results.reload();
     evaluations.baseline.results.reload();
     evaluations.promotionEvaluations.reload();
+    evaluationComparison.comparison.reload();
+    promotionChoices.reload();
   };
   // A link with the wrong Model id still names the version; send it to the right address.
   if (detail.value && detail.value.model.id !== modelId)
@@ -73,6 +86,8 @@ export function ModelVersionPage() {
             rules={rules.value ?? []}
             executions={executions}
             evaluations={evaluations}
+            evaluationComparison={evaluationComparison}
+            promotionChoices={promotionChoices}
             canPromote={canEdit}
             onPromoted={reloadAll}
           />
@@ -89,6 +104,8 @@ function ModelVersionContent({
   rules,
   executions,
   evaluations,
+  evaluationComparison,
+  promotionChoices,
   canPromote,
   onPromoted,
 }: {
@@ -98,6 +115,8 @@ function ModelVersionContent({
   rules: ModelAutomationRule[];
   executions: QueryState<ModelAutomationExecutionPage>;
   evaluations: ReturnType<typeof useModelVersionEvaluations>;
+  evaluationComparison: ReturnType<typeof useEvaluationComparison>;
+  promotionChoices: ReturnType<typeof usePromotionChoices>;
   canPromote: boolean;
   onPromoted: () => void;
 }) {
@@ -140,10 +159,15 @@ function ModelVersionContent({
       <EvaluationComparisonPanel
         projectId={projectId}
         model={detail.model}
-        candidateVersionId={detail.version.id}
+        evaluationComparison={evaluationComparison}
       />
       {canPromote && (
-        <PromotionCheckCard projectId={projectId} detail={detail} onPromoted={onPromoted} />
+        <PromotionCheckCard
+          projectId={projectId}
+          detail={detail}
+          choices={promotionChoices}
+          onPromoted={onPromoted}
+        />
       )}
       <section className="model-version-section" aria-label={text.versionPromotionEvaluations}>
         <h2>{text.versionPromotionEvaluations}</h2>
