@@ -16,6 +16,7 @@ import { serviceAccountsTextTemplates, tokenScopeLabels } from '../i18n/serviceA
 const TOKEN_EXPIRY_PRESET_DAYS = [7, 30, 90, 365];
 const DEFAULT_TOKEN_EXPIRY_DAYS = 90;
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000;
+const DEFAULT_TOKEN_SCOPES: TokenScope[] = ['read'];
 
 type IssuedToken = { token: string; item: TokenSummary };
 export type TokenRequest = { name: string; scopes: TokenScope[]; expiresAt: string };
@@ -28,14 +29,17 @@ export interface ServiceAccountTokenOwner {
 
 /**
  * Issues a token for the signed-in user, or for a Service Account when `owner` is set.
- * The scopes on offer stop at the owner's Project role, as the API does.
+ * The scopes on offer stop at the owner's Project role, as the API does; `initialScopes` above
+ * that role are left unselected rather than offered.
  */
 export function TokenDialog({
   owner,
+  initialScopes = DEFAULT_TOKEN_SCOPES,
   onClose,
   onCreated,
 }: {
   owner?: ServiceAccountTokenOwner;
+  initialScopes?: TokenScope[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -70,6 +74,7 @@ export function TokenDialog({
       </Dialog>
     );
   const ownerRole: ProjectRole = serviceAccount ? (serviceAccount.role ?? 'viewer') : project.role;
+  const allowedScopes = scopesAllowedForRole(ownerRole);
   return (
     <FormDialog
       title={title}
@@ -81,8 +86,8 @@ export function TokenDialog({
           label: text.scopes,
           type: 'multiselect',
           required: true,
-          defaultValue: ['read'],
-          options: scopesAllowedForRole(ownerRole).map((scope) => ({
+          defaultValue: initialScopes.filter((scope) => allowedScopes.includes(scope)),
+          options: allowedScopes.map((scope) => ({
             value: scope,
             label: tokenScopeLabels[scope],
           })),

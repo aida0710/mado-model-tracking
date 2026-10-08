@@ -1,0 +1,48 @@
+/* The "connect from MLflow 3" card on the Project settings page. */
+/* Full width so each export line fits without breaking after the shell keyword. */
+.mlflow-connection {
+  grid-column: 1 / -1;
+}
+.mlflow-connection-uris {
+  margin: 0 0 12px;
+  display: grid;
+  gap: 8px;
+}
+.mlflow-connection-uris dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mlflow-connection-uris dd {
+  margin: 2px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.mlflow-connection-uris code {
+  overflow-wrap: anywhere;
+}
+.mlflow-connection-snippet {
+  margin-top: 12px;
+}
+.mlflow-connection-snippet-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mlflow-connection-snippet pre {
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+}
+.mlflow-connection-more {
+  margin-top: 12px;
+}
+.mlflow-connection-more summary {
+  color: var(--muted);
+  font-size: 12px;
+}

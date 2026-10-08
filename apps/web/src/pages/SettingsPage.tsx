@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useProject } from '../hooks/useProject';
 import { useAuditEvents } from '../hooks/useAuditEvents';
 import { useProjectMembers } from '../hooks/useProjectMembers';
 import { useServiceAccounts } from '../hooks/useServiceAccounts';
 import { PageHeader } from '../components/PageHeader';
 import { ProjectSettings } from '../components/ProjectSettings';
+import { MlflowConnectionCard } from '../components/MlflowConnectionCard';
 import { ProjectMembers } from '../components/ProjectMembers';
 import { ProjectGroupBindings } from '../components/ProjectGroupBindings';
 import { ProjectTokens } from '../components/ProjectTokens';
@@ -22,16 +24,24 @@ export function SettingsPage() {
   const projectMembers = useProjectMembers(project.id);
   // Shared so a key issued to a Service Account appears in the Project token list.
   const serviceAccounts = useServiceAccounts(project.id, isProjectAdmin);
+  // ProjectTokens loads the personal tokens itself; remounting it shows a token issued from the
+  // MLflow connection card.
+  const [tokenListRevision, setTokenListRevision] = useState(0);
+  const reloadTokenLists = () => {
+    setTokenListRevision((revision) => revision + 1);
+    if (isProjectAdmin) serviceAccounts.projectTokens.reload();
+  };
   return (
     <section className="page">
       <PageHeader title={text.settings} eyebrow={project.name} />
       <div className="settings-grid">
         <ProjectList projects={projects} onCreated={reloadProjects} />
         <ProjectSettings />
+        <MlflowConnectionCard onTokenCreated={reloadTokenLists} />
         <ProjectMembers projectMembers={projectMembers} />
         <ProjectGroupBindings onChanged={projectMembers.members.reload} />
         <ProjectServiceAccounts access={serviceAccounts} />
-        <ProjectTokens projectTokens={serviceAccounts.projectTokens} />
+        <ProjectTokens key={tokenListRevision} projectTokens={serviceAccounts.projectTokens} />
         <NotificationSettings />
         {isProjectAdmin && (
           <section className="settings-section">

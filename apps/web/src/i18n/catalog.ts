@@ -16,6 +16,7 @@ import { datasetsText, datasetsTextTemplates } from './datasets';
 import { notificationsText, notificationsTextTemplates } from './notifications';
 import { checkpointsText, checkpointsTextTemplates } from './checkpoints';
 import { comparisonText, comparisonTextTemplates } from './comparison';
+import { connectionText } from './connection';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -71,6 +72,7 @@ export const text = {
   ...notificationsText,
   ...checkpointsText,
   ...comparisonText,
+  ...connectionText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
