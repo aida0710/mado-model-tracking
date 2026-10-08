@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
   ModelAutomationExecution,
+  ModelAutomationExecutionPage,
   ModelAutomationRule,
   ModelVersion,
   Run,
@@ -13,6 +14,7 @@ import { DomainError, notFound } from '../domain/errors.js';
 import {
   assertRuleTrigger,
   type AutomationExecutionCreate,
+  type AutomationExecutionQuery,
   type ModelAutomationRuleCreate,
 } from '../domain/modelAutomationValidation.js';
 import { isTerminalStatus } from '../domain/runTransitions.js';
@@ -21,6 +23,7 @@ import { findExecutionForRun } from '../repositories/automationExecutionLookup.j
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import {
   findAutomationExecution,
+  findAutomationExecutionBoundary,
   hasAutomationCreatorAccess,
   insertAutomationEvent,
   insertAutomationExecution,
@@ -51,8 +54,6 @@ import { auditActor, recordDenial, type AuditEventDraft } from './auditService.j
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
-// A bounded history supports the Models screen without loading an entire project.
-const AUTOMATION_EXECUTION_LIMIT = 100;
 // Generated names follow the same limit as user-created Run names.
 const RUN_NAME_LIMIT = 200;
 
@@ -147,8 +148,8 @@ export class ModelAutomationService {
       });
       return (await first<ModelAutomationRule>(
         connection,
-        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by,trigger,upstream_rule_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by,trigger,upstream_rule_id,summary_metrics)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
         [
           projectId,
           input.name,
@@ -166,6 +167,7 @@ export class ModelAutomationService {
           principal.user.id,
           input.trigger,
           input.upstreamRuleId,
+          input.summaryMetrics,
         ],
       ))!;
     });
@@ -217,16 +219,28 @@ export class ModelAutomationService {
     });
   }
 
-  async executions(principal: Principal, projectId: string): Promise<ModelAutomationExecution[]> {
+  async executions(
+    principal: Principal,
+    projectId: string,
+    query: AutomationExecutionQuery,
+  ): Promise<ModelAutomationExecutionPage> {
     await requireProject(this.database, principal, {
       projectId,
       role: 'viewer',
       scope: 'read',
     });
-    return listAutomationExecutions(this.database, {
-      projectId,
-      limit: AUTOMATION_EXECUTION_LIMIT,
+    const filter = { projectId, modelVersionId: query.modelVersionId, ruleId: query.ruleId };
+    const after = query.cursor
+      ? await findAutomationExecutionBoundary(this.database, { ...filter, id: query.cursor })
+      : undefined;
+    if (query.cursor && !after) notFound('ModelAutomationExecution cursor');
+    const page = await listAutomationExecutions(this.database, {
+      ...filter,
+      limit: query.limit + 1,
+      after,
     });
+    const items = page.slice(0, query.limit);
+    return { items, nextCursor: page.length > query.limit ? items.at(-1)!.id : null };
   }
 
   async processRegistration(

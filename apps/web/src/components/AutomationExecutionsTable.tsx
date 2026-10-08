@@ -5,7 +5,8 @@ import type { ExecutionCatalog } from '../types/executionCatalog';
 import { DataTable } from './DataTable';
 import { StatusBadge } from './StatusBadge';
 import { buildCatalogOptions } from '../lib/catalogOptions';
-import { formatDate } from '../lib/format';
+import { formatDate, formatDuration } from '../lib/format';
+import { modelVersionPath } from '../lib/modelVersionPath';
 import { text } from '../i18n/catalog';
 import {
   automationOutcomeLabels,
@@ -45,22 +46,89 @@ function RuleCell({
   );
 }
 
+function ModelVersionLink({
+  projectId,
+  modelVersionId,
+  catalog,
+}: {
+  projectId: string;
+  modelVersionId: string;
+  catalog?: ExecutionCatalog;
+}) {
+  const version = catalog?.modelVersions.find((item) => item.id === modelVersionId);
+  const label = catalog
+    ? (buildCatalogOptions(catalog).models.find((option) => option.value === modelVersionId)
+        ?.label ?? modelVersionId)
+    : modelVersionId;
+  // The version page needs the Model id; without the catalog the registry resolves the version.
+  const to = version
+    ? modelVersionPath(projectId, { modelId: version.modelId, versionId: version.id })
+    : `/projects/${projectId}/models?version=${modelVersionId}`;
+  return <Link to={to}>{label}</Link>;
+}
+
+/**
+ * Automation executions grouped by pipeline. The 'project' variant lists every version; the
+ * 'version' variant is one version's history, so it drops the version column and adds the rule's
+ * kind and the Run's duration.
+ */
 export function AutomationExecutionsTable({
   executions,
   rules,
   projectId,
   catalog,
+  variant = 'project',
 }: {
   executions: ModelAutomationExecution[];
   rules: ModelAutomationRule[];
   projectId: string;
   catalog?: ExecutionCatalog;
+  variant?: 'project' | 'version';
 }) {
-  const modelOptions = catalog ? buildCatalogOptions(catalog).models : [];
   const base = `/projects/${projectId}`;
   const rows = groupAutomationPipelines(executions, rules);
   const column = (render: (execution: ModelAutomationExecution) => ReactNode) =>
     (row: AutomationPipelineRow) => render(row.execution);
+  const ruleOf = (execution: ModelAutomationExecution) =>
+    rules.find((rule) => rule.id === execution.ruleId);
+  const versionColumns =
+    variant === 'version'
+      ? [
+          {
+            key: 'kind',
+            label: text.kind,
+            render: column((execution) => {
+              const rule = ruleOf(execution);
+              return rule ? text[rule.kind] : '—';
+            }),
+          },
+        ]
+      : [
+          {
+            key: 'model',
+            label: text.modelVersion,
+            render: column((execution) => (
+              <ModelVersionLink
+                projectId={projectId}
+                modelVersionId={execution.modelVersionId}
+                catalog={catalog}
+              />
+            )),
+          },
+        ];
+  const durationColumns =
+    variant === 'version'
+      ? [
+          {
+            key: 'duration',
+            label: text.duration,
+            className: 'nowrap',
+            render: column((execution) =>
+              formatDuration(execution.runStartedAt ?? null, execution.runEndedAt ?? null),
+            ),
+          },
+        ]
+      : [];
   return (
     <DataTable
       items={rows}
@@ -85,24 +153,10 @@ export function AutomationExecutionsTable({
           key: 'rule',
           label: text.automationRule,
           render: column((execution) => (
-            <RuleCell
-              execution={execution}
-              ruleName={
-                rules.find((rule) => rule.id === execution.ruleId)?.name ?? execution.ruleId
-              }
-            />
+            <RuleCell execution={execution} ruleName={ruleOf(execution)?.name ?? execution.ruleId} />
           )),
         },
-        {
-          key: 'model',
-          label: text.modelVersion,
-          render: column((execution) => (
-            <Link to={`${base}/models?version=${execution.modelVersionId}`}>
-              {modelOptions.find((option) => option.value === execution.modelVersionId)?.label ??
-                execution.modelVersionId}
-            </Link>
-          )),
-        },
+        ...versionColumns,
         {
           key: 'outcome',
           label: text.automationOutcome,
@@ -128,6 +182,7 @@ export function AutomationExecutionsTable({
             execution.jobStatus ? <StatusBadge status={execution.jobStatus} /> : '—',
           ),
         },
+        ...durationColumns,
         {
           key: 'links',
           label: text.details,

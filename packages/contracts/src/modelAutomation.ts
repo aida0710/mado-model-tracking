@@ -18,6 +18,8 @@ export interface ModelAutomationRule {
   parameters: JsonObject;
   tags: Record<string, string>;
   maxAttempts: number;
+  // Metric names shown first, in this order, when the version page summarizes the rule's Runs.
+  summaryMetrics: string[];
   createdBy: string;
   createdAt: string;
 }
@@ -36,6 +38,9 @@ export interface ModelAutomationExecution {
   sourceRunId: string | null;
   runStatus: RunStatus | null;
   jobStatus: JobStatus | null;
+  // Times of the started Run, for the duration on the version page; null before it starts.
+  runStartedAt?: string | null;
+  runEndedAt?: string | null;
   error: string | null;
   // The upstream Run that started this stage; null for the first stage of a pipeline.
   triggerRunId: string | null;
@@ -50,3 +55,9 @@ export interface ModelAutomationExecution {
 
 /** POST /projects/:p/automation-rules/:id/executions: a version, or an upstream Run for chained rules. */
 export type CreateAutomationExecution = { modelVersionId: string } | { triggerRunId: string };
+
+/** GET /projects/:p/automation-executions?modelVersionId=&ruleId=&limit=&cursor= */
+export interface ModelAutomationExecutionPage {
+  items: ModelAutomationExecution[];
+  nextCursor: string | null;
+}

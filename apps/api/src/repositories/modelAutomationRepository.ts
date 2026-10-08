@@ -9,7 +9,8 @@ export interface PendingAutomationEvent {
 }
 
 const storedExecutionSelect = `SELECT e.id,e.project_id,e.rule_id,e.model_version_id,e.run_id,e.job_id,e.status,e.error,
-  e.created_at,mv.source_run_id,r.status AS run_status,j.status AS job_status,e.trigger_run_id,
+  e.created_at,mv.source_run_id,r.status AS run_status,j.status AS job_status,
+  r.started_at AS run_started_at,r.ended_at AS run_ended_at,e.trigger_run_id,
   e.pipeline_root_execution_id,e.attempt,e.source,e.requested_by
   FROM model_automation_executions e
   JOIN model_versions mv ON mv.id=e.model_version_id
@@ -23,6 +24,7 @@ const storedExecutionSelect = `SELECT e.id,e.project_id,e.rule_id,e.model_versio
 const pendingExecutionSelect = `SELECT md5(ev.model_version_id::text||rule.id::text)::uuid AS id,ev.project_id,
   rule.id AS rule_id,ev.model_version_id,NULL::uuid AS run_id,NULL::uuid AS job_id,'pending' AS status,
   NULL AS error,ev.pending_since AS created_at,ev.source_run_id,NULL AS run_status,NULL AS job_status,
+  NULL::timestamptz AS run_started_at,NULL::timestamptz AS run_ended_at,
   NULL::uuid AS trigger_run_id,md5(ev.model_version_id::text||rule.id::text)::uuid AS pipeline_root_execution_id,
   1 AS attempt,'automatic' AS source,NULL::uuid AS requested_by
   FROM model_automation_events ev
@@ -32,14 +34,50 @@ const pendingExecutionSelect = `SELECT md5(ev.model_version_id::text||rule.id::t
     AND rule.trigger='model_registered' AND m.family=ANY(rule.model_families)
   WHERE ev.project_id=$1 AND ev.state='pending'`;
 
+// Stored and pending rows together; both selects take the project as $1.
+const executionSource = `(${storedExecutionSelect} UNION ALL ${pendingExecutionSelect}) e`;
+
+export interface AutomationExecutionFilter {
+  projectId: string;
+  modelVersionId?: string;
+  ruleId?: string;
+}
+
+// The (createdAt, id) of a cursor row, or undefined when it is not in the filtered list. The
+// timestamp stays text: JavaScript Date would drop PostgreSQL microseconds from the boundary.
+export async function findAutomationExecutionBoundary(
+  connection: Connection,
+  reference: AutomationExecutionFilter & { id: string },
+): Promise<{ id: string; createdAt: string } | undefined> {
+  return first(
+    connection,
+    `SELECT id,created_at::text AS created_at FROM ${executionSource}
+    WHERE e.id=$2 AND ($3::uuid IS NULL OR e.model_version_id=$3) AND ($4::uuid IS NULL OR e.rule_id=$4)`,
+    [reference.projectId, reference.id, reference.modelVersionId ?? null, reference.ruleId ?? null],
+  );
+}
+
 export async function listAutomationExecutions(
   connection: Connection,
-  page: { projectId: string; limit: number },
+  page: AutomationExecutionFilter & {
+    limit: number;
+    after?: { id: string; createdAt: string };
+  },
 ): Promise<ModelAutomationExecution[]> {
   return rows(
     connection,
-    `${storedExecutionSelect} UNION ALL ${pendingExecutionSelect} ORDER BY created_at DESC,id DESC LIMIT $2`,
-    [page.projectId, page.limit],
+    `SELECT * FROM ${executionSource}
+    WHERE ($2::uuid IS NULL OR e.model_version_id=$2) AND ($3::uuid IS NULL OR e.rule_id=$3)
+      AND ($4::timestamptz IS NULL OR (e.created_at,e.id)<($4::timestamptz,$5::uuid))
+    ORDER BY e.created_at DESC,e.id DESC LIMIT $6`,
+    [
+      page.projectId,
+      page.modelVersionId ?? null,
+      page.ruleId ?? null,
+      page.after?.createdAt ?? null,
+      page.after?.id ?? null,
+      page.limit,
+    ],
   );
 }
 

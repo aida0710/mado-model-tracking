@@ -15,6 +15,15 @@ export type ArtifactBackend = string;
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { CreateAutomationExecution } from './modelAutomation.js';
+export type { ModelAutomationExecutionPage } from './modelAutomation.js';
+export type {
+  AutomatedRunSummary,
+  ModelVersionDetail,
+  ModelVersionEvaluationSummary,
+  ModelVersionResultRunKind,
+  RunDownstreamPage,
+} from './modelVersionEvaluations.js';
+export { MODEL_VERSION_RESULT_RUN_KINDS } from './modelVersionEvaluations.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
 export type { RunOutputRegistration, TaskOutputModel } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';

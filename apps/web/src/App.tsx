@@ -19,6 +19,9 @@ const ComparePage = lazy(() =>
 const ModelsPage = lazy(() =>
   import('./pages/ModelsPage').then((module) => ({ default: module.ModelsPage })),
 );
+const ModelVersionPage = lazy(() =>
+  import('./pages/ModelVersionPage').then((module) => ({ default: module.ModelVersionPage })),
+);
 const CodesPage = lazy(() =>
   import('./pages/CodesPage').then((module) => ({ default: module.CodesPage })),
 );
@@ -69,6 +72,7 @@ export function App() {
             <Route path="runs/:runId" element={<RunDetailPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="models" element={<ModelsPage />} />
+            <Route path="models/:modelId/versions/:versionId" element={<ModelVersionPage />} />
             <Route path="codes" element={<CodesPage />} />
             <Route path="datasets" element={<DatasetsPage />} />
             <Route path="artifacts" element={<ArtifactsPage />} />

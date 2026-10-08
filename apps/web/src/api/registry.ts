@@ -6,11 +6,15 @@ import type {
   Model,
   ModelAliasEventPage,
   ModelVersion,
+  ModelVersionDetail,
+  ModelVersionEvaluationSummary,
+  ModelVersionResultRunKind,
+  RunDownstreamPage,
 } from '@mmt/contracts';
 import type { CreateCodeVersion, CreateDatasetVersion, CreateModelVersion } from './inputs';
 import {
+  assertCursorPage,
   encodeId,
-  invalidResponseError,
   jsonRequest,
   projectPath,
   request,
@@ -21,6 +25,10 @@ import {
 export const MAX_MODEL_ALIAS_REASON_LENGTH = 2000;
 // Matches the API default so each "load more" fetches one server page.
 export const MODEL_ALIAS_EVENT_PAGE_SIZE = 50;
+// The API maximum: the version page shows a version's results in one polled page.
+export const MODEL_VERSION_RUN_PAGE_SIZE = 200;
+// Matches the API default for the Runs a Run started.
+export const RUN_DOWNSTREAM_PAGE_SIZE = 50;
 
 export interface ModelAliasAssignment {
   alias: string;
@@ -66,11 +74,37 @@ export const registryApi = {
       `${registryPath(projectId, 'models', id)}/alias-events?${query}`,
       { signal },
     );
-    if (
-      !Array.isArray(page.items) ||
-      (page.nextCursor !== null && typeof page.nextCursor !== 'string')
-    )
-      throw invalidResponseError();
+    assertCursorPage(page);
+    return page;
+  },
+  modelVersionDetail: (projectId: string, versionId: string, signal?: AbortSignal) =>
+    request<ModelVersionDetail>(registryPath(projectId, 'model-versions', versionId), { signal }),
+  modelVersionEvaluations: async (
+    projectId: string,
+    versionId: string,
+    { kind, signal }: { kind?: ModelVersionResultRunKind; signal?: AbortSignal } = {},
+  ): Promise<ModelVersionEvaluationSummary> => {
+    const query = new URLSearchParams({ limit: String(MODEL_VERSION_RUN_PAGE_SIZE) });
+    if (kind) query.set('kind', kind);
+    const page = await request<ModelVersionEvaluationSummary>(
+      `${registryPath(projectId, 'model-versions', versionId)}/evaluations?${query}`,
+      { signal },
+    );
+    assertCursorPage(page);
+    return page;
+  },
+  runDownstream: async (
+    projectId: string,
+    runId: string,
+    { cursor, signal }: { cursor?: string; signal?: AbortSignal } = {},
+  ): Promise<RunDownstreamPage> => {
+    const query = new URLSearchParams({ limit: String(RUN_DOWNSTREAM_PAGE_SIZE) });
+    if (cursor) query.set('cursor', cursor);
+    const page = await request<RunDownstreamPage>(
+      `${projectPath(projectId)}/runs/${encodeId(runId)}/downstream?${query}`,
+      { signal },
+    );
+    assertCursorPage(page);
     return page;
   },
   codes: (projectId: string, signal?: AbortSignal) =>

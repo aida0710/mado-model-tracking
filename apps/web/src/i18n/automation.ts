@@ -47,4 +47,5 @@ export const automationText = {
   applyRunning: 'このruleと版の実行が進行中です。終わってから適用してください。',
   applyInvalidRule: 'このruleは適用できません。',
   applied: 'Jobを登録しました。自動実行履歴で状態を確認できます。',
+  automaticRun: '自動',
 };

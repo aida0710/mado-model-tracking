@@ -1,10 +1,21 @@
 import type {
   CreateAutomationExecution,
   ModelAutomationExecution,
+  ModelAutomationExecutionPage,
   ModelAutomationRule,
 } from '@mmt/contracts';
 import type { CreateAutomationRule } from './inputs';
-import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
+import {
+  assertCursorPage,
+  encodeId,
+  jsonRequest,
+  projectPath,
+  request,
+  requestItems,
+} from './http';
+
+// The API maximum: one polled page holds a version's executions.
+export const VERSION_EXECUTION_PAGE_SIZE = 200;
 
 const rulesPath = (projectId: string) => `${projectPath(projectId)}/automation-rules`;
 export const automationApi = {
@@ -23,9 +34,26 @@ export const automationApi = {
       `${rulesPath(projectId)}/${encodeId(ruleId)}/executions`,
       jsonRequest('POST', body),
     ),
+  // The newest page of the whole Project (the API default size).
   executions: (projectId: string, signal?: AbortSignal) =>
     requestItems<ModelAutomationExecution>(
       `${projectPath(projectId)}/automation-executions`,
       signal,
     ),
+  versionExecutions: async (
+    projectId: string,
+    modelVersionId: string,
+    signal?: AbortSignal,
+  ): Promise<ModelAutomationExecutionPage> => {
+    const query = new URLSearchParams({
+      modelVersionId,
+      limit: String(VERSION_EXECUTION_PAGE_SIZE),
+    });
+    const page = await request<ModelAutomationExecutionPage>(
+      `${projectPath(projectId)}/automation-executions?${query}`,
+      { signal },
+    );
+    assertCursorPage(page);
+    return page;
+  },
 };

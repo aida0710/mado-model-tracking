@@ -52,6 +52,7 @@ import { RunOutputDeclarationService } from './services/runOutputDeclarationServ
 import { TokenService } from './services/tokenService.js';
 import { ServiceAccountService } from './services/serviceAccountService.js';
 import { EvaluationService } from './services/evaluationService.js';
+import { ModelEvaluationService } from './services/modelEvaluationService.js';
 import { PromotionService } from './services/promotionService.js';
 import { PromotionRunHandler } from './services/promotionRunHandler.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
@@ -92,6 +93,7 @@ import { tokenRoutes } from './routes/tokenRoutes.js';
 import { serviceAccountRoutes } from './routes/serviceAccountRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
+import { modelEvaluationRoutes } from './routes/modelEvaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { runResumeRoutes } from './routes/runResumeRoutes.js';
@@ -324,6 +326,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/projects', evaluationRoutes(evaluation));
+  app.route('/api/projects', modelEvaluationRoutes(new ModelEvaluationService(database)));
   app.route('/api/projects', promotionRoutes(promotion));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', runResumeRoutes(runResumes));

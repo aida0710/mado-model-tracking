@@ -7,6 +7,7 @@ import { DetailsList, JsonDetails } from './JsonDetails';
 import { ModelAliasHistory } from './ModelAliasHistory';
 import type { ModelAliasHistoryState } from '../hooks/useModelAliasHistory';
 import { formatDate } from '../lib/format';
+import { modelVersionPath } from '../lib/modelVersionPath';
 import { text } from '../i18n/catalog';
 
 export function ModelRegistryPanel({
@@ -137,12 +138,15 @@ export function ModelRegistryPanel({
                           key: 'version',
                           label: text.version,
                           render: (version) => (
-                            <button
-                              className="link-button mono"
-                              onClick={() => registry.selectVersion(version.id)}
+                            <Link
+                              className="mono"
+                              to={modelVersionPath(projectId, {
+                                modelId: version.modelId,
+                                versionId: version.id,
+                              })}
                             >
                               {version.version}
-                            </button>
+                            </Link>
                           ),
                         },
                         {
@@ -166,6 +170,14 @@ export function ModelRegistryPanel({
                     />
                     {registry.selectedVersion && (
                       <div className="version-detail">
+                        <Link
+                          to={modelVersionPath(projectId, {
+                            modelId: registry.selectedVersion.modelId,
+                            versionId: registry.selectedVersion.id,
+                          })}
+                        >
+                          {text.modelVersionOpenPage}
+                        </Link>
                         <DetailsList
                           entries={[
                             [text.version, registry.selectedVersion.version],
