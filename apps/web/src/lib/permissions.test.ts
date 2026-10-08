@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectRole } from '@mmt/contracts';
 import {
   canChangeOwnPassword,
+  canControlSweep,
   canCreateProject,
   canEditProject,
   canManageAutomationRules,
@@ -59,5 +60,14 @@ describe('Projectの権限判定', () => {
     [[], false],
   ] as const)('ログイン手段が%sならパスワード変更=%sになる', (authSources, expected) => {
     expect(canChangeOwnPassword({ authSources: [...authSources] })).toBe(expected);
+  });
+
+  it.each([
+    ['viewer', 'creator', false],
+    ['editor', 'creator', true],
+    ['editor', 'other', false],
+    ['admin', 'other', true],
+  ] as const)('Sweepの操作は%s（%s）なら%sになる', (role, userId, expected) => {
+    expect(canControlSweep(role, userId, { createdBy: 'creator' })).toBe(expected);
   });
 });
