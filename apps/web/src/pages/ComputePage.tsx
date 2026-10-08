@@ -4,10 +4,11 @@ import type { ComputeTarget } from '@mmt/contracts';
 import { executionApi } from '../api/execution';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
-import { useQuery } from '../hooks/useQuery';
+import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { useMutation } from '../hooks/useMutation';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable } from '../components/DataTable';
+import { WorkerPresenceTable } from '../components/WorkerPresenceTable';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { text } from '../i18n/catalog';
@@ -20,6 +21,11 @@ export function ComputePage() {
   const [editingTarget, setEditingTarget] = useState<ComputeTarget | undefined>();
   const mutation = useMutation();
   const targets = useQuery('compute-targets', executionApi.targets);
+  const workers = useQuery(
+    `${project.id}:workers`,
+    (signal) => executionApi.workers(project.id, signal),
+    EXECUTION_POLL_MS,
+  );
   return (
     <section className="page">
       <PageHeader
@@ -94,6 +100,14 @@ export function ComputePage() {
           />
         )}
       </Resource>
+      <section className="settings-section">
+        <div className="section-heading">
+          <h2>{text.workers}</h2>
+        </div>
+        <Resource query={workers}>
+          {(items) => <WorkerPresenceTable workers={items} targets={targets.value ?? []} />}
+        </Resource>
+      </section>
       {showDialog && (
         <TargetDialog
           target={editingTarget}

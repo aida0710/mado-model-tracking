@@ -1,6 +1,7 @@
 import type { Job } from '@mmt/contracts';
 import { first, type Connection } from '../db/database.js';
 import { notFound } from '../domain/errors.js';
+import { jobHeartbeatStaleSql } from '../domain/workerLiveness.js';
 
 const publicJobColumns = [
   'id',
@@ -23,7 +24,8 @@ const publicJobColumns = [
 ];
 
 export function jobColumns(alias = ''): string {
-  return publicJobColumns.map((column) => `${alias ? `${alias}.` : ''}${column}`).join(',');
+  const columns = publicJobColumns.map((column) => `${alias ? `${alias}.` : ''}${column}`);
+  return [...columns, `${jobHeartbeatStaleSql(alias)} AS heartbeat_stale`].join(',');
 }
 
 export async function findJob(

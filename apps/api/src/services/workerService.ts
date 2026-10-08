@@ -1,4 +1,12 @@
-import type { ComputeTarget, Job, LogEntry, MetricPoint, Run, WorkerJob } from '@mmt/contracts';
+import type {
+  ComputeTarget,
+  Job,
+  LogEntry,
+  MetricPoint,
+  Run,
+  WorkerJob,
+  WorkerPresence,
+} from '@mmt/contracts';
 import type { z } from 'zod';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
@@ -13,7 +21,12 @@ import type {
 import { jobColumns } from '../repositories/jobRepository.js';
 import { findRun } from '../repositories/registryRepository.js';
 import { appendLogs, appendMetrics } from '../repositories/telemetryRepository.js';
-import { requireWorker } from './accessService.js';
+import {
+  listWorkerPresence,
+  touchWorker,
+  touchWorkerLastSeen,
+} from '../repositories/workerPresenceRepository.js';
+import { requireGlobalAdmin, requireProject, requireWorker } from './accessService.js';
 import type { JobService } from './jobService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import { runColumns } from '../repositories/runListProjection.js';
@@ -44,6 +57,7 @@ export class WorkerService {
   ): Promise<WorkerJob[]> {
     return transaction(this.database, async (connection) => {
       const worker = await requireWorker(connection, principal);
+      await this.recordPresence(connection, worker, request);
       const activeJobs = await rows<Job>(
         connection,
         `SELECT ${jobColumns()} FROM jobs WHERE project_id=$1 AND worker_token_id=$2 AND worker_id=$3
@@ -69,6 +83,7 @@ export class WorkerService {
       await connection.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
         `${worker.tokenId}:${request.workerId}`,
       ]);
+      await this.recordPresence(connection, worker, request);
       const activeJobIds = request.activeJobIds ?? [];
       if (activeJobIds.length) {
         const monitored = await rows<{ id: string }>(
@@ -152,12 +167,23 @@ export class WorkerService {
         leaseId: request.leaseId,
       });
       if (isTerminalStatus(job.status)) conflict('Jobは既に終了しています');
+      await touchWorkerLastSeen(connection, { jobId: job.id });
       await connection.query(
         'UPDATE jobs SET heartbeat_at=now(),status=COALESCE($2,status) WHERE id=$1',
         [job.id, request.status],
       );
       return { cancelRequested: job.cancelRequested };
     });
+  }
+
+  async listProjectWorkers(principal: Principal, projectId: string): Promise<WorkerPresence[]> {
+    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
+    return listWorkerPresence(this.database, { projectId });
+  }
+
+  async listAllWorkers(principal: Principal): Promise<WorkerPresence[]> {
+    requireGlobalAdmin(principal);
+    return listWorkerPresence(this.database, { projectId: null });
   }
 
   async metrics(
@@ -225,6 +251,20 @@ export class WorkerService {
         run,
       });
       return completed;
+    });
+  }
+
+  private async recordPresence(
+    connection: Connection,
+    worker: { projectId: string; tokenId: string },
+    request: z.infer<typeof workerResumeSchema>,
+  ): Promise<void> {
+    await touchWorker(connection, {
+      projectId: worker.projectId,
+      tokenId: worker.tokenId,
+      workerId: request.workerId,
+      targetIds: request.targetIds ?? null,
+      ...request.workerInfo,
     });
   }
 

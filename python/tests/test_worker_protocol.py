@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from mado_tracking.errors import ApiError
-from mado_tracking.worker.api import WorkerApi
+from mado_tracking.worker.api import WorkerApi, worker_info
 from mado_tracking.worker.host_state import read_state, write_json
 from mado_tracking.worker.journal import JobJournal
 from mado_tracking.worker.service import Worker
@@ -60,7 +60,12 @@ def test_claim_sends_monitored_job_ids_and_target_filter(worker_job):
 
     asyncio.run(scenario())
     assert calls == [
-        {"workerId": "worker", "targetIds": [worker_job.target["id"]], "activeJobIds": [worker_job.id]}
+        {
+            "workerId": "worker",
+            "targetIds": [worker_job.target["id"]],
+            "activeJobIds": [worker_job.id],
+            "workerInfo": worker_info(),
+        }
     ]
 
 

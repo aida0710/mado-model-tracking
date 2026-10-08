@@ -67,6 +67,20 @@ export function jobRoutes(jobs: JobService): Hono<ApiEnvironment> {
   return routes;
 }
 
+// Mounted at /api: project members see their project's workers, global administrators see all.
+export function workerPresenceRoutes(worker: WorkerService): Hono<ApiEnvironment> {
+  const routes = new Hono<ApiEnvironment>();
+  routes.get('/projects/:p/workers', async (context) =>
+    context.json({
+      items: await worker.listProjectWorkers(principal(context), uuidParam(context, 'p')),
+    }),
+  );
+  routes.get('/workers', async (context) =>
+    context.json({ items: await worker.listAllWorkers(principal(context)) }),
+  );
+  return routes;
+}
+
 export function workerRoutes(worker: WorkerService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.post('/claim', async (context) =>

@@ -1,4 +1,4 @@
-import type { ComputeTarget, Job, Run } from '@mmt/contracts';
+import type { ComputeTarget, Job, Run, WorkerPresence } from '@mmt/contracts';
 import type { CreateTarget } from './inputs';
 import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
 
@@ -19,4 +19,6 @@ export const executionApi = {
     request<unknown>(`${jobPath(projectId, id)}/cancel`, { method: 'POST' }),
   retryJob: (projectId: string, id: string) =>
     request<{ run: Run; job: Job }>(`${jobPath(projectId, id)}/retry`, { method: 'POST' }),
+  workers: (projectId: string, signal?: AbortSignal) =>
+    requestItems<WorkerPresence>(`${projectPath(projectId)}/workers`, signal),
 };

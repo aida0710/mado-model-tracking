@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import socket
 from collections.abc import AsyncIterator, Sequence
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
@@ -21,11 +23,25 @@ ARTIFACT_CHUNK_BYTES = 1024 * 1024
 
 LEASE_REJECTED_STATUSES = {401, 403, 404, 409, 410}
 LOGGER = logging.getLogger(__name__)
+# The distribution name in pyproject.toml; its version is what operators compare across hosts.
+DISTRIBUTION_NAME = "mado-tracking"
+
+
+def worker_info() -> dict[str, str]:
+    """Describe this worker host for the API's worker list; display only, never authorization."""
+    info = {"hostname": socket.gethostname()}
+    try:
+        info["version"] = metadata.version(DISTRIBUTION_NAME)
+    except metadata.PackageNotFoundError:
+        # A source checkout without installation has no version to report.
+        pass
+    return info
 
 
 class WorkerApi:
     def __init__(self, *, url: str, token: str, transport: httpx.AsyncBaseTransport | None = None):
         self.masker = SecretMasker([token])
+        self.worker_info = worker_info()
         self.http = httpx.AsyncClient(
             base_url=url.rstrip("/") + "/",
             transport=transport,
@@ -59,7 +75,11 @@ class WorkerApi:
         self, worker_id: str, target_ids: Sequence[str], *, active_job_ids: Sequence[str] = ()
     ) -> WorkerJob | InvalidWorkerJob | None:
         # A lost claim response is recovered through resume; replay could claim another job.
-        payload: dict[str, Any] = {"workerId": worker_id, "activeJobIds": list(active_job_ids)}
+        payload: dict[str, Any] = {
+            "workerId": worker_id,
+            "activeJobIds": list(active_job_ids),
+            "workerInfo": self.worker_info,
+        }
         if target_ids:
             payload["targetIds"] = list(target_ids)
         response = await self.request("worker/claim", payload, retryable=False)
@@ -72,7 +92,7 @@ class WorkerApi:
         )
 
     async def resume(self, worker_id: str, target_ids: Sequence[str]) -> list[WorkerJob | InvalidWorkerJob]:
-        payload: dict[str, Any] = {"workerId": worker_id}
+        payload: dict[str, Any] = {"workerId": worker_id, "workerInfo": self.worker_info}
         if target_ids:
             payload["targetIds"] = list(target_ids)
         response = await self.request("worker/resume", payload)

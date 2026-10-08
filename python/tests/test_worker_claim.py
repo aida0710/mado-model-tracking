@@ -6,6 +6,8 @@ import asyncio
 import copy
 import hashlib
 import json
+import socket
+from importlib import metadata
 from pathlib import Path
 from uuid import uuid4
 
@@ -233,3 +235,30 @@ def test_restarted_worker_resumes_two_running_jobs_without_new_claims_or_duplica
 
     asyncio.run(scenario())
     assert_single_start(payloads)
+
+
+def test_claim_and_resume_report_installed_version_and_hostname():
+    requests: list[tuple[str, dict]] = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        requests.append((request.url.path.rsplit("/", 1)[-1], json.loads(request.content)))
+        return httpx.Response(
+            200, json={"item": None} if request.url.path.endswith("/claim") else {"items": []}
+        )
+
+    async def scenario():
+        api = WorkerApi(
+            url="http://localhost/api", token="test-api-secret", transport=httpx.MockTransport(serve)
+        )
+        try:
+            await api.resume("presence-worker", [])
+            assert await api.claim("presence-worker", []) is None
+        finally:
+            await api.close()
+
+    asyncio.run(scenario())
+    expected = {"version": metadata.version("mado-tracking"), "hostname": socket.gethostname()}
+    assert [(path, body["workerInfo"]) for path, body in requests] == [
+        ("resume", expected),
+        ("claim", expected),
+    ]

@@ -1,5 +1,6 @@
 import { accessText } from './access';
 import { artifactsText } from './artifacts';
+import { computeText } from './compute';
 import { workbenchText } from './workbench';
 
 export const lineageNodeKindLabels = {
@@ -33,6 +34,7 @@ export const text = {
   ...workbenchText,
   ...accessText,
   ...artifactsText,
+  ...computeText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

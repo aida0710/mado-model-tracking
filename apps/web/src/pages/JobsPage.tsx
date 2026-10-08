@@ -15,6 +15,7 @@ import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { FormDialog } from '../components/FormDialog';
 import { LaunchDialog } from '../dialogs/LaunchDialog';
 import { formatDate } from '../lib/format';
+import { isJobUnresponsive } from '../lib/jobLiveness';
 import { text } from '../i18n/catalog';
 
 const activeStatuses = ['queued', 'claimed', 'running'];
@@ -115,6 +116,12 @@ export function JobsPage() {
                 render: (job) => (
                   <>
                     <StatusBadge status={job.status} />
+                    {isJobUnresponsive(job) && (
+                      // The red Job status color marks a silent worker; the Job status itself is unchanged.
+                      <span className="status-badge status-failed" title={text.jobUnresponsiveHint}>
+                        {text.jobUnresponsive}
+                      </span>
+                    )}
                     {job.cancelRequested && <small>{text.cancelRequested}</small>}
                   </>
                 ),
