@@ -3,9 +3,11 @@ import type { Principal } from '../../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../../db/database.js';
 import { conflict, notFound } from '../../domain/errors.js';
 import { findReservedRunTag, reservedRunTagMessage } from '../../domain/reservedRunTags.js';
+import { isTerminalStatus } from '../../domain/runTransitions.js';
 import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
 import { findRun } from '../../repositories/registryRepository.js';
+import { insertRunResumeEvent } from '../../repositories/runResumeRepository.js';
 import { runColumns } from '../../repositories/runListProjection.js';
 import { requireProject } from '../../services/accessService.js';
 import type { RunCompletionService } from '../../services/runCompletionService.js';
@@ -15,7 +17,7 @@ import { logDatasetInputs } from './datasetInputs.js';
 import { findTrackingExperiment, resolveExperimentId } from './experimentService.js';
 import { logRunModels } from './runModels.js';
 import { appendTrackingMetrics, metricHistory } from './trackingMetrics.js';
-import { resolveTrackingLifecycle } from './trackingLifecycle.js';
+import { isTrackingResume, resolveTrackingLifecycle } from './trackingLifecycle.js';
 import { appendParameters, collectValues } from './trackingParameters.js';
 import { compileSearch, nextPageToken, pageOffset } from './trackingSearch.js';
 import { serializeRun, serializeRunInfo, serializeRuns } from './trackingSerialization.js';
@@ -197,13 +199,16 @@ export class RunTrackingService {
           endTime: input.end_time,
           hasJob: !!job,
         });
+        const resumed = isTrackingResume(run, { status, hasJob: !!job });
+        if (resumed) await this.recordResume(connection, { principal, run });
         const tags = { ...run.tags };
         if (input.run_name !== undefined) tags['mlflow.runName'] = input.run_name;
+        // A resume clears the ended segment's error, as the native resume API does.
         const updated = (await first<TrackingRun>(
           connection,
           `UPDATE runs SET name=COALESCE($2,name),tags=$3::jsonb,status=$4,ended_at=$5,
-          started_at=$6 WHERE id=$1 RETURNING ${runColumns}`,
-          [run.id, input.run_name, JSON.stringify(tags), status, endedAt, startedAt],
+          started_at=$6,error=CASE WHEN $7 THEN NULL ELSE error END WHERE id=$1 RETURNING ${runColumns}`,
+          [run.id, input.run_name, JSON.stringify(tags), status, endedAt, startedAt, resumed],
         ))!;
         if (status !== run.status)
           await this.runCompletion.recordStatusChange(connection, {
@@ -454,6 +459,24 @@ export class RunTrackingService {
           invalidParameter('同じProjectのLogged Modelが必要です');
       }
       return operation(connection, run);
+    });
+  }
+  private async recordResume(
+    connection: Connection,
+    resume: { principal: Principal; run: TrackingRun },
+  ): Promise<void> {
+    const { principal, run } = resume;
+    // isTrackingResume already required an ended Run; this narrows previousStatus for the type.
+    if (!isTerminalStatus(run.status)) return;
+    await insertRunResumeEvent(connection, {
+      projectId: run.projectId,
+      runId: run.id,
+      previousStatus: run.status,
+      previousEndedAt: run.endedAt,
+      source: 'mlflow',
+      actorUserId: principal.user.id,
+      actorTokenId: principal.token?.id ?? null,
+      reason: null,
     });
   }
   private async validateParent(
