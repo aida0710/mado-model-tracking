@@ -60,7 +60,12 @@ import { taskRoutes } from './routes/taskRoutes.js';
 import { repositoryRoutes } from './routes/repositoryRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
 import { artifactUploadRoutes, PART_SHA256_HEADER } from './routes/artifactUploadRoutes.js';
-import { jobRoutes, targetRoutes, workerRoutes } from './routes/executionRoutes.js';
+import {
+  jobRoutes,
+  targetRoutes,
+  workerPresenceRoutes,
+  workerRoutes,
+} from './routes/executionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
@@ -230,6 +235,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
+  app.route('/api', workerPresenceRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
   app.route('/api/mlflow/projects/:p', mlflowInformationRoutes(database));
   app.route('/api/mlflow/projects/:p', mlflowTrackingRoutes({ database, runs, registry, runCompletion }));

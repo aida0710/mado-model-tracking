@@ -239,6 +239,23 @@ export interface Job {
   heartbeatAt: string | null;
   exitCode: number | null;
   error: string | null;
+  // Derived: claimed/running with no heartbeat for 60 seconds. Display only; status is unchanged.
+  heartbeatStale: boolean;
+}
+export type WorkerPresenceStatus = 'online' | 'offline';
+export interface WorkerPresence {
+  projectId: string;
+  tokenId: string;
+  tokenName: string;
+  workerId: string;
+  version: string | null;
+  hostname: string | null;
+  targetIds: string[] | null;
+  parallelJobs: number | null;
+  startedAt: string;
+  lastSeenAt: string;
+  status: WorkerPresenceStatus;
+  activeJobCount: number;
 }
 export interface WorkerJob {
   job: Job;

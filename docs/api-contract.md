@@ -144,12 +144,15 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
 
 ## Worker API
 
-- `POST /worker/claim` ({workerId,targetIds?:string[],activeJobIds?:string[]}) → `{item:WorkerJob|null}`。DB transaction＋SKIP LOCKED、target/GPU予約、worker project scope、ランダムleaseを使う。targetが対応しないruntimeは候補から除外し、返す前にも版/runtime/Artifact/GPUを再検証する。検証失敗でleaseやGPU予約は残らない。activeJobIdsは既に監視中のJobを指定する。そのID以外に同じworkerの未完了Jobがあれば同じleaseで回収し、なければ次をclaimする。同じpayloadの再送で新たなJobを重複claimしない。
-- `POST /worker/resume` ({workerId,targetIds?:string[]}) → `{items:WorkerJob[]}`。同じworkerIdとproject scopeのclaimed/running jobを同じleaseのまま返す。別workerへ自動再claimしない。
+- `POST /worker/claim` ({workerId,targetIds?:string[],activeJobIds?:string[],workerInfo?}) → `{item:WorkerJob|null}`。DB transaction＋SKIP LOCKED、target/GPU予約、worker project scope、ランダムleaseを使う。targetが対応しないruntimeは候補から除外し、返す前にも版/runtime/Artifact/GPUを再検証する。検証失敗でleaseやGPU予約は残らない。activeJobIdsは既に監視中のJobを指定する。そのID以外に同じworkerの未完了Jobがあれば同じleaseで回収し、なければ次をclaimする。同じpayloadの再送で新たなJobを重複claimしない。
+- `POST /worker/resume` ({workerId,targetIds?:string[],workerInfo?}) → `{items:WorkerJob[]}`。同じworkerIdとproject scopeのclaimed/running jobを同じleaseのまま返す。別workerへ自動再claimしない。
 - `POST /worker/jobs/:id/heartbeat` ({leaseId,status?:'running'}) → `{cancelRequested:boolean}`。
 - `POST /worker/jobs/:id/metrics` ({leaseId,metrics:MetricPoint[]})、`POST .../logs` ({leaseId,entries:LogEntry[]})。
 - `POST /worker/jobs/:id/complete` ({leaseId,status:'finished'|'failed'|'canceled',exitCode?,error?})。同じleaseの再送は安全。古いleaseからの状態変更を拒否。
 - WorkerはAPI heartbeatと並行してSSH commandを実行する。切断してもremote processを二重起動しないためjob別workspaceのPID/statusファイルでattach・回収する。worker停止後のleaseは安易に再実行せず、同じworkerの復帰で再attachするか状態不明として扱う。再実行は明示操作。
+- 在籍登録: claim/resume の任意の`workerInfo`は`{version?:string,hostname?:string,parallelJobs?:int(1..1000)}`。表示用の自己申告で、認可には使わない。claim/resume/heartbeat の受付で`workers`（主キーは token ID と workerId）の`lastSeenAt`を更新する。claimは毎秒来るので、前回の記録から15秒（`WORKER_PRESENCE_WRITE_INTERVAL_SECONDS`）未満で内容（版、ホスト名、targetIds、parallelJobs）も変わらなければ書き込まない。workerInfoで省略した項目は前回の値を残す。120秒以上応答のなかった worker が戻ると`startedAt`を今に戻す。
+- `GET /projects/:p/workers` → `{items:WorkerPresence[]}`。viewer、API tokenは`read` scope。`GET /workers` → 全Projectの同じ形。全体管理者だけ。WorkerPresenceは`{projectId,tokenId,tokenName,workerId,version,hostname,targetIds:string[]|null,parallelJobs,startedAt,lastSeenAt,status:'online'|'offline',activeJobCount}`。`targetIds=null`は全targetを対象にする worker。`status`はDBの時刻で`lastSeenAt`から120秒（`WORKER_OFFLINE_SECONDS`）を超えると`offline`。`activeJobCount`はその worker の claimed/running Job数。最終応答の新しい順に最大1000件。
+- Job の`heartbeatStale:boolean`は派生値で、claimed/running かつ`heartbeatAt`から60秒（`JOB_HEARTBEAT_STALE_SECONDS`、heartbeat 5秒の12回分）を超えると true。表示だけに使い、Jobの状態変更、GPU予約の解放、別workerへの再claim、自動再実行はしない。
 - GPUなしのCPU実行はgpuIds=[]。実際のGPU計測はnvidia-smiで任意に採取。WorkerはAPI/ログへ鍵・token・シークレット値を出さない。
 - 環境: `MMT_API_URL`, `MMT_API_TOKEN`, `MMT_WORKER_ID`, `MMT_WORKER_TARGET_IDS`。SDKはstart_run、log_params/tags/metrics、log_artifact、register_model/dataset等を提供。例と実行する小さいtraining/inference scriptを同梱する。
 

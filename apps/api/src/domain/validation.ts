@@ -256,9 +256,18 @@ export const pluginDatasetSchema = z.strictObject({
   schema: jsonObjectSchema,
   metadata: jsonObjectSchema,
 });
+// A worker reports at most this many parallel jobs; larger values are a misconfiguration.
+const MAX_WORKER_PARALLEL_JOBS = 1000;
+// Self-reported by the worker host for display only; never used for authorization.
+export const workerInfoSchema = z.strictObject({
+  version: z.string().trim().min(1).max(200).optional(),
+  hostname: z.string().trim().min(1).max(255).optional(),
+  parallelJobs: z.number().int().min(1).max(MAX_WORKER_PARALLEL_JOBS).optional(),
+});
 export const workerResumeSchema = z.strictObject({
   workerId: z.string().min(1).max(200),
   targetIds: uniqueIdsSchema.optional(),
+  workerInfo: workerInfoSchema.optional(),
 });
 export const workerClaimSchema = workerResumeSchema.extend({
   activeJobIds: uniqueIdsSchema.optional(),

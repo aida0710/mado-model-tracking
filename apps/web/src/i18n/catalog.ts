@@ -1,6 +1,7 @@
 import { accessText } from './access';
 import { artifactsText } from './artifacts';
 import { modelsText } from './models';
+import { computeText } from './compute';
 import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
 
@@ -37,6 +38,7 @@ export const text = {
   ...artifactsText,
   ...modelsText,
   ...evaluationText,
+  ...computeText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
