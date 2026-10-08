@@ -1,2 +1,22 @@
 // Local login and password change labels. auth-local-accounts-and-mode owns the entries.
-export const accessText = {} as const;
+export const accessText = {
+  username: 'ユーザー名',
+  password: 'パスワード',
+  localLogin: 'ローカルアカウントでログイン',
+  localLoginSeparator: 'またはローカルアカウント',
+  localLoginInvalid: 'ユーザー名またはパスワードが正しくありません',
+  loginRateLimited: '試行回数の上限に達しました。しばらく待ってから再試行してください',
+  ssoUnavailable: 'このサーバーではログイン方法が設定されていません',
+  changePasswordTitle: 'パスワードを変更',
+  changePasswordRequired: '続けるには初期パスワードを変更してください。',
+  currentPassword: '現在のパスワード',
+  newPassword: '新しいパスワード',
+  confirmNewPassword: '新しいパスワード（確認）',
+  newPasswordHint: '12〜1024 byteで、現在と異なるパスワードにしてください。',
+  newPasswordMismatch: '確認用のパスワードが一致しません',
+  currentPasswordInvalid: '現在のパスワードが正しくありません',
+  weakPassword: '新しいパスワードが条件を満たしていません',
+  localAccountRequired: 'ローカルアカウントのパスワードだけを変更できます',
+  changePassword: 'パスワードを変更',
+  passwordChanged: 'パスワードを変更しました。ほかの端末のログインは終了しました。',
+} as const;

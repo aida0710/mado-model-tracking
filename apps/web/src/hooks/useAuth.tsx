@@ -5,6 +5,7 @@ import { RequestError } from '../api/http';
 import { useQuery } from './useQuery';
 import { Resource } from '../components/Feedback';
 import { LoginPage } from '../pages/LoginPage';
+import { ChangePasswordPage } from '../pages/ChangePasswordPage';
 import { AuthReturn } from '../components/AuthReturn';
 
 const AuthContext = createContext<{ user: User; reload: () => void } | null>(null);
@@ -12,17 +13,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const session = useQuery('auth', async (signal) => {
     const config = await authApi.config(signal);
     try {
-      const { user } = await authApi.me(signal);
-      return { config, user };
+      const { user, mustChangePassword } = await authApi.me(signal);
+      return { config, user, mustChangePassword };
     } catch (error) {
-      if (error instanceof RequestError && error.status === 401) return { config, user: null };
+      if (error instanceof RequestError && error.status === 401)
+        return { config, user: null, mustChangePassword: false };
       throw error;
     }
   });
   return (
     <Resource query={session}>
-      {({ config, user }) =>
-        user ? (
+      {({ config, user, mustChangePassword }) =>
+        // The API refuses every other request until the password changes, so no app screen is shown.
+        user && mustChangePassword ? (
+          <ChangePasswordPage isRequired onChanged={session.reload} />
+        ) : user ? (
           <AuthContext.Provider value={{ user, reload: session.reload }}>
             <AuthReturn>{children}</AuthReturn>
           </AuthContext.Provider>

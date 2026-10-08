@@ -1,5 +1,40 @@
 # 運用と接続設定
 
+## 認証方式（AUTH_MODE）
+
+`AUTH_MODE`でログイン方法を選びます。既定は`hybrid`です。
+
+| AUTH_MODE | 使えるログイン | 必須の設定 | 向いている場面 |
+|---|---|---|---|
+| `local` | ローカルアカウント | なし（`OIDC_*`は読まない） | SSOが無い環境、閉じたLAN |
+| `oidc` | Authentik（SSO）だけ | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID` | SSOへ移行し終えた本番 |
+| `hybrid` | SSOとローカルアカウント | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID` | SSOの導入中。Local Adminを緊急経路に残す |
+| `development` | 開発用ログイン | なし | ローカル開発。`NODE_ENV=production`では起動しない |
+
+必須の設定が欠けると、APIは設定名だけを示して起動しません。無効なmodeの経路は404を返します（`local`のOIDC開始・callback、`oidc`の`POST /api/auth/local-login`）。
+
+Web sessionはidle期限`AUTH_SESSION_IDLE_SECONDS`（既定28800=8時間）とabsolute期限`AUTH_SESSION_ABSOLUTE_SECONDS`（既定43200=12時間）の早い方で切れます。idleがabsoluteを超える設定は起動時に拒否します。SSOボタンの表示名は`OIDC_LABEL`（既定`Authentik`）です。
+
+ローカルアカウントのパスワードはArgon2id（memory 19456KiB、time 2、parallelism 1）で保存し、12〜1024 byteを受け付けます。ログインは接続元ごとに1分30回、同じユーザー名への失敗は15分10回、パスワード変更時の現在のパスワード確認はユーザーごとに15分10回までで、超えると429と`Retry-After`を返します。回数はAPIプロセスのメモリにあり、再起動で戻ります。Argon2の同時計算は4件までです。存在しないユーザー名、誤ったパスワード、無効化したユーザーは同じ401を返します。ログイン・ログアウト・パスワード変更は監査ログ（`audit_events`の`auth.login`、`auth.logout`、`auth.password.change`）に残り、パスワードやOIDCのcode・stateは記録しません。
+
+### 初期管理者（bootstrap-admin）
+
+API serverの端末で対話的に実行します。ユーザー名とパスワードは端末から入力し、コマンド引数やログには出しません。
+
+```sh
+npm run bootstrap-admin -w @mmt/api
+```
+
+同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。
+
+### SSOへの移行手順
+
+1. `AUTH_MODE=hybrid`とAuthentikの設定（下記）を入れて`npm run db:migrate`の後にAPIを再起動し、`bootstrap-admin`でLocal Adminを作ってパスワードを変更します。
+2. 管理者と一般メンバーがSSOでログインし、全体管理者の判定とProject権限が正しいことを確認します。migration 010で既存のSSOユーザーは`user_oidc_identities`へ移り、同じユーザーIDのままログインできます。
+3. 確認できたら`AUTH_MODE=oidc`へ変えて再起動します。Local Adminのログインは404になります。SSOが止まったときは`hybrid`へ戻すとLocal Adminでログインできます。
+
+migration 010はsessionに`auth_method`を必須で追加します。migration後は新しいAPIへ入れ替えてください（古いAPIはsessionを作れません）。
+
 ## Authentik
 
 AuthentikにOAuth2/OpenID ProviderとApplicationを用意します。client secretはAPI serverにだけ設定します。Redirect URIには`https://<アプリのホスト>/api/auth/callback`を完全一致で登録し、per-providerのissuerを使います。Providerの設定方法は[Authentik公式資料](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)を参照してください。
@@ -8,18 +43,19 @@ API server側の設定:
 
 ```dotenv
 NODE_ENV=production
-AUTH_MODE=oidc
+AUTH_MODE=hybrid
 MMT_PUBLIC_URL=https://tracking.example.com
 MMT_WEB_ORIGIN=https://tracking.example.com
 OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
 OIDC_CLIENT_ID=<providerのclient ID>
 OIDC_CLIENT_SECRET=<secret>
 OIDC_ADMIN_GROUP=mmt-admins
+OIDC_LABEL=Authentik
 ```
 
 アプリはAuthorization Code＋PKCE、state、nonce、ID tokenの署名・issuer・audienceを検証します。`openid profile email`を要求し、`email_verified=true`が必要です。Authentik側のscope mappingから必要なclaimをID tokenへ出してください。`groups`配列に`mmt-admins`がある利用者だけが全体管理者になります。Project内の権限はアプリで個別に設定します。
 
-Web sessionはHttpOnly/SameSite=Lax cookieで12時間。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを削除します。Authentik全体のsession logout、SCIM、back-channel logoutは提供しません。
+Web sessionはHttpOnly/SameSite=Lax cookieで、期限は上の`AUTH_SESSION_*`に従います。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを失効させます。Authentik全体のsession logout、SCIM、back-channel logoutは提供しません。
 
 LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します。CORS、ログイン/logout、sessionの変更操作で同じ判定を使い、HTTP(S)のIPv4 private・loopback・link-local・CGNAT、IPv6 ULA・loopback・link-localとlocalhostを許可します。設定省略時はfalseです。DNS名で使う場合は`MMT_WEB_ORIGIN`と`MMT_PUBLIC_URL`へ実際のURLを設定してください。Originが欠落/nullの場合や、許可されていないpublic IP・DNS名は拒否します。Bearer API tokenは従来どおりOriginなしで使えます。
 
