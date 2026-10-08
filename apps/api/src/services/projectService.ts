@@ -9,6 +9,7 @@ import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { removesLastProjectAdmin } from '../domain/projectAdminInvariant.js';
+import type { ExperimentPatch } from '../domain/registryLifecycleValidation.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import {
@@ -25,6 +26,9 @@ import {
   recordDenial,
   type AuditEventDraft,
 } from './auditService.js';
+
+const experimentSelect =
+  "SELECT e.*, (SELECT count(*) FROM runs r WHERE r.experiment_id=e.id AND r.lifecycle_stage='active') AS run_count FROM experiments e";
 
 export class ProjectService {
   constructor(
@@ -179,8 +183,86 @@ export class ProjectService {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     return rows<Experiment>(
       this.database,
-      "SELECT e.*, (SELECT count(*) FROM runs r WHERE r.experiment_id=e.id AND r.lifecycle_stage='active') AS run_count FROM experiments e WHERE project_id=$1 AND e.lifecycle_stage='active' ORDER BY e.created_at DESC",
+      `${experimentSelect} WHERE project_id=$1 AND e.lifecycle_stage='active' ORDER BY e.created_at DESC`,
       [projectId],
+    );
+  }
+
+  // Deleted (MLflow soft-deleted) Experiments are hidden here as in the list.
+  async experiment(
+    principal: Principal,
+    projectId: string,
+    experimentId: string,
+  ): Promise<Experiment> {
+    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
+    const experiment = await first<Experiment>(
+      this.database,
+      `${experimentSelect} WHERE e.project_id=$1 AND e.id=$2 AND e.lifecycle_stage='active'`,
+      [projectId, experimentId],
+    );
+    if (!experiment) notFound('Experiment');
+    return experiment;
+  }
+
+  /**
+   * Uses the scope that created the Experiment (runs:write). Names stay unique in the Project;
+   * the lock order (Project, then Experiment) matches MLflow rename and Artifact PUT.
+   */
+  async updateExperiment(
+    principal: Principal,
+    change: { projectId: string; experimentId: string; input: ExperimentPatch },
+    request: RequestMetadata = NO_REQUEST_METADATA,
+  ): Promise<Experiment> {
+    const { projectId, experimentId, input } = change;
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'experiment.update',
+      resourceType: 'experiment',
+      resourceId: experimentId,
+      projectId,
+      details: { fields: Object.keys(input), ...(input.name ? { name: input.name } : {}) },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await requireProject(connection, principal, {
+          projectId,
+          role: 'editor',
+          scope: 'runs:write',
+        });
+        await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+        const current = await first<{ name: string; lifecycleStage: string }>(
+          connection,
+          'SELECT name,lifecycle_stage FROM experiments WHERE project_id=$1 AND id=$2 FOR UPDATE',
+          [projectId, experimentId],
+        );
+        if (!current) notFound('Experiment');
+        if (current.lifecycleStage !== 'active') conflict('削除済みExperimentは変更できません');
+        if (input.name !== undefined && input.name !== current.name) {
+          const duplicate = await first(
+            connection,
+            'SELECT id FROM experiments WHERE project_id=$1 AND name=$2 AND id<>$3',
+            [projectId, input.name, experimentId],
+          );
+          if (duplicate)
+            throw new DomainError(409, '同名Experimentが既に存在します', 'resource_already_exists');
+        }
+        await connection.query(
+          'UPDATE experiments SET name=COALESCE($2,name),description=COALESCE($3,description),updated_at=now() WHERE id=$1',
+          [experimentId, input.name ?? null, input.description ?? null],
+        );
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: {
+            ...draft.details,
+            ...(input.name !== undefined ? { previousName: current.name } : {}),
+          },
+        });
+        return (await first<Experiment>(connection, `${experimentSelect} WHERE e.id=$1`, [
+          experimentId,
+        ]))!;
+      }),
     );
   }
 

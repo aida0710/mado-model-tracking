@@ -74,6 +74,12 @@ import {
   runAnalysisTableRequestSchema,
 } from '../../domain/runAnalysisValidation.js';
 import { operationsAlertQuerySchema } from '../../domain/operationsAlerts.js';
+import {
+  datasetListQuerySchema,
+  datasetPatchSchema,
+  experimentPatchSchema,
+  modelPatchSchema,
+} from '../../domain/registryLifecycleValidation.js';
 import { runNoteUpdateSchema } from '../../domain/runNote.js';
 import {
   mediaCompareSchema,
@@ -525,6 +531,24 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
   },
   {
     method: 'get',
+    path: '/api/projects/:p/experiments/:id',
+    tag: 'projects',
+    summary: 'Experimentを取得（削除済みは404）',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.experimentSchema },
+  },
+  {
+    method: 'patch',
+    path: '/api/projects/:p/experiments/:id',
+    tag: 'projects',
+    summary: 'Experimentの名前・説明を変更（名前はProject内で一意）',
+    access: RUNS_WRITE,
+    body: experimentPatchSchema,
+    responses: { 200: contract.experimentSchema },
+    errors: routeError(409, 'resource_already_exists'),
+  },
+  {
+    method: 'get',
     path: '/api/projects/:p/service-accounts',
     tag: 'tokens',
     summary: 'Service Account一覧',
@@ -608,6 +632,31 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: REGISTRY_WRITE,
     body: modelCreateSchema,
     responses: { 201: contract.modelSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/models/:id',
+    tag: 'registry',
+    summary: 'Modelを取得',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.modelSchema },
+  },
+  {
+    method: 'patch',
+    path: '/api/projects/:p/models/:id',
+    tag: 'registry',
+    summary: 'Modelの説明を変更（名前と系列は変えない）',
+    access: REGISTRY_WRITE,
+    body: modelPatchSchema,
+    responses: { 200: contract.modelSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/models/:id/versions/:v',
+    tag: 'registry',
+    summary: 'ModelVersionを取得（別Modelの版は404）',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.modelVersionSchema },
   },
   {
     method: 'get',
@@ -769,6 +818,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     tag: 'registry',
     summary: 'Dataset一覧',
     access: PROJECT_VIEWER,
+    query: datasetListQuerySchema,
     responses: { 200: contract.itemsOf(contract.datasetSchema) },
   },
   {
@@ -779,6 +829,23 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: REGISTRY_WRITE,
     body: datasetCreateSchema,
     responses: { 201: contract.datasetSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/datasets/:id',
+    tag: 'registry',
+    summary: 'Datasetを取得',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.datasetSchema },
+  },
+  {
+    method: 'patch',
+    path: '/api/projects/:p/datasets/:id',
+    tag: 'registry',
+    summary: 'Datasetのarchive・解除と説明の変更（物理削除はしない）',
+    access: REGISTRY_WRITE,
+    body: datasetPatchSchema,
+    responses: { 200: contract.datasetSchema },
   },
   {
     method: 'get',
@@ -972,6 +1039,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
       'checkpoint_kind_mismatch',
       'checkpoint_code_mismatch',
       'checkpoint_artifact_missing',
+      'dataset_archived',
     ),
   },
   {
@@ -1257,6 +1325,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
       'checkpoint_kind_mismatch',
       'checkpoint_code_mismatch',
       'checkpoint_artifact_missing',
+      'dataset_archived',
     ),
   },
   {
@@ -1493,6 +1562,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
         'checkpoint_kind_mismatch',
         'checkpoint_code_mismatch',
         'checkpoint_artifact_missing',
+        'dataset_archived',
       ),
     ],
   },
@@ -1914,7 +1984,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     responses: { 200: contract.runSchema, 201: contract.runSchema },
     errors: [
       ...routeError(409, 'sync_run_conflict'),
-      ...routeError(422, 'sync_timestamp_in_future', 'reserved_tag'),
+      ...routeError(422, 'sync_timestamp_in_future', 'reserved_tag', 'dataset_archived'),
     ],
   },
   {

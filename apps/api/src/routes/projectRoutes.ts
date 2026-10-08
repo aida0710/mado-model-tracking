@@ -9,6 +9,7 @@ import {
   projectPatchSchema,
   roleAssignmentSchema,
 } from '../domain/validation.js';
+import { experimentPatchSchema } from '../domain/registryLifecycleValidation.js';
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 
@@ -107,6 +108,28 @@ export function projectRoutes(
         await jsonBody(context, namedEntitySchema),
       ),
       201,
+    ),
+  );
+  routes.get('/:p/experiments/:id', async (context) =>
+    context.json(
+      await projects.experiment(
+        principal(context),
+        uuidParam(context, 'p'),
+        uuidParam(context, 'id'),
+      ),
+    ),
+  );
+  routes.patch('/:p/experiments/:id', async (context) =>
+    context.json(
+      await projects.updateExperiment(
+        principal(context),
+        {
+          projectId: uuidParam(context, 'p'),
+          experimentId: uuidParam(context, 'id'),
+          input: await jsonBody(context, experimentPatchSchema),
+        },
+        requestMetadata(context),
+      ),
     ),
   );
   return routes;

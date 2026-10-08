@@ -149,6 +149,16 @@ JobのあるRunの開始・終了状態はworkerが正本。SDKのstart/end操�
 
 MLflow 3の実験記録・モデル保存/登録を対象とし、Tracing/GenAI/Gateway/Prompt Registryは対象外。未知の検索構文とAPIは明示エラーを返す。接続と検証の例は[MLflow手順](mlflow.md)を参照する。
 
+## Registryのライフサイクル（単体取得・更新・Datasetのarchive）
+
+読み出しはviewerと`read` scope、変更はeditorと`registry:write`（Experimentだけは作成と同じ`runs:write`）。他Projectや別Model・別DatasetのIDは404、bodyが空（変更する項目なし）や未知のfieldは422。変更は成功を監査ログ（`model.update`・`experiment.update`・`dataset.update`。`details.fields`に変更した項目）に残し、権限不足の403と409は`denied`で残す。
+
+- `GET /projects/:p/models/:id` → Model。`PATCH /projects/:p/models/:id` (ModelUpdate {description?}) → Model。名前と系列はMLflowの登録や自動実行ruleが参照するので変えない。
+- `GET /projects/:p/models/:id/versions/:v` → ModelVersion。`GET /projects/:p/model-versions/:id`と同じ版を、Modelの下の形で返す（版がそのModelのものでなければ404）。aliasを含む詳細は`model-versions/:id`を使う。
+- `GET /projects/:p/experiments/:id` → Experiment（MLflowで削除済みのExperimentは一覧と同じく404）。`PATCH /projects/:p/experiments/:id` (ExperimentUpdate {name?,description?}) → Experiment。名前はProject内で一意で、重複は409 `resource_already_exists`。削除済みのExperimentは409。MLflowのrenameと同じくProject→Experimentの順にlockする。監査の`details`に`name`と`previousName`を残す。
+- `GET /projects/:p/datasets?archived=true|false` → `{items:Dataset[]}`。省略すると全件（archive済みを含む）。Datasetは`archivedAt:string|null`を持つ。`GET /projects/:p/datasets/:id` → Dataset。
+- `PATCH /projects/:p/datasets/:id` (DatasetUpdate {archived?,description?}) → Dataset。`archived:true`でarchiveし（既にarchive済みなら最初の日時のまま）、`false`で解除する。Datasetも版も物理削除しない（版は不変）。archive済みDatasetの版を入力にした新しいRunの作成（`POST /runs`、Taskの実行、Jobのretry、自動実行、`PUT /sync/runs/:r`）は422 `dataset_archived`。作成済みのRun・Jobの参照はそのまま残り、queuedのRunへのJob作成やworkerへの受け渡しも続く。archive済みDatasetにも版は登録できる（Run完了時の出力登録を止めないため）。Run作成はDatasetの行をFOR SHAREでlockするので、同時のarchiveはRunの作成が終わってから反映される。
+
 ## Runの予約tagと終端後の記録
 
 - 予約tag: `automation.`と`mmt.`で始まるRunのtagはサーバーが付ける（例: 自動実行の`automation.ruleId`）。利用者はnative・MLflowのどちらからも付け外しできない。対象はnativeの`POST /projects/:p/runs`と`PATCH /projects/:p/runs/:r`のtags（422 `reserved_tag`）、MLflowの`runs/create`のtags、`runs/set-tag`、`runs/delete-tag`、`runs/log-batch`のtags（400 `INVALID_PARAMETER_VALUE`）。`mlflow.`で始まるsystem tagは従来どおり書ける。予約tagを持つ既存Runはそのまま残す。自動化の判定はtagではなく`model_automation_executions.run_id`で行う。

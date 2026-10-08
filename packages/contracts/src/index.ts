@@ -333,7 +333,22 @@ export interface Dataset {
   namespace: string;
   description: string;
   latestVersion: string | null;
+  // Set while archived: new Runs refuse its versions as inputs; existing Runs keep them.
+  archivedAt: string | null;
   createdAt: string;
+}
+// PATCH bodies of the registry lifecycle; at least one field is required.
+export interface ModelUpdate {
+  description?: string;
+}
+export interface ExperimentUpdate {
+  // Unique within the Project.
+  name?: string;
+  description?: string;
+}
+export interface DatasetUpdate {
+  archived?: boolean;
+  description?: string;
 }
 export interface DatasetVersion {
   id: string;
