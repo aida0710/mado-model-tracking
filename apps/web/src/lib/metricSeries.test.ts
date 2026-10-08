@@ -1,9 +1,76 @@
 import { describe, expect, it } from 'vitest';
-import { buildMetricRows } from './metricSeries';
+import type { MetricGroup, MetricSeries as SampledMetricSeries, RunSegment } from '@mmt/contracts';
+import {
+  groupChartSeries,
+  groupSeriesId,
+  isSystemMetric,
+  nearestPointIndex,
+  prepareChartLines,
+  recordedPointSeries,
+  resumeMarkers,
+  runChartSeries,
+  valuesAtX,
+} from './metricSeries';
 
-describe('メトリクスの比較', () => {
-  it('欠損したstepを補完せず、同じstepの更新は最新時刻の値を表示する', () => {
-    const rows = buildMetricRows(
+function sampled(runId: string, key: string, points: SampledMetricSeries['points']) {
+  return { runId, key, points, sampled: false, totalPoints: points.length, nanCount: 0, droppedPoints: 0 };
+}
+
+describe('APIの系列から図の系列への変換', () => {
+  it('指定したkeyの系列をRunごとの線にし、Run名を凡例に使う', () => {
+    const series = runChartSeries(
+      [
+        sampled('a', 'loss', [{ x: 1, step: 1, value: 0.5, min: 0.5, max: 0.5, count: 1 }]),
+        sampled('a', 'acc', [{ x: 1, step: 1, value: 0.9, min: 0.9, max: 0.9, count: 1 }]),
+        sampled('b', 'loss', []),
+      ],
+      'loss',
+      { a: 'run A' },
+    );
+    expect(series).toEqual([
+      { id: 'a', label: 'run A', kind: 'run', points: [{ x: 1, value: 0.5 }] },
+      { id: 'b', label: 'b', kind: 'run', points: [] },
+    ]);
+  });
+
+  it('間引かれたbucketだけが最小〜最大の帯を持つ', () => {
+    const [series] = runChartSeries(
+      [
+        sampled('a', 'loss', [
+          { x: 1.5, step: 2, value: 0.4, min: 0.1, max: 0.7, count: 2 },
+          { x: 3, step: 3, value: 0.2, min: 0.2, max: 0.2, count: 1 },
+        ]),
+      ],
+      'loss',
+    );
+    expect(series!.points).toEqual([
+      { x: 1.5, value: 0.4, min: 0.1, max: 0.7 },
+      { x: 3, value: 0.2 },
+    ]);
+  });
+
+  it('グループは平均を線の値にし、最小〜最大を帯にする', () => {
+    const group: MetricGroup = {
+      groupKey: '0.01',
+      label: 'lr=0.01',
+      runIds: ['a', 'b'],
+      series: [
+        { key: 'loss', points: [{ x: 1, mean: 0.5, min: 0.4, max: 0.6, stddev: 0.1, runCount: 2 }] },
+      ],
+    };
+    expect(groupChartSeries([group], 'loss')).toEqual([
+      {
+        id: groupSeriesId('0.01'),
+        label: 'lr=0.01',
+        kind: 'group',
+        points: [{ x: 1, value: 0.5, min: 0.4, max: 0.6 }],
+      },
+    ]);
+    expect(groupChartSeries([group], 'acc')[0]!.points).toEqual([]);
+  });
+
+  it('記録した全点の系列は同じstepの値を両方残し、stepと時刻の順に並べる', () => {
+    const [series] = recordedPointSeries(
       [
         {
           id: 'a',
@@ -11,19 +78,137 @@ describe('メトリクスの比較', () => {
           points: [
             { name: 'loss', value: 0.2, step: 1, timestamp: '2026-10-08T00:01:00Z' },
             { name: 'loss', value: 0.4, step: 1, timestamp: '2026-10-08T00:00:00Z' },
+            { name: 'loss', value: 0.1, step: 0, timestamp: '2026-10-08T00:02:00Z' },
+            { name: 'acc', value: 0.9, step: 0, timestamp: '2026-10-08T00:02:00Z' },
           ],
-        },
-        {
-          id: 'b',
-          label: 'B',
-          points: [{ name: 'loss', value: 0.8, step: 2, timestamp: '2026-10-08T00:02:00Z' }],
         },
       ],
       'loss',
     );
-    expect(rows).toEqual([
-      { step: 1, a: 0.2 },
-      { step: 2, b: 0.8 },
+    expect(series!.points).toEqual([
+      { x: 0, value: 0.1 },
+      { x: 1, value: 0.4 },
+      { x: 1, value: 0.2 },
+    ]);
+  });
+
+  it('system metricsはsystem・gpu・cpu・memoryで始まる名前', () => {
+    expect(isSystemMetric('system/gpu_0_utilization_percentage')).toBe(true);
+    expect(isSystemMetric('gpu.0.memory')).toBe(true);
+    expect(isSystemMetric('loss')).toBe(false);
+  });
+});
+
+describe('再開位置の目印', () => {
+  const segments: RunSegment[] = [
+    { startedAt: '2026-10-08T00:00:00Z', endedAt: '2026-10-08T01:00:00Z', endStatus: 'failed', firstStep: null },
+    { startedAt: '2026-10-08T02:00:00Z', endedAt: '2026-10-08T03:00:00Z', endStatus: 'failed', firstStep: 501 },
+    { startedAt: '2026-10-08T04:00:00Z', endedAt: null, endStatus: null, firstStep: null },
+  ];
+  const runs = [{ label: '再開', resumeEvents: { items: [], segments } }];
+
+  it('step軸では再開後の最初のstepに置き、metricの無かった区間は置かない', () => {
+    expect(resumeMarkers({ kind: 'step' }, runs)).toEqual([{ x: 501, label: '再開' }]);
+  });
+
+  it('経過時間の軸ではRun開始からの秒、時刻の軸では再開時刻に置く', () => {
+    expect(resumeMarkers({ kind: 'relative_time' }, runs).map((marker) => marker.x)).toEqual([
+      7200, 14400,
+    ]);
+    expect(resumeMarkers({ kind: 'wall_time' }, runs)[0]!.x).toBe(
+      Date.parse('2026-10-08T02:00:00Z'),
+    );
+  });
+
+  it('メトリクスのx軸には再開位置が無いので置かない', () => {
+    expect(resumeMarkers({ kind: 'metric', metricKey: 'epoch' }, runs)).toEqual([]);
+  });
+});
+
+describe('x位置の値', () => {
+  const points = [
+    { x: 0, value: 1 },
+    { x: 10, value: 2 },
+    { x: 4, value: 3 },
+  ];
+
+  it('並んでいない点からも最も近い点を返す', () => {
+    expect(nearestPointIndex(points, 5)).toBe(2);
+  });
+
+  it('線のx範囲の外では値を出さない', () => {
+    expect(nearestPointIndex(points, 11)).toBeNull();
+    expect(nearestPointIndex([], 1)).toBeNull();
+  });
+});
+
+describe('描く前の系列の準備', () => {
+  it('色はRun IDから決まり、並べ替えても同じRunは同じ色になる', () => {
+    const run = (id: string) => ({ id, label: id, kind: 'run' as const, points: [] });
+    const options = { xScale: 'linear' as const, yScale: 'linear' as const, smoothing: { kind: 'none' as const, weight: 0 } };
+    const forward = prepareChartLines([run('a'), run('b')], options);
+    const reversed = prepareChartLines([run('b'), run('a')], options);
+    expect(reversed[1]!.color).toBe(forward[0]!.color);
+    expect(prepareChartLines([{ ...run('a'), color: '#123456' }], options)[0]!.color).toBe('#123456');
+  });
+
+  it('対数軸に置けない点を除いてから平滑化し、除いた件数を残す', () => {
+    const [line] = prepareChartLines(
+      [
+        {
+          id: 'a',
+          label: 'A',
+          kind: 'run',
+          points: [
+            { x: 1, value: 1 },
+            { x: 2, value: -100 },
+            { x: 3, value: 2 },
+          ],
+        },
+      ],
+      { xScale: 'linear', yScale: 'log', smoothing: { kind: 'running_average', weight: 1 } },
+    );
+    expect(line!.excludedCount).toBe(1);
+    expect(line!.smoothedValues).toEqual([1, 1.5]);
+  });
+});
+
+describe('tooltipの値', () => {
+  const options = { xScale: 'linear' as const, yScale: 'linear' as const, smoothing: { kind: 'none' as const, weight: 0 } };
+  const lines = prepareChartLines(
+    ['a', 'b', 'c'].map((id, index) => ({
+      id,
+      label: id,
+      kind: 'run' as const,
+      points: [
+        { x: 0, value: index },
+        { x: 10, value: index + 1 },
+      ],
+    })),
+    options,
+  );
+
+  it('値の大きい順に並べ、上限を超えた件数を返す', () => {
+    const { rows, hiddenRowCount } = valuesAtX(lines, 9, { highlightedId: null, maxRows: 2 });
+    expect(rows.map((row) => [row.id, row.value])).toEqual([
+      ['c', 3],
+      ['b', 2],
+    ]);
+    expect(hiddenRowCount).toBe(1);
+  });
+
+  it('強調中の系列は値にかかわらず先頭に出す', () => {
+    const { rows } = valuesAtX(lines, 9, { highlightedId: 'a', maxRows: 2 });
+    expect(rows.map((row) => row.id)).toEqual(['a', 'c']);
+  });
+
+  it('平滑化した値には元の値を添える', () => {
+    const [smoothed] = prepareChartLines(
+      [{ id: 'a', label: 'a', kind: 'run', points: [{ x: 0, value: 0 }, { x: 1, value: 10 }] }],
+      { ...options, smoothing: { kind: 'running_average', weight: 1 } },
+    );
+    expect(valuesAtX([smoothed!], 1, { highlightedId: null, maxRows: 5 }).rows).toEqual([
+      { id: 'a', label: 'a', color: smoothed!.color, value: 5, rawValue: 10 },
     ]);
   });
 });

@@ -1,0 +1,190 @@
+/* Metric chart (components/charts): controls, legend, plot layer and tooltip. */
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin: 4px 0 12px;
+  font-size: 12px;
+}
+.chart-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.chart-control label {
+  color: var(--muted);
+}
+.chart-control select {
+  padding: 6px 8px;
+  border-color: var(--border);
+}
+.chart-weight input[type='range'] {
+  width: 120px;
+  accent-color: var(--teal);
+}
+.chart-weight output {
+  min-width: 3ch;
+}
+.chart-toggle {
+  padding: 0;
+  gap: 6px;
+}
+
+.metrics-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.metrics-chart-canvas {
+  position: relative;
+  width: 100%;
+  background: var(--background);
+  user-select: none;
+}
+.metrics-chart-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+}
+.chart-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* 200 Runs make a long legend: it scrolls instead of pushing the plot down. */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  max-height: 72px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.chart-legend-item:hover,
+.chart-legend-item:focus-visible {
+  background: var(--surface-hover);
+}
+.chart-legend-item[aria-pressed='false'] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.chart-legend-item[aria-pressed='false'] .chart-legend-swatch {
+  opacity: 0.3;
+}
+.chart-legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-legend-swatch {
+  display: inline-block;
+  flex: none;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+.chart-legend-swatch.group {
+  height: 8px;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.chart-line.group {
+  stroke-width: 2.4;
+}
+.chart-line.highlighted {
+  stroke-width: 3;
+}
+.chart-raw-line {
+  fill: none;
+  stroke-width: 1;
+  opacity: 0.25;
+}
+.chart-band {
+  stroke: none;
+  opacity: 0.12;
+}
+.chart-band.group {
+  opacity: 0.2;
+}
+.chart-line.dimmed,
+.chart-raw-line.dimmed,
+.chart-band.dimmed {
+  opacity: 0.08;
+}
+.chart-marker line {
+  stroke: var(--muted);
+  stroke-dasharray: 4 3;
+}
+.chart-marker text {
+  fill: var(--muted);
+  font-size: 10px;
+}
+.chart-cursor {
+  stroke: var(--muted);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.chart-zoom-selection {
+  fill: var(--teal);
+  opacity: 0.12;
+  pointer-events: none;
+}
+.chart-pointer-area {
+  fill: transparent;
+  cursor: crosshair;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  max-width: 360px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  pointer-events: none;
+}
+.chart-tooltip-x {
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+.chart-tooltip table {
+  border-collapse: collapse;
+}
+.chart-tooltip td {
+  padding: 1px 6px 1px 0;
+  border: 0;
+}
+.chart-tooltip-label {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-tooltip-raw {
+  color: var(--muted);
+}
+.chart-tooltip-more {
+  margin-top: 4px;
+  color: var(--muted);
+}
