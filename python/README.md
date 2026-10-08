@@ -224,6 +224,47 @@ mado-tracking sync --project-id P --prune   # Project Pの分だけ送り、送�
 | システムメトリクス | `start_run(system_metrics=True)` | 既定で有効 | `mlflow.enable_system_metrics_logging()` |
 | 既定と止め方 | 既定で無効。`MMT_SYSTEM_METRICS=false`でコードの指定も止める | 既定で有効。`wandb.init(settings=...)`で止める | 既定で無効（`MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING`で切替） |
 
+### stepごとの音声・画像・表・動画（media）
+
+```bash
+python3 -m pip install 'mado-tracking[media]'   # numpy配列とPIL画像を渡すときだけ（numpy、Pillow）
+```
+
+```python
+import numpy as np
+import mado_tracking
+from mado_tracking import Audio, Table
+
+with mado_tracking.start_run(project_id="project-id", experiment_id="experiment-id", name="tts") as run:
+    for step in range(1, 1001):
+        run.log_metrics({"loss": loss}, step=step)
+        if step % 100:
+            continue
+        # stepを省くと、最後にlog_metricsしたstep（再開したRunでは続きのstep）で記録する
+        run.log_audio("inference/sample", waveform, sample_rate=16000, caption="prompt 1")
+        run.log_image("inference/spectrogram", mel)          # HxWのfloat [0,1]
+        run.log_table("evaluation/samples", Table(
+            columns=["audio", "transcript", "score"],
+            rows=[[Audio(wav, sample_rate=16000), text, score] for wav, text, score in samples],
+        ))
+```
+
+- **入力**: `log_audio`はpath・bytes（WAV・FLAC・MP3・OGG・M4A）・numpy配列（floatは[-1,1]を16bit PCM、範囲外はclip。int16はそのまま。`(frames,)`か`(frames, channels)`のmono/stereo。`sample_rate`が必須）。`log_image`はpath・bytes・numpy配列（HxW／HxWx3／HxWx4。uint8、floatは[0,1]）・PIL.Image。`log_video`はpath・bytesだけで、変換はしない（ブラウザで再生できるmp4（H.264）かwebmを推奨）。種類は拡張子、無ければ先頭bytesで判定し、別の種類のファイル（`log_image`に音声など）や判定できないbytesは`ConfigurationError`。numpy配列のWAV化・PNG化は標準ライブラリで行うので、numpy・Pillow・pandasが無い環境でもpathとbytesは使える。値クラス`Audio`・`Image`・`Video`（`caption=`付き）を直接渡してもよい。
+- **表**: `log_table(key, table, step=)`は`Table(columns, rows)`、MLflowのsplit形式の`{columns, data}`、pandas.DataFrameを受け取る。セルの`Audio`・`Image`・`Video`は表と同じ場所へ別のArtifactとして保存し、表はMLflow `log_table`と同じ`orient='split'`のJSONに`{type:'audio'|'image'|'video', filepath}`のセルを入れて保存する。別のRunのArtifactは`artifact_reference(run_id, path)`（文字列`mmt-artifact://runs/<runId>/<path>`）をセルに置く。NaNはnullになる。
+- **保存場所と登録**: ファイルは`media/<key>/step-<step>/<uuid>.<拡張子>`のArtifact（keyの`/`はそのまま階層になり、Artifact一覧でも辿れる）。保存のあと`POST /projects/:p/runs/:r/media`で登録する。media idはSDKがUUIDで決めるので、応答が失われた再送でも件数は増えない。metadataには、配列から作った音声は`{sampleRate, channels}`、画像は`{width, height}`、表は`{rowCount, columnCount}`が入る。keyは1〜250文字で、空・`.`・`..`の区切り、バックスラッシュ、制御文字、`%xx`は使えない。
+- **オフライン**: `mode="offline"`ではファイルをspoolへ複製して`media.jsonl`に書き、`mado-tracking sync`がArtifactのあとに同じidで登録する。`mode="auto"`で登録がAPIに届かなければ、ファイルごとspoolへ記録し直す。
+- **例**: `examples/media_logging.py`（100 stepごとに推論音声・スペクトログラム・評価表を記録する。`--mode offline`でAPIなしに動く）。
+
+| やりたいこと | Mado | MLflow |
+| --- | --- | --- |
+| stepつきの画像 | `run.log_image(key, image, step=)` | `mlflow.log_image(image, key=, step=)` |
+| 音声 | `run.log_audio(key, data, step=, sample_rate=)` | （無い。`log_artifact`） |
+| 動画 | `run.log_video(key, path, step=)` | （無い。`log_artifact`） |
+| 表 | `run.log_table(key, table, step=)` | `mlflow.log_table(data, artifact_file=)`（stepなし） |
+| 表の中の画像 | セルに`Image(...)`（音声・動画も可） | DataFrameのセルにPIL画像 |
+
+MLflowの`log_image(key=, step=)`と`log_table`で記録したものも、同じmediaの画面（stepのスライダー、表）に出る（`docs/api-contract.md`の「Runのmedia」）。
+
 ### Sweep
 
 - 学習コードで試行のparametersを読む: `from mado_tracking import trial_parameters` → `trial_parameters({"lr": 0.05})`。`MMT_PARAMETERS_JSON`（無ければ`MMT_PARAMETERS_FILE`）をdefaultsに上書きして返す。workerの外ではdefaultsをそのまま返す。値はJSONの型のまま。

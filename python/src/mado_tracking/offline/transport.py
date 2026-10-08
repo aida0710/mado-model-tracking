@@ -8,6 +8,7 @@ import socket
 import sys
 import threading
 from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, BinaryIO, Literal, Protocol, TypeVar
 
@@ -35,6 +36,21 @@ SYNC_ORIGIN_MAX_LENGTH = 200
 Result = TypeVar("Result")
 
 
+@dataclass(frozen=True)
+class RunMediaItem:
+    """A media item to register after its file is stored at artifact_path. The id is chosen by the
+    SDK so a resent registration, online or from the spool, does not add a second item."""
+
+    id: str
+    key: str
+    step: int
+    kind: str
+    artifact_path: str
+    mime_type: str
+    caption: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class RunTransport(Protocol):
     """The write side of a Run. Methods that change the Run return its new entity when known."""
 
@@ -57,6 +73,9 @@ class RunTransport(Protocol):
     def log_artifact(
         self, source: Path | BinaryIO, *, path: str, mime_type: str, copy: bool
     ) -> dict[str, Any]: ...
+
+    def log_media(self, source: Path, media: RunMediaItem) -> dict[str, Any]:
+        """Store source as the Artifact media.artifact_path, then register it as Run media."""
 
     def close(self) -> None: ...
 
@@ -165,6 +184,23 @@ class HttpRunTransport:
             if isinstance(source, Path):
                 stream.close()
 
+    def log_media(self, source: Path, media: RunMediaItem) -> dict[str, Any]:
+        artifact = self.log_artifact(source, path=media.artifact_path, mime_type=media.mime_type, copy=True)
+        item = {
+            "id": media.id,
+            "key": media.key,
+            "step": media.step,
+            "kind": media.kind,
+            "artifactId": artifact["id"],
+            "caption": media.caption,
+            "metadata": media.metadata,
+        }
+        # The media id makes the POST idempotent, so a lost response can be retried.
+        created = self.client.request(
+            "POST", f"{self.run_path}/media", json={"items": [item]}, retryable=True
+        )
+        return dict(created["items"][0])
+
     def close(self) -> None:
         pass
 
@@ -205,6 +241,18 @@ class SpoolRunTransport:
         self, source: Path | BinaryIO, *, path: str, mime_type: str, copy: bool
     ) -> dict[str, Any]:
         return self.spool.add_artifact(source, path=path, mime_type=mime_type, copy=copy)
+
+    def log_media(self, source: Path, media: RunMediaItem) -> dict[str, Any]:
+        self.spool.add_artifact(source, path=media.artifact_path, mime_type=media.mime_type, copy=True)
+        return self.spool.add_media(
+            key=media.key,
+            step=media.step,
+            kind=media.kind,
+            artifact_path=media.artifact_path,
+            caption=media.caption,
+            metadata=media.metadata,
+            media_id=media.id,
+        )
 
     def close(self) -> None:
         self.spool.close()
@@ -258,6 +306,10 @@ class AutoRunTransport:
         return self._send(
             lambda transport: transport.log_artifact(source, path=path, mime_type=mime_type, copy=copy)
         )
+
+    def log_media(self, source: Path, media: RunMediaItem) -> dict[str, Any]:
+        # Spooling stores the file again: sync needs it in the spool even if the upload succeeded.
+        return self._send(lambda transport: transport.log_media(source, media))
 
     def close(self) -> None:
         if self._offline is not None:

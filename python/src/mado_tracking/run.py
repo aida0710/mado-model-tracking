@@ -10,11 +10,25 @@ from collections.abc import Mapping
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, BinaryIO, Literal
+from uuid import uuid4
 
 from .checkpoints import ResumeCheckpoint, log_checkpoint, resume_checkpoint_from_environment
 from .client import path_id
 from .errors import ConfigurationError
-from .offline.transport import ARTIFACT_CHUNK_BYTES, HttpRunTransport, RunTransport
+from .media import (
+    TABLE_MIME_TYPE,
+    Audio,
+    Image,
+    MediaFile,
+    MediaKind,
+    MediaValue,
+    Table,
+    Video,
+    media_artifact_path,
+    validate_media_key,
+    validate_step,
+)
+from .offline.transport import ARTIFACT_CHUNK_BYTES, HttpRunTransport, RunMediaItem, RunTransport
 from .security import SecretMasker, secret_values
 from .system_metrics import DEFAULT_SYSTEM_METRICS_SECONDS, SystemMetricsMonitor
 from .timestamps import utc_timestamp
@@ -216,6 +230,91 @@ class Run:
             raise ConfigurationError("path is required for a binary stream")
         content_type = mime_type or mimetypes.guess_type(path)[0] or "application/octet-stream"
         return self.transport.log_artifact(source, path=path, mime_type=content_type, copy=copy)
+
+    @property
+    def current_step(self) -> int:
+        """The step media is logged at without a step: the largest metric step logged so far
+        (continuing after a resume), else 0, as in W&B."""
+        return max(self._last_steps.values(), default=0)
+
+    def log_audio(
+        self,
+        key: str,
+        data: Any,
+        *,
+        step: int | None = None,
+        sample_rate: int | None = None,
+        caption: str | None = None,
+    ) -> dict[str, Any]:
+        """Log audio at step: a path, bytes, an Audio, or a numpy array with sample_rate (saved as WAV).
+
+        Online this returns the registered RunMedia; offline, the spooled media record.
+        """
+        audio = data if isinstance(data, Audio) else Audio(data, sample_rate=sample_rate)
+        return self._log_media_value(key, audio, step=step, caption=caption)
+
+    def log_image(
+        self, key: str, image: Any, *, step: int | None = None, caption: str | None = None
+    ) -> dict[str, Any]:
+        """Log an image at step: a path, bytes, an Image, a PIL.Image or a numpy array (saved as PNG)."""
+        value = image if isinstance(image, Image) else Image(image)
+        return self._log_media_value(key, value, step=step, caption=caption)
+
+    def log_video(
+        self, key: str, video: Any, *, step: int | None = None, caption: str | None = None
+    ) -> dict[str, Any]:
+        """Log an encoded video file (path, bytes or Video) at step; it is stored as it is."""
+        value = video if isinstance(video, Video) else Video(video)
+        return self._log_media_value(key, value, step=step, caption=caption)
+
+    def log_table(self, key: str, table: Any, *, step: int | None = None) -> dict[str, Any]:
+        """Log a Table, {columns, data} or pandas.DataFrame at step as MLflow's split JSON.
+
+        Audio/Image/Video cells are stored first as Artifacts next to the table and written as
+        {type, filepath} cells, the form MLflow uses for image cells.
+        """
+        validate_media_key(key)
+        media_step = self._media_step(step)
+        value = Table.from_value(table)
+        stored_cells: dict[tuple[int, int], dict[str, str]] = {}
+        for row, column, cell in value.media_cells():
+            cell_path = media_artifact_path(key, media_step, cell.file.extension)
+            with cell.file.local_path() as source:
+                self.transport.log_artifact(source, path=cell_path, mime_type=cell.file.mime_type, copy=True)
+            stored_cells[(row, column)] = {"type": cell.kind, "filepath": cell_path}
+        table_file = MediaFile(
+            TABLE_MIME_TYPE,
+            "json",
+            {"rowCount": len(value.rows), "columnCount": len(value.columns)},
+            content=value.split_json(stored_cells),
+        )
+        return self._log_media_file(key, "table", table_file, step=media_step, caption=None)
+
+    def _log_media_value(
+        self, key: str, value: MediaValue, *, step: int | None, caption: str | None
+    ) -> dict[str, Any]:
+        return self._log_media_file(
+            key, value.kind, value.file, step=self._media_step(step), caption=caption or value.caption
+        )
+
+    def _log_media_file(
+        self, key: str, kind: MediaKind, file: MediaFile, *, step: int, caption: str | None
+    ) -> dict[str, Any]:
+        media = RunMediaItem(
+            id=str(uuid4()),
+            key=key,
+            step=step,
+            kind=kind,
+            artifact_path=media_artifact_path(key, step, file.extension),
+            mime_type=file.mime_type,
+            caption=caption,
+            metadata=file.metadata,
+        )
+        with file.local_path() as source:
+            return self.transport.log_media(source, media)
+
+    def _media_step(self, step: int | None) -> int:
+        return self.current_step if step is None else validate_step(step)
 
     def _metric_step(self, name: str, step: int | None) -> int:
         if step is not None:
