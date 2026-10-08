@@ -150,7 +150,7 @@ export class ArtifactService {
             size: stored.size,
             sha256: stored.sha256,
           },
-          upload.onStored,
+          { stores: this.stores, onStored: upload.onStored },
         );
       });
     } catch (error) {

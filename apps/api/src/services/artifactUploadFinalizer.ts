@@ -194,17 +194,21 @@ export class ArtifactUploadFinalizer {
         });
         if (stage !== 'active') return 'run_deleted';
       }
-      const artifact = await registerStoredArtifact(connection, {
-        id: upload.id,
-        projectId: upload.projectId,
-        runId: upload.runId,
-        path: upload.path,
-        backend: upload.backend,
-        storageKey: upload.storageKey,
-        mimeType: upload.mimeType,
-        size: stored.size,
-        sha256: stored.sha256,
-      });
+      const artifact = await registerStoredArtifact(
+        connection,
+        {
+          id: upload.id,
+          projectId: upload.projectId,
+          runId: upload.runId,
+          path: upload.path,
+          backend: upload.backend,
+          storageKey: upload.storageKey,
+          mimeType: upload.mimeType,
+          size: stored.size,
+          sha256: stored.sha256,
+        },
+        { stores: this.options.stores },
+      );
       await this.options.onRegistered?.(connection, upload, artifact);
       await connection.query(
         `UPDATE artifact_uploads SET status='completed',artifact_id=$2,error=NULL,

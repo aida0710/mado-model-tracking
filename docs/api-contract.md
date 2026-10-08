@@ -266,6 +266,15 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - 監査: `storage.backend.create`／`storage.backend.update`（変更した項目名）／`storage.backend.test`（`ok`と失敗した段階）／`storage.settings.update`（新旧の既定）。detailsにsecret、access key id、CAの本文を入れない。403・409は`denied`として記録する。
 - DB由来のsecretを現在の鍵で復号できない保存先は起動時に`storage_backend_unavailable`をログへ出し（名前と理由だけ）、その保存先のArtifactは503 `artifact_read_failed`になる。
 - `scripts/verify_s3_artifacts.ts`は`MMT_VERIFY_S3_BACKEND=<名前>`でDB上のS3保存先を検証する（`MMT_DATABASE_URL`と`MMT_STORAGE_SECRET_KEY`が必要。結果に値を出さない）。
+## Artifactのmedia情報
+
+音声の長さ・sample rate・チャンネル数を、1件ずつdecodeせずに一覧や評価サンプル表へ出すため、登録時にヘッダーから求めて`artifact_media_info`に保存する。依存を増やさないためWAVとFLACのヘッダーだけを読む（ほかの形式はpreview workerのffprobeで後から足し、`source='ffprobe'`になる）。
+
+- 対象はmime typeが`audio/wav`・`audio/x-wav`・`audio/wave`・`audio/flac`・`audio/x-flac`のArtifact。native・MLflow・upload sessionのどの経路でも、登録のtransaction内で保存先から先頭64KiBをRangeで読む。WAVは`fmt `（`WAVE_FORMAT_EXTENSIBLE`はSubFormatとvalid bits）と`data` chunk、FLACは`fLaC`直後のSTREAMINFOを解析する。`data` chunkが先頭64KiBより後ろ、圧縮WAV、総サンプル数0のFLAC、壊れたヘッダーは保存しない（推測で埋めない）。`data`の宣言sizeがファイル末尾を超える場合は実際に残っているbyte数で長さを求める。
+- 読み込み・解析・保存の失敗はsavepointで戻し、Artifactの登録は成功させる（ログは`artifact_media_info_failed`）。この機能より前に登録したArtifactには無い。
+- `GET /projects/:p/artifacts/:a/media-info` → ArtifactMediaInfo `{artifactId,durationSeconds,sampleRate,channels,bitsPerSample:number|null,codec,source:'header'}`。viewer+`read`。media情報が無い、または別ProjectのArtifactは404 `not_found`。`codec`はffprobeの`codec_name`と同じ名前（`pcm_s16le`、`pcm_s24le`、`pcm_f32le`、`pcm_alaw`、`flac`など）。
+- `GET /projects/:p/artifact-media-info?artifactIds=<id>,<id>,…` → `{items:ArtifactMediaInfo[]}`。viewer+`read`。IDはカンマ区切りで重複を除き最大200件（`ARTIFACT_MEDIA_INFO_BATCH_LIMIT`）。超過・UUIDでない値は422 `invalid_request`。media情報が無いIDや別ProjectのIDは結果から除くだけでエラーにしない。
+- Webの音声viewerはdecode前でもmedia情報があれば長さ・sample rate・チャンネル数を表示し、decode結果が出たらそちらを正として置き換える。
 
 ## Platform保存API（親担当）
 
