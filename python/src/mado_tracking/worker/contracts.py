@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID
 
@@ -14,6 +14,8 @@ from ..execution_snapshot import resolve_execution_snapshot
 RUN_KINDS = {"inference", "evaluation", "training", "finetuning", "processing"}
 TERMINAL_STATUSES = {"finished", "failed", "canceled"}
 ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# Job tokens are what the Job's own code authenticates with; the worker token never reaches it.
+JOB_TOKEN = re.compile(r"^mmtj_[A-Za-z0-9_-]+$")
 
 
 def require_uuid(value: object, field: str) -> str:
@@ -34,6 +36,8 @@ class WorkerJob:
     code_version: dict[str, Any]
     model_version: dict[str, Any] | None
     input_datasets: list[dict[str, Any]]
+    # Only claim/resume of a not-yet-started Job carries one; the journal keeps it afterwards.
+    job_token: str | None = field(default=None, repr=False)
 
     @classmethod
     def parse(cls, payload: dict[str, Any]) -> WorkerJob:
@@ -45,6 +49,7 @@ class WorkerJob:
                 payload["codeVersion"],
                 payload["modelVersion"],
                 payload["inputDatasets"],
+                payload.get("jobToken"),
             )
             snapshot.validate()
         except (KeyError, TypeError, AttributeError):
@@ -78,6 +83,10 @@ class WorkerJob:
             ("codeVersion", self.code_version),
         ):
             require_uuid(entity["id"], f"{entity_name}.id")
+        if self.job_token is not None and (
+            not isinstance(self.job_token, str) or not JOB_TOKEN.fullmatch(self.job_token)
+        ):
+            raise ConfigurationError("WorkerJob has an invalid job token")
         if not isinstance(self.job.get("leaseId"), str) or not self.job["leaseId"]:
             raise ConfigurationError("WorkerJob has no lease")
         if self.job["status"] not in {"claimed", "running"}:

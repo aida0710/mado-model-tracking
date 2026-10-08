@@ -7,6 +7,7 @@ import base64
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 from ..errors import ApiError, ConfigurationError, LeaseRejected, TransportError
@@ -38,8 +39,10 @@ class JobSession:
         settings: WorkerSettings,
         journal: JobJournal,
         executor: JobExecutor,
+        reissued_job_token: Callable[[], str | None] = lambda: None,
     ):
         self.job = job
+        self.reissued_job_token = reissued_job_token
         self.api = api
         self.settings = settings
         self.journal = journal
@@ -141,8 +144,32 @@ class JobSession:
             if await self.api.heartbeat(self.job) or self.cancel_requested.is_set():
                 await self.complete({"status": "canceled", "exit_code": None, "error": None})
                 return
+            self.adopt_reissued_job_token()
             await self.retry_transport(self.executor.start)
+            await self.report_started()
         self.running = state["status"] in {"starting", "running"} or state["status"] == "missing"
+
+    def adopt_reissued_job_token(self) -> None:
+        token = self.reissued_job_token()
+        if token is None or token == self.job.job_token:
+            return
+        self.job = replace(self.job, job_token=token)
+        self.executor.job = self.job
+        self.executor.masker.add(token)
+        self.persist()
+
+    async def report_started(self) -> None:
+        # The API re-issues the Job token while the Job is still `claimed`; reporting `running`
+        # right after launch keeps a worker restart from revoking the token the process holds.
+        try:
+            if await self.api.heartbeat(self.job, running=True):
+                self.cancel_requested.set()
+        except LeaseRejected:
+            self.lease_rejected.set()
+        except (ApiError, ConfigurationError) as error:
+            LOGGER.warning(
+                "Job %s start report failed: %s", self.job.id, self.executor.masker.mask(str(error))
+            )
 
     async def prepare_container_inputs(self) -> bool:
         try:

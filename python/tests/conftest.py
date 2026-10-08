@@ -65,6 +65,7 @@ def job_payload(tmp_path: Path) -> dict:
         },
         "modelVersion": None,
         "inputDatasets": [],
+        "jobToken": "mmtj_test-job-token",
     }
 
 

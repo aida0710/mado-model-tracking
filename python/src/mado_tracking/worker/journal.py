@@ -6,6 +6,7 @@ import fcntl
 import json
 import logging
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -24,7 +25,20 @@ def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
         "codeVersion": job.code_version,
         "modelVersion": job.model_version,
         "inputDatasets": job.input_datasets,
+        # The state directory is private (0700/0600); the token is stored nowhere else.
+        "jobToken": job.job_token,
     }
+
+
+def with_saved_job_token(job: WorkerJob, record: dict[str, Any]) -> WorkerJob:
+    """Keep the token a started process already holds when the API returns none (resume)."""
+    snapshot = record.get("snapshot")
+    if job.job_token is not None or not isinstance(snapshot, dict):
+        return job
+    saved_token = snapshot.get("jobToken")
+    if not isinstance(saved_token, str) or snapshot.get("job", {}).get("leaseId") != job.lease_id:
+        return job
+    return replace(job, job_token=saved_token)
 
 
 class JobJournal:

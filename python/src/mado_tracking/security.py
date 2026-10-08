@@ -17,6 +17,10 @@ class SecretMasker:
     def __init__(self, secrets: Iterable[str] = ()):
         self.secrets = tuple(sorted({value for value in secrets if value}, key=len, reverse=True))
 
+    def add(self, secret: str) -> None:
+        # Maskers are shared by reference with transports, so a secret learned later covers all output.
+        self.secrets = tuple(sorted({*self.secrets, secret} - {""}, key=len, reverse=True))
+
     def mask(self, message: str) -> str:
         for value in self.secrets:
             message = message.replace(value, REDACTED)

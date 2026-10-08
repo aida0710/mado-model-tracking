@@ -125,6 +125,17 @@ ModelVersion登録のtransaction内で、同じ系列の有効ruleを判定し�
 - GPUなしのCPU実行はgpuIds=[]。実際のGPU計測はnvidia-smiで任意に採取。WorkerはAPI/ログへ鍵・token・シークレット値を出さない。
 - 環境: `MMT_API_URL`, `MMT_API_TOKEN`, `MMT_WORKER_ID`, `MMT_WORKER_TARGET_IDS`。SDKはstart_run、log_params/tags/metrics、log_artifact、register_model/dataset等を提供。例と実行する小さいtraining/inference scriptを同梱する。
 
+### Job限定token
+
+- `WorkerJob.jobToken:string|null`。claim/resumeで返すJobが`claimed`（まだ実行コードを起動していない）なら、そのJobの既存Job tokenを失効させて新しく発行し、値を一度だけ返す。claim応答が失われて同じJobが再度返る場合も再発行され、旧tokenは401になる。`running`のJobでは`null`（実行中のprocessは既にtokenを持ち、workerはjournalに保存した値を使う）。workerは実行開始の直後に`status:'running'`のheartbeatを送り、再起動時の再発行で実行中processのtokenを失効させないようにする。準備中のJobがclaim失敗後のresumeで再発行を受けた場合、workerは実行コードの起動直前に新しいtokenへ切り替える。
+- 接頭辞`mmtj_`＋32 byteの乱数。DBにはSHA-256 hashだけを保存する（`job_tokens`）。principalはRunの作成者（`users.status='active'`）、`method='token'`、scopeは`read`,`runs:write`,`artifacts:write`,`registry:write`。Project権限はRun作成者の現在のmembershipで判定する（外されると403）。
+- 有効なのは、失効しておらず、Jobが発行時と同じleaseのまま`claimed`/`running`の間だけ。終端（finished/failed/canceled）やleaseの変更で401。
+- 読み出しはtokenのProject配下（`GET|HEAD /projects/:p/*`、`/mlflow/projects/:p/*`）と、読むだけのsearch（`POST /projects/:p/runs/search`、MLflowの`runs/search`・`experiments/search`・`logged-models/search`・`registered-models/get-latest-versions`）。
+- 書き込みは次の許可表に一致したものだけ。それ以外（`/worker/*`、Run作成、他Runへの書き込み、token発行、Project設定、自動実行rule等）は403 `job_token_forbidden`（MLflowは`PERMISSION_DENIED`）。許可表に無いrouteは追加されても既定で拒否される。
+  - native: `PATCH /projects/:p/runs/:r`、`POST .../runs/:r/metrics`、`POST .../runs/:r/logs`、`PUT .../runs/:r/artifacts`（`:r`がtokenのRun）。`POST /projects/:p/artifact-uploads`（`body.runId`がtokenのRun）と、そのsessionの`PUT .../parts/:n`・`POST .../complete`・`POST .../abort`・`DELETE /artifact-uploads/:u`（sessionの`run_id`がtokenのRun）。`POST /projects/:p/models`。`POST .../models/:m/versions`と`POST .../datasets/:d/versions`（`body.sourceRunId`がtokenのRun）。
+  - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
+- workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
+
 ## Platform保存API（親担当）
 
 `@mmt/platform`は`createArtifactStoresFromEnv(env?)` → `ArtifactStores`をexportする。`stores.backends():ArtifactBackend[]`、`stores.put({backend,key,body:Readable,mimeType})` → `{size,sha256}`、`stores.read({backend,key,range?:string})` → `{body:Readable,size,totalSize,contentRange?:string,status:200|206}`。`stores.remove({backend,key})`。keyはprojectId/artifactId配下の不変ID。登録DB失敗時は書いたblobをcleanup。streamingでGBファイルを全量メモリへ載せない。`.env`設定は`ARTIFACT_FILESYSTEM_ROOT`、`S3_BUCKET`, `S3_ENDPOINT?`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`。FSは常時available、S3は必要設定がある場合available。

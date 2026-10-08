@@ -12,7 +12,7 @@ from .config import WorkerSettings
 from .contracts import WorkerJob
 from .event_wait import wait_interval
 from .job_responses import InvalidWorkerJob
-from .journal import JobJournal
+from .journal import JobJournal, with_saved_job_token
 from .runtime import JobExecutor
 from .session import JobSession
 
@@ -34,6 +34,8 @@ class Worker:
         self.stopping = asyncio.Event()
         self.tasks: dict[str, asyncio.Task[None]] = {}
         self.retained_job_ids: set[str] = set()
+        # Tokens the API re-issued for Jobs whose task already runs (resume after a failed claim).
+        self.reissued_job_tokens: dict[str, str] = {}
         self.resume_available = True
 
     async def run_job(self, job: WorkerJob) -> None:
@@ -42,6 +44,7 @@ class Worker:
         if self.settings.target_ids and job.target["id"] not in self.settings.target_ids:
             raise ConfigurationError("Job target is outside this worker's configured targets")
         record = self.journal.load(job.id)
+        job = with_saved_job_token(job, record)
         if "snapshot" in record and record["snapshot"]["job"]["leaseId"] != job.lease_id:
             raise ConfigurationError("Saved job lease differs; refusing a replacement execution")
         if "snapshot" in record:
@@ -60,12 +63,19 @@ class Worker:
         try:
             executor = self.executor_factory(job, self.settings)
             session = JobSession(
-                job, api=self.api, settings=self.settings, journal=self.journal, executor=executor
+                job,
+                api=self.api,
+                settings=self.settings,
+                journal=self.journal,
+                executor=executor,
+                reissued_job_token=lambda: self.reissued_job_tokens.get(job.id),
             )
             await session.execute()
         except LeaseRejected:
             self.journal.record_rejection(job)
             LOGGER.error("Job %s lease rejected; no new execution was started", job.id)
+        finally:
+            self.reissued_job_tokens.pop(job.id, None)
 
     async def recover(self) -> list[WorkerJob]:
         pending = {job.id: job for job in self.journal.pending()}
@@ -110,6 +120,9 @@ class Worker:
     def launch(self, job: WorkerJob) -> None:
         if job.id not in self.tasks:
             self.tasks[job.id] = asyncio.create_task(self.run_job(job))
+        elif job.job_token is not None:
+            # Re-issuing revoked the token the task holds; it adopts this one before launching code.
+            self.reissued_job_tokens[job.id] = job.job_token
 
     def collect_finished(self) -> None:
         for job_id, task in list(self.tasks.items()):
