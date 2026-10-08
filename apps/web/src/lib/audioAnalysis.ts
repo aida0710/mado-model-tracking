@@ -1,12 +1,15 @@
 // Pure audio analysis for the artifact viewer: waveform peaks and STFT spectrograms (linear or mel).
 // Runs inside workers/audioAnalysis.worker.ts and in unit tests, so it must not touch the DOM.
 
+import { BROWSER_AUDIO_ANALYSIS_MAX_BYTES } from '@mmt/contracts';
+
 /**
  * The viewer fetches the whole file and decodes it into Float32 PCM. Decoded PCM is several times
  * the compressed size (a 64MiB MP3 can expand past 1GiB at 48kHz stereo), and a browser tab is
- * usually killed around 2-4GiB, so files above this size are played without analysis.
+ * usually killed around 2-4GiB, so files above this size are played without analysis. The server
+ * makes previews above the same size.
  */
-export const AUDIO_ANALYSIS_MAX_BYTES = 64 * 1024 * 1024;
+export const AUDIO_ANALYSIS_MAX_BYTES = BROWSER_AUDIO_ANALYSIS_MAX_BYTES;
 export const STFT_FFT_SIZE = 1024;
 // Minimum hop. Long ranges use a larger hop so the frame count stays near the drawn width.
 export const STFT_HOP_SIZE = 256;

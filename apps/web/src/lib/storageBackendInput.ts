@@ -41,6 +41,7 @@ export function createStorageBackendValues(): FormValues {
     caBundle: '',
     clearCaBundle: 'false',
     checksumMode: 'when_required',
+    multipartEnabled: 'true',
     multipartPartSizeMib: String(DEFAULT_MULTIPART_PART_SIZE_MIB),
     accessKeyId: '',
     secretAccessKey: '',
@@ -63,6 +64,7 @@ export function updateStorageBackendValues(backend: StorageBackend): FormValues 
     signatureVersion: backend.signatureVersion,
     tlsVerify: String(backend.tlsVerify),
     checksumMode: backend.checksumMode,
+    multipartEnabled: String(backend.multipartEnabled ?? true),
     multipartPartSizeMib: String(Math.round(backend.multipartPartSizeBytes / MIB)),
     accessKeyId: backend.accessKeyId ?? '',
     enabled: String(backend.enabled),
@@ -113,6 +115,14 @@ export function buildStorageBackendPatch(
   return patch;
 }
 
+function getSignatureVersion(values: FormValues): StorageBackend['signatureVersion'] {
+  return getFieldValue(values, 'signatureVersion') === 'v2' ? 'v2' : 'v4';
+}
+
+export function isSignatureV2(values: FormValues): boolean {
+  return getSignatureVersion(values) === 'v2';
+}
+
 function getKind(values: FormValues): StorageBackendKind {
   return getFieldValue(values, 'kind') === 'filesystem' ? 'filesystem' : 's3';
 }
@@ -138,12 +148,13 @@ function buildS3Settings(values: FormValues): BackendSettings {
     bucket,
     prefix,
     pathStyle: isChecked(values, 'pathStyle'),
-    signatureVersion: getFieldValue(
-      values,
-      'signatureVersion',
-    ) as StorageBackend['signatureVersion'],
+    signatureVersion: getSignatureVersion(values),
     tlsVerify: isChecked(values, 'tlsVerify'),
-    checksumMode: getFieldValue(values, 'checksumMode') as StorageBackend['checksumMode'],
+    // The API stores v2 backends only with WHEN_REQUIRED, so v2 hides the choice and sends it.
+    checksumMode: isSignatureV2(values)
+      ? 'when_required'
+      : (getFieldValue(values, 'checksumMode') as StorageBackend['checksumMode']),
+    multipartEnabled: isChecked(values, 'multipartEnabled'),
     multipartPartSizeBytes: parsePartSizeMib(getFieldValue(values, 'multipartPartSizeMib')) * MIB,
     accessKeyId: accessKeyId || null,
     enabled: isChecked(values, 'enabled'),

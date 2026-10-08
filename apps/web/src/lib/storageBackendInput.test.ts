@@ -50,6 +50,7 @@ describe('保存先の作成', () => {
       signatureVersion: 'v4',
       tlsVerify: true,
       checksumMode: 'when_required',
+      multipartEnabled: true,
       multipartPartSizeBytes: 16 * 1024 * 1024,
       accessKeyId: 'AKIAEXAMPLE',
       secretAccessKey: 'example-secret',
@@ -136,6 +137,20 @@ describe('保存先の変更', () => {
   it('保存済みのpartサイズをMiBで表示し、そのまま保存すると同じbyte数を送る', () => {
     expect(updateStorageBackendValues(savedS3).multipartPartSizeMib).toBe('16');
     expect(patch().multipartPartSizeBytes).toBe(savedS3.multipartPartSizeBytes);
+  });
+  it('署名v2ではchecksumを選ばせず、必要なときだけ（WHEN_REQUIRED）で送る', () => {
+    expect(create({ signatureVersion: 'v2', checksumMode: 'when_supported' })).toMatchObject({
+      signatureVersion: 'v2',
+      checksumMode: 'when_required',
+    });
+    expect(create({ checksumMode: 'when_supported' }).checksumMode).toBe('when_supported');
+  });
+  it('multipartを使わない設定を送り、保存済みの値を表示する（未設定は使う）', () => {
+    expect(create({ multipartEnabled: 'false' }).multipartEnabled).toBe(false);
+    expect(updateStorageBackendValues(savedS3).multipartEnabled).toBe('true');
+    const withoutMultipart = { ...savedS3, multipartEnabled: false };
+    expect(updateStorageBackendValues(withoutMultipart).multipartEnabled).toBe('false');
+    expect(patch().multipartEnabled).toBe(true);
   });
   it('filesystemの変更ではS3の項目を送らない', () => {
     const filesystem: StorageBackend = {

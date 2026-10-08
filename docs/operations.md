@@ -35,9 +35,20 @@ npm run bootstrap-admin -w @mmt/api
 
 migration 010はsessionに`auth_method`を必須で追加します。migration後は新しいAPIへ入れ替えてください（古いAPIはsessionを作れません）。
 
+### ユーザーを止める・戻す（退職・異動）
+
+1. 全体管理者がブラウザで`/admin`の「ユーザー」タブを開き、対象の行で「無効化」を押します。そのユーザーのsessionは直ちに終了し、API token（MLflow互換APIを含む）も直ちに401になります。SSOユーザーはAuthentik側でもgroupから外します。外さずに再有効化すると、次回loginでgroup由来の全体roleに戻ります。
+2. 戻すときは同じ行で「有効化」を押します。API tokenは再び使えますが、終了したsessionは戻りません（再loginが必要）。
+3. 最後の有効な全体管理者は無効化・降格できません（409 `last_global_admin`）。先に別の管理者を用意します。
+4. ユーザーは削除しません。Runやモデル版の作成者の記録を保つためです。
+
+### ローカルアカウントのパスワードを忘れた
+
+全体管理者が「ユーザー」タブで「パスワード再設定」を押すと、一時パスワードが1回だけ表示されます。本人へ安全な経路で渡してください。本人の既存sessionは終了し、次回loginでパスワードの変更を求められます。全体管理者自身が締め出された場合は、上の`bootstrap-admin`で復旧します。
+
 ## 監査ログ
 
-認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`、`project.member.delete`）、SSO groupへのProject権限の付与（`project.group_binding.set`、`project.group_binding.delete`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
+認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`、`project.member.delete`）、SSO groupへのProject権限の付与（`project.group_binding.set`、`project.group_binding.delete`）、API tokenの発行・失効（`token.create`、`token.revoke`）、Service Accountの作成・変更（`service_account.create`、`service_account.update`）、全体管理者によるユーザーの作成・変更・パスワード再設定（`admin.user.create`、`admin.user.update`（変更前後のstatus・isAdmin・表示名）、`admin.user.password_reset`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
 
 Project adminは設定画面の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
 
@@ -186,14 +197,16 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 
 ### Artifact保存先の全体設定
 
-- 保存先は全体管理者が `/admin/storage-backends`（画面は storage-backend-admin-web の /admin）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4。v2 は第4波から）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
+- 保存先は全体管理者が `/admin/storage-backends`（画面は storage-backend-admin-web の /admin）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4／v2）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
 - 環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）由来の `filesystem` と `s3` は従来どおり使え、画面では読み取り専用で表示される。DB へは写さない。
 - secret を持つ S3 保存先を作るには `MMT_STORAGE_SECRET_KEY`（base64 の 32 byte）を API の環境に設定する。生成例: `openssl rand -base64 32`。値は `.env` だけに置き、worklog やチケットへ書かない。
 - **鍵を変えると、保存済みの secret は復号できなくなる。** 起動時に `storage_backend_unavailable`（名前と理由だけ）がログに出て、その保存先の Artifact は 503 になる。鍵を変えたら、各 S3 保存先の secret を PATCH で入れ直す（鍵の自動ローテーションは未実装）。
-- 新しい保存先は、作成後に「接続テスト」（put/get/range/delete を `mmt-connection-test/<uuid>/` で実施）で確かめてから既定にする。
+- 新しい保存先は、作成後に「接続テスト」（put/get/range/delete を `mmt-connection-test/<uuid>/` で実施）で確かめてから既定にする。v2 の保存先も同じ。
+- 署名 v2 は、v4 を受け付けない古い S3 互換ストレージ向け。AWS SDK は v4 しか持たないので、v2 は自前実装の署名（HMAC-SHA1）で送る。v2 では checksum を「必要なときだけ（WHEN_REQUIRED）」に固定する（WHEN_SUPPORTED との組み合わせは保存できない）。region は署名に使わない。
+- multipart が動かない S3 互換ストレージでは、保存先の `multipartEnabled` を false にする。Artifact は API の一時ディレクトリ（`os.tmpdir()`）へ書いてから 1 回の PUT で送るので、1 件 5GiB まで・一時ディレクトリに同じ容量が要る。再開可能な upload（upload session、MLflow の multipart）はこの保存先では 422 `multipart_unsupported` になる。
 - 既定の保存先（`/admin/storage-settings`）は新規Projectの作成フォームの初期選択だけを変える。既存Projectの保存先は Project 設定で個別に変える。既存Artifactは保存時の保存先から読み続ける。
 - 保存先をやめるときは `enabled:false` にする（既存Artifactは読めるが、新規保存は拒否）。既定のままでは無効にできないので、先に既定を切り替える。Artifact が参照している保存先の種類・bucket・endpoint・prefix・rootPath は変えられない（409）。
-- DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。
+- DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。署名の版は保存先の設定から使われるので、v2 の保存先もこの手順で確かめる（[検証手順](verification.md) の「実S3の保存・取得を確認する」）。
 - API プロセスが複数ある構成では、設定変更は変更を受けたプロセスで即時に効き、他のプロセスは未知の保存先名を読んだときに読み直す。有効/無効や part size の変更を全プロセスへ確実に反映するには API を再起動する。
 
 ### 音声Artifactのmedia情報
@@ -201,7 +214,19 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - WAV（`audio/wav`・`audio/x-wav`・`audio/wave`）と FLAC（`audio/flac`・`audio/x-flac`）の Artifact は、登録時に保存先から先頭 64KiB を Range で読み、長さ・sample rate・チャンネル数・bit 数・codec を `artifact_media_info` に保存する（migration 029）。ffmpeg などの追加依存は無い。
 - 読み込みや解析に失敗しても Artifact の登録は成功する。API ログに `{"event":"artifact_media_info_failed","artifactId":…,"projectId":…,"name":…}` が出る。保存先の場所や SQL の詳細は出さない。多発する場合は、保存先の Range 読み込み（S3 の GetObject Range、filesystem の読み取り権限）を確認する。
 - この機能より前に登録した Artifact には media 情報が無い（API は 404、Web は decode 後の値だけを表示）。必要になったら、`mime_type` が上記で `artifact_media_info` に行の無い Artifact を対象に、同じ `recordArtifactMediaInfo` を呼ぶ一括処理を後から足す（今回は作っていない）。
-- MP3・Ogg・m4a などは第4波 server-preview-derivatives の ffprobe（`source='ffprobe'`）で扱う。
+- MP3・Ogg・m4a などは下の「長い音声・動画のpreview worker」の ffprobe が後から media 情報を足す（`source='ffprobe'`）。
+
+### 長い音声・動画のpreview worker
+
+64MiBを超える音声、ヘッダーでmedia情報を読めない音声（mp3、m4a、ogg、opusなど）、動画について、波形・スペクトログラム・posterをAPIとは別のpreview workerが作ります。API imageにはffmpegを入れません。
+
+- compose: `docker compose up -d preview`（`Dockerfile.preview`、ffmpeg入り）。DBとArtifact保存先（`artifacts` volume、S3の環境変数）をAPIと共有します。DB由来の保存先を使う場合は`MMT_STORAGE_SECRET_KEY`をAPIと同じ値で`.env`に入れます。
+- compose以外: ffmpeg/ffprobeを入れたホストで`npm run preview-worker -w @mmt/api`。systemdで動かす場合もAPIと同じ`.env`を読みます。
+- 設定: `MMT_PREVIEW_FFMPEG_PATH`／`MMT_PREVIEW_FFPROBE_PATH`（既定`ffmpeg`／`ffprobe`）、`MMT_PREVIEW_POLL_INTERVAL_MS`（既定5000）、`MMT_PREVIEW_TOOL_TIMEOUT_MS`（1回のffprobe/ffmpegの上限。既定30分、最大40分）、`MMT_PREVIEW_WORK_DIR`（本体を一時的に置く場所。最大のArtifactが入る空きが要る。既定はOSの一時ディレクトリ、composeでは`preview-work` volume）。
+- 複数台を同時に動かせます（`FOR UPDATE SKIP LOCKED`）。停止（SIGTERM）は処理中のArtifactを終えてから抜けます。composeの`stop_grace_period`は30秒なので、長い処理の途中で止めた行は2時間後に別のworkerが引き継ぎます。
+- 状態の確認: `SELECT kind,status,error,count(*) FROM artifact_previews GROUP BY 1,2,3;`。`ffmpeg_unavailable`が増えたらworkerのffmpegを確認します。`failed`の`storage_failed`・`source_unreadable`は保存先の障害、`probe_failed`・`render_failed`はファイル側の問題です。
+- ログ: `artifact_preview_worker_started`、`artifact_preview_worker_failed`、`artifact_preview_source_unreadable`、`artifact_preview_store_failed`、`artifact_preview_enqueue_failed`（API側）。ffmpegの出力と保存先のパスは出しません。
+- 生成物は`.previews/<元のArtifact ID>/`のRunの無いArtifactとして、Projectの現在の保存先に入ります。この機能より前のArtifactは対象外です（backfillは未実装）。
 
 ## SSH/GPU worker
 
@@ -219,8 +244,21 @@ APIサーバーはworkerホストへSSHしない（decisions.md）。導入・�
 
 ### 1. tokenを用意する
 
-Project限定のservice tokenを、scope `read`・`worker:execute`・`artifacts:write` で発行する（`POST /tokens`、kind=`service`）。
-第4波（auth-service-accounts）以降は、人に紐付かないService Accountのkeyを使う（期限上限365日）。予定どおりに入ったら、この節の発行手順をService Accountの画面・APIに置き換える。
+workerのtokenは、人に紐付かないService Accountで発行する。発行した人がProjectを離れても止まらない。
+
+1. Projectの設定画面「Service Accounts」で「Service Accountを作成」を押す。名前（例: `gpu-host-1-worker`）、説明、Role `Admin` を入力する。`worker:execute` scope は Role が Admin の Service Account にだけ発行できる。
+2. 作成した行の「tokenを発行」を押し、scope `read`・`worker:execute`・`artifacts:write`（出力の登録をするなら `registry:write` も）、有効期限（上限365日、`MMT_TOKEN_MAX_LIFETIME_DAYS`）を選ぶ。
+3. 表示されたtokenを次の手順の入力に使う。tokenは一度だけ表示される。
+
+APIで行う場合（Project adminのbrowser sessionが必要。API tokenからは403 `session_required`）:
+- `POST /api/projects/:p/service-accounts` `{name, description, role:'admin'}`
+- `POST /api/projects/:p/service-accounts/:id/tokens` `{name, scopes:['read','worker:execute','artifacts:write'], expiresAt?}`
+
+確認: `mado-tracking-worker doctor` が `GET /api/auth/token` で scope を表示する。Projectの設定画面「Projectのtoken一覧」に、所有者 Service Account・先頭12文字・最終使用（5分ごとに更新）が出る。
+
+止めるとき: Service Accountを「無効化」すると、そのtokenは次の要求から401になる。1本だけ止めるときは「Projectのtoken一覧」で失効する。期限が近づいたら新しいtokenを発行し、`mado-tracking-worker install --token-file` で差し替える。
+
+既存の個人所有のservice token（一覧で「旧形式」）は動き続けるが、所有者がProjectを離れると止まる。稼働中Playgroundの旧形式tokenは期限（2026-10-15）までにService Accountのtokenへ置き換える。
 
 ### 2. venvへ入れてinstallする（user unit）
 
@@ -240,6 +278,7 @@ installがすること:
 - `~/.config/systemd/user/mado-tracking-worker@.service` を書き、`systemctl --user daemon-reload` → `enable --now mado-tracking-worker@<worker-id>.service`。
 - state directoryの既定は、手で起動していたworkerと同じ `~/.local/state/mado-tracking-worker/<sha256(worker-id)の先頭16桁>`。手動起動から移るときも実行中Jobのjournalを引き継ぐ。別の場所なら `--state-dir`。
 - worker IDは英数字・`.`・`_`・`-`の64文字まで（systemdのinstance名とファイル名に使うため）。
+- `--target-ids`（env fileの`MMT_WORKER_TARGET_IDS`）は省略できるが、Compute画面の「接続を確認」（target checks）をclaimするのは`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけ。未設定のworkerは確認をclaimしない（[worker手順](worker.md)の「Compute targetの接続を確認する」）。
 
 system unitにする場合は root で `--systemd-system --service-user <account>`。env fileは `/etc/mado-tracking-worker/<id>.env`（root、600）、stateは `/var/lib/mado-tracking-worker/<id>`（service userの所有、700）。手で置く場合の雛形は `deploy/worker/mado-tracking-worker@.service` と `deploy/worker/worker.env.example`。
 
@@ -325,6 +364,25 @@ MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
 - 積んだ後で通知先やruleを無効にした行は、送らずに`failed`（`notification_channel_disabled`／`notification_rule_disabled`）にします。有効に戻しても古い通知はまとめて届きません。
 - Project adminは設定画面の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。
 - 通知先の作成・変更・テスト送信、ruleの作成・有効切替は監査ログ（`notification.channel.create`／`update`／`test`、`notification.rule.create`／`update`）に残ります。環境変数の値と宛先のメールアドレスは記録しません（宛先は件数だけ）。
+
+## API serverの上限と保持数
+
+| 変数 | 既定 | 意味 |
+|---|---|---|
+| `MMT_TOKEN_MAX_LIFETIME_DAYS` | `365` | 新しいAPI tokenの期限の上限。期限を省略したtokenはこの日数で切れる。1〜3650 |
+| `MMT_CSV_EXPORT_MAX_ROWS` | `50000` | `POST /projects/:p/runs/search/export.csv`の最大行数。超えた分は省き、応答ヘッダ`X-MMT-Export-Truncated: true`とCSV末尾の`# truncated: ...`行で示す。正の整数 |
+| `MMT_CHECKPOINT_KEEP_COUNT` | `5` | Runごとに既定の一覧へ出すcheckpointの数（1以上）。超えた古いcheckpointは`retained=false`になり、一覧の既定表示から外れる。Artifactは消さないので再開には使える |
+
+### Run検索のCSV出力
+
+- 検索のCSV出力は、列と件数を決めるため一致したRunを1回読み（500件ずつ、ページごとに短いtransaction）、その後に本文をstreamでもう1回読みます。50000行では検索を約200ページ読むことになります。ページの間はDB接続を保持しないので、遅いダウンロードでpoolを占有しません。
+- CSVはUTF-8 BOM付きです（Excel向け）。BOMを外す場合は`apps/api/src/domain/csvEncoding.ts`の`CSV_BYTE_ORDER_MARK`を空文字にします。
+
+### 学習の途中再開（checkpoint）
+
+- 再開は手動だけです（Run詳細のCheckpointタブ、Jobsの「最新checkpointから再開」、retry APIの`checkpointId`／`resumeFromLatestCheckpoint`）。学習コード側の書き方は[worker手順](worker.md)の「学習を途中から再開する（checkpoint）」にあります。
+- checkpointのArtifactは`checkpoints/step-<N>.tar`（SDK）または`checkpoints/step-<N>/...`（MLflow）です。容量の掃除はArtifactのlifecycle GC（第6波 artifact-lifecycle-gc の予定）の削除APIで行います。再開Runが参照中のcheckpoint（`runs.resume_checkpoint_id`）のArtifactは消さないでください。
+- worker側の照合失敗（sha256・manifest不一致）はJobのerrorに「Checkpoint ... mismatch」などで残り、entrypointは起動していません。
 
 ## Gitのファイルをエディタへ読み込む
 

@@ -11,6 +11,7 @@ from .execution_runtime import (
 )
 from .execution_snapshot import ExecutionMode
 from .run import Run
+from .sweeps import SweepsClient, trial_parameters
 from .upstream import download_upstream_artifacts, list_upstream_artifacts, upstream_run_id
 
 __all__ = [
@@ -24,9 +25,11 @@ __all__ = [
     "PythonRuntime",
     "Run",
     "SifRuntime",
+    "SweepsClient",
     "download_upstream_artifacts",
     "list_upstream_artifacts",
     "start_run",
+    "trial_parameters",
     "upstream_run_id",
 ]
 

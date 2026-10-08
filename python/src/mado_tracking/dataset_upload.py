@@ -10,13 +10,14 @@ from __future__ import annotations
 import hashlib
 import json
 import mimetypes
+import os
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from .artifact_uploads import SESSION_UPLOAD_THRESHOLD_BYTES, UploadTarget, upload_file_sync
 from .api_paths import path_id
+from .artifact_uploads import SESSION_UPLOAD_THRESHOLD_BYTES, UploadTarget, upload_file_sync
 from .errors import ApiError, ConfigurationError
 
 if TYPE_CHECKING:
@@ -128,7 +129,7 @@ def upload_dataset_directory(
     client: Client,
     project_id: str,
     dataset_id: str,
-    directory: str | Path,
+    directory: str | os.PathLike[str],
     *,
     version: str | None = None,
     metadata: Mapping[str, Any] | None = None,

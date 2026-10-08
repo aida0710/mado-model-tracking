@@ -156,6 +156,12 @@ describe.skipIf(!testDatabaseUrl)('長い音声・動画のサーバー側previe
       });
       // Preview files are not audio or video, so they queue nothing themselves.
       expect(await processor().processNext()).toBe(false);
+      // The Project's Artifact list shows the source but not the generated files.
+      const catalog = await entity<{ items: Artifact[] }>(
+        await request(harness.app, `${fixture.basePath}/artifacts`, { cookie: fixture.viewer.cookie }),
+        200,
+      );
+      expect(catalog.items.map((item) => item.id)).toEqual([artifact.id]);
     },
   );
 

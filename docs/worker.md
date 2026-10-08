@@ -94,7 +94,7 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 ## workerを起動する
 
-管理者がproject限定のservice tokenを作る。workerには`read`、`worker:execute`、実行前のコードと出力ファイル（`/mmt/outputs`・`MMT_OUTPUTS_DIR`）をRun Artifactへ保存するための`artifacts:write`が必要。出力のmetricsはworker APIで送るため、ほかのscopeは要らない。実行コードの記録・登録にはworker tokenを使わない（次節）ので、そのためにscopeを足す必要もない。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
+worker tokenは、Projectの設定画面「Service Accounts」で作ったService Account（Role `Admin`）に発行する。scopeは`read`、`worker:execute`、実行前のコードと出力ファイル（`/mmt/outputs`・`MMT_OUTPUTS_DIR`）をRun Artifactへ保存するための`artifacts:write`。`result.json`で出力モデル・出力Datasetを宣言して登録するなら`registry:write`も要る。出力のmetricsはworker APIで送るため、ほかのscopeは要らない。実行コードの記録・登録にはworker tokenを使わない（次節）ので、そのためにscopeを足す必要もない。個人が所有するservice token（`POST /tokens`のkind=`service`）は旧形式で、所有者がProjectを離れると止まる。期限は最長365日（`MMT_TOKEN_MAX_LIFETIME_DAYS`）で、期限が近づいたら新しいtokenを発行して`mado-tracking-worker install --token-file`で差し替える。手順は[operations.md](operations.md)の「1. tokenを用意する」。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
 
 ```bash
 export MMT_API_URL=http://127.0.0.1:4182
@@ -108,7 +108,7 @@ python/.venv/bin/mado-tracking-worker
 
 常駐させる場合は、手動の `export` と `read -rsp` の代わりに `mado-tracking-worker install`（systemd user/system unit）を使う。手順は [operations.md](operations.md) の「workerホストへworkerを導入する」。`install`・`upgrade`・`status`・`doctor` のサブコマンドが増えたが、引数なしと `--once` は従来どおりworkerの実行（`run`）になる。containerでは `MMT_API_TOKEN_FILE` に置いたtoken fileを `MMT_API_TOKEN` として読む（`MMT_API_TOKEN` が既にあればそちらを使う）。
 
-`MMT_WORKER_ID`とstate directoryは再起動後も同じものを使う。同じdirectoryのworkerを2つ起動すると後の起動を拒否する。`MMT_WORKER_TARGET_IDS`はカンマ区切り。省略した場合は、tokenとAPI設定で許可されたtargetが対象になる。
+`MMT_WORKER_ID`とstate directoryは再起動後も同じものを使う。同じdirectoryのworkerを2つ起動すると後の起動を拒否する。`MMT_WORKER_TARGET_IDS`はカンマ区切り。省略した場合は、tokenとAPI設定で許可されたtargetが対象になる。ただし、targetの接続確認（下の「Compute targetの接続を確認する」）は`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけがclaimする。
 
 通常のworkerは`WorkerSettings.parallel_jobs=2`で最大2Jobを並行して監視・実行する。claimには現在監視中のJob IDsを`activeJobIds`として送る。APIは未監視の未完了Jobを同じleaseで返し、全件を監視中なら次のJobをclaimする。targetの`maxConcurrentJobs`とGPU予約による制限も適用される。
 
@@ -411,6 +411,22 @@ workerはclaimとresumeで`workerInfo`（パッケージ`mado-tracking`の版と
 - Jobのheartbeatが60秒途絶すると、Jobs画面に「応答なし」を出す。Jobの状態、GPUの予約、leaseは変えず、再claimや自動再実行もしない（前節の方針）。止まったままのJobは、workerホストで状態を確認してからcancelやretryを手で行う。
 - 版は`importlib.metadata`で読む。インストールせずに動かしている場合は版を送らず、画面は「—」になる。
 - `parallelJobs`はAPIでは受け付けるが、現在のworkerはまだ送らない。
+
+## Compute targetの接続を確認する
+
+最初のJobを流す前に、targetへSSHで入れるか、Python・venv・pip・git・Docker・Apptainer/Singularity・GPUが使えるかをCompute画面の「接続を確認」で確かめる。API serverはSSH鍵を持たないので、確認はそのtargetを担当するworkerが自分の鍵で行う。
+
+- 確認するのは`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけ。`MMT_WORKER_TARGET_IDS`の無いworkerは確認をclaimしない。依頼から5分claimされなければ「workerがありません」（`no_worker`）で終わる。
+- workerはJobのclaimが空いた間に5秒間隔で`POST /worker/target-checks/claim`を呼び、Jobの監視と並行して確認する。確認は同時に1件。
+- 確認は3段階で、最初に失敗した段階を結果にする。
+  1. `true`を送ってSSH接続を確かめる（失敗は`ssh_failed`。sshのエラー文は鍵のパスを含みうるので結果に入れない）。workerホストに鍵やknown_hostsが無い・鍵の権限が600でないときは接続せずに`ssh_configuration`で`failed`にする。
+  2. `pythonExecutable -c`でPythonの版と実行パスを得る（無ければ`python_missing`、3.11未満は`python_too_old`）。
+  3. 固定の確認スクリプト（`worker/target_probe.py`の`PROBE_SCRIPT`。Python 3.6以上の標準ライブラリだけ）を送り、構造化JSONで受け取る。各コマンドは15秒、全体は90秒で打ち切る。
+- 確認する項目: venvとensurepip、`python -m pip --version`、`git --version`、`docker --version`と`docker version`（daemonへの到達。届かないときはsocketの読み書き権限で`docker_socket_denied`と`docker_daemon_unreachable`を分ける）、`apptainer`/`singularity`の版と`exec --help`の必須flag（`sif_container.py`の`REQUIRED_SIF_FLAGS`と`--nv`）、`nvidia-smi --query-gpu=index,uuid,name,memory.total`、`workDirectory`（無ければ一番近い既存の親）への書き込みと空き容量、targetから`MMT_API_URL/health`への到達。
+- 確認はtargetに何も残さない（作業ディレクトリも作らない。書き込み確認の一時ファイルはすぐ消す）。
+- GPUはnvidia-smiが報告した値だけを返す。nvidia-smiが無ければ`gpus=null`で、GPUを設定したtargetではNG、CPUだけのtargetでは「なし」。
+- 画面は検出したGPUのindexと確認に通ったRuntimeを候補として示す。targetの`gpuIds`・`runtimeKinds`は管理者が「選んだ候補を保存」を押したときだけ変わる。
+- 結果の文字列は1行200文字以下に切り、worker tokenはマスクし、targetの鍵・known_hostsのパスを含む文字列は捨てる。APIも同じ検査をして、含んでいれば保存しない。
 
 ## ジョブを止めるとprocess groupが終了する
 

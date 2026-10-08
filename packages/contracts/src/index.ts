@@ -177,6 +177,7 @@ import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
 import type { WorkerResumeCheckpoint } from './checkpoints.js';
+import type { UserKind } from './adminUsers.js';
 
 export type AuthMode = 'local' | 'oidc' | 'hybrid' | 'development';
 export type AuthSource = 'local' | 'oidc';
@@ -189,7 +190,7 @@ export interface User {
   status: 'active' | 'disabled';
   authSources: AuthSource[];
   // 'service' is a Service Account: it has no login method and acts only through its tokens.
-  kind: 'human' | 'service';
+  kind: UserKind;
 }
 export interface Project {
   id: string;

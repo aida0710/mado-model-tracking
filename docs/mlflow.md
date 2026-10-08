@@ -16,7 +16,7 @@ API tokenの画面で対象Projectのtokenを作成します。記録するユ�
 | Artifactのアップロード | `artifacts:write` |
 | Logged Models・モデル版・aliasの登録や変更 | `registry:write` |
 
-Authentikのログインはブラウザでの操作に使います。Pythonの記録には個人tokenまたはService Account tokenを使い、失効・期限・Projectへの所属・scopeはリクエストごとに確認します。
+Authentikのログインはブラウザでの操作に使います。Pythonの記録には個人tokenまたはService Account tokenを使い、失効・期限・Projectへの所属・scopeはリクエストごとに確認します。自動実行やworkerなど、人の異動で止めたくない記録には、Projectの設定画面「Service Accounts」で作ったService Accountのtokenを使います。tokenの期限は最長365日です。
 
 学習を実行するマシンのターミナルで設定します。`PROJECT_ID`は記録先ProjectのUUIDへ置き換えてください。`http://10.0.10.160:5182`はこの開発環境のURLです。別の配置ではそのWeb/APIのURLに変更します。
 
@@ -190,7 +190,19 @@ with mlflow.start_run():
 
 ## 認証方式の対応状況
 
-SDKからはAPI tokenを`MLFLOW_TRACKING_TOKEN`（Bearer）で渡します。passwordにAPI tokenを入れるBasic認証（`MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD`）は社内ツールとの互換のために受け付ける方針で、第4波のService Accountの実装（auth-service-accounts）で追加します。それまではBearerを使ってください。
+SDKからはAPI tokenを`MLFLOW_TRACKING_TOKEN`（Bearer）で渡します。ユーザー名とパスワードしか設定できない社内ツールでは、Basic認証も使えます。passwordにAPI tokenを入れ、ユーザー名は任意の値にします（照合しません）。
+
+```bash
+export MLFLOW_TRACKING_URI="https://tracking.example.internal/api/mlflow/projects/<project-uuid>"
+export MLFLOW_TRACKING_USERNAME=mado
+read -r -s -p 'API token: ' MLFLOW_TRACKING_PASSWORD
+export MLFLOW_TRACKING_PASSWORD
+```
+
+- Basic認証が使えるのはMLflow互換API（`/api/mlflow/*`）だけです。native APIは401 `basic_auth_unsupported`。
+- passwordにローカルアカウントのパスワードを入れても通りません（401）。
+- 失効・scope・Projectの権限の確認はBearerと同じです。Job限定token（`mmtj_`）をpasswordにしても、Job tokenの許可表がそのまま効きます。
+- tokenを発行した直後の画面に、Bearer／Basicそれぞれの環境変数の設定例が出ます。
 
 ## autologを使う
 

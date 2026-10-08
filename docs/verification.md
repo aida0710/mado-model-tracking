@@ -228,6 +228,20 @@ npx tsx artifacts/verification/2026-10-08/run-search-browser/verify-run-search-b
 
 このスクリプトはgitignoreした`artifacts/`の下にあり、リポジトリには含まれません。画像も同じディレクトリへ保存します。
 
+## Run比較とCSV出力をブラウザで確認する
+
+比較画面の基準Runの選択（URLの`baseline`）と差分表示、「差のある行だけ」、比較CSVのダウンロード（BOM・引用符・数式対策・差分行）、Experiments画面の「検索結果をCSV出力」（POSTをblobで受けてダウンロード、列順）を確かめます。スクリプトは`mmt_test`の一時schemaを使う独立したAPI（47084）を自分で起動します。WebはViteを47085で起動しておきます。
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47084 npx vite --port 47085 --strictPort --host 127.0.0.1) &
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+npx tsx artifacts/verification/2026-10-08/run-comparison-csv-browser/verify-run-comparison-csv-browser.ts
+```
+
+このスクリプトはgitignoreした`artifacts/`の下にあり、リポジトリには含まれません。画像も同じディレクトリへ保存します。
+
 ## 音声ビューア・評価サンプル表・Artifactの聴き比べを確認する
 
 APIはブラウザ内のmockで差し替えるので、Webの開発サーバーだけを起動します（開発用の5182とは別のport）。
@@ -259,7 +273,7 @@ npx tsx apps/web/tests/browser-artifact-upload.mjs
 
 ## 全体管理画面の保存先を確認する
 
-保存先APIはブラウザ内でmockし、`/admin`の「ストレージ」タブで、保存先の作成（v2は422の表示）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→新規プロジェクトの初期選択→全体管理者以外の拒否表示、を確かめます。
+保存先APIはブラウザ内でmockし、`/admin`の「ストレージ」タブで、保存先の作成（署名v2）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→新規プロジェクトの初期選択→全体管理者以外の拒否表示、を確かめます。
 
 ```bash
 MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \

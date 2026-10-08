@@ -70,11 +70,6 @@ async function routeStorage(route) {
   if (path === '/admin/storage-backends') {
     if (method === 'GET') return reply({ items: storage.backends });
     storage.requests.push(body);
-    if (body.signatureVersion === 'v2')
-      return reply(
-        { error: 'Signature Version 2 is not supported yet', code: 'storage_signature_unsupported' },
-        422,
-      );
     const backend = toBackend(body);
     storage.backends.push(backend);
     return reply(backend);
@@ -111,7 +106,7 @@ try {
   await page.getByRole('cell', { name: '/var/lib/mmt/artifacts' }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/01-admin-storage.png`, fullPage: true });
 
-  // Create an S3 backend: v2 is refused by the API for now, then v4 is saved.
+  // Create an S3 backend signed with v2.
   await page.getByRole('button', { name: '保存先を追加' }).click();
   const dialog = page.getByRole('dialog', { name: '保存先を追加' });
   await dialog.getByLabel('名前').fill('minio-main');
@@ -124,14 +119,10 @@ try {
   assert.equal(await dialog.getByLabel('Secret access key').getAttribute('type'), 'password');
   await dialog.getByLabel('署名').selectOption('v2');
   await dialog.getByRole('button', { name: '作成' }).click();
-  await dialog.getByText('Signature Version 2に対応していません').waitFor();
-  await page.screenshot({ path: `${outputDirectory}/02-signature-v2-unsupported.png` });
-  await dialog.getByLabel('署名').selectOption('v4');
-  await dialog.getByRole('button', { name: '作成' }).click();
   await dialog.waitFor({ state: 'detached' });
   const created = storage.requests.at(-1);
   assert.equal(created.prefix, 'team-a');
-  assert.equal(created.signatureVersion, 'v4');
+  assert.equal(created.signatureVersion, 'v2');
   assert.equal(created.rootPath, undefined, 'S3 backends do not send the filesystem root');
   assert.ok(!(await page.content()).includes(SECRET_VALUE), 'the secret is never rendered');
 

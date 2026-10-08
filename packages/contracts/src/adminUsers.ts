@@ -4,7 +4,6 @@ export type UserKind = 'human' | 'service';
 
 /** A user as the global administrator sees it (GET /admin/users). */
 export interface AdminUser extends User {
-  kind: UserKind;
   lastLoginAt: string | null;
   createdAt: string;
 }

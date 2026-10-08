@@ -4,10 +4,8 @@ import {
   type RunAnalysisParam,
   type RunAnalysisRange,
 } from '@mmt/contracts';
-
-// The same rule as domain/analysis/parameterMatrix.ts, so the table and the importance agree on
-// which params are numeric: '0.001' and '1e-4' are numbers, '0x10' and 'Infinity' are not.
-const NUMERIC_STRING_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+// The importance calculation's rule, so the table and the importance agree on which params are numeric.
+import { NUMERIC_STRING_PATTERN } from './analysis/parameterMatrix.js';
 
 export type RunParameters = Record<string, JsonValue>;
 

@@ -6,7 +6,7 @@ export const adminText = {
   adminUsers: 'ユーザー',
   newLocalUser: 'ローカルユーザーを作成',
   userSearch: 'ユーザーを検索',
-  userSearchPlaceholder: '名前・ユーザー名・メールアドレス',
+  adminUserSearchPlaceholder: '名前・ユーザー名・メールアドレス',
   userStatusFilter: '状態',
   userStatusAll: 'すべての状態',
   userStatusActive: '有効',

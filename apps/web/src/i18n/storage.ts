@@ -31,6 +31,7 @@ export const storageText = {
   storageChecksumMode: 'Checksumの扱い',
   storageChecksumWhenRequired: '必要なときだけ（WHEN_REQUIRED）',
   storageChecksumWhenSupported: '対応していれば常に（WHEN_SUPPORTED）',
+  storageMultipartEnabled: 'Multipart uploadを使う（使わない場合は1件5GiBまで）',
   storagePartSize: 'Multipartのpartサイズ（MiB）',
   storageAccessKeyId: 'Access key ID（任意）',
   storageSecretAccessKey: 'Secret access key',
@@ -53,8 +54,6 @@ export const storageText = {
     'Bucket名は3〜63文字の小文字英数字・ハイフン・ドットで、先頭と末尾を英数字にしてください',
   storageCaBundleError: 'CA証明書はPEM形式（-----BEGIN CERTIFICATE-----）で貼り付けてください',
   storageSecretRequired: 'Access key IDを指定するときはSecret access keyも入力してください',
-  storageSignatureUnsupported:
-    'このサーバーはまだSignature Version 2に対応していません。v4を選んでください',
 } as const;
 
 export const storageTextTemplates = {

@@ -4,7 +4,7 @@ import type { JsonValue } from '@mmt/contracts';
 export const MAX_CATEGORY_LEVELS = 50;
 
 // MLflow の params は文字列で届くので、'0.001' や '1e-4' を数値として扱う。'0x10' や 'Infinity' は数値にしない。
-const NUMERIC_STRING_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+export const NUMERIC_STRING_PATTERN = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 export interface ParameterAnalysisRun {
   parameters: Record<string, JsonValue | undefined>;

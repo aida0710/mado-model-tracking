@@ -14,7 +14,7 @@ from .config import WorkerSettings
 from .container_layout import resume_checkpoint_document, upstream_run_document
 from .contracts import WorkerJob
 from .tracking_environment import build_tracking_environment
-from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, LocalTransport, SSHTransport
+from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, create_target_transport
 
 BOOTSTRAP = """
 import hashlib, io, json, os, pathlib, sys, tempfile, zipfile
@@ -137,24 +137,13 @@ class JobExecutor:
         self.masker = SecretMasker(
             [settings.api.token, job.job_token or "", *secret_values(job.code_version["environment"])]
         )
-        self.transport = transport or self._create_transport()
+        self.transport = transport or create_target_transport(
+            self.job.target, allow_local_executor=self.settings.allow_local_executor, masker=self.masker
+        )
         self.workspace: str | None = None
         self.runtime: str | None = None
         self.bundle = build_runtime_bundle()
         self.staged_inputs: dict[str, Any] = {}
-
-    def _create_transport(self) -> CommandTransport:
-        target = self.job.target
-        if target["executor"] == "local":
-            return LocalTransport(allow_local_executor=self.settings.allow_local_executor, masker=self.masker)
-        return SSHTransport(
-            host=target["host"],
-            port=target["port"],
-            username=target["username"],
-            ssh_key_path=target["sshKeyPath"],
-            known_hosts_path=target["knownHostsPath"],
-            masker=self.masker,
-        )
 
     async def install_runtime(self) -> None:
         target = self.job.target

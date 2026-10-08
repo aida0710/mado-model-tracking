@@ -14,6 +14,7 @@ import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import { lockActiveGlobalAdminIds } from '../repositories/identityRepository.js';
 import { revokeAllForUser } from '../repositories/sessionRepository.js';
+import { setServiceAccountStatus } from '../repositories/serviceAccountRepository.js';
 import {
   findAdminUser,
   insertLocalUser,
@@ -115,6 +116,9 @@ export class UserAdministrationService {
             'last_global_admin',
           );
         await updateAdminUser(connection, { userId, ...next });
+        // A Service Account disabled here reads the same as one disabled from Project settings.
+        if (current.kind === 'service' && next.status !== current.status)
+          await setServiceAccountStatus(connection, { serviceAccountId: userId, status: next.status });
         // Tokens stop through the users.status check; sessions are revoked so they do not return.
         if (next.status === 'disabled' && current.status !== 'disabled')
           await revokeAllForUser(connection, userId);

@@ -96,7 +96,7 @@ export function UsersPanel() {
         <input
           type="search"
           aria-label={text.userSearch}
-          placeholder={text.userSearchPlaceholder}
+          placeholder={text.adminUserSearchPlaceholder}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
         />

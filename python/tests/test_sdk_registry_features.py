@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 
-from mado_tracking import ApiError, Client, ConfigurationError, dataset_upload
+from mado_tracking import ApiError, Client, ConfigurationError
 from mado_tracking.evaluation import reference_dataset_version_ids
 from mado_tracking.upstream import download_upstream_artifacts
 
@@ -477,11 +477,6 @@ def test_dataset_files_cannot_be_combined_with_a_reference_uri(tmp_path):
         with pytest.raises(ConfigurationError, match="uri"):
             client.register_dataset(PROJECT, dataset_id="d", version="v1")
     assert requests == []
-
-
-def test_directory_upload_stub_keeps_the_agreed_signature():
-    with pytest.raises(NotImplementedError):
-        dataset_upload.upload_dataset_directory(None, PROJECT, "d", ".", version="v1")  # type: ignore[arg-type]
 
 
 class InterruptedBody(httpx.SyncByteStream):

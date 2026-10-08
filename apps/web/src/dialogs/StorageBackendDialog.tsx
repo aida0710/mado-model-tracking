@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { StorageBackend } from '@mmt/contracts';
 import type { FormField, FormValues } from '../types/form';
 import { storageApi } from '../api/storage';
-import { RequestError } from '../api/http';
 import { Dialog } from '../components/Dialog';
 import { FormFields } from '../components/FormFields';
 import { ErrorNotice } from '../components/Feedback';
@@ -15,12 +14,10 @@ import {
   MAX_MULTIPART_PART_SIZE_MIB,
   MIN_MULTIPART_PART_SIZE_MIB,
   PEM_CERTIFICATE_HEADER,
+  isSignatureV2,
   updateStorageBackendValues,
 } from '../lib/storageBackendInput';
 import { text } from '../i18n/catalog';
-
-// Returned until the server can sign with v2 (s3-signature-v2); the Web names it in place.
-const SIGNATURE_UNSUPPORTED_CODE = 'storage_signature_unsupported';
 
 const isS3 = (values: FormValues) => getFieldValue(values, 'kind') === 's3';
 const isFilesystem = (values: FormValues) => !isS3(values);
@@ -69,16 +66,10 @@ export function StorageBackendDialog({
   );
 }
 
-async function saveBackend(values: FormValues, backend?: StorageBackend) {
-  try {
-    return backend
-      ? await storageApi.updateBackend(backend.name, buildStorageBackendPatch(values, backend))
-      : await storageApi.createBackend(buildStorageBackendCreate(values));
-  } catch (failure) {
-    if (failure instanceof RequestError && failure.code === SIGNATURE_UNSUPPORTED_CODE)
-      throw new Error(text.storageSignatureUnsupported);
-    throw failure;
-  }
+function saveBackend(values: FormValues, backend?: StorageBackend) {
+  return backend
+    ? storageApi.updateBackend(backend.name, buildStorageBackendPatch(values, backend))
+    : storageApi.createBackend(buildStorageBackendCreate(values));
 }
 
 function buildFields(backend?: StorageBackend): FormField[] {
@@ -140,6 +131,12 @@ function buildFields(backend?: StorageBackend): FormField[] {
         { value: 'when_required', label: text.storageChecksumWhenRequired },
         { value: 'when_supported', label: text.storageChecksumWhenSupported },
       ],
+      visible: (values) => isS3(values) && !isSignatureV2(values),
+    },
+    {
+      name: 'multipartEnabled',
+      label: text.storageMultipartEnabled,
+      type: 'checkbox',
       visible: isS3,
     },
     {
@@ -149,7 +146,7 @@ function buildFields(backend?: StorageBackend): FormField[] {
       required: true,
       min: MIN_MULTIPART_PART_SIZE_MIB,
       max: MAX_MULTIPART_PART_SIZE_MIB,
-      visible: isS3,
+      visible: (values) => isS3(values) && getFieldValue(values, 'multipartEnabled') === 'true',
     },
     { name: 'accessKeyId', label: text.storageAccessKeyId, visible: isS3 },
     {

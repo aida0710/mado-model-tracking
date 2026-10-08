@@ -14,7 +14,7 @@ from typing import Any
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker
 from .sif_container import REQUIRED_SIF_FLAGS
-from .transport import CommandTransport, LocalTransport, SSHTransport
+from .transport import CommandTransport, create_target_transport
 
 # The host runner and SDK need the same Python as pyproject.toml's requires-python.
 MINIMUM_TARGET_PYTHON = (3, 11)
@@ -153,22 +153,6 @@ print(json.dumps({
     "api": api(sys.argv[2]),
 }))
 """
-
-
-def create_target_transport(
-    target: dict[str, Any], *, allow_local_executor: bool, masker: SecretMasker
-) -> CommandTransport:
-    """Same transport choice as JobExecutor, so the check connects exactly as a Job would."""
-    if target["executor"] == "local":
-        return LocalTransport(allow_local_executor=allow_local_executor, masker=masker)
-    return SSHTransport(
-        host=target["host"],
-        port=target["port"],
-        username=target["username"],
-        ssh_key_path=target["sshKeyPath"],
-        known_hosts_path=target["knownHostsPath"],
-        masker=masker,
-    )
 
 
 def item(name: str, status: str, code: str | None = None, detail: str | None = None) -> dict[str, Any]:

@@ -170,9 +170,44 @@ with Client() as client:
 
 `expires_at`はtimezone付きのdatetimeで渡す。省略するとAPIの上限（既定365日）になる。token発行と作成系の操作は、応答が失われても再送しない（tokenが二重に発行されるのを避ける）。alias設定と所有者の移管は同じ値の再送で結果が変わらないので、一時的な失敗のときに再送する。
 
+### 学習の途中再開（checkpoint）
+
+詳細は`docs/worker.md`の「学習を途中から再開する（checkpoint）」を参照する。
+
+- `run.log_checkpoint(directory, step=, includes_optimizer=False, framework=None, metadata=None)`: ディレクトリをtar 1個にしてupload sessionで保存し、Runのcheckpointとして登録する。
+- `run.resume_checkpoint()`: 再開Jobならcheckpointの展開先（read-only）とstepを`ResumeCheckpoint`で返す。再開でなければNone。APIなしでは`mado_tracking.checkpoints.resume_checkpoint_from_environment()`。
+- 再開後もmetricの`step`は続きの値（checkpointのstepから）で記録する。
+
+### Sweep
+
+- 学習コードで試行のparametersを読む: `from mado_tracking import trial_parameters` → `trial_parameters({"lr": 0.05})`。`MMT_PARAMETERS_JSON`（無ければ`MMT_PARAMETERS_FILE`）をdefaultsに上書きして返す。workerの外ではdefaultsをそのまま返す。値はJSONの型のまま。
+- Sweepの作成・一覧・最良試行・pause/resume/cancel: `SweepsClient(Client())`。configはW&B形式（変換規則は`docs/sweeps.md`の「W&B 形式の config の変換規則」）。
+- 例: `examples/sweep_training.py`（`--offline`でAPIなしに試せる）。
+
 ### ディレクトリからデータセット版を作る
 
-`register_dataset(..., files="data/speech")`はディレクトリの中身をArtifactsとして送り、APIがuriとdigestを決める。`files`を使うときは`uri`、`digest`、`source_run_id`、`parent_dataset_version_ids`、`external_ref`を指定しない。
+`register_dataset(..., files="data/speech")`はディレクトリの中身をArtifactsとして送り、APIがuriとdigestを決める。`files`を使うときは`uri`、`digest`、`source_run_id`、`parent_dataset_version_ids`、`external_ref`を指定しない。既存のDatasetへ版を足すだけなら、同じ処理を`upload_dataset_directory`で直接呼べる。
+
+```python
+from mado_tracking import Client
+from mado_tracking.dataset_upload import upload_dataset_directory
+
+with Client() as client:
+    version = upload_dataset_directory(
+        client, "project-id", "dataset-id", "corpus/",
+        version=None,                 # None なら整数で自動採番
+        metadata={"language": "ja"},
+        schema={"sampleRate": 16000},
+    )
+```
+
+- ディレクトリ配下の全ファイルをProjectのArtifact（`datasets/<datasetId>/<相対パス>`）として保存し、1回の`POST /datasets/:d/versions`（`content.files`）で`contentKind='artifacts'`の版を作る。版の`uri`は`mmt-dataset://<版のID>`。
+- uploadの前に`GET /artifacts/by-digest?sha256=&size=`を引き、同じ中身の保存済みArtifactがあればuploadせずにそのIDを使う。中断後に再実行すると、未保存のファイルだけを送る。
+- 64MiB以上のファイルは再開可能なupload sessionを使う。
+- ローカルで計算したdigestを送るので、保存されたArtifactが手元のファイルと違えばAPIが422 `dataset_digest_mismatch`で拒否する。同じ`version`の再作成は409。
+- ファイル数の上限は10万件（超えるとupload前に`ConfigurationError`）。
+
+### workerの実行前sourceとsnapshot
 
 workerはRunの`executionMode`と`executionSnapshot`をコード版へ照合し、固定されたcommandを実行する。コードを実行する前に、Run Artifactsの`.mmt/source.zip`と`.mmt/source-manifest.json`用のファイルを作成する。ZIPには実行前のsource、manifestにはjob/run/code版ID、版名、mode、検証したcommit、runtime、command、各ファイルのSHA256とsizeを記録する。コードがsourceを書き換えた場合や通常・テスト実行が失敗した場合も、同じsnapshotを回収する。sourceなしのコンテナは、固定されたimage digestまたはSIFのArtifact/hashをmanifestに保存する。environmentの値はmanifestに含めない。
 

@@ -15,6 +15,7 @@ import { RunArtifacts } from '../components/RunArtifacts';
 import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { RunOutputModels } from '../components/RunOutputModels';
 import { RunCheckpointList } from '../components/RunCheckpointList';
+import { RunDownstream } from '../components/RunDownstream';
 import { DetailsList, KeyValues } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
 import { ArtifactUploadDialog } from '../dialogs/ArtifactUploadDialog';
@@ -239,6 +240,7 @@ export function RunDetailPage() {
                       ]}
                     />
                   </section>
+                  <RunDownstream projectId={project.id} runId={runId} />
                   <section>
                     <h2>{text.parameters}</h2>
                     <KeyValues values={getRunParameters(item)} />

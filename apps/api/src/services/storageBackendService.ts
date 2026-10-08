@@ -77,12 +77,6 @@ function normalizedConfig(input: StorageBackendConfigInput): StorageBackendConfi
     return normalizeStorageBackendConfig(input);
   } catch (error) {
     if (!(error instanceof StorageBackendConfigError)) throw error;
-    if (error.code === 'storage_signature_unsupported')
-      throw new DomainError(
-        422,
-        '署名v2はまだ使えません。署名v4を選んでください',
-        'storage_signature_unsupported',
-      );
     throw new DomainError(422, `保存先の設定が不正です: ${error.field}`, error.code);
   }
 }

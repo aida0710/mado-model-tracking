@@ -256,6 +256,9 @@ export async function listProjectArtifacts(
             WHERE run.id=a.run_id AND run.project_id=a.project_id AND run.model_version_id=$5))
        AND ($6::timestamptz IS NULL OR (a.created_at,a.id)<($6,$7::uuid))
        AND ($8='all' OR ${currentRunArtifactCondition('a')})
+       -- Server-side previews are Runless Artifacts the viewer reads through /previews, not catalog items.
+       AND (a.run_id IS NOT NULL OR NOT EXISTS(SELECT 1 FROM artifact_previews preview
+            WHERE preview.preview_artifact_id=a.id))
      ORDER BY a.created_at DESC,a.id DESC LIMIT $9`,
     [
       query.projectId,

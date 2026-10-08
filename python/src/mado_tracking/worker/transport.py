@@ -7,6 +7,7 @@ import os
 import shlex
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker
@@ -141,3 +142,19 @@ class SSHTransport(CommandTransport):
             f"{self.username}@{self.host}",
             shlex.join(command),
         ]
+
+
+def create_target_transport(
+    target: dict[str, Any], *, allow_local_executor: bool, masker: SecretMasker
+) -> CommandTransport:
+    """The transport to a compute target; Jobs and target checks connect the same way."""
+    if target["executor"] == "local":
+        return LocalTransport(allow_local_executor=allow_local_executor, masker=masker)
+    return SSHTransport(
+        host=target["host"],
+        port=target["port"],
+        username=target["username"],
+        ssh_key_path=target["sshKeyPath"],
+        known_hosts_path=target["knownHostsPath"],
+        masker=masker,
+    )

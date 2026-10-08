@@ -16,6 +16,19 @@ const actionTextKeys: Record<string, AuditTextKey> = {
   'comment.create': 'auditActionCommentCreate',
   'comment.update': 'auditActionCommentUpdate',
   'comment.delete': 'auditActionCommentDelete',
+  'service_account.create': 'auditActionServiceAccountCreate',
+  'service_account.update': 'auditActionServiceAccountUpdate',
+  'admin.user.create': 'auditActionAdminUserCreate',
+  'admin.user.update': 'auditActionAdminUserUpdate',
+  'admin.user.password_reset': 'auditActionAdminUserPasswordReset',
+  'saved_view.create': 'auditActionSavedViewCreate',
+  'saved_view.update': 'auditActionSavedViewUpdate',
+  'saved_view.delete': 'auditActionSavedViewDelete',
+  'notification.channel.create': 'auditActionNotificationChannelCreate',
+  'notification.channel.update': 'auditActionNotificationChannelUpdate',
+  'notification.channel.test': 'auditActionNotificationChannelTest',
+  'notification.rule.create': 'auditActionNotificationRuleCreate',
+  'notification.rule.update': 'auditActionNotificationRuleUpdate',
 };
 
 const outcomeTextKeys: Record<AuditEvent['outcome'], AuditTextKey> = {

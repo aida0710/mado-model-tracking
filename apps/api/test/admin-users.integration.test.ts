@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Hono } from 'hono';
-import type { Account, AdminUser, AdminUserPasswordReset, AuthMe } from '@mmt/contracts';
+import type {
+  Account,
+  AdminUser,
+  AdminUserPasswordReset,
+  AuthMe,
+  ServiceAccount,
+} from '@mmt/contracts';
 import { createApplication } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import type { ApiEnvironment } from '../src/http/request.js';
@@ -337,6 +343,35 @@ describe.skipIf(!testDatabaseUrl)('全体管理者のユーザー管理（独立
       method: 'POST',
     });
     expect(reset.status).toBe(422);
+  });
+
+  it('Service Accountを全体管理から無効化すると、Projectの一覧でも無効になり無効化日時が残る', async () => {
+    const { administrator, basePath } = await projectFixture(harness);
+    const account = await entity<ServiceAccount>(
+      await request(harness.app, `${basePath}/service-accounts`, {
+        method: 'POST',
+        cookie: administrator.cookie,
+        body: { name: 'gpu-worker', description: '', role: 'editor' },
+      }),
+    );
+    const disabled = await entity<AdminUser>(
+      await adminRequest(administrator.cookie, `/users/${account.id}`, {
+        method: 'PATCH',
+        body: { status: 'disabled' },
+      }),
+      200,
+    );
+    expect(disabled).toMatchObject({ kind: 'service', status: 'disabled' });
+    const listed = await entity<{ items: ServiceAccount[] }>(
+      await request(harness.app, `${basePath}/service-accounts`, { cookie: administrator.cookie }),
+      200,
+    );
+    expect(listed.items).toEqual([expect.objectContaining({ id: account.id, status: 'disabled' })]);
+    const details = await harness.database.query<{ disabled_at: Date | null }>(
+      'SELECT disabled_at FROM service_account_details WHERE user_id=$1',
+      [account.id],
+    );
+    expect(details.rows[0]!.disabled_at).not.toBeNull();
   });
 
   it('パスワード再設定は一時パスワードを1回返し、全sessionを失効させ、旧パスワードは401になる', async () => {

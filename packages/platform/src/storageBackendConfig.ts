@@ -63,8 +63,7 @@ const S3_PREFIX_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export type StorageBackendConfigErrorCode =
   | 'invalid_storage_backend_name'
-  | 'invalid_storage_backend_config'
-  | 'storage_signature_unsupported';
+  | 'invalid_storage_backend_config';
 
 export class StorageBackendConfigError extends Error {
   constructor(
