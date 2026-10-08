@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from typing import Any
 
 from ..errors import ApiError, ConfigurationError, LeaseRejected
 from .api import WorkerApi
@@ -15,8 +16,12 @@ from .job_responses import InvalidWorkerJob
 from .journal import JobJournal, with_saved_job_token
 from .runtime import JobExecutor
 from .session import JobSession
+from .target_probe import check_target
 
 LOGGER = logging.getLogger(__name__)
+# Connection checks are rare administrator requests; a few seconds of delay is fine and keeps
+# the extra API traffic far below the one-second Job claim loop.
+TARGET_CHECK_POLL_SECONDS = 5.0
 
 
 class Worker:
@@ -37,6 +42,10 @@ class Worker:
         # Tokens the API re-issued for Jobs whose task already runs (resume after a failed claim).
         self.reissued_job_tokens: dict[str, str] = {}
         self.resume_available = True
+        # Only a worker with explicit MMT_WORKER_TARGET_IDS is in charge of diagnosing targets.
+        self.target_checks_enabled = bool(settings.target_ids)
+        self.target_check_task: asyncio.Task[None] | None = None
+        self.next_target_check_poll = 0.0
 
     async def run_job(self, job: WorkerJob) -> None:
         if job.job.get("workerId") != self.settings.worker_id:
@@ -117,6 +126,42 @@ class Worker:
         except LeaseRejected:
             LOGGER.error("Invalid claimed Job %s lease rejected; no execution started", job.id)
 
+    async def poll_target_check(self) -> None:
+        """Claim one connection check while idle; the probe runs beside Job monitoring."""
+        if not self.target_checks_enabled or (self.target_check_task and not self.target_check_task.done()):
+            return
+        now = asyncio.get_running_loop().time()
+        if now < self.next_target_check_poll:
+            return
+        self.next_target_check_poll = now + TARGET_CHECK_POLL_SECONDS
+        try:
+            claimed = await self.api.claim_target_check(self.settings.worker_id, self.settings.target_ids)
+        except ApiError as error:
+            if error.status_code == 404:
+                self.target_checks_enabled = False
+                LOGGER.warning("The API has no target check endpoint; connection checks are disabled")
+            else:
+                LOGGER.warning("Target check claim failed: %s", str(error))
+            return
+        except ConfigurationError as error:
+            LOGGER.error("Target check claim was rejected: %s", self.api.masker.mask(str(error)))
+            return
+        if claimed is not None:
+            self.target_check_task = asyncio.create_task(self.run_target_check(claimed))
+
+    async def run_target_check(self, claimed: dict[str, Any]) -> None:
+        status, result = await check_target(
+            claimed["target"],
+            allow_local_executor=self.settings.allow_local_executor,
+            health_url=f"{self.settings.api.url}/health",
+            masker=self.api.masker,
+        )
+        try:
+            await self.api.complete_target_check(claimed, status=status, result=result)
+        except ApiError as error:
+            # The API expires an unreported check, so the administrator can request it again.
+            LOGGER.error("Target check %s report failed: %s", claimed["check"]["id"], str(error))
+
     def launch(self, job: WorkerJob) -> None:
         if job.id not in self.tasks:
             self.tasks[job.id] = asyncio.create_task(self.run_job(job))
@@ -165,8 +210,12 @@ class Worker:
                             ) from None
                         for job in await self.recover():
                             self.launch(job)
+                await self.poll_target_check()
                 await wait_interval(self.stopping, self.settings.poll_seconds)
         finally:
+            if self.target_check_task is not None:
+                self.target_check_task.cancel()
+                await asyncio.gather(self.target_check_task, return_exceptions=True)
             # Worker shutdown leaves detached executions running and preserves their journals.
             for task in self.tasks.values():
                 task.cancel()

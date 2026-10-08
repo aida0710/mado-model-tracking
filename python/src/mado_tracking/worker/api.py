@@ -127,6 +127,33 @@ class WorkerApi:
                 )
         return jobs
 
+    async def claim_target_check(self, worker_id: str, target_ids: Sequence[str]) -> dict[str, Any] | None:
+        """Claim a queued connection check for one of this worker's targets (resent claims are safe)."""
+        response = await self.request(
+            "worker/target-checks/claim", {"workerId": worker_id, "targetIds": list(target_ids)}
+        )
+        claimed = response.get("item")
+        if claimed is None:
+            return None
+        if (
+            not isinstance(claimed, dict)
+            or not isinstance(claimed.get("leaseId"), str)
+            or not isinstance(claimed.get("check"), dict)
+            or not isinstance(claimed.get("target"), dict)
+            or claimed["target"].get("id") not in target_ids
+        ):
+            raise ConfigurationError("Target check claim response is invalid")
+        return claimed
+
+    async def complete_target_check(
+        self, claimed: dict[str, Any], *, status: str, result: dict[str, Any]
+    ) -> None:
+        await self.request(
+            f"worker/target-checks/{claimed['check']['id']}/complete",
+            {"leaseId": claimed["leaseId"], "status": status, "result": result},
+            leased=True,
+        )
+
     async def heartbeat(self, job: WorkerJob, *, running: bool = False) -> bool:
         payload: dict[str, Any] = {"leaseId": job.lease_id}
         if running:

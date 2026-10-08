@@ -45,6 +45,8 @@ import { GitRepositoryReader, type RepositoryReader } from './services/repositor
 import { ModelAutomationService } from './services/modelAutomationService.js';
 import { LineageService } from './services/lineageService.js';
 import { TargetService } from './services/targetService.js';
+import { TargetCheckService } from './services/targetCheckService.js';
+import { targetCheckRoutes } from './routes/targetCheckRoutes.js';
 import { JobService } from './services/jobService.js';
 import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
@@ -168,6 +170,7 @@ export function createApplication(options: ApplicationOptions) {
   const artifactMediaInfo = new ArtifactMediaInfoService(database);
   const artifactUploadSweeper = new ArtifactUploadSweeper({ database, stores });
   const targets = new TargetService(database, config);
+  const targetChecks = new TargetCheckService(database, config);
   const jobTokens = new JobTokenService(database);
   const jobs = new JobService({ database, runs, config, runCompletion, jobTokens });
   const tasks = new TaskService(database, runs, jobs);
@@ -320,6 +323,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
+  app.route('/api', targetCheckRoutes(targetChecks));
   app.route('/api', workerPresenceRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
   app.route('/api/mlflow/projects/:p', mlflowInformationRoutes(database, config.mlflowMultipart));
@@ -366,6 +370,7 @@ export function createApplication(options: ApplicationOptions) {
       artifactUploads,
       artifactMediaInfo,
       targets,
+      targetChecks,
       jobs,
       worker,
       tokens,
