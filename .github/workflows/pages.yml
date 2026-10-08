@@ -1,0 +1,66 @@
+# mainへ入った利用者向けドキュメントをGitHub Pagesへ公開する。
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pages/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+# 書き込み権限はdeploy jobだけに渡す。build jobはnpmの依存を実行するため、
+# Pagesへの書き込みとOIDC tokenの発行を持たせない。
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      # configure-pagesが公開先のURLを読むために使う。
+      pages: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pages/package-lock.json
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Install locked dependencies
+        working-directory: pages
+        run: npm ci
+      - name: Build Japanese and English documentation
+        working-directory: pages
+        env:
+          MMT_DOCS_BASE: /mado-model-tracking/
+        run: npm run build
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: pages/.vitepress/dist
+
+  deploy:
+    name: Deploy documentation
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
