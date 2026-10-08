@@ -1,0 +1,32 @@
+/* Promotion policies: criteria rows in the create dialog and per-criterion results in the history. */
+.promotion-criteria {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.promotion-criterion-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 2fr) minmax(110px, 1fr) minmax(130px, 1fr) minmax(
+      90px,
+      1fr
+    ) auto;
+  gap: 8px;
+  align-items: end;
+}
+.promotion-criterion-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.promotion-criterion-passed {
+  color: var(--success);
+}
+.promotion-criterion-failed {
+  color: var(--error);
+}
+.promotion-criterion-preview {
+  margin: -8px 0 4px;
+  font-size: 12px;
+}

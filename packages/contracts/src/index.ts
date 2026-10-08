@@ -36,6 +36,10 @@ export type {
   PromotionCriterion,
   PromotionCriterionOutcome,
   PromotionCriterionReason,
+export type {
+  PromotionCriterion,
+  PromotionCriterionDirection,
+  PromotionCriterionMode,
   PromotionCriterionResult,
   PromotionDecision,
   PromotionEvaluation,
@@ -47,6 +51,11 @@ export type {
   PromotionPolicyPatch,
 } from './promotion.js';
 export { PROMOTION_CRITERIA_MAX } from './promotion.js';
+  PromotionMissingBaseline,
+  PromotionPolicy,
+  PromotionPolicyCreate,
+} from './promotion.js';
+export { PROMOTION_CRITERIA_MAX, PROMOTION_FIRST_RELEASE_REASON } from './promotion.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

@@ -27,6 +27,19 @@ export function canManageAutomationRules(role: ProjectRole, globalAdmin: boolean
   return globalAdmin || canManageProject(role);
 }
 
+/** Promotion policies are created and switched by the Project admin or a global administrator. */
+export function canManagePromotionPolicies(role: ProjectRole, globalAdmin: boolean): boolean {
+  return globalAdmin || canManageProject(role);
+}
+
+/**
+ * Re-evaluating a promotion decision needs the Project admin role itself; editors could otherwise
+ * retry until a pass. A global administrator who is not a member resolves to admin in `role`.
+ */
+export function canReevaluatePromotion(role: ProjectRole): boolean {
+  return canManageProject(role);
+}
+
 /**
  * Any signed-in user who is not disabled may create a Project (projectService.create).
  * Checks for "not disabled" so a session from an API that does not send status yet still works.

@@ -6,6 +6,7 @@ import { runsText, runsTextTemplates } from './runs';
 import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
 import { projectAccessText } from './projectAccess';
+import { promotionText } from './promotion';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -41,6 +42,7 @@ export const text = {
   ...artifactsText,
   ...modelsText,
   ...evaluationText,
+  ...promotionText,
   ...computeText,
   ...runsText,
   ...projectAccessText,
