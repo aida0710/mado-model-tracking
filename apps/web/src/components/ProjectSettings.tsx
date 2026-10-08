@@ -52,7 +52,7 @@ export function ProjectSettings() {
                 >
                   {items.map((item) => (
                     <option key={item} value={item}>
-                      {text[item]}
+                      {item === 'filesystem' || item === 's3' ? text[item] : item}
                     </option>
                   ))}
                 </select>

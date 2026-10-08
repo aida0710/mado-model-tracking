@@ -21,12 +21,17 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import pg from 'pg';
 import {
   ArtifactNotFoundError,
   ArtifactRangeError,
   createS3ArtifactStore,
+  createS3Client,
   type ArtifactStore,
 } from '@mmt/platform';
+import { findStorageBackendRow } from '../apps/api/src/repositories/storageBackendRepository.js';
+import { decryptSecret, parseSecretKey } from '../apps/api/src/security/secretEncryption.js';
+import { storageSecretContext } from '../apps/api/src/services/artifactStoreRegistry.js';
 
 const MIB = 1024 * 1024;
 // Above 16 MiB so the store must send at least two multipart parts plus an uneven last part.
@@ -44,7 +49,7 @@ const CONFIRM_VALUE = 'write-and-delete';
 const DEFAULT_OUTSIDE_PREFIX = 'mmt-verification-outside-prefix';
 const INTERRUPTION_MESSAGE = 'verification interrupted the upload stream';
 
-/** Where to verify. W3 adds a DB-configured backend that builds the same shape. */
+/** Where to verify: the environment S3 backend or a DB-configured backend chosen by name. */
 interface S3VerificationTarget {
   client: S3Client;
   bucket: string;
@@ -151,10 +156,7 @@ function readS3TargetFromEnv(env: NodeJS.ProcessEnv): S3VerificationTarget {
         }
       : {}),
   });
-  const outsidePrefix =
-    env.MMT_VERIFY_S3_SKIP_OUTSIDE_PREFIX === 'true'
-      ? null
-      : joinKey(env.MMT_VERIFY_S3_OUTSIDE_PREFIX ?? DEFAULT_OUTSIDE_PREFIX);
+  const outsidePrefix = outsidePrefixFromEnv(env);
   return {
     client,
     bucket,
@@ -170,6 +172,71 @@ function readS3TargetFromEnv(env: NodeJS.ProcessEnv): S3VerificationTarget {
       outsidePrefixCheck: outsidePrefix !== null,
     },
   };
+}
+
+function outsidePrefixFromEnv(env: NodeJS.ProcessEnv): string | null {
+  return env.MMT_VERIFY_S3_SKIP_OUTSIDE_PREFIX === 'true'
+    ? null
+    : joinKey(env.MMT_VERIFY_S3_OUTSIDE_PREFIX ?? DEFAULT_OUTSIDE_PREFIX);
+}
+
+/**
+ * Builds the client the API builds for a DB backend (s3ClientFactory), decrypting the secret with
+ * MMT_STORAGE_SECRET_KEY. Only non-secret facts reach the description.
+ */
+async function readS3TargetFromDatabase(
+  env: NodeJS.ProcessEnv,
+  backendName: string,
+): Promise<S3VerificationTarget> {
+  const databaseUrl = env.MMT_DATABASE_URL ?? env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('MMT_DATABASE_URL is required to read a DB backend');
+  const database = new pg.Pool({ connectionString: databaseUrl, max: 1 });
+  try {
+    const row = await findStorageBackendRow(database, backendName);
+    if (!row) throw new Error('The named storage backend does not exist in the database');
+    if (row.config.kind !== 's3') throw new Error('The named storage backend is not S3');
+    let credentials: { accessKeyId: string; secretAccessKey: string } | undefined;
+    if (row.accessKeyId && row.secretEncrypted && row.secretKeyId) {
+      if (!env.MMT_STORAGE_SECRET_KEY)
+        throw new Error('MMT_STORAGE_SECRET_KEY is required to decrypt the backend secret');
+      credentials = {
+        accessKeyId: row.accessKeyId,
+        secretAccessKey: decryptSecret({
+          key: parseSecretKey(env.MMT_STORAGE_SECRET_KEY),
+          encrypted: { keyId: row.secretKeyId, payload: row.secretEncrypted },
+          context: storageSecretContext(row.name),
+        }),
+      };
+    }
+    const { config } = row;
+    const outsidePrefix = outsidePrefixFromEnv(env);
+    return {
+      client: createS3Client({
+        config,
+        ...(credentials ? { credentials } : {}),
+        ...(row.caBundle ? { caBundle: row.caBundle } : {}),
+      }),
+      bucket: config.bucket,
+      basePrefix: config.prefix,
+      outsidePrefix,
+      description: {
+        source: 'database',
+        backend: row.name,
+        endpoint: config.endpoint ? 'custom' : 'aws-default',
+        region: config.region,
+        forcePathStyle: config.pathStyle,
+        signatureVersion: config.signatureVersion,
+        checksumMode: config.checksumMode,
+        tlsVerify: config.tlsVerify,
+        caBundleConfigured: row.caBundle !== null,
+        basePrefixConfigured: Boolean(config.prefix),
+        staticCredentials: Boolean(credentials),
+        outsidePrefixCheck: outsidePrefix !== null,
+      },
+    };
+  } finally {
+    await database.end();
+  }
 }
 
 function createVerificationContext(
@@ -546,7 +613,11 @@ async function main(): Promise<void> {
     process.exitCode = 2;
     return;
   }
-  const target = readS3TargetFromEnv(process.env);
+  // MMT_VERIFY_S3_BACKEND names a backend stored by an administrator; otherwise S3_* is used.
+  const backendName = process.env.MMT_VERIFY_S3_BACKEND;
+  const target = backendName
+    ? await readS3TargetFromDatabase(process.env, backendName)
+    : readS3TargetFromEnv(process.env);
   try {
     const report = {
       label: process.env.MMT_VERIFY_S3_LABEL ?? 'unlabeled',

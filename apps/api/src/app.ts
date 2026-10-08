@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit';
 import {
   ArtifactRangeError,
   createArtifactStoresFromEnv,
+  describeEnvironmentBackends,
   type ArtifactStores,
 } from '@mmt/platform';
 import type { ApiConfig } from './config.js';
@@ -85,10 +86,14 @@ import { commentRoutes } from './routes/commentRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
 import { UserDirectoryService } from './services/userDirectoryService.js';
+import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
+import { StorageBackendService } from './services/storageBackendService.js';
+import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
   database: Database;
+  /** Environment backends; DB-configured backends are added by ArtifactStoreRegistry. */
   stores?: ArtifactStores;
   environment?: NodeJS.ProcessEnv;
   pluginClientFactory?: PluginClientFactory;
@@ -102,10 +107,23 @@ const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
-  const stores = options.stores ?? createArtifactStoresFromEnv(options.environment);
+  const stores = new ArtifactStoreRegistry({
+    database,
+    environmentStores: options.stores ?? createArtifactStoresFromEnv(options.environment),
+    secretKey: config.storageSecretKey,
+  });
+  // Load DB backends now so the first request does not wait; failures are retried on use.
+  void stores.ensureLoaded();
+  const storageBackends = new StorageBackendService({
+    database,
+    registry: stores,
+    secretKey: config.storageSecretKey,
+    environmentBackends: describeEnvironmentBackends(options.environment ?? process.env),
+  });
   const auth = new AuthService(database, config);
   const audit = new AuditService(database);
-  const projects = new ProjectService(database, () => stores.backends());
+  // A disabled backend keeps serving its Artifacts but cannot be chosen for a Project.
+  const projects = new ProjectService(database, () => stores.writableBackends());
   // Handlers run in this order inside the terminal-transition transaction. Output registration
   // must precede pending automation so versions it creates start in the same completion.
   // Plugin outbox events are not handlers: RunCompletionService enqueues them on every status change.
@@ -291,8 +309,15 @@ export function createApplication(options: ApplicationOptions) {
     }),
   );
   app.get('/api/storage/backends', (context) => {
+  app.route('/api/mlflow/projects/:p', mlflowArtifactRoutes({ database, artifacts }));
+  app.route('/api/admin', storageBackendRoutes(storageBackends));
+  app.get('/api/storage/backends', async (context) => {
     requireScope(principal(context), 'read');
-    return context.json({ items: stores.backends() });
+    await stores.ensureLoaded();
+    return context.json({
+      items: stores.writableBackends(),
+      defaultBackend: await stores.getDefaultBackend(),
+    });
   });
   return {
     app,
@@ -325,6 +350,8 @@ export function createApplication(options: ApplicationOptions) {
       runNotes,
       commentTargets,
       comments,
+      storageBackends,
+      artifactStores: stores,
     },
   };
 }

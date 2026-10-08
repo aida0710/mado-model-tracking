@@ -10,7 +10,8 @@ export type ProjectRole = 'viewer' | 'editor' | 'admin';
 export type RunKind = 'inference' | 'evaluation' | 'training' | 'finetuning' | 'processing';
 export type RunStatus = 'queued' | 'running' | 'finished' | 'failed' | 'canceled';
 export type JobStatus = RunStatus | 'claimed';
-export type ArtifactBackend = 'filesystem' | 's3';
+// Immutable backend name: 'filesystem' and 's3' from the environment, or one stored in the DB.
+export type ArtifactBackend = string;
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { CreateAutomationExecution } from './modelAutomation.js';
@@ -56,6 +57,7 @@ export { PROMOTION_CRITERIA_MAX } from './promotion.js';
   PromotionPolicyCreate,
 } from './promotion.js';
 export { PROMOTION_CRITERIA_MAX, PROMOTION_FIRST_RELEASE_REASON } from './promotion.js';
+export type { StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

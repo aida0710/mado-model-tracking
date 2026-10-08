@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidStorageBackendName } from '@mmt/platform';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
 import { codeSourceSchema } from './codeSourceValidation.js';
 export { codeSourceSchema } from './codeSourceValidation.js';
@@ -26,6 +27,8 @@ export const groupNameSchema = z
 // Query string of GET /users: a prefix of an email, username, or display name.
 export const userSearchQuerySchema = z.object({ query: z.string().trim().min(1).max(200) });
 export const artifactBackendSchema = z.enum(['filesystem', 's3']);
+// Environment backends ('filesystem', 's3') or a name an administrator stored in storage_backends.
+export const artifactBackendSchema = z.string().refine(isValidStorageBackendName);
 export const scopeSchema = z.enum([
   'read',
   'runs:write',

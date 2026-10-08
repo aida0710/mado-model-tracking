@@ -30,7 +30,10 @@ export function ProjectDialog({
               label: text.storage,
               type: 'select',
               defaultValue: items[0],
-              options: items.map((backend) => ({ value: backend, label: text[backend] })),
+              options: items.map((backend) => ({
+                value: backend,
+                label: backend === 'filesystem' || backend === 's3' ? text[backend] : backend,
+              })),
               required: true,
             },
           ]}

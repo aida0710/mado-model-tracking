@@ -20,6 +20,7 @@ import {
   orderedCompletionParts,
 } from './artifactMultipart.js';
 import { parseArtifactRange } from './artifactRange.js';
+import { DEFAULT_MULTIPART_PART_SIZE_BYTES } from './storageBackendConfig.js';
 import {
   ArtifactNotFoundError,
   type ArtifactMultipartStore,
@@ -27,8 +28,7 @@ import {
   type IncompleteMultipartUpload,
 } from './artifactTypes.js';
 
-// Two 8 MiB parts bound streaming upload memory while supporting multi-GB weights.
-const MULTIPART_PART_BYTES = 8 * 1024 * 1024;
+// Two parts in flight bound streaming upload memory to twice the part size.
 const MULTIPART_CONCURRENCY = 2;
 function httpStatus(error: unknown): number | undefined {
   return (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
@@ -46,10 +46,13 @@ export function createS3ArtifactStore({
   client,
   bucket,
   prefix = '',
+  multipartPartSizeBytes = DEFAULT_MULTIPART_PART_SIZE_BYTES,
 }: {
   client: S3Client;
   bucket: string;
   prefix?: string;
+  /** Part size of streamed single-request uploads; upload sessions choose their own part size. */
+  multipartPartSizeBytes?: number;
 }): ArtifactStore {
   const keyPrefix = prefix ? `${prefix.replace(/\/$/, '')}/` : '';
   function objectKey(key: string): string {
@@ -203,7 +206,7 @@ export function createS3ArtifactStore({
         size += bytes.length;
         buffered.push(bytes);
         bufferedBytes += bytes.length;
-        if (bufferedBytes < MULTIPART_PART_BYTES) continue;
+        if (bufferedBytes < multipartPartSizeBytes) continue;
         const partBytes = Buffer.concat(buffered);
         buffered = [];
         bufferedBytes = 0;

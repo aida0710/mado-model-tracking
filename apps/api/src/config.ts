@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { AuthMode } from '@mmt/contracts';
 import { createOidcRolePolicy, type OidcRolePolicy } from './domain/oidcRolePolicy.js';
+import { parseSecretKey, type SecretKey } from './security/secretEncryption.js';
 
 const optionalSetting = z.preprocess(
   (value) => (value === '' ? undefined : value),
@@ -104,6 +105,8 @@ const environmentSchema = z.object({
     .int()
     .min(0)
     .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
+  // base64 of 32 bytes. Without it, storage backends that need a secret cannot be created.
+  MMT_STORAGE_SECRET_KEY: optionalSetting,
 });
 
 export interface ApiConfig {
@@ -140,6 +143,8 @@ export interface ApiConfig {
   mlflowMultipart: { uploadsEnabled: boolean; downloadsEnabled: boolean };
   // How long MLflow's mpu/complete waits for the upload finalizer before answering 503.
   uploadFinalizeWaitMs: number;
+  // Encrypts storage backend secrets in the DB; null when MMT_STORAGE_SECRET_KEY is unset.
+  storageSecretKey: SecretKey | null;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -170,6 +175,14 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     throw new Error('Insecure OIDC transport is forbidden in production');
   if (settings.AUTH_SESSION_IDLE_SECONDS > settings.AUTH_SESSION_ABSOLUTE_SECONDS)
     throw new Error('AUTH_SESSION_IDLE_SECONDS must not exceed AUTH_SESSION_ABSOLUTE_SECONDS');
+  let storageSecretKey: SecretKey | null = null;
+  if (settings.MMT_STORAGE_SECRET_KEY) {
+    try {
+      storageSecretKey = parseSecretKey(settings.MMT_STORAGE_SECRET_KEY);
+    } catch {
+      throw new Error('MMT_STORAGE_SECRET_KEY must be base64 of 32 bytes');
+    }
+  }
   let oidc: ApiConfig['oidc'] = null;
   // local mode ignores OIDC_* so a leftover SSO setting cannot open a second login path.
   if (settings.AUTH_MODE === 'oidc' || settings.AUTH_MODE === 'hybrid') {
@@ -245,5 +258,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       downloadsEnabled: settings.MMT_MLFLOW_MULTIPART_DOWNLOADS === 'true',
     },
     uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
+    storageSecretKey,
   };
 }

@@ -147,7 +147,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactとplugin outbox（独立PostgreSQL�
 
   it('blob保存後のDB失敗では保存した実ファイルをcleanupする', async () => {
     const fixture = await executionFixture(harness);
-    let written: { backend: 'filesystem' | 's3'; key: string } | undefined;
+    let written: { backend: string; key: string } | undefined;
     const stores: ArtifactStores = {
       ...harness.stores,
       put: async (upload) => {

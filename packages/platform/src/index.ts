@@ -6,3 +6,5 @@ export * from './filesystemArtifactStore.js';
 export * from './s3ArtifactStore.js';
 export * from './pluginClient.js';
 export * from './artifactMultipart.js';
+export * from './storageBackendConfig.js';
+export * from './s3ClientFactory.js';
