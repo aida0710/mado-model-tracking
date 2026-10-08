@@ -5,6 +5,7 @@ import { computeText } from './compute';
 import { runsText, runsTextTemplates } from './runs';
 import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
+import { promotionText } from './promotion';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -40,6 +41,7 @@ export const text = {
   ...artifactsText,
   ...modelsText,
   ...evaluationText,
+  ...promotionText,
   ...computeText,
   ...runsText,
   appName: 'Mado Model Tracking',

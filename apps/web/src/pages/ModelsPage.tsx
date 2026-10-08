@@ -11,6 +11,7 @@ import { FormDialog } from '../components/FormDialog';
 import { ModelVersionDialog } from '../dialogs/ModelVersionDialog';
 import { ModelAutomationPanel } from '../components/ModelAutomationPanel';
 import { ModelRegistryPanel } from '../components/ModelRegistryPanel';
+import { PromotionPolicyPanel } from '../components/PromotionPolicyPanel';
 import { Tabs } from '../components/Tabs';
 import { getFieldValue } from '../lib/formValues';
 import { text } from '../i18n/catalog';
@@ -19,7 +20,7 @@ import { modelsTextTemplates } from '../i18n/models';
 export function ModelsPage() {
   const { project, canEdit } = useProject();
   const [dialog, setDialog] = useState<'model' | 'version' | 'alias' | null>(null);
-  const [view, setView] = useState<'registry' | 'rules' | 'history'>('registry');
+  const [view, setView] = useState<'registry' | 'rules' | 'history' | 'promotion'>('registry');
   const [aliasToRemove, setAliasToRemove] = useState<{ alias: string; version: string } | null>(
     null,
   );
@@ -62,13 +63,16 @@ export function ModelsPage() {
           { key: 'registry', label: text.modelRegistry },
           { key: 'rules', label: text.automationRules },
           { key: 'history', label: text.automationHistory },
+          { key: 'promotion', label: text.promotionPolicies },
         ]}
         selected={view}
         onSelect={(key) => setView(key as typeof view)}
         panelId="model-tab-panel"
       />
       <div id="model-tab-panel" role="tabpanel">
-        {view !== 'registry' ? (
+        {view === 'promotion' ? (
+          <PromotionPolicyPanel initialModelId={registry.selected?.id ?? ''} />
+        ) : view !== 'registry' ? (
           <ModelAutomationPanel view={view} initialFamily={registry.selected?.family} />
         ) : (
           <ModelRegistryPanel

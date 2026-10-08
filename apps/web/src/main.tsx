@@ -15,6 +15,7 @@ import './styles/audio.css';
 import './styles/forms.css';
 import './styles/workbench.css';
 import './styles/admin.css';
+import './styles/promotion.css';
 
 // Keep the existing route tree while enabling blocked SPA navigation.
 const router = createBrowserRouter([{
