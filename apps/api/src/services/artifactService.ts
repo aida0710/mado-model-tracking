@@ -8,7 +8,7 @@ import {
   type ArtifactStores,
 } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Database } from '../db/database.js';
+import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { DomainError, notFound } from '../domain/errors.js';
 import { isRelativeFilePath } from '../domain/validation.js';
 import { findRun } from '../repositories/registryRepository.js';
@@ -63,7 +63,13 @@ export class ArtifactService {
   async upload(
     principal: Principal,
     projectId: string,
-    upload: { runId?: string; path: string; mimeType: string; body: Readable },
+    upload: {
+      runId?: string;
+      path: string;
+      mimeType: string;
+      body: Readable;
+      onStored?: (connection: Connection, artifact: Artifact) => Promise<void>;
+    },
   ): Promise<Artifact> {
     await requireProject(this.database, principal, {
       projectId,
@@ -96,7 +102,7 @@ export class ArtifactService {
           scope: 'artifacts:write',
         });
         if (upload.runId) await findRun(connection, { projectId, id: upload.runId });
-        return (await first<Artifact>(
+        const artifact = (await first<Artifact>(
           connection,
           `INSERT INTO artifacts(id,project_id,run_id,path,backend,storage_key,mime_type,size,sha256)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
@@ -112,6 +118,9 @@ export class ArtifactService {
             stored.sha256,
           ],
         ))!;
+        // Commit the compatibility index with its Artifact so failed mappings leave no visible file.
+        await upload.onStored?.(connection, artifact);
+        return artifact;
       });
     } catch (error) {
       try {

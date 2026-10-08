@@ -114,7 +114,7 @@ export class ProjectService {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     return rows<Experiment>(
       this.database,
-      'SELECT e.*, (SELECT count(*) FROM runs r WHERE r.experiment_id=e.id) AS run_count FROM experiments e WHERE project_id=$1 ORDER BY e.created_at DESC',
+      "SELECT e.*, (SELECT count(*) FROM runs r WHERE r.experiment_id=e.id AND r.lifecycle_stage='active') AS run_count FROM experiments e WHERE project_id=$1 AND e.lifecycle_stage='active' ORDER BY e.created_at DESC",
       [projectId],
     );
   }
@@ -124,16 +124,27 @@ export class ProjectService {
     projectId: string,
     input: { name: string; description: string },
   ): Promise<Experiment> {
-    await requireProject(this.database, principal, {
-      projectId,
-      role: 'editor',
-      scope: 'runs:write',
+    return transaction(this.database, async (connection) => {
+      await requireProject(connection, principal, {
+        projectId,
+        role: 'editor',
+        scope: 'runs:write',
+      });
+      // SDK creation and rename also lock the Project to keep names unambiguous.
+      await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+      const duplicate = await first(
+        connection,
+        'SELECT id FROM experiments WHERE project_id=$1 AND name=$2',
+        [projectId, input.name],
+      );
+      if (duplicate)
+        throw new DomainError(409, '同名Experimentが既に存在します', 'resource_already_exists');
+      return (await first<Experiment>(
+        connection,
+        'INSERT INTO experiments(project_id,name,description) VALUES($1,$2,$3) RETURNING *,0 AS run_count',
+        [projectId, input.name, input.description],
+      ))!;
     });
-    return (await first<Experiment>(
-      this.database,
-      'INSERT INTO experiments(project_id,name,description) VALUES($1,$2,$3) RETURNING *,0 AS run_count',
-      [projectId, input.name, input.description],
-    ))!;
   }
 
   private validateBackend(backend: ArtifactBackend): void {

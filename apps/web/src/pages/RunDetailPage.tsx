@@ -18,6 +18,7 @@ import { LaunchDialog } from '../dialogs/LaunchDialog';
 import { getFieldValue, parseStringMap } from '../lib/formValues';
 import { formatDate, formatDuration } from '../lib/format';
 import { isSystemMetric } from '../lib/metricSeries';
+import { getRunParameters } from '../lib/runParameters';
 import { text } from '../i18n/catalog';
 
 const tabs = ['metrics', 'artifacts', 'systemMetrics', 'logs', 'details'] as const;
@@ -218,7 +219,7 @@ export function RunDetailPage() {
                   </section>
                   <section>
                     <h2>{text.parameters}</h2>
-                    <KeyValues values={item.parameters} />
+                    <KeyValues values={getRunParameters(item)} />
                   </section>
                   <section>
                     <h2>{text.tags}</h2>

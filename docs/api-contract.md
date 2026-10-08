@@ -32,6 +32,22 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET|POST /projects/:p/plugins` (POST:name,baseUrl,tokenEnv,enabled?)。登録は全体管理者に限定し、plugin secretは環境変数参照。Project adminは登録済みのpluginを利用する。`POST /projects/:p/plugins/:id/check` → manifest。`POST /projects/:p/plugins/:id/datasets/search` ({query}) → `{items:PluginDataset[]}`。
 - `POST /projects/:p/plugins/:id/datasets/import` ({dataset:PluginDataset}) → DatasetVersion。`POST /projects/:p/plugins/:id/events/retry` → `{queued:number}`。`GET /projects/:p/plugins/:id/metrics` → `{prometheus:string}`（storage:metrics対応pluginのみ）。event outboxはRun状態のtransactionと一緒に保存し、plugin障害でRunを失敗させない。
 
+## MLflow 3互換API
+
+接続先は`/api/mlflow/projects/:p`。公式SDKの`MLFLOW_TRACKING_URI`と`MLFLOW_REGISTRY_URI`へこのURLを指定する。`:p`はProjectのUUIDで、既存API tokenのProject制限・現在のmembership・scopeを要求する。互換APIはMLflowのsnake_case JSONとint64の文字列表現を使い、エラーを`{error_code,message}`で返す。
+
+- `/api/2.0/mlflow/experiments/*`、`/runs/*`：Experiment/Runの作成・取得・検索・tags・softdelete/restore、params・metric履歴・batch、Runの入出力Dataset/Logged Model。新規Datasetの登録には`runs:write`と`registry:write`が必要。
+- `/api/2.0/mlflow/logged-models/*`：MLflow 3のモデルID、params/tags、PENDING/READY/FAILEDとモデルmetrics。READY確定は保存済みArtifactと`MLmodel`の参照を検証する。
+- `/api/2.0/mlflow/registered-models/*`、`/model-versions/*`：native Model/ModelVersionを使った登録、数字版の採番、検索、tags、alias。登録とモデル自動実行を同じtransactionへ保存する。
+- `GET /api/2.0/mlflow/artifacts/list`、Logged ModelのArtifacts一覧、`GET|PUT /api/2.0/mlflow-artifacts/artifacts/*`：Projectのfilesystem/S3へstream転送。SDKにストレージの秘密を渡さず、Rangeに対応する。
+- `GET /server-info`：SDKへの転送capabilityを返す。SDK向けmultipartはfalseで、通常のstream転送を使う。
+
+Artifactのroot URIは`mlflow-artifacts:/runs/:runId/artifacts`または`mlflow-artifacts:/models/:loggedModelId/artifacts`。登録したモデル版の取得先は`mlflow-artifacts:/model-versions/:nativeVersionId/artifacts`で、版の不変manifestから全ファイルを解決する。元Runのpath上書きやLogged Modelの削除で保存済み版を変更しない。
+
+JobのあるRunの開始・終了状態はworkerが正本。SDKのstart/end操作は状態を変更せず受け付ける。SDKが追加するparamsは`recordedParameters`へ保存し、Jobの起動・再接続に使う`parameters`を変更しない。SDKとWebの表示・検索は両方を合成する。通常のMLflow Runのparamsはstringで不変。
+
+MLflow 3の実験記録・モデル保存/登録を対象とし、Tracing/GenAI/Gateway/Prompt Registryは対象外。未知の検索構文とAPIは明示エラーを返す。接続と検証の例は[MLflow手順](mlflow.md)を参照する。
+
 ## コンテナのCodeVersion
 
 `runtime`は省略時に`{kind:'python'}`へ正規化する。既存CodeVersionとtargetもmigrationでPythonへ移行する。版はruntimeを含めて更新不可。

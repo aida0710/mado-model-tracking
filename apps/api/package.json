@@ -19,6 +19,7 @@
     "jose": "^6.2.10",
     "openid-client": "^6.8.7",
     "pg": "^8.20.0",
+    "yaml": "^2.9.1",
     "zod": "^4.4.1"
   },
   "devDependencies": {

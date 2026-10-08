@@ -56,6 +56,7 @@ export interface Run {
   kind: RunKind;
   status: RunStatus;
   parameters: JsonObject;
+  recordedParameters?: JsonObject;
   tags: Record<string, string>;
   latestMetrics: Record<string, number>;
   modelVersionId: string | null;
@@ -255,9 +256,10 @@ export interface PluginEvent {
 }
 export interface LineageNode {
   id: string;
-  kind: 'datasetVersion' | 'modelVersion' | 'run' | 'codeVersion';
+  kind: 'datasetVersion' | 'modelVersion' | 'loggedModel' | 'run' | 'codeVersion';
   label: string;
   status?: string;
+  sourceRunId?: string;
 }
 export interface LineageEdge {
   source: string;

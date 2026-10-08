@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader';
 import { MetricsChart } from '../components/MetricsChart';
 import { StatusBadge } from '../components/StatusBadge';
 import { formatValue } from '../lib/format';
+import { getRunParameters } from '../lib/runParameters';
 import { text } from '../i18n/catalog';
 
 export function ComparePage() {
@@ -17,10 +18,13 @@ export function ComparePage() {
     `${project.id}:compare:${ids.join(',')}`,
     (signal) =>
       Promise.all(
-        ids.map(async (id) => ({
-          run: await trackingApi.run(project.id, id, signal),
-          points: await trackingApi.metrics(project.id, id, signal),
-        })),
+        ids.map(async (id) => {
+          const run = await trackingApi.run(project.id, id, signal);
+          return {
+            run: { ...run, parameters: getRunParameters(run) },
+            points: await trackingApi.metrics(project.id, id, signal),
+          };
+        }),
       ),
     EXECUTION_POLL_MS,
   );

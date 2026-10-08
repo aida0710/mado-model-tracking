@@ -64,10 +64,15 @@ class WorkerServer:
 
 
 def test_local_job_runs_for_real_and_forwards_masked_output_with_metrics(job_payload, worker_settings):
+    job_payload["codeVersion"]["environment"]["MLFLOW_TRACKING_URI"] = "http://wrong-project.invalid"
+    job_payload["codeVersion"]["environment"]["MLFLOW_RUN_ID"] = "wrong-run"
     job_payload["codeVersion"]["source"]["files"]["main.py"] = (
         "import os,sys,time,json\n"
         "print('running cpu job', flush=True)\n"
         "print(os.environ['MMT_API_TOKEN'], flush=True)\n"
+        "print(os.environ['MLFLOW_TRACKING_TOKEN'], flush=True)\n"
+        "print('tracking=' + os.environ['MLFLOW_TRACKING_URI'], flush=True)\n"
+        "print('run=' + os.environ['MLFLOW_RUN_ID'], flush=True)\n"
         "sys.stderr.write(os.environ['MY_PASSWORD'] + '\\n'); sys.stderr.flush()\n"
         "print(json.load(open(os.environ['MMT_PARAMETERS_FILE']))['steps'])\n"
         "print('gpus=' + os.environ['CUDA_VISIBLE_DEVICES'])\n"
@@ -90,6 +95,9 @@ def test_local_job_runs_for_real_and_forwards_masked_output_with_metrics(job_pay
     )
     assert "running cpu job" in messages and "[REDACTED]" in messages and "gpus=" in messages
     assert "test-api-secret" not in messages and "configured-secret" not in messages
+    assert f"tracking=http://localhost/api/mlflow/projects/{job_payload['job']['projectId']}" in messages
+    assert f"run={job_payload['run']['id']}" in messages
+    assert "wrong-project.invalid" not in messages and "wrong-run" not in messages
     assert any(path.endswith("/metrics") and body["metrics"] for path, body in server.calls)
     assert any(path.endswith("/heartbeat") and body.get("status") == "running" for path, body in server.calls)
     workspace = Path(job_payload["target"]["workDirectory"]) / job_payload["job"]["id"]

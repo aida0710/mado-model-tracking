@@ -7,7 +7,7 @@ import {
   lineageNodeUrl,
 } from '../lib/lineageLayout';
 import { Empty } from './Feedback';
-import { text } from '../i18n/catalog';
+import { lineageNodeKindLabels, lineageRelationLabels, text } from '../i18n/catalog';
 
 export function LineageGraph({ graph, projectId }: { graph: Graph; projectId: string }) {
   if (!graph.nodes.length) return <Empty>{text.graphEmpty}</Empty>;
@@ -42,7 +42,7 @@ export function LineageGraph({ graph, projectId }: { graph: Graph; projectId: st
             const middleX = (startX + endX) / 2;
             return (
               <g key={`${edge.source}:${edge.target}:${index}`}>
-                <title>{edge.relation}</title>
+                <title>{lineageRelationLabels[edge.relation] ?? edge.relation}</title>
                 <path
                   className="graph-edge"
                   d={`M ${startX} ${startY} C ${middleX} ${startY}, ${middleX} ${endY}, ${endX} ${endY}`}
@@ -55,7 +55,7 @@ export function LineageGraph({ graph, projectId }: { graph: Graph; projectId: st
             <Link
               key={node.id}
               to={lineageNodeUrl(projectId, node)}
-              aria-label={`${node.kind}: ${node.label}`}
+              aria-label={`${lineageNodeKindLabels[node.kind]}: ${node.label}`}
             >
               <g
                 className={`graph-node node-${node.kind}`}
@@ -64,7 +64,7 @@ export function LineageGraph({ graph, projectId }: { graph: Graph; projectId: st
                 <title>{node.label}</title>
                 <rect width={GRAPH_NODE_WIDTH} height={GRAPH_NODE_HEIGHT} rx="2" />
                 <text x="12" y="23" className="node-kind">
-                  {node.kind}
+                  {lineageNodeKindLabels[node.kind]}
                   {node.status ? ` · ${node.status}` : ''}
                 </text>
                 <text x="12" y="46" className="node-label">
@@ -92,7 +92,7 @@ export function LineageGraph({ graph, projectId }: { graph: Graph; projectId: st
               {graph.edges.map((edge, index) => (
                 <tr key={index}>
                   <td>{nodeById.get(edge.source)?.label ?? edge.source}</td>
-                  <td className="mono">{edge.relation}</td>
+                  <td>{lineageRelationLabels[edge.relation] ?? edge.relation}</td>
                   <td>{nodeById.get(edge.target)?.label ?? edge.target}</td>
                 </tr>
               ))}

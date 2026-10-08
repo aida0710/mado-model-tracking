@@ -1149,7 +1149,8 @@ tr.selected td {
 .node-run rect {
   stroke: var(--teal);
 }
-.node-modelVersion rect {
+.node-modelVersion rect,
+.node-loggedModel rect {
   stroke: #7991cf;
 }
 .node-datasetVersion rect {

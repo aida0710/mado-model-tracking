@@ -8,6 +8,7 @@ import type {
   Run,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
+import type { PoolClient } from 'pg';
 import { first, rows, transaction, type Database, type Connection } from '../db/database.js';
 import type {
   CodeVersionCreate,
@@ -86,56 +87,73 @@ export class RegistryService {
     projectId: string,
     registration: { modelId: string; input: ModelVersionCreate },
   ): Promise<ModelVersion> {
-    return transaction(this.database, async (connection) => {
-      await this.requireWriteAccess(connection, principal, projectId);
-      const model = await first<Model>(
-        connection,
-        'SELECT * FROM models WHERE id=$1 AND project_id=$2',
-        [registration.modelId, projectId],
-      );
-      if (!model) notFound('Model');
-      const input = registration.input;
-      await assertProjectReferences(connection, {
-        table: 'model_versions',
+    return transaction(this.database, (connection) =>
+      this.insertModelVersion(connection, {
+        principal,
         projectId,
-        ids: input.parentModelVersionIds,
-      });
-      if (input.sourceRunId) await findRun(connection, { projectId, id: input.sourceRunId });
-      if (input.artifactId)
-        await findSavedArtifact(connection, {
-          projectId,
-          artifactId: input.artifactId,
-        });
-      if (input.defaultCodeVersionId)
-        validateCodeCompatibility(
-          await findCodeVersion(connection, {
-            projectId,
-            id: input.defaultCodeVersionId,
-          }),
-          { model },
-        );
-      const version = (await first<Omit<ModelVersion, 'family'>>(
-        connection,
-        `INSERT INTO model_versions(model_id,project_id,version,source_run_id,parent_model_version_ids,weights_uri,artifact_id,default_code_version_id,metadata)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-        [
-          model.id,
-          projectId,
-          input.version,
-          input.sourceRunId ?? null,
-          input.parentModelVersionIds,
-          input.weightsUri ?? null,
-          input.artifactId ?? null,
-          input.defaultCodeVersionId ?? null,
-          JSON.stringify(input.metadata),
-        ],
-      ))!;
-      await this.automation.processRegistration(connection, {
-        projectId,
-        modelVersionId: version.id,
-      });
-      return { ...version, family: model.family };
+        modelId: registration.modelId,
+        input: registration.input,
+      }),
+    );
+  }
+
+  async insertModelVersion(
+    connection: PoolClient,
+    registration: {
+      principal: Principal;
+      projectId: string;
+      modelId: string;
+      input: ModelVersionCreate;
+    },
+  ): Promise<ModelVersion> {
+    const { principal, projectId, input } = registration;
+    await this.requireWriteAccess(connection, principal, projectId);
+    const model = await first<Model>(
+      connection,
+      'SELECT * FROM models WHERE id=$1 AND project_id=$2',
+      [registration.modelId, projectId],
+    );
+    if (!model) notFound('Model');
+    await assertProjectReferences(connection, {
+      table: 'model_versions',
+      projectId,
+      ids: input.parentModelVersionIds,
     });
+    if (input.sourceRunId) await findRun(connection, { projectId, id: input.sourceRunId });
+    if (input.artifactId)
+      await findSavedArtifact(connection, {
+        projectId,
+        artifactId: input.artifactId,
+      });
+    if (input.defaultCodeVersionId)
+      validateCodeCompatibility(
+        await findCodeVersion(connection, {
+          projectId,
+          id: input.defaultCodeVersionId,
+        }),
+        { model },
+      );
+    const version = (await first<Omit<ModelVersion, 'family'>>(
+      connection,
+      `INSERT INTO model_versions(model_id,project_id,version,source_run_id,parent_model_version_ids,weights_uri,artifact_id,default_code_version_id,metadata)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [
+        model.id,
+        projectId,
+        input.version,
+        input.sourceRunId ?? null,
+        input.parentModelVersionIds,
+        input.weightsUri ?? null,
+        input.artifactId ?? null,
+        input.defaultCodeVersionId ?? null,
+        JSON.stringify(input.metadata),
+      ],
+    ))!;
+    await this.automation.processRegistration(connection, {
+      projectId,
+      modelVersionId: version.id,
+    });
+    return { ...version, family: model.family };
   }
 
   async setAlias(

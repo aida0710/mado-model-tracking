@@ -37,4 +37,20 @@ describe('Runの絞り込み', () => {
   it('壊れた比較式を名前検索として黙って処理しない', () => {
     expect(() => parseRunFilter('metrics.val/loss < nope')).toThrow();
   });
+  it('実行設定を変更せずにSDKから記録したパラメータでも絞り込める', () => {
+    const recorded = { ...run, recordedParameters: { optimizer: 'adamw' } };
+    expect(matchesRunFilter(recorded, parseRunFilter('params.optimizer = "adamw"'))).toBe(true);
+    expect(recorded.parameters).toEqual(run.parameters);
+  });
+  it('SDKが同値の実行パラメータを記録しても数値と真偽値の比較を維持する', () => {
+    const recorded = {
+      ...run,
+      parameters: { batch_size: 32, speaker: true },
+      recordedParameters: { batch_size: '32', speaker: 'True' },
+    };
+    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size = 32'))).toBe(true);
+    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size >= 16'))).toBe(true);
+    expect(matchesRunFilter(recorded, parseRunFilter('params.speaker = true'))).toBe(true);
+    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size != 32'))).toBe(false);
+  });
 });

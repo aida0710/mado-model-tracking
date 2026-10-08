@@ -56,6 +56,12 @@ export class JobService {
     registration: { run: Run; input: JobCreate; attempt: number },
   ): Promise<Job> {
     const { run, input, attempt } = registration;
+    const activeRun = await first(
+      connection,
+      "SELECT id FROM runs WHERE id=$1 AND project_id=$2 AND lifecycle_stage='active'",
+      [run.id, run.projectId],
+    );
+    if (!activeRun) conflict('削除済みRunにはJobを作成できません');
     if (run.status !== 'queued') conflict('JobはqueuedのRunにだけ作成できます');
     if (!run.codeVersionId)
       throw new DomainError(422, '実行するCodeVersionが必要です', 'code_required');

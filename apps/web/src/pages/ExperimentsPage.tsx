@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Columns3, Plus, RefreshCw, Search } from 'lucide-react';
 import type { Run } from '@mmt/contracts';
+import { getRunParameters } from '../lib/runParameters';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
@@ -68,7 +69,7 @@ export function ExperimentsPage() {
   );
   const experiment = experiments.value?.find((item) => item.id === experimentId);
   const parameterNames = Array.from(
-    new Set((runs.value ?? []).flatMap((run) => Object.keys(run.parameters))),
+    new Set((runs.value ?? []).flatMap((run) => Object.keys(getRunParameters(run)))),
   ).sort();
   const metricNames = Array.from(
     new Set((runs.value ?? []).flatMap((run) => Object.keys(run.latestMetrics))),
@@ -369,7 +370,7 @@ export function ExperimentsPage() {
                     </span>
                   </>
                 ),
-                render: (run: Run) => <CompactValue value={run.parameters[name]} />,
+                render: (run: Run) => <CompactValue value={getRunParameters(run)[name]} />,
                 className: 'mono',
               })),
               {

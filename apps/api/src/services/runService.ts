@@ -8,7 +8,7 @@ import type {
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
-import { conflict } from '../domain/errors.js';
+import { conflict, notFound } from '../domain/errors.js';
 import type { RunCreate, RunPatch } from '../domain/validation.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { validatePinnedRuntime } from '../domain/runtimeCompatibility.js';
@@ -52,7 +52,7 @@ export class RunService {
       });
     return rows(
       this.database,
-      `SELECT * FROM runs WHERE project_id=$1 AND ($2::uuid IS NULL OR experiment_id=$2)
+      `SELECT * FROM runs WHERE project_id=$1 AND lifecycle_stage='active' AND ($2::uuid IS NULL OR experiment_id=$2)
       AND ($3::text IS NULL OR status=$3) AND ($4::text IS NULL OR name ILIKE '%'||$4||'%') ORDER BY created_at DESC,id DESC LIMIT $5`,
       [
         projectId,
@@ -80,11 +80,13 @@ export class RunService {
     registration: { projectId: string; createdBy: string; input: RunCreate },
   ): Promise<Run> {
     const { projectId, input } = registration;
-    await assertProjectReference(connection, {
-      table: 'experiments',
-      projectId,
-      id: input.experimentId,
-    });
+    const experiment = await first<{ lifecycleStage: string }>(
+      connection,
+      'SELECT lifecycle_stage FROM experiments WHERE project_id=$1 AND id=$2 FOR SHARE',
+      [projectId, input.experimentId],
+    );
+    if (!experiment) notFound('Experiment');
+    if (experiment.lifecycleStage !== 'active') conflict('削除済みExperimentにはRunを作成できません');
     await assertProjectReferences(connection, {
       table: 'dataset_versions',
       projectId,
@@ -146,6 +148,18 @@ export class RunService {
       });
       const run = await findRun(connection, { projectId, id: registration.runId, lock: true });
       const input = registration.input;
+      const isMlflowManaged = (run as Run & { mlflowManaged?: boolean }).mlflowManaged === true;
+      if (isMlflowManaged && input.parameters) {
+        for (const [key, value] of Object.entries(input.parameters)) {
+          if (typeof value !== 'string') conflict('MLflowのparamはstringで記録してください');
+          if (Object.hasOwn(run.parameters, key) && run.parameters[key] !== value)
+            conflict('記録済みMLflowのparamは変更できません');
+        }
+      }
+      let tags = input.tags && { ...input.tags };
+      const name = input.name ?? input.tags?.['mlflow.runName'];
+      if (name !== undefined && (isMlflowManaged || Object.hasOwn(run.tags, 'mlflow.runName')))
+        (tags ??= {})['mlflow.runName'] = name;
       if (input.environment?.runtime !== undefined && run.codeVersionId) {
         const code = await findCodeVersion(connection, {
           projectId,
@@ -176,8 +190,8 @@ export class RunService {
         ended_at=CASE WHEN $6 THEN COALESCE(ended_at,now()) ELSE ended_at END WHERE id=$1 RETURNING *`,
         [
           run.id,
-          input.name,
-          input.tags ? JSON.stringify(input.tags) : null,
+          name,
+          tags ? JSON.stringify(tags) : null,
           environment ? JSON.stringify(environment) : null,
           status,
           isTerminalStatus(status),

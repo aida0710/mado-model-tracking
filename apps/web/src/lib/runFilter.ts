@@ -1,4 +1,5 @@
 import type { Run } from '@mmt/contracts';
+import { getRunParameters } from './runParameters';
 import { text } from '../i18n/catalog';
 
 interface Comparison {
@@ -41,7 +42,7 @@ export function matchesRunFilter(run: Run, filter: RunFilter): boolean {
       namespace === 'metrics'
         ? run.latestMetrics
         : namespace === 'params'
-          ? run.parameters
+          ? getRunParameters(run)
           : run.tags;
     const actual = values[key];
     if (actual === undefined) return false;

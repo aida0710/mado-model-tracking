@@ -10,6 +10,7 @@ import type {
 import type { Principal } from '../auth/principal.js';
 import { rows, type Database } from '../db/database.js';
 import { datasetVersionSelect } from '../repositories/registryRepository.js';
+import { getMlflowLineage } from '../repositories/mlflowLineageRepository.js';
 import { requireProject } from './accessService.js';
 
 export class LineageService {
@@ -17,7 +18,7 @@ export class LineageService {
 
   async graph(principal: Principal, projectId: string): Promise<LineageGraph> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
-    const [runs, models, datasets, codes] = await Promise.all([
+    const [runs, models, datasets, codes, mlflow] = await Promise.all([
       rows<Run>(this.database, 'SELECT * FROM runs WHERE project_id=$1', [projectId]),
       rows<ModelVersion & { name: string }>(
         this.database,
@@ -32,9 +33,10 @@ export class LineageService {
         'SELECT v.*,c.name FROM code_versions v JOIN codes c ON c.id=v.code_id WHERE v.project_id=$1',
         [projectId],
       ),
+      getMlflowLineage(this.database, projectId),
     ]);
-    const nodes: LineageNode[] = [];
-    const edges: LineageEdge[] = [];
+    const nodes: LineageNode[] = [...mlflow.nodes];
+    const edges: LineageEdge[] = [...mlflow.edges];
     for (const run of runs) {
       nodes.push({ id: run.id, kind: 'run', label: run.name, status: run.status });
       if (run.modelVersionId)

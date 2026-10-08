@@ -1,3 +1,23 @@
+export const lineageNodeKindLabels = {
+  datasetVersion: 'データセット版',
+  modelVersion: 'モデル版',
+  loggedModel: 'MLflowモデル',
+  run: 'Run',
+  codeVersion: 'コード版',
+} as const;
+
+export const lineageRelationLabels: Record<string, string> = {
+  model: 'モデル入力',
+  code: '実行コード',
+  parentRun: '親Run',
+  input: 'データ入力',
+  outputModel: 'モデル出力',
+  registeredModel: 'モデル登録',
+  parentModel: '親モデル',
+  output: 'データ出力',
+  parentDataset: '親データセット',
+};
+
 export const text = {
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
@@ -173,7 +193,7 @@ export const text = {
   importMado: 'Madoからインポート',
   graphEmpty: 'Lineageはまだありません',
   relations: 'Relations',
-  graphLegend: 'データセット版 / Run / モデル版 / コード版',
+  graphLegend: 'データセット版 / Run / MLflowモデル / モデル版 / コード版',
   launch: 'ジョブを起動',
   launchTitle: 'SSH GPUジョブを起動',
   launchSetup: '実行内容',

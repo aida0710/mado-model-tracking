@@ -2,7 +2,7 @@
 
 実験、モデル、実行コード、データセットを同じRunに結び付ける実験管理アプリです。Madoとは別に動作し、最初の外部連携を[Mado plugin](../mado-model-tracking-plugin-mado/README.md)で提供します。
 
-React/Viteの画面、TypeScript/HonoのAPI、PostgreSQL、Python SDKとSSH workerで構成します。学習・fine-tuning・推論・評価・データ加工を扱います。ArtifactsはファイルシステムまたはS3互換ストレージをProjectごとに選びます。
+React/Viteの画面、TypeScript/HonoのAPI、PostgreSQL、Python SDKとSSH workerで構成します。学習・fine-tuning・推論・評価・データ加工を扱います。ArtifactsはファイルシステムまたはS3互換ストレージをProjectごとに選びます。[公式MLflow 3 SDK](docs/mlflow.md)からも記録できます。
 
 ## ローカルで起動する
 
@@ -47,6 +47,8 @@ CPUだけで実行を試す場合は`MMT_ALLOW_LOCAL_EXECUTOR=true`にし、loca
 ## 設定と検証
 
 [運用・Authentik・保存先](docs/operations.md)、[コンテナ・モデルの自動実行](docs/containers-automation.md)、[API契約](docs/api-contract.md)、[plugin仕様](docs/plugins.md)、[検証手順](docs/verification.md)を参照してください。Python SDKの使用例は`python/examples/`にあります。
+
+MLflow 3の接続先・API token・Runとモデルの記録・autolog・workerでの使用方法は[MLflow 3の手順](docs/mlflow.md)を参照してください。
 
 ```bash
 npm run typecheck

@@ -12,6 +12,11 @@ import { DomainError } from './domain/errors.js';
 import { authentication } from './http/authMiddleware.js';
 import { isAllowedOrigin } from './http/originPolicy.js';
 import { principal, type ApiEnvironment } from './http/request.js';
+import { formatMlflowError, isMlflowArtifactUpload, isMlflowRequest } from './mlflow/errors.js';
+import { mlflowInformationRoutes } from './mlflow/informationRoutes.js';
+import { mlflowTrackingRoutes } from './mlflow/tracking/index.js';
+import { mlflowModelRoutes } from './mlflow/models/index.js';
+import { mlflowArtifactRoutes } from './mlflow/artifacts/index.js';
 import { AuthService } from './services/authService.js';
 import { ArtifactService } from './services/artifactService.js';
 import { ProjectService } from './services/projectService.js';
@@ -70,6 +75,14 @@ export function createApplication(options: ApplicationOptions) {
   const outbox = new OutboxDispatcher(database, plugins);
   const app = new Hono<ApiEnvironment>();
   app.onError((error, context) => {
+    if (isMlflowRequest(context.req.path)) {
+      const response = formatMlflowError(error);
+      if (error instanceof ArtifactRangeError)
+        context.header('Content-Range', `bytes */${error.totalSize}`);
+      if (response.status >= 500 && !(error instanceof DomainError))
+        console.error(JSON.stringify({ event: 'mlflow_request_failed', name: error.name }));
+      return context.json(response.body, response.status);
+    }
     if (error instanceof DomainError)
       return context.json({ error: error.message, code: error.code }, error.status);
     if (error instanceof ArtifactRangeError) {
@@ -97,7 +110,14 @@ export function createApplication(options: ApplicationOptions) {
     );
     return context.json({ error: 'リクエストの処理に失敗しました', code: 'internal_error' }, 503);
   });
-  app.notFound((context) => context.json({ error: 'APIが見つかりません', code: 'not_found' }, 404));
+  app.notFound((context) =>
+    isMlflowRequest(context.req.path)
+      ? context.json(
+          { error_code: 'ENDPOINT_NOT_FOUND', message: 'このMLflow APIは対応していません' },
+          404,
+        )
+      : context.json({ error: 'APIが見つかりません', code: 'not_found' }, 404),
+  );
   app.use(
     '/api/*',
     cors({
@@ -112,7 +132,9 @@ export function createApplication(options: ApplicationOptions) {
     context.header('X-Content-Type-Options', 'nosniff');
     context.header('Cache-Control', 'no-store');
     // Artifact routes accept arbitrary binary MIME types including application/json.
-    if (!(context.req.method === 'PUT' && context.req.path.endsWith('/artifacts'))) {
+    const isNativeArtifactUpload =
+      context.req.method === 'PUT' && context.req.path.endsWith('/artifacts');
+    if (!isNativeArtifactUpload && !isMlflowArtifactUpload(context.req)) {
       return bodyLimit({
         maxSize: MAX_JSON_BODY_BYTES,
         onError: () => {
@@ -144,6 +166,10 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
+  app.route('/api/mlflow/projects/:p', mlflowInformationRoutes(database));
+  app.route('/api/mlflow/projects/:p', mlflowTrackingRoutes({ database, runs, registry }));
+  app.route('/api/mlflow/projects/:p', mlflowModelRoutes({ database, registry }));
+  app.route('/api/mlflow/projects/:p', mlflowArtifactRoutes({ database, artifacts }));
   app.get('/api/storage/backends', (context) => {
     requireScope(principal(context), 'read');
     return context.json({ items: stores.backends() });

@@ -12,6 +12,7 @@ from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker, secret_values
 from .config import WorkerSettings
 from .contracts import WorkerJob
+from .tracking_environment import build_tracking_environment
 from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, LocalTransport, SSHTransport
 
 BOOTSTRAP = """
@@ -101,14 +102,7 @@ def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[st
             "codeVersionId": job.code_version["id"],
             "gpuIds": job.job["gpuIds"],
         },
-        "sdkEnvironment": {
-            "MMT_API_URL": settings.api.url,
-            "MMT_API_TOKEN": settings.api.token,
-            "MMT_PROJECT_ID": job.job["projectId"],
-            "MMT_RUN_ID": job.run["id"],
-            "MMT_EXPERIMENT_ID": job.run["experimentId"],
-            "MMT_JOB_ID": job.id,
-        },
+        "sdkEnvironment": build_tracking_environment(job, settings.api),
         "installDependencies": settings.install_dependencies,
         "cancelGraceSeconds": settings.cancel_grace_seconds,
     }

@@ -3,7 +3,7 @@ dist/
 .env
 .env.*
 !.env.example
-artifacts/
+/artifacts/
 var/
 __pycache__/
 *.pyc

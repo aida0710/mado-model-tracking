@@ -15,7 +15,7 @@ export async function appendMetrics(
   // Arrival order can differ from step order during reconnects.
   await connection.query(
     `UPDATE runs SET latest_metrics=COALESCE((SELECT jsonb_object_agg(name,value) FROM
-    (SELECT DISTINCT ON(name) name,value FROM metrics WHERE run_id=$1 ORDER BY name,step DESC,timestamp DESC,id DESC) latest),'{}'::jsonb) WHERE id=$1`,
+    (SELECT DISTINCT ON(name) name,value FROM metrics WHERE run_id=$1 ORDER BY name,step DESC,timestamp DESC,value DESC,id DESC) latest),'{}'::jsonb) WHERE id=$1`,
     [runId],
   );
 }

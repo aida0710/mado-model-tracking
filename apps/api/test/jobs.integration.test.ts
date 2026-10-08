@@ -16,6 +16,25 @@ describe.skipIf(!testDatabaseUrl)('Job・GPU予約・worker lease（独立Postgr
     await harness?.close();
   });
 
+  it('MLflowで削除したqueued RunにはJobを作れず、復元すると作成できる', async () => {
+    const fixture = await executionFixture(harness);
+    const run = await fixture.newRun();
+    const trackingBase = `/api/mlflow/projects/${fixture.project.id}/api/2.0/mlflow/runs`;
+    expect((await request(harness.app, `${trackingBase}/delete`, {
+      method: 'POST', cookie: fixture.editor.cookie, body: { run_id: run.id },
+    })).status).toBe(200);
+    const jobRequest = {
+      method: 'POST', cookie: fixture.editor.cookie,
+      body: { runId: run.id, targetId: fixture.target.id, gpuIds: ['0'] },
+    };
+    expect((await request(harness.app, `${fixture.basePath}/jobs`, jobRequest)).status).toBe(409);
+    expect((await harness.database.query('SELECT id FROM jobs')).rows).toHaveLength(0);
+    expect((await request(harness.app, `${trackingBase}/restore`, {
+      method: 'POST', cookie: fixture.editor.cookie, body: { run_id: run.id },
+    })).status).toBe(200);
+    expect((await request(harness.app, `${fixture.basePath}/jobs`, jobRequest)).status).toBe(201);
+  });
+
   it('同時claimでも同じGPUを予約するJobは一つだけになる', async () => {
     const fixture = await executionFixture(harness);
     const runs = await Promise.all([fixture.newRun('First'), fixture.newRun('Second')]);
