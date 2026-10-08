@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
-import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,12 +27,19 @@ from mlflow.environment_variables import (
     MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE,
 )
 from mlflow.exceptions import MlflowException, _UnsupportedMultipartUploadException
+from mlflow3_checks.common import (
+    AutomationEnvironment,
+    create_local_cpu_target,
+    evaluation_rule,
+    expect_mlflow_error,
+    linear_fixture,
+    record_rest_calls,
+)
+from mlflow3_checks.evaluation import verify_evaluation, verify_evaluation_automation
+from mlflow3_checks.pyfunc_model import verify_pyfunc_model
+from mlflow3_checks.rich_artifacts import verify_rich_artifacts
 from sklearn.linear_model import LinearRegression
-from verify_worker import run_next_job, session_request
-
-from mado_tracking import Client
-from mado_tracking.settings import ApiSettings
-from mado_tracking.worker.config import WorkerSettings
+from verify_worker import session_request
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB_URL = os.environ.get("MMT_VERIFY_WEB_ORIGIN", "http://127.0.0.1:5182").rstrip("/")
@@ -45,10 +50,6 @@ ARTIFACT_DIRECTORY = (
 WORK_DIRECTORY = ROOT / "var/verification-mlflow3"
 # Exceed the JSON body limit to exercise streamed binary transfer through the Web proxy.
 LARGE_ARTIFACT_BYTES = 6 * 1024 * 1024
-# Native workers report final state only after the child process and output collection finish.
-WORKER_HEARTBEAT_SECONDS = 0.2
-WORKER_POLL_SECONDS = 0.1
-WORKER_TELEMETRY_SECONDS = 1
 TOKEN_LIFETIME = timedelta(hours=1)
 
 
@@ -150,8 +151,7 @@ def verify_multipart_fallback(client: MlflowClient, temporary: Path, *, token: s
 
 
 def verify_models(client: MlflowClient) -> dict:
-    features = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [2.0, 1.0]])
-    targets = features[:, 0] * 2 + features[:, 1] * 3 + 1
+    features, targets = linear_fixture()
     model = LinearRegression().fit(features, targets)
     with mlflow.start_run(run_name="Logged model and dataset") as run:
         mlflow.log_input(
@@ -183,11 +183,10 @@ def verify_models(client: MlflowClient) -> dict:
 
 
 def verify_autolog(client: MlflowClient) -> dict:
-    features = np.array([[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [2.0, 1.0]])
-    targets = features[:, 0] * 2 + features[:, 1] * 3 + 1
+    features, targets = linear_fixture()
     mlflow.sklearn.autolog(log_models=True, log_datasets=True, silent=False)
     try:
-        with mlflow.start_run(run_name="Unmodified sklearn autolog") as run:
+        with record_rest_calls() as calls, mlflow.start_run(run_name="Unmodified sklearn autolog") as run:
             LinearRegression().fit(features, targets)
             run_id = run.info.run_id
         recorded = client.get_run(run_id)
@@ -199,9 +198,56 @@ def verify_autolog(client: MlflowClient) -> dict:
             [recorded.info.experiment_id], filter_string=f"source_run_id = '{run_id}'"
         )
         assert models and all(model.status.name == "READY" for model in models)
-        return {"runId": run_id, "loggedModelIds": [model.model_id for model in models]}
+        return {
+            "runId": run_id,
+            "loggedModelIds": [model.model_id for model in models],
+            "tracesRequests": calls.traces_requests,
+        }
     finally:
         mlflow.sklearn.autolog(disable=True)
+
+
+def verify_deferred_webhooks(client: MlflowClient) -> dict | str:
+    if not hasattr(client, "create_webhook"):
+        return "not available in this SDK version"
+    error = expect_mlflow_error(
+        lambda: client.create_webhook(
+            name="deferred-webhook",
+            url="https://example.invalid/hook",
+            events=["registered_model.created"],
+        ),
+        "ENDPOINT_NOT_FOUND",
+    )
+    return {"errorCode": error.error_code, "httpStatus": error.get_http_status_code()}
+
+
+def verify_deferred_tracing(experiment_id: str) -> dict:
+    """Tracing is deferred: searches fail clearly, and a traced call inside a Run still completes."""
+
+    @mlflow.trace
+    def traced_double(value: int) -> int:
+        return value * 2
+
+    with record_rest_calls() as calls:
+        error = expect_mlflow_error(
+            lambda: mlflow.search_traces(experiment_ids=[experiment_id]), "ENDPOINT_NOT_FOUND"
+        )
+        with mlflow.start_run(run_name="Traced call while Tracing is deferred") as run:
+            assert traced_double(21) == 42
+        # Trace export may run on a background thread; wait for it so its request is recorded.
+        if hasattr(mlflow, "flush_trace_async_logging"):
+            mlflow.flush_trace_async_logging()
+    assert MlflowClient().get_run(run.info.run_id).info.status == "FINISHED"
+    return {
+        "searchTraces": {"errorCode": error.error_code, "httpStatus": error.get_http_status_code()},
+        "tracedRunId": run.info.run_id,
+        "tracesRequests": calls.traces_requests,
+    }
+
+
+def verify_deferred_apis(client: MlflowClient, *, experiment_id: str) -> dict:
+    """Record how the SDK reports APIs this server deliberately omits (docs/mlflow.md)."""
+    return {"webhooks": verify_deferred_webhooks(client), "tracing": verify_deferred_tracing(experiment_id)}
 
 
 def verify_authorization(
@@ -244,104 +290,31 @@ def verify_authorization(
 
 
 def verify_native_automation(
-    *,
-    session: httpx.Client,
-    project_id: str,
-    token: str,
-    experiment_id: str,
-    models: dict,
-    client: MlflowClient,
+    environment: AutomationEnvironment, *, models: dict, client: MlflowClient
 ) -> dict:
-    target = session_request(
-        session,
-        "POST",
-        "targets",
-        json={
-            "name": f"MLflow verification CPU {project_id[:8]}",
-            "host": "127.0.0.1",
-            "port": 22,
-            "username": "local",
-            "sshKeyPath": "",
-            "knownHostsPath": "",
-            "workDirectory": str(WORK_DIRECTORY / "jobs"),
-            "pythonExecutable": sys.executable,
-            "gpuIds": [],
-            "maxConcurrentJobs": 1,
-            "enabled": True,
-            "executor": "local",
-        },
-    )
-    with Client(api_url=API_URL, api_token=token) as native:
-        code = native.register_code(
-            project_id,
-            name="Official MLflow SDK evaluation",
-            version="v1",
-            source={
-                "kind": "inline",
-                "files": {"main.py": (ROOT / "scripts/fixtures/mlflowEvaluation.py").read_text()},
-            },
-            entrypoint=[sys.executable, "main.py"],
-            supported_model_families=["linear"],
-            task_types=["evaluation"],
-            environment={
-                "MLFLOW_DISABLE_AGENT_HINT": "1",
-                "MLFLOW_HTTP_REQUEST_MAX_RETRIES": "0",
-            },
-        )
-        rule = session_request(
-            session,
-            "POST",
-            f"projects/{project_id}/automation-rules",
-            json={
-                "name": "Evaluate MLflow registered models",
-                "enabled": True,
-                "modelFamilies": ["linear"],
-                "kind": "evaluation",
-                "experimentId": experiment_id,
-                "codeVersionId": code["id"],
-                "targetId": target["id"],
-                "gpuIds": [],
-                "inputDatasetVersionIds": [],
-                "parameters": {"evaluation": "mlflow-registry"},
-                "tags": {"source": "mlflow3"},
-                "maxAttempts": 1,
-            },
-        )
-        try:
-            registered = mlflow.register_model(models["modelUri"], "linear-regression")
-            executions = native.list_automation_executions(project_id)
+    with evaluation_rule(
+        environment,
+        name="Evaluate MLflow registered models",
+        main_source=(ROOT / "scripts/fixtures/mlflowEvaluation.py").read_text(),
+        model_family="linear",
+    ):
+        registered = mlflow.register_model(models["modelUri"], "linear-regression")
+        with environment.native_client() as native:
+            executions = native.list_automation_executions(environment.project_id)
             assert len(executions) == 1 and executions[0]["status"] == "queued", executions
             execution = executions[0]
-            settings = WorkerSettings(
-                api=ApiSettings.from_environment(url=API_URL, token=token),
-                worker_id=f"mlflow3-{project_id}",
-                target_ids=(target["id"],),
-                state_directory=WORK_DIRECTORY / "state" / project_id,
-                allow_local_executor=True,
-                install_dependencies=False,
-                heartbeat_seconds=WORKER_HEARTBEAT_SECONDS,
-                poll_seconds=WORKER_POLL_SECONDS,
-                telemetry_seconds=WORKER_TELEMETRY_SECONDS,
-            )
-            asyncio.run(run_next_job(settings))
-            recorded = native.get_run(project_id, execution["runId"]).entity
+            environment.run_one_worker_job()
+            recorded = native.get_run(environment.project_id, execution["runId"]).entity
             assert recorded["status"] == "finished", recorded
             assert abs(recorded["latestMetrics"]["evaluation.prediction"] - 9) < 1e-8
             assert client.get_run(recorded["id"]).info.status == "FINISHED"
-            lineage = native.request("GET", native.project_path(project_id, "lineage"))
+            lineage = native.request("GET", native.project_path(environment.project_id, "lineage"))
             assert models["runId"] in json.dumps(lineage) and recorded["id"] in json.dumps(lineage)
-            return {
-                "runId": recorded["id"],
-                "modelVersion": registered.version,
-                "automationExecutionId": execution["id"],
-            }
-        finally:
-            session_request(
-                session,
-                "PATCH",
-                f"projects/{project_id}/automation-rules/{rule['id']}",
-                json={"enabled": False},
-            )
+    return {
+        "runId": recorded["id"],
+        "modelVersion": registered.version,
+        "automationExecutionId": execution["id"],
+    }
 
 
 def main() -> None:
@@ -416,6 +389,28 @@ def main() -> None:
             summary["checks"].append("logged models, native registry, alias, pyfunc load, dataset lineage")
             summary["autolog"] = verify_autolog(client)
             summary["checks"].append("sklearn autolog with model and dataset logging")
+            summary["evaluation"] = verify_evaluation(
+                client,
+                model_uri=summary["models"]["modelUri"],
+                logged_model_id=summary["models"]["loggedModelId"],
+            )
+            summary["checks"].append("mlflow.models.evaluate metrics on the Run and Logged Model, eval table")
+            with tempfile.TemporaryDirectory(prefix="mmt-mlflow3-rich-") as directory:
+                summary["richArtifacts"] = verify_rich_artifacts(client, Path(directory))
+            summary["checks"].append("log_table/image/dict/text/figure, audio Content-Type and Range 206")
+            with tempfile.TemporaryDirectory(prefix="mmt-mlflow3-pyfunc-") as directory:
+                summary["pyfuncModel"] = verify_pyfunc_model(
+                    client, Path(directory), experiment_id=summary["tracking"]["experimentId"]
+                )
+            summary["checks"].append(
+                "custom multi-file pyfunc via alias, models:/ download, pandas search_runs"
+            )
+            summary["deferredApis"] = verify_deferred_apis(
+                client, experiment_id=summary["tracking"]["experimentId"]
+            )
+            summary["checks"].append(
+                "deferred webhooks/Tracing return ENDPOINT_NOT_FOUND without stopping Runs"
+            )
             summary["authorization"] = verify_authorization(
                 session=session,
                 project_id=project["id"],
@@ -423,16 +418,29 @@ def main() -> None:
                 other_project_id=other["id"],
             )
             summary["checks"].append("read-only, project isolation and invalid API tokens")
-            summary["automation"] = verify_native_automation(
+            target = create_local_cpu_target(
+                session, name=f"MLflow verification CPU {project['id'][:8]}", work_directory=WORK_DIRECTORY
+            )
+            automation = AutomationEnvironment(
                 session=session,
+                api_url=API_URL,
                 project_id=project["id"],
                 token=token,
                 experiment_id=summary["tracking"]["experimentId"],
-                models=summary["models"],
-                client=client,
+                target_id=target["id"],
+                work_directory=WORK_DIRECTORY,
+            )
+            summary["automation"] = verify_native_automation(
+                automation, models=summary["models"], client=client
             )
             summary["checks"].append(
                 "registry-triggered CPU evaluation and recording into the worker-owned Run"
+            )
+            summary["evaluationAutomation"] = verify_evaluation_automation(
+                automation, client=client, models=summary["models"], registered_name="linear-regression"
+            )
+            summary["checks"].append(
+                "registry-triggered mlflow.models.evaluate recorded once in the Job's Run"
             )
             summary["verifiedAt"] = datetime.now(ZoneInfo("Asia/Tokyo")).isoformat()
             summary_json = json.dumps(summary, ensure_ascii=False, indent=2)
