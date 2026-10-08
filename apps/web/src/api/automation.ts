@@ -1,4 +1,5 @@
 import type {
+  AutomationRuleOwnerTransfer,
   CreateAutomationExecution,
   ModelAutomationExecution,
   ModelAutomationExecutionPage,
@@ -33,6 +34,12 @@ export const automationApi = {
     request<ModelAutomationExecution>(
       `${rulesPath(projectId)}/${encodeId(ruleId)}/executions`,
       jsonRequest('POST', body),
+    ),
+  // Runs the rule as a Service Account of the Project; Project admin only.
+  transferOwner: (projectId: string, ruleId: string, body: AutomationRuleOwnerTransfer) =>
+    request<ModelAutomationRule>(
+      `${rulesPath(projectId)}/${encodeId(ruleId)}/owner`,
+      jsonRequest('PUT', body),
     ),
   // The newest page of the whole Project (the API default size).
   executions: (projectId: string, signal?: AbortSignal) =>

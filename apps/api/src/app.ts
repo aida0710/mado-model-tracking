@@ -66,6 +66,7 @@ import { PluginService, type PluginClientFactory } from './services/pluginServic
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
 import { AutomationSourceRunHandler } from './services/automationSourceRunHandler.js';
 import { AutomationChainHandler } from './services/automationChainHandler.js';
+import { AutomationRetryHandler } from './services/automationRetryHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { RunNoteService } from './services/runNoteService.js';
 import { RunResumeService } from './services/runResumeService.js';
@@ -231,7 +232,12 @@ export function createApplication(options: ApplicationOptions) {
     database,
     options.repositoryReader ?? ((request) => gitRepositories.read(request)),
   );
-  const automation = new ModelAutomationService(database, runs, jobs);
+  const automation = new ModelAutomationService({
+    database,
+    runs,
+    jobs,
+    webOrigin: config.webOrigin,
+  });
   const automationSweeper = new AutomationPendingSweeper(database, automation);
   const registry = new RegistryService(database, automation);
   // Output registration must run before the source-run handler releases pending automation.
@@ -241,6 +247,8 @@ export function createApplication(options: ApplicationOptions) {
   // Promotion follows automation chaining (wave-wide order: outputs, pending, chain, promotion).
   const promotion = new PromotionService(database);
   terminalHandlers.push(new PromotionRunHandler(promotion));
+  // Automatic retry follows promotion so a failed evaluation is judged before its retry starts.
+  terminalHandlers.push(new AutomationRetryHandler(automation));
   // Sweep trials follow chaining, promotion and automatic retry, and precede notifications.
   const sweepController = new SweepController(tasks, jobs);
   terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));

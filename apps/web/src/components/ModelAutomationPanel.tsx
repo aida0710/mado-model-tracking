@@ -103,6 +103,7 @@ export function ModelAutomationPanel({
               rules={rules}
               projectId={project.id}
               catalog={registry.value}
+              onRerun={canManage ? automation.reload : undefined}
             />
           )}
         </Resource>

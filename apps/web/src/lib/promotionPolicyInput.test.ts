@@ -35,6 +35,7 @@ const evaluationRule: ModelAutomationRule = {
   maxAttempts: 1,
   summaryMetrics: [],
   createdBy: 'user',
+  runAsUserId: 'user',
   createdAt: '2026-10-08T00:00:00.000Z',
 };
 const rules: ModelAutomationRule[] = [

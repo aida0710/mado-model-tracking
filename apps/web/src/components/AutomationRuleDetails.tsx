@@ -5,6 +5,8 @@ import type { AutomationCatalog } from '../types/modelAutomation';
 import { DetailsList, JsonDetails } from './JsonDetails';
 import { CodeRuntimeDetails } from './CodeRuntimeDetails';
 import { AutomationManualApply } from './AutomationManualApply';
+import { AutomationOwnerTransfer } from './AutomationOwnerTransfer';
+import { automationOwnerLabel } from '../lib/automationOwner';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
@@ -82,6 +84,10 @@ export function AutomationRuleDetails({
               : text.none,
           ],
           [text.maxAttempts, rule.maxAttempts],
+          [
+            automationText.owner,
+            <span title={automationText.ownerHint}>{automationOwnerLabel(rule)}</span>,
+          ],
           [text.user, rule.createdBy],
           [text.created, formatDate(rule.createdAt)],
         ]}
@@ -94,6 +100,14 @@ export function AutomationRuleDetails({
           projectId={projectId}
           registry={catalog.registry}
           onApplied={onApplied}
+        />
+      )}
+      {canManage && (
+        <AutomationOwnerTransfer
+          key={`${rule.id}:owner`}
+          rule={rule}
+          projectId={projectId}
+          onTransferred={onApplied}
         />
       )}
       <details className="automation-settings">

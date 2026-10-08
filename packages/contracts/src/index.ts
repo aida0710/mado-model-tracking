@@ -15,6 +15,7 @@ export type ArtifactBackend = string;
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { CreateAutomationExecution } from './modelAutomation.js';
+export type { AutomationRuleOwnerTransfer } from './modelAutomation.js';
 export type { ModelAutomationExecutionPage } from './modelAutomation.js';
 export type {
   AutomatedRunSummary,

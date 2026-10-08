@@ -794,14 +794,14 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
   it('各ruleのJob保存失敗はsavepointでRunもrollbackし、次のruleとモデル登録を残す', async () => {
     const fixture = await containerFixture(harness);
     const failed = await registerRule(fixture, {
-      overrides: { name: 'Failure', maxAttempts: 2 },
+      overrides: { name: 'Failure', maxAttempts: 5 },
     });
     const successful = await registerRule(fixture, {
       overrides: { name: 'Success', kind: 'evaluation' },
     });
     await harness.database
       .query(`CREATE FUNCTION reject_fixture_job() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN IF NEW.max_attempts=2 THEN RAISE EXCEPTION 'fixture confidential SQL detail' USING ERRCODE='23514'; END IF; RETURN NEW; END; $$;
+      BEGIN IF NEW.max_attempts=5 THEN RAISE EXCEPTION 'fixture confidential SQL detail' USING ERRCODE='23514'; END IF; RETURN NEW; END; $$;
       CREATE TRIGGER reject_fixture_job BEFORE INSERT ON jobs FOR EACH ROW EXECUTE FUNCTION reject_fixture_job()`);
     try {
       const model = await registerModel(fixture);

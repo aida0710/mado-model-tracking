@@ -15,6 +15,8 @@ import {
 export const MAX_SUMMARY_METRICS = 20;
 // The model version page asks for executions in pages; the default keeps the former fixed size.
 export const DEFAULT_AUTOMATION_EXECUTION_LIMIT = 100;
+// Automatic retries spend GPU time, so a rule retries only when maxAttempts is given explicitly.
+export const DEFAULT_AUTOMATION_MAX_ATTEMPTS = 1;
 export const MAX_AUTOMATION_EXECUTION_LIMIT = 200;
 
 const summaryMetricsSchema = z
@@ -36,7 +38,7 @@ export const modelAutomationRuleSchema = z.strictObject({
   inputDatasetVersionIds: uniqueIdsSchema.default([]),
   parameters: jsonObjectSchema.default({}),
   tags: tagsSchema.default({}),
-  maxAttempts: maxAttemptsSchema,
+  maxAttempts: maxAttemptsSchema.removeDefault().default(DEFAULT_AUTOMATION_MAX_ATTEMPTS),
   summaryMetrics: summaryMetricsSchema.default([]),
 });
 

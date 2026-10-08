@@ -187,7 +187,7 @@ export const gpuIdsSchema = z
   .refine((values) => new Set(values).size === values.length);
 // Explicit retries remain bounded, and the default matches the existing worker policy.
 const MAX_JOB_ATTEMPTS = 100;
-const DEFAULT_JOB_ATTEMPTS = 3;
+export const DEFAULT_JOB_ATTEMPTS = 3;
 export const maxAttemptsSchema = z
   .number()
   .int()

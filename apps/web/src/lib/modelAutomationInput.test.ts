@@ -28,6 +28,7 @@ const inferenceRule: ModelAutomationRule = {
   maxAttempts: 1,
   summaryMetrics: [],
   createdBy: 'admin',
+  runAsUserId: 'admin',
   createdAt: '2026-10-08T00:00:00Z',
 };
 const disabledRule = { ...inferenceRule, id: 'disabled-rule', enabled: false };

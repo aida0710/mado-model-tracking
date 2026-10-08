@@ -1,4 +1,5 @@
 import type { JobStatus, JsonObject, RunStatus } from './index.js';
+import type { UserKind } from './adminUsers.js';
 
 export interface ModelAutomationRule {
   id: string;
@@ -21,7 +22,18 @@ export interface ModelAutomationRule {
   // Metric names shown first, in this order, when the version page summarizes the rule's Runs.
   summaryMetrics: string[];
   createdBy: string;
+  // The user whose authority the rule runs with and who creates its Runs: the creator until a
+  // Project admin moves the rule to a Service Account (PUT .../automation-rules/:id/owner).
+  runAsUserId: string;
+  // Who runAsUserId is, for display; API responses include them, internal reads may not.
+  runAsKind?: UserKind;
+  runAsName?: string;
   createdAt: string;
+}
+
+/** PUT /projects/:p/automation-rules/:id/owner */
+export interface AutomationRuleOwnerTransfer {
+  serviceAccountId: string;
 }
 
 export interface ModelAutomationExecution {
@@ -50,6 +62,8 @@ export interface ModelAutomationExecution {
   source: 'automatic' | 'manual';
   // The Project admin who applied the rule by hand; null for automatic executions.
   requestedBy: string | null;
+  // The failed execution this automatic retry follows; null unless the server retried it.
+  retryOfExecutionId: string | null;
   createdAt: string;
 }
 

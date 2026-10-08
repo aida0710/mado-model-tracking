@@ -20,6 +20,7 @@ function execution(
     attempt: 1,
     source: 'automatic',
     requestedBy: null,
+    retryOfExecutionId: null,
     createdAt: '2026-10-08T00:00:00Z',
     ...overrides,
   };

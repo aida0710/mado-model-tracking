@@ -11,7 +11,7 @@ export interface PendingAutomationEvent {
 const storedExecutionSelect = `SELECT e.id,e.project_id,e.rule_id,e.model_version_id,e.run_id,e.job_id,e.status,e.error,
   e.created_at,mv.source_run_id,r.status AS run_status,j.status AS job_status,
   r.started_at AS run_started_at,r.ended_at AS run_ended_at,e.trigger_run_id,
-  e.pipeline_root_execution_id,e.attempt,e.source,e.requested_by
+  e.pipeline_root_execution_id,e.attempt,e.source,e.requested_by,e.retry_of_execution_id
   FROM model_automation_executions e
   JOIN model_versions mv ON mv.id=e.model_version_id
   LEFT JOIN runs r ON r.id=e.run_id AND r.project_id=e.project_id
@@ -26,7 +26,7 @@ const pendingExecutionSelect = `SELECT md5(ev.model_version_id::text||rule.id::t
   NULL AS error,ev.pending_since AS created_at,ev.source_run_id,NULL AS run_status,NULL AS job_status,
   NULL::timestamptz AS run_started_at,NULL::timestamptz AS run_ended_at,
   NULL::uuid AS trigger_run_id,md5(ev.model_version_id::text||rule.id::text)::uuid AS pipeline_root_execution_id,
-  1 AS attempt,'automatic' AS source,NULL::uuid AS requested_by
+  1 AS attempt,'automatic' AS source,NULL::uuid AS requested_by,NULL::uuid AS retry_of_execution_id
   FROM model_automation_events ev
   JOIN model_versions mv ON mv.id=ev.model_version_id
   JOIN models m ON m.id=mv.model_id
@@ -262,6 +262,7 @@ export interface AutomationExecutionInsert {
   attempt?: number;
   source?: ModelAutomationExecution['source'];
   requestedBy?: string | null;
+  retryOfExecutionId?: string | null;
 }
 
 export async function insertAutomationExecution(
@@ -271,8 +272,8 @@ export async function insertAutomationExecution(
   const inserted = await first<{ id: string }>(
     connection,
     `INSERT INTO model_automation_executions(id,project_id,rule_id,model_version_id,run_id,job_id,status,error,
-      trigger_run_id,pipeline_root_execution_id,attempt,source,requested_by)
-    VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      trigger_run_id,pipeline_root_execution_id,attempt,source,requested_by,retry_of_execution_id)
+    VALUES(COALESCE($1::uuid,gen_random_uuid()),$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
     [
       execution.id ?? null,
       execution.projectId,
@@ -287,21 +288,72 @@ export async function insertAutomationExecution(
       execution.attempt ?? 1,
       execution.source ?? 'automatic',
       execution.requestedBy ?? null,
+      execution.retryOfExecutionId ?? null,
     ],
   );
   return inserted!.id;
 }
 
-// The creator's role is the higher of the direct membership and SSO group bindings.
-export async function hasAutomationCreatorAccess(
+/**
+ * Whether the user a rule runs as may still run it: an active global administrator or an active
+ * user whose Project role is admin (the higher of the direct membership and SSO group bindings).
+ */
+export async function hasAutomationOwnerAccess(
   connection: Connection,
-  rule: { projectId: string; createdBy: string },
+  rule: Pick<ModelAutomationRule, 'projectId' | 'runAsUserId'>,
 ): Promise<boolean> {
-  const creator = await first<{ hasAccess: boolean }>(
+  const owner = await first<{ hasAccess: boolean }>(
     connection,
-    `SELECT (u.is_admin OR COALESCE(m.role='admin',false)) AS has_access FROM users u
+    `SELECT u.status='active' AND (u.is_admin OR COALESCE(m.role='admin',false)) AS has_access FROM users u
     LEFT JOIN effective_project_roles m ON m.user_id=u.id AND m.project_id=$2 WHERE u.id=$1`,
-    [rule.createdBy, rule.projectId],
+    [rule.runAsUserId, rule.projectId],
   );
-  return creator?.hasAccess === true;
+  return owner?.hasAccess === true;
+}
+
+// API responses name the owner, so the page can tell a person from a Service Account.
+const ruleWithOwnerSelect = `SELECT r.*,u.kind AS run_as_kind,u.display_name AS run_as_name
+  FROM model_automation_rules r JOIN users u ON u.id=r.run_as_user_id`;
+
+export async function listAutomationRules(
+  connection: Connection,
+  projectId: string,
+): Promise<ModelAutomationRule[]> {
+  return rows(
+    connection,
+    `${ruleWithOwnerSelect} WHERE r.project_id=$1 ORDER BY r.created_at DESC,r.id DESC`,
+    [projectId],
+  );
+}
+
+export async function findAutomationRule(
+  connection: Connection,
+  reference: { projectId: string; id: string },
+): Promise<ModelAutomationRule | undefined> {
+  return first(connection, `${ruleWithOwnerSelect} WHERE r.id=$1 AND r.project_id=$2`, [
+    reference.id,
+    reference.projectId,
+  ]);
+}
+
+export async function updateAutomationRuleOwner(
+  connection: Connection,
+  owner: { ruleId: string; runAsUserId: string },
+): Promise<void> {
+  await connection.query('UPDATE model_automation_rules SET run_as_user_id=$2 WHERE id=$1', [
+    owner.ruleId,
+    owner.runAsUserId,
+  ]);
+}
+
+/** The execution that already retried the given one, if any; a retry is created once. */
+export async function findAutomaticRetry(
+  connection: Connection,
+  executionId: string,
+): Promise<{ id: string } | undefined> {
+  return first(
+    connection,
+    'SELECT id FROM model_automation_executions WHERE retry_of_execution_id=$1',
+    [executionId],
+  );
 }
