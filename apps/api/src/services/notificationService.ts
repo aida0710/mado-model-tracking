@@ -398,7 +398,10 @@ export class NotificationService {
   private present(channel: ChannelRow): NotificationChannel {
     return {
       ...channel,
-      configured: isNotificationChannelConfigured(channel, this.options.environment),
+      // Email has no variables of its own; it can send only while an SMTP sender is registered.
+      configured:
+        this.options.senders[channel.kind] !== undefined &&
+        isNotificationChannelConfigured(channel, this.options.environment),
     };
   }
 

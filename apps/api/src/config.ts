@@ -3,6 +3,7 @@ import type { AuthMode } from '@mmt/contracts';
 import { createOidcRolePolicy, type OidcRolePolicy } from './domain/oidcRolePolicy.js';
 import { parseSecretKey, type SecretKey } from './security/secretEncryption.js';
 import { DEFAULT_CHECKPOINT_KEEP_COUNT } from '@mmt/contracts';
+import { parseSmtpSettings, type SmtpSettings } from '@mmt/platform';
 
 const optionalSetting = z.preprocess(
   (value) => (value === '' ? undefined : value),
@@ -124,6 +125,9 @@ const environmentSchema = z.object({
     .min(1)
     .default(DEFAULT_CHECKPOINT_KEEP_COUNT),
   MMT_CSV_EXPORT_MAX_ROWS: z.coerce.number().int().positive().default(DEFAULT_CSV_EXPORT_MAX_ROWS),
+  // Email notifications are sent only when both are set; the URL may hold the SMTP password.
+  MMT_SMTP_URL: optionalSetting,
+  MMT_SMTP_FROM: optionalSetting,
 });
 
 export interface ApiConfig {
@@ -168,6 +172,8 @@ export interface ApiConfig {
   checkpointKeepCount: number;
   // Rows of POST /runs/search/export.csv; further matches are cut and marked at the end.
   csvExportMaxRows: number;
+  // null leaves email channels saved but undeliverable (email_sender_unavailable).
+  smtp: SmtpSettings | null;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -285,5 +291,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
     checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
     csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,
+    smtp: parseSmtpSettings({ url: settings.MMT_SMTP_URL, from: settings.MMT_SMTP_FROM }),
   };
 }

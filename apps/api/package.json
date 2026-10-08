@@ -26,6 +26,8 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "@types/smtp-server": "^3.5.13",
+    "smtp-server": "^3.19.18"
   }
 }

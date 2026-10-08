@@ -140,7 +140,7 @@ export interface ApplicationOptions {
   environment?: NodeJS.ProcessEnv;
   pluginClientFactory?: PluginClientFactory;
   repositoryReader?: RepositoryReader;
-  /** Senders by channel kind; defaults to Slack and webhook over HTTP. */
+  /** Senders by channel kind; defaults to Slack and webhook over HTTP, and email when SMTP is set. */
   notificationSenders?: NotificationSenders;
 }
 
@@ -255,7 +255,8 @@ export function createApplication(options: ApplicationOptions) {
     clientFactory: options.pluginClientFactory,
   });
   const outbox = new OutboxDispatcher(database, plugins);
-  const notificationSenders = options.notificationSenders ?? createNotificationSenders();
+  const notificationSenders =
+    options.notificationSenders ?? createNotificationSenders({ smtp: config.smtp });
   const notificationEnvironment = options.environment ?? process.env;
   const notifications = new NotificationService({
     database,
