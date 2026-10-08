@@ -1,0 +1,37 @@
+/* Model version page: summary, lineage band, automation, evaluation results; Run downstream list. */
+.model-version-section {
+  padding-top: 24px;
+}
+.model-version-section h3 {
+  margin-top: 20px;
+}
+.model-version-aliases {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.model-version-alias {
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 1px 6px;
+  background: var(--surface);
+}
+.model-version-lineage {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.evaluation-origin {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.evaluation-origin-automatic {
+  color: var(--teal);
+}
+.evaluation-origin-manual {
+  color: var(--muted);
+}
+/* The sign is not coloured good or bad: which direction is better depends on the metric. */
+.delta-sign {
+  white-space: nowrap;
+}

@@ -60,6 +60,12 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   return payload as T;
 }
 
+// Cursor-paged responses carry the page items and the id to continue from (null on the last page).
+export function assertCursorPage(page: { items: unknown; nextCursor: unknown }): void {
+  if (!Array.isArray(page.items) || (page.nextCursor !== null && typeof page.nextCursor !== 'string'))
+    throw invalidResponseError();
+}
+
 export async function requestItems<T>(path: string, signal?: AbortSignal): Promise<T[]> {
   const payload = await request<{ items: T[] }>(path, { signal });
   if (!Array.isArray(payload.items)) throw invalidResponseError();

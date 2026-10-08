@@ -29,14 +29,19 @@ export const promotionApi = {
       `${policiesPath(projectId)}/${encodeId(policyId)}`,
       jsonRequest('PATCH', { enabled }),
     ),
+  // Filtered by a policy, by a candidate version (the version page), or both.
   evaluations: async (
     projectId: string,
-    { policyId, cursor, signal }: { policyId: string; cursor?: string; signal?: AbortSignal },
-  ): Promise<PromotionEvaluationPage> => {
-    const query = new URLSearchParams({
+    {
       policyId,
-      limit: String(PROMOTION_EVALUATION_PAGE_SIZE),
-    });
+      candidateVersionId,
+      cursor,
+      signal,
+    }: { policyId?: string; candidateVersionId?: string; cursor?: string; signal?: AbortSignal },
+  ): Promise<PromotionEvaluationPage> => {
+    const query = new URLSearchParams({ limit: String(PROMOTION_EVALUATION_PAGE_SIZE) });
+    if (policyId) query.set('policyId', policyId);
+    if (candidateVersionId) query.set('candidateVersionId', candidateVersionId);
     if (cursor) query.set('cursor', cursor);
     const page = await request<PromotionEvaluationPage>(`${evaluationsPath(projectId)}?${query}`, {
       signal,

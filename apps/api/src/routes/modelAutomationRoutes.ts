@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
 import {
   automationExecutionCreateSchema,
+  automationExecutionQuerySchema,
   modelAutomationRuleSchema,
   modelAutomationToggleSchema,
 } from '../domain/modelAutomationValidation.js';
-import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
+import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 import type { ModelAutomationService } from '../services/modelAutomationService.js';
 
@@ -44,9 +45,13 @@ export function modelAutomationRoutes(automation: ModelAutomationService): Hono<
     ),
   );
   routes.get('/:p/automation-executions', async (context) =>
-    context.json({
-      items: await automation.executions(principal(context), uuidParam(context, 'p')),
-    }),
+    context.json(
+      await automation.executions(
+        principal(context),
+        uuidParam(context, 'p'),
+        parse(automationExecutionQuerySchema, context.req.query()),
+      ),
+    ),
   );
   return routes;
 }

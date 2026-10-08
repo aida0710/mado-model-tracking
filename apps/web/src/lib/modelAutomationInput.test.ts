@@ -26,6 +26,7 @@ const inferenceRule: ModelAutomationRule = {
   parameters: {},
   tags: {},
   maxAttempts: 1,
+  summaryMetrics: [],
   createdBy: 'admin',
   createdAt: '2026-10-08T00:00:00Z',
 };

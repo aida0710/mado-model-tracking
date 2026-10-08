@@ -130,9 +130,9 @@ Runは固定CodeVersion IDと`environment.runtime`を保存する。Job登録時
 ## モデル登録後の自動実行
 
 - `GET /projects/:p/automation-rules` → `{items:ModelAutomationRule[]}`。
-- `POST /projects/:p/automation-rules` → ModelAutomationRule、201。bodyは`name,modelFamilies,kind,experimentId,codeVersionId,targetId,trigger?,upstreamRuleId?,gpuIds?,inputDatasetVersionIds?,parameters?,tags?,maxAttempts?,enabled?`。`kind`は`inference`・`evaluation`・`processing`。`trigger`は`model_registered`（既定）または`upstream_run_finished`（下記の連鎖）。`enabled`はtrue、GPU/入力は空、parameters/tagsは空、maxAttemptsは3が既定。
+- `POST /projects/:p/automation-rules` → ModelAutomationRule、201。bodyは`name,modelFamilies,kind,experimentId,codeVersionId,targetId,trigger?,upstreamRuleId?,gpuIds?,inputDatasetVersionIds?,parameters?,tags?,maxAttempts?,enabled?,summaryMetrics?`。`summaryMetrics`はモデル版の画面でこのruleのRunを集約するときに先頭へ並べるmetric名（0〜20件、重複不可、既定は空。ほかの設定と同じく不変）。`kind`は`inference`・`evaluation`・`processing`。`trigger`は`model_registered`（既定）または`upstream_run_finished`（下記の連鎖）。`enabled`はtrue、GPU/入力は空、parameters/tagsは空、maxAttemptsは3が既定。
 - `PATCH /projects/:p/automation-rules/:id` ({enabled:boolean}) → ModelAutomationRule。設定は不変で、有効/無効だけを切り替える。設定変更は新しいruleを登録する。
-- `GET /projects/:p/automation-executions` → `{items:ModelAutomationExecution[]}`。最新100件を返す。保留中の登録（下記）も`status:'pending'`の行として含める。
+- `GET /projects/:p/automation-executions?modelVersionId=&ruleId=&limit=&cursor=` → `{items:ModelAutomationExecution[],nextCursor:string|null}`。新しい順（createdAt、idの降順）。limitは既定100、最大200。`modelVersionId`・`ruleId`で絞り込む（他Projectや存在しないIDは0件）。cursorは前ページ末尾のID（保留中の行のIDも使える）で、絞り込みの外や存在しないcursorは404。保留中の登録（下記）も`status:'pending'`の行として含める。各行は`runStartedAt`・`runEndedAt`（作ったRunの開始・終了時刻。Runが無いか未開始ならnull）を持つ。
 - `POST /projects/:p/automation-rules/:id/executions` ({modelVersionId}|{triggerRunId}) → ModelAutomationExecution、201。既存の版への手動適用（下記）。
 
 作成・切替はProject adminまたはglobal adminだけが行える。API tokenには`admin` scopeに加え、Project制限と現在のmembershipを要求する。読む操作はviewerと`read` scope。CodeVersion、Experiment、入力DatasetVersionは同じProjectで照合し、モデル系列/kind、targetの有効状態/runtime/GPUも登録時に検証する。ruleには`createdBy`を保存する。登録処理では作成者の現在のProject admin/global admin権限を再確認し、失効していれば`skipped`を記録する。
@@ -155,6 +155,15 @@ ModelAutomationExecutionは`sourceRunId`（版の生成元Run、なければnull
 - ModelAutomationExecutionは`triggerRunId`（下流を起動した上流Run。1段目はnull）、`pipelineRootExecutionId`（1段目のexecution。1段目は自身のid）、`attempt`（1始まり）、`source`（`automatic`|`manual`）、`requestedBy`（手動適用した利用者。自動はnull）を持つ。保留中の行は`triggerRunId:null`、`pipelineRootExecutionId`＝`id`、`attempt:1`、`source:'automatic'`。
 - 手動適用`POST /projects/:p/automation-rules/:id/executions`はProject admin（global adminを含む）と`admin` scopeのtokenだけ（editorは403）。`model_registered`のruleは`{modelVersionId}`、`upstream_run_finished`のruleは`{triggerRunId}`を受け、逆は422 `automation_trigger_mismatch`。`triggerRunId`はfinished（違えば422 `upstream_run_not_finished`）で、そのruleの上流ruleが作ったRun（違えば422 `upstream_rule_mismatch`）で、出力DatasetVersionがあるRun（無ければ422 `upstream_outputs_missing`）に限る。ruleが無効なら422 `automation_rule_disabled`、版の系列がruleの`modelFamilies`に無ければ422 `incompatible_model_family`、同じruleと版のexecutionのJobがqueued/claimed/runningなら409 `automation_execution_active`。`attempt`は同じruleと版の最大＋1、`source:'manual'`、`requestedBy`を記録する。重み・作成者権限・参照先の再検証の結果は`skipped`/`failed`のexecutionとして201で返す。手動適用したRunが成功すると下流ruleは通常どおり連鎖する。監査は`automation.execution.manual`（403/409は`denied`）。
 - 作成者権限の再確認は`effective_project_roles`（直接付与とgroup bindingの最大値）のadminまたはglobal adminで判定する。
+
+### モデル版の詳細と評価の集約
+
+モデル版の画面（学習Run→版→推論・評価Run）のための読み取りAPI。どれもviewerと`read` scope。他Projectの版・Runの指定は404。
+
+- `GET /projects/:p/model-versions/:id` → ModelVersionDetail `{version:ModelVersion,model:Model,aliases:string[]}`。`aliases`はModelのaliasのうちこの版を指すもの（名前順）。
+- `GET /projects/:p/model-versions/:id/evaluations?kind=&limit=&cursor=` → ModelVersionEvaluationSummary `{modelVersionId,items:AutomatedRunSummary[],nextCursor}`。`modelVersionId`がこの版で、削除されていない`inference`・`evaluation`・`processing`のRun（`kind`で1種類に絞れる）。新しい順（createdAt、idの降順）、limitは既定50・最大200、cursorは前ページ末尾のRun ID（他の版のRunや存在しないIDは404）。
+- `GET /projects/:p/runs/:r/downstream?limit=&cursor=` → RunDownstreamPage `{runId,items:AutomatedRunSummary[],nextCursor}`。`parentRunId`がそのRunで削除されていないRun（kindは問わない）。順序・limit・cursorは上と同じ。
+- AutomatedRunSummary `{id,name,kind,status,modelVersionId,codeVersionId,parentRunId,latestMetrics,parameters,referenceDatasetVersionIds,upstreamDatasetVersionIds,automatic,ruleId,executionId,pipelineRootExecutionId,createdAt,startedAt,endedAt}`。`referenceDatasetVersionIds`は正解セット（`inputDatasetVersionIds`−`upstreamDatasetVersionIds`）。`automatic`はそのRunを作った自動実行があるか（`findExecutionForRun`。Jobの手動retryのRunは元のJobまで辿る。tagは見ない）で、`ruleId`・`executionId`・`pipelineRootExecutionId`はその自動実行の値（人が作ったRunはnull）。昇格判定の対象になるのは`automatic:true`の評価Runだけ。
 
 ## 評価結果の比較
 

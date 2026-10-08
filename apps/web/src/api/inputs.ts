@@ -50,10 +50,11 @@ export interface CreateCodeVersion {
   supportedModelFamilies: string[];
   taskTypes: RunKind[];
 }
+// summaryMetrics defaults to [] on the server; the rule form does not set it yet.
 export type CreateAutomationRule = Omit<
   ModelAutomationRule,
-  'id' | 'projectId' | 'createdBy' | 'createdAt'
->;
+  'id' | 'projectId' | 'createdBy' | 'createdAt' | 'summaryMetrics'
+> & { summaryMetrics?: string[] };
 export interface CreateDatasetVersion {
   version: string;
   uri: string;

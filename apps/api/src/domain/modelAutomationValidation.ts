@@ -11,6 +11,17 @@ import {
   uuidSchema,
 } from './validation.js';
 
+// Matches the CHECK in migration 034; a summary wider than this no longer fits one table row.
+export const MAX_SUMMARY_METRICS = 20;
+// The model version page asks for executions in pages; the default keeps the former fixed size.
+export const DEFAULT_AUTOMATION_EXECUTION_LIMIT = 100;
+export const MAX_AUTOMATION_EXECUTION_LIMIT = 200;
+
+const summaryMetricsSchema = z
+  .array(nameSchema)
+  .max(MAX_SUMMARY_METRICS)
+  .refine((metrics) => new Set(metrics).size === metrics.length, 'metrics must be unique');
+
 export const modelAutomationRuleSchema = z.strictObject({
   name: nameSchema,
   enabled: z.boolean().default(true),
@@ -26,6 +37,7 @@ export const modelAutomationRuleSchema = z.strictObject({
   parameters: jsonObjectSchema.default({}),
   tags: tagsSchema.default({}),
   maxAttempts: maxAttemptsSchema,
+  summaryMetrics: summaryMetricsSchema.default([]),
 });
 
 export const modelAutomationToggleSchema = z.strictObject({
@@ -37,8 +49,22 @@ export const automationExecutionCreateSchema = z.union([
   z.strictObject({ triggerRunId: uuidSchema }),
 ]);
 
+export const automationExecutionQuerySchema = z.strictObject({
+  modelVersionId: uuidSchema.optional(),
+  ruleId: uuidSchema.optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_AUTOMATION_EXECUTION_LIMIT)
+    .default(DEFAULT_AUTOMATION_EXECUTION_LIMIT),
+  // Pending rows have md5-derived ids that are not RFC 4122 versions, so any GUID is accepted.
+  cursor: z.guid().optional(),
+});
+
 export type ModelAutomationRuleCreate = z.infer<typeof modelAutomationRuleSchema>;
 export type AutomationExecutionCreate = z.infer<typeof automationExecutionCreateSchema>;
+export type AutomationExecutionQuery = z.infer<typeof automationExecutionQuerySchema>;
 
 // A chained rule needs the rule it follows; a registration rule must not name one.
 export function assertRuleTrigger(
