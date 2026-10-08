@@ -1,14 +1,37 @@
 import type { ApiError } from '@mmt/contracts';
-import { text } from '../i18n/catalog';
 
+// Client-side failure codes. They never come from the API and are translated in lib/errorMessage.ts.
+export const NETWORK_ERROR_CODE = 'network_error';
+export const INVALID_RESPONSE_CODE = 'invalid_response';
+
+/**
+ * A failed API call. It carries only what the API (or the transport) reported;
+ * lib/errorMessage.ts turns it into the text shown on screen.
+ */
 export class RequestError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public code?: string,
-  ) {
-    super(message);
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly serverMessage: string | undefined;
+
+  constructor({
+    status,
+    code,
+    serverMessage,
+  }: {
+    status: number;
+    code?: string;
+    serverMessage?: string;
+  }) {
+    super(serverMessage ?? `Request failed: ${code ?? `HTTP ${status}`}`);
+    this.name = 'RequestError';
+    this.status = status;
+    this.code = code;
+    this.serverMessage = serverMessage;
   }
+}
+
+export function invalidResponseError(status = 200): RequestError {
+  return new RequestError({ status, code: INVALID_RESPONSE_CODE });
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -17,27 +40,25 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     response = await fetch(`/api${path}`, { ...options, credentials: 'include' });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
-    throw new RequestError(text.requestError, 0);
+    throw new RequestError({ status: 0, code: NETWORK_ERROR_CODE });
   }
   if (response.status === 204) return undefined as T;
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     const apiError = payload as Partial<ApiError> | null;
-    throw new RequestError(
-      typeof apiError?.error === 'string'
-        ? apiError.error
-        : `${text.requestError} (${response.status})`,
-      response.status,
-      apiError?.code,
-    );
+    throw new RequestError({
+      status: response.status,
+      code: typeof apiError?.code === 'string' ? apiError.code : undefined,
+      serverMessage: typeof apiError?.error === 'string' ? apiError.error : undefined,
+    });
   }
-  if (payload === null) throw new RequestError(text.invalidResponse, response.status);
+  if (payload === null) throw invalidResponseError(response.status);
   return payload as T;
 }
 
 export async function requestItems<T>(path: string, signal?: AbortSignal): Promise<T[]> {
   const payload = await request<{ items: T[] }>(path, { signal });
-  if (!Array.isArray(payload.items)) throw new RequestError(text.invalidResponse, 200);
+  if (!Array.isArray(payload.items)) throw invalidResponseError();
   return payload.items;
 }
 

@@ -208,7 +208,7 @@ try {
     .last()
     .click();
   await page.getByRole('button', { name: '失効', exact: true }).click();
-  await submit();
+  await submit('失効');
   await page
     .getByText('UI verification personal token', { exact: true })
     .waitFor({ state: 'hidden' });

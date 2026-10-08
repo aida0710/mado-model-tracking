@@ -1,0 +1,43 @@
+/* Artifact browser, previews, and upload results. */
+.artifact-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 36%) minmax(0, 1fr);
+  gap: 28px;
+}
+.artifact-preview {
+  padding: 18px;
+  border: 1px solid var(--border);
+}
+.artifact-preview h3 {
+  margin-top: 0;
+  overflow-wrap: anywhere;
+}
+.artifact-image,
+.artifact-video {
+  display: block;
+  max-width: 100%;
+  max-height: 450px;
+  margin: 16px auto;
+}
+.artifact-preview audio {
+  width: 100%;
+  margin: 16px 0;
+}
+.artifact-text {
+  background: var(--surface);
+  max-height: 460px;
+  overflow: auto;
+  padding: 14px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.artifact-upload-result {
+  margin: 22px;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+  .artifact-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}

@@ -22,6 +22,13 @@ export const lineageRelationLabels: Record<string, string> = {
   parentDataset: '親データセット',
 };
 
+// Text that embeds values. Kept apart from `text` so every `text` entry stays a plain string.
+export const textTemplates = {
+  runCount: (count: number) => `${count} runs`,
+  revokeTokenConfirm: (tokenName: string) =>
+    `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
+};
+
 export const text = {
   ...workbenchText,
   ...accessText,
@@ -73,6 +80,9 @@ export const text = {
   navigation: 'メインナビゲーション',
   skipContent: 'コンテンツへ移動',
   noProjects: '参加しているプロジェクトがありません',
+  noProjectsCreateHint:
+    '「プロジェクトを作成」から始めてください。作成後も、設定の「Projects」で一覧と作成ができます。',
+  noProjectsAskAdmin: 'プロジェクトの管理者に、メンバーへの追加を依頼してください。',
   newExperiment: '実験を作成',
   filterExperiments: '実験を検索',
   newRun: 'Runを作成',

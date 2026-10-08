@@ -1,0 +1,241 @@
+/* Registry list/detail, details lists, automation panels, charts, logs, jobs, and the lineage graph. */
+.registry-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.registry-detail {
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  padding-left: 28px;
+}
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-heading h2 {
+  margin: 0;
+}
+.section-heading > div {
+  display: flex;
+  gap: 8px;
+}
+.version-detail {
+  padding-top: 20px;
+}
+.field-action {
+  margin-bottom: 16px;
+}
+.automation-panel {
+  padding-top: 20px;
+}
+.automation-enabled {
+  color: var(--teal);
+}
+.automation-links {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+.automation-error {
+  display: block;
+  min-width: 160px;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.automation-rule-detail {
+  margin-top: 24px;
+}
+.automation-settings {
+  margin-top: 20px;
+}
+.automation-settings summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
+.details-list {
+  margin: 0;
+  font-size: 12px;
+}
+.details-list > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.details-list dt {
+  color: var(--muted);
+}
+.details-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.version-link {
+  display: block;
+  margin-bottom: 5px;
+}
+.json-view {
+  padding: 16px;
+  background: var(--surface);
+  overflow: auto;
+  line-height: 1.6;
+}
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+}
+.chart-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 16px;
+  font-size: 12px;
+}
+.chart-selector span {
+  color: var(--muted);
+}
+.chart-selector select {
+  padding: 7px 10px;
+  border-color: var(--border);
+  min-width: 160px;
+}
+.chart-canvas {
+  height: 330px;
+  width: 100%;
+  background: var(--background);
+}
+.chart-points {
+  margin-top: 16px;
+  margin-bottom: 24px;
+  color: var(--muted);
+}
+.chart-points table {
+  margin-top: 12px;
+}
+.log-view {
+  background: #13171b;
+  color: #d8e1e5;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  max-height: 520px;
+  overflow: auto;
+  padding: 14px 16px;
+}
+.log-entry {
+  display: grid;
+  grid-template-columns: 138px 64px minmax(250px, 1fr);
+  gap: 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 3px 0;
+}
+.log-entry time {
+  color: #788c95;
+}
+.log-entry.log-error {
+  color: #ff9ca7;
+}
+.log-entry.log-warning {
+  color: #efcf8e;
+}
+.section-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+.job-detail {
+  border-top: 1px solid var(--border);
+  margin-top: 28px;
+  padding-top: 24px;
+}
+.job-detail > .details-list {
+  max-width: 640px;
+}
+.lineage-legend {
+  color: var(--muted);
+  margin: 0 0 16px;
+  font-size: 12px;
+}
+.graph-scroll {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.graph-edge {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5px;
+}
+.graph-node rect {
+  fill: var(--background);
+  stroke: var(--border);
+  stroke-width: 1.5px;
+}
+.graph-node:hover rect {
+  stroke: var(--teal);
+}
+.node-run rect {
+  stroke: var(--teal);
+}
+.node-modelVersion rect,
+.node-loggedModel rect {
+  stroke: #7991cf;
+}
+.node-datasetVersion rect {
+  stroke: #b79854;
+}
+.node-kind {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+.node-label {
+  fill: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.graph-relations {
+  margin-top: 20px;
+  color: var(--muted);
+}
+.graph-relations table {
+  margin-top: 14px;
+}
+@media (max-width: 1200px) {
+  .registry-layout {
+    grid-template-columns: minmax(250px, 34%) minmax(0, 1fr);
+    gap: 20px;
+  }
+  .registry-detail {
+    padding-left: 20px;
+  }
+}
+@media (max-width: 800px) {
+  .registry-layout,
+  .details-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .registry-detail {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding: 22px 0 0;
+  }
+  .chart-canvas {
+    height: 280px;
+  }
+}
+@media (max-width: 480px) {
+  .details-list > div {
+    grid-template-columns: 112px minmax(0, 1fr);
+  }
+}

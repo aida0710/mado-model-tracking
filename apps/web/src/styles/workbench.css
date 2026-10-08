@@ -1,0 +1,147 @@
+/* Code workspace editor, file tree, tasks, and execution snapshots. */
+.workspace-form-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.workspace-settings, .workspace-files {
+  min-width: 0;
+}
+.workspace-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.workspace-toolbar .inline-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+}
+.workspace-toolbar select {
+  min-width: 0;
+  max-width: 100%;
+}
+.file-path-field {
+  flex: 1;
+  min-width: 130px;
+}
+.file-path-field input {
+  width: 100%;
+}
+.workspace-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.code-file-tree {
+  min-width: 0;
+  overflow: auto;
+  max-height: 520px;
+  border-right: 1px solid var(--border);
+  padding: 8px 0;
+}
+.code-file-tree button, .code-directory {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 7px 8px;
+  text-align: start;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.code-file-tree button svg, .code-directory svg {
+  flex-shrink: 0;
+}
+.code-file-tree button[aria-current='true'] {
+  background: var(--surface);
+  color: var(--teal-strong);
+}
+.code-directory {
+  color: var(--muted);
+}
+.workspace-editor-pane {
+  min-width: 0;
+  overflow: hidden;
+}
+.editor-file-header {
+  border-bottom: 1px solid var(--border);
+  padding: 9px 12px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.monaco-container {
+  height: 470px;
+  min-width: 0;
+  position: relative;
+}
+.deleted-files {
+  margin-top: 14px;
+  font-size: 12px;
+}
+.deleted-files > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.deleted-files code {
+  overflow-wrap: anywhere;
+}
+.unsaved-indicator {
+  margin-right: auto;
+  align-self: center;
+  font-size: 12px;
+}
+.task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.task-details details, .execution-snapshot details {
+  margin-bottom: 12px;
+}
+.snapshot-artifacts {
+  padding-left: 20px;
+}
+.snapshot-artifacts code {
+  display: block;
+  font-size: 11px;
+  margin: 5px 0 12px;
+}
+.execution-snapshot {
+  min-width: 0;
+}
+@media (max-width: 800px) {
+  .workspace-form-grid, .workspace-editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .code-file-tree {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    max-height: 150px;
+  }
+  .monaco-container {
+    height: 360px;
+  }
+  .workspace-dialog footer {
+    flex-wrap: wrap;
+  }
+  .workspace-toolbar .inline-selector {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  .task-actions {
+    justify-content: flex-start;
+  }
+}

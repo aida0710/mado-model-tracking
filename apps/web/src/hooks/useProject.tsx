@@ -1,8 +1,10 @@
 import { createContext, useContext } from 'react';
 import type { Project } from '@mmt/contracts';
+import { canEditProject, canManageProject } from '../lib/permissions';
 
 export const ProjectContext = createContext<{
   project: Project;
+  projects: Project[];
   reloadProjects: () => void;
 } | null>(null);
 export function useProject() {
@@ -10,7 +12,7 @@ export function useProject() {
   if (!context) throw new Error('Project context is required');
   return {
     ...context,
-    canEdit: context.project.role !== 'viewer',
-    isProjectAdmin: context.project.role === 'admin',
+    canEdit: canEditProject(context.project.role),
+    isProjectAdmin: canManageProject(context.project.role),
   };
 }
