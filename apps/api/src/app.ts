@@ -14,6 +14,11 @@ import type { Database } from './db/database.js';
 import { DomainError } from './domain/errors.js';
 import { authentication } from './http/authMiddleware.js';
 import { jobTokenGuard } from './http/jobTokenGuard.js';
+import {
+  MAX_DATASET_VERSION_BODY_BYTES,
+  MAX_JSON_BODY_BYTES,
+  SYNC_BATCH_MAX_BYTES,
+} from './http/requestBodyLimits.js';
 import { isAllowedOrigin } from './http/originPolicy.js';
 import { principal, type ApiEnvironment } from './http/request.js';
 import { formatMlflowError, isMlflowArtifactUpload, isMlflowRequest } from './mlflow/errors.js';
@@ -131,6 +136,7 @@ import { NotificationRunHandler } from './services/notificationRunHandler.js';
 import { notificationRoutes } from './routes/notificationRoutes.js';
 import { SavedViewService } from './services/savedViewService.js';
 import { savedViewRoutes } from './routes/savedViewRoutes.js';
+import { openapiRoutes } from './routes/openapiRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -144,17 +150,10 @@ export interface ApplicationOptions {
   notificationSenders?: NotificationSenders;
 }
 
-// Registry JSON and code uploads are bounded separately from streamed artifact bodies.
-const MAX_JSON_BODY_BYTES = 4 * 1024 * 1024;
 // Upload session parts are raw bytes up to the part size, not JSON.
 const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
-// An offline sync batch carries up to 10000 metrics and 10000 log lines in one JSON body.
-const SYNC_BATCH_MAX_BYTES = 32 * 1024 * 1024;
 const SYNC_BATCH_PATH = /^\/api\/projects\/[^/]+\/sync\/runs\/[^/]+\/batches$/;
-// A DatasetVersion lists up to MAX_DATASET_VERSION_FILES files of up to 1024-character paths
-// (about 1.1 KB each with the Artifact ID), so its creation request gets a larger JSON limit.
 const DATASET_VERSION_CREATE_PATH = /^\/api\/projects\/[^/]+\/datasets\/[^/]+\/versions$/;
-const MAX_DATASET_VERSION_BODY_BYTES = 128 * 1024 * 1024;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
@@ -433,6 +432,7 @@ export function createApplication(options: ApplicationOptions) {
   );
   app.route('/api/account', accountRoutes(new AccountService(database)));
   app.route('/api', notificationRoutes(notifications));
+  app.route('/api', openapiRoutes());
   app.get('/api/storage/backends', async (context) => {
     requireScope(principal(context), 'read');
     await stores.ensureLoaded();

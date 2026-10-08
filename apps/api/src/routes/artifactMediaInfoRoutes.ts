@@ -6,7 +6,7 @@ import { parse, principal, uuidParam, type ApiEnvironment } from '../http/reques
 import type { ArtifactMediaInfoService } from '../services/artifactMediaInfoService.js';
 
 // artifactIds is one comma-separated value so a sample table fits its whole page in one URL.
-const artifactMediaInfoQuerySchema = z.object({
+export const artifactMediaInfoQuerySchema = z.object({
   artifactIds: z
     .string()
     .optional()
