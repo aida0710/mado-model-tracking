@@ -11,6 +11,7 @@ import './styles/layout.css';
 import './styles/tables.css';
 import './styles/registry.css';
 import './styles/artifacts.css';
+import './styles/audio.css';
 import './styles/forms.css';
 import './styles/workbench.css';
 import './styles/admin.css';
