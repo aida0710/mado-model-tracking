@@ -33,6 +33,7 @@ export function MemberDialog({
       title={member ? text.editMember : text.addMember}
       onClose={onClose}
       busy={mutation.pending}
+      fullScreenOnNarrow
     >
       <form
         onSubmit={(event) => {

@@ -11,7 +11,7 @@ import { executionApi } from '../api/execution';
 import { targetChecksApi } from '../api/targetChecks';
 import { useMutation } from '../hooks/useMutation';
 import { useQuery } from '../hooks/useQuery';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { ErrorNotice, Resource } from './Feedback';
 import { StatusBadge } from './StatusBadge';
 import { formatBytes, formatDate } from '../lib/format';
@@ -157,18 +157,20 @@ function TargetCheckItems({
   executor: ComputeTarget['executor'];
 }) {
   return (
-    <DataTable
-      items={items}
+    <ResponsiveTable
+      rows={items}
       rowKey={(item) => item.name}
       columns={[
         {
           key: 'item',
-          label: text.targetCheckItem,
+          priority: 'primary',
+          header: text.targetCheckItem,
           render: (item) => targetCheckItemLabel(item.name, executor),
         },
         {
           key: 'outcome',
-          label: text.targetCheckOutcome,
+          priority: 'primary',
+          header: text.targetCheckOutcome,
           render: (item) => (
             <span className={`status-badge ${outcomeBadgeClass[item.status]}`}>
               {targetCheckOutcomeLabels[item.status]}
@@ -177,13 +179,15 @@ function TargetCheckItems({
         },
         {
           key: 'detail',
-          label: text.targetCheckDetail,
+          priority: 'secondary',
+          header: text.targetCheckDetail,
           className: 'mono',
           render: (item) => item.detail ?? '—',
         },
         {
           key: 'action',
-          label: text.targetCheckAction,
+          priority: 'secondary',
+          header: text.targetCheckAction,
           render: (item) => (item.code ? targetCheckCodeHints[item.code] : ''),
         },
       ]}
@@ -195,20 +199,33 @@ function DetectedGpus({ gpus }: { gpus: TargetCheckGpu[] }) {
   return (
     <>
       <h3>{text.detectedGpus}</h3>
-      <DataTable
-        items={gpus}
+      <ResponsiveTable
+        rows={gpus}
         rowKey={(gpu) => gpu.uuid}
         empty={text.noDetectedGpus}
         columns={[
-          { key: 'index', label: text.gpuIndex, className: 'mono', render: (gpu) => gpu.index },
-          { key: 'name', label: text.gpuName, render: (gpu) => gpu.name },
+          {
+            key: 'index',
+            priority: 'primary',
+            header: text.gpuIndex,
+            className: 'mono',
+            render: (gpu) => gpu.index,
+          },
+          { key: 'name', priority: 'primary', header: text.gpuName, render: (gpu) => gpu.name },
           {
             key: 'memory',
-            label: text.gpuMemory,
+            priority: 'secondary',
+            header: text.gpuMemory,
             className: 'mono',
             render: (gpu) => `${gpu.memoryTotalMiB} MiB`,
           },
-          { key: 'uuid', label: text.gpuUuid, className: 'mono', render: (gpu) => gpu.uuid },
+          {
+            key: 'uuid',
+            priority: 'secondary',
+            header: text.gpuUuid,
+            className: 'mono',
+            render: (gpu) => gpu.uuid,
+          },
         ]}
       />
     </>

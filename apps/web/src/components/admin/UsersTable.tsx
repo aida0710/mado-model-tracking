@@ -1,5 +1,5 @@
 import type { AdminUser } from '@mmt/contracts';
-import { DataTable } from '../DataTable';
+import { ResponsiveTable } from '../ResponsiveTable';
 import { formatDate } from '../../lib/format';
 import { isSsoUser, userAuthSourceLabels } from '../../lib/adminUserDisplay';
 import { text } from '../../i18n/catalog';
@@ -32,14 +32,15 @@ export function UsersTable({
   onAction: (user: AdminUser, action: UserAction) => void;
 }) {
   return (
-    <DataTable
-      items={users}
+    <ResponsiveTable
+      rows={users}
       rowKey={(user) => user.id}
       empty={text.userNoMatches}
       columns={[
         {
           key: 'name',
-          label: text.displayName,
+          priority: 'primary',
+          header: text.displayName,
           render: (user) => (
             <div className="user-name">
               <strong>{user.displayName}</strong>
@@ -48,15 +49,22 @@ export function UsersTable({
             </div>
           ),
         },
-        { key: 'email', label: text.email, render: (user) => user.email || '—' },
+        {
+          key: 'email',
+          priority: 'secondary',
+          header: text.email,
+          render: (user) => user.email || '—',
+        },
         {
           key: 'authSources',
-          label: text.userAuthSources,
+          priority: 'secondary',
+          header: text.userAuthSources,
           render: (user) => userAuthSourceLabels(user).join(' / '),
         },
         {
           key: 'status',
-          label: text.userStatusFilter,
+          priority: 'primary',
+          header: text.userStatusFilter,
           render: (user) => (
             <span className={`user-status ${user.status}`}>
               {user.status === 'active' ? text.userStatusActive : text.userStatusDisabled}
@@ -65,7 +73,8 @@ export function UsersTable({
         },
         {
           key: 'admin',
-          label: text.userGlobalAdmin,
+          priority: 'secondary',
+          header: text.userGlobalAdmin,
           render: (user) => (
             <div className="user-admin">
               <span>{user.isAdmin ? text.userIsAdmin : text.userIsNotAdmin}</span>
@@ -75,12 +84,14 @@ export function UsersTable({
         },
         {
           key: 'lastLogin',
-          label: text.userLastLogin,
+          priority: 'secondary',
+          header: text.userLastLogin,
           render: (user) => formatDate(user.lastLoginAt),
         },
         {
           key: 'actions',
-          label: text.userActions,
+          priority: 'secondary',
+          header: text.userActions,
           render: (user) => (
             <div className="user-actions">
               {availableActions(user).map((action) => (

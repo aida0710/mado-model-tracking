@@ -28,7 +28,7 @@ export function LocalUserDialog({
   const mutation = useMutation();
   if (createdPassword)
     return (
-      <Dialog title={text.newLocalUser} onClose={onClose}>
+      <Dialog title={text.newLocalUser} onClose={onClose} fullScreenOnNarrow>
         <TemporaryPasswordNotice password={createdPassword} />
         <footer>
           <button type="button" className="button primary" onClick={onClose}>
@@ -38,7 +38,7 @@ export function LocalUserDialog({
       </Dialog>
     );
   return (
-    <Dialog title={text.newLocalUser} onClose={onClose} busy={mutation.pending}>
+    <Dialog title={text.newLocalUser} onClose={onClose} busy={mutation.pending} fullScreenOnNarrow>
       <form
         onSubmit={(event) => {
           event.preventDefault();

@@ -27,6 +27,7 @@ import { artifactLifecycleText, artifactLifecycleTextTemplates } from './artifac
 import { reportsText, reportsTextTemplates } from './reports';
 import { savedViewsText, savedViewsTextTemplates } from './savedViews';
 import { jobsText } from './jobs';
+import { responsiveText } from './responsive';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -102,6 +103,7 @@ export const text = {
   ...reportsText,
   ...savedViewsText,
   ...jobsText,
+  ...responsiveText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

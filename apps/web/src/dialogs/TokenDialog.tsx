@@ -51,7 +51,7 @@ export function TokenDialog({
     : text.newToken;
   if (token)
     return (
-      <Dialog title={title} onClose={onClose}>
+      <Dialog title={title} onClose={onClose} fullScreenOnNarrow>
         <p className="notice">{text.tokenOnce}</p>
         <label className="field">
           <span>{text.issuedTokenValue}</span>
@@ -79,6 +79,7 @@ export function TokenDialog({
     <FormDialog
       title={title}
       onClose={onClose}
+      fullScreenOnNarrow
       fields={[
         { name: 'name', label: text.name, required: true },
         {

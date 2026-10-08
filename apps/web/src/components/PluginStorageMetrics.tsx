@@ -8,7 +8,7 @@ import {
   type StorageBucketMetrics,
   type StorageConnectionMetrics,
 } from '../lib/storageMetrics';
-import { DataTable, type TableColumn } from './DataTable';
+import { ResponsiveTable, type ResponsiveTableColumn } from './ResponsiveTable';
 import { Empty, ErrorNotice, Resource } from './Feedback';
 import { StorageMetricValue } from './StorageMetricValue';
 import { text } from '../i18n/catalog';
@@ -26,10 +26,12 @@ const metricColumnDefinitions = {
 
 function createStorageMetricColumns<T extends StorageMeasurementFields>(
   fields: Array<keyof StorageMeasurementFields>,
-): TableColumn<T>[] {
+): ResponsiveTableColumn<T>[] {
   return fields.map((field) => ({
     key: field,
-    label: metricColumnDefinitions[field].label,
+    // Capacity is what the panel is for; the other measurements wait for the row to open.
+    priority: field === 'bytes' ? 'primary' : 'secondary',
+    header: metricColumnDefinitions[field].label,
     className: 'mono numeric nowrap',
     render: (item) => (
       <StorageMetricValue sample={item[field]} unit={metricColumnDefinitions[field].unit} />
@@ -59,13 +61,14 @@ function ConnectionStorageMetrics({ connection }: { connection: StorageConnectio
         </span>
       </div>
       {!!connection.buckets.length && (
-        <DataTable
-          items={connection.buckets}
+        <ResponsiveTable
+          rows={connection.buckets}
           rowKey={(bucket) => bucket.bucket}
           columns={[
             {
               key: 'bucket',
-              label: text.bucket,
+              priority: 'primary',
+              header: text.bucket,
               className: 'mono storage-label',
               render: (bucket) => bucket.bucket,
             },
@@ -81,19 +84,21 @@ function ConnectionStorageMetrics({ connection }: { connection: StorageConnectio
       {!!prefixes.length && (
         <div className="storage-prefixes">
           <h4>{text.prefix}</h4>
-          <DataTable
-            items={prefixes}
+          <ResponsiveTable
+            rows={prefixes}
             rowKey={(prefix) => JSON.stringify([prefix.bucket, prefix.prefix])}
             columns={[
               {
                 key: 'bucket',
-                label: text.bucket,
+                priority: 'primary',
+                header: text.bucket,
                 className: 'mono storage-label',
                 render: (prefix) => prefix.bucket,
               },
               {
                 key: 'prefix',
-                label: text.prefix,
+                priority: 'primary',
+                header: text.prefix,
                 className: 'mono storage-label',
                 render: (prefix) => prefix.prefix,
               },

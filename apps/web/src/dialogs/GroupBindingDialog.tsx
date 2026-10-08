@@ -38,6 +38,7 @@ export function GroupBindingDialog({
       title={binding ? text.editGroupBinding : text.addGroupBinding}
       onClose={onClose}
       busy={mutation.pending}
+      fullScreenOnNarrow
     >
       <form
         onSubmit={(event) => {

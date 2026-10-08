@@ -1,5 +1,5 @@
 import type { ComputeTarget, WorkerPresence } from '@mmt/contracts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
 
@@ -30,51 +30,59 @@ export function WorkerPresenceTable({
 }) {
   const targetName = (id: string) => targets.find((target) => target.id === id)?.name ?? id;
   return (
-    <DataTable
-      items={workers}
+    <ResponsiveTable
+      rows={workers}
       rowKey={(worker) => `${worker.tokenId}:${worker.workerId}`}
       empty={text.noWorkers}
       columns={[
         {
           key: 'worker',
-          label: text.workerId,
+          priority: 'primary',
+          header: text.workerId,
           className: 'mono',
           render: (worker) => worker.workerId,
         },
         {
           key: 'status',
-          label: text.workerStatus,
+          priority: 'primary',
+          header: text.workerStatus,
           render: (worker) => <WorkerStatusBadge status={worker.status} />,
         },
         {
           key: 'version',
-          label: text.workerVersion,
+          priority: 'secondary',
+          header: text.workerVersion,
           className: 'mono',
           render: (worker) => worker.version ?? '—',
         },
         {
           key: 'hostname',
-          label: text.workerHostname,
+          priority: 'secondary',
+          header: text.workerHostname,
           render: (worker) => worker.hostname ?? '—',
         },
         {
           key: 'token',
-          label: text.workerToken,
+          priority: 'secondary',
+          header: text.workerToken,
           render: (worker) => worker.tokenName,
         },
         {
           key: 'targets',
-          label: text.workerTargets,
+          priority: 'secondary',
+          header: text.workerTargets,
           render: (worker) => worker.targetIds?.map(targetName).join(', ') ?? text.workerAllTargets,
         },
         {
           key: 'lastSeen',
-          label: text.workerLastSeen,
+          priority: 'secondary',
+          header: text.workerLastSeen,
           render: (worker) => formatDate(worker.lastSeenAt),
         },
         {
           key: 'activeJobs',
-          label: text.workerActiveJobs,
+          priority: 'secondary',
+          header: text.workerActiveJobs,
           className: 'mono',
           render: (worker) =>
             worker.parallelJobs

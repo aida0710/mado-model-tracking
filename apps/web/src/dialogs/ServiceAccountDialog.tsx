@@ -24,6 +24,7 @@ export function ServiceAccountDialog({
     <FormDialog
       title={serviceAccount ? text.editServiceAccount : text.newServiceAccount}
       onClose={onClose}
+      fullScreenOnNarrow
       fields={[
         {
           name: 'name',

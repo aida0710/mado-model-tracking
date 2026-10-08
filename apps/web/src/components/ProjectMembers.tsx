@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ProjectMember } from '@mmt/contracts';
 import type { useProjectMembers } from '../hooks/useProjectMembers';
 import { useProject } from '../hooks/useProject';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { Resource } from './Feedback';
 import { ConfirmDialog } from './ConfirmDialog';
 import { MemberDialog } from '../dialogs/MemberDialog';
@@ -41,13 +41,14 @@ export function ProjectMembers({
       </div>
       <Resource query={members}>
         {(items) => (
-          <DataTable
-            items={items}
+          <ResponsiveTable
+            rows={items}
             rowKey={(member) => member.user.id}
             columns={[
               {
                 key: 'name',
-                label: text.name,
+                priority: 'primary',
+                header: text.name,
                 render: (member) => (
                   <span className="member-name">
                     {member.user.displayName}
@@ -59,11 +60,22 @@ export function ProjectMembers({
                   </span>
                 ),
               },
-              { key: 'email', label: text.email, render: (member) => member.user.email },
-              { key: 'role', label: text.effectiveRole, render: (member) => text[member.role] },
+              {
+                key: 'email',
+                priority: 'secondary',
+                header: text.email,
+                render: (member) => member.user.email,
+              },
+              {
+                key: 'role',
+                priority: 'primary',
+                header: text.effectiveRole,
+                render: (member) => text[member.role],
+              },
               {
                 key: 'sources',
-                label: text.memberSources,
+                priority: 'secondary',
+                header: text.memberSources,
                 render: (member) => (
                   <ul className="member-sources">
                     {listProjectMemberSources(member).map((source) => (
@@ -78,7 +90,8 @@ export function ProjectMembers({
                 ? [
                     {
                       key: 'actions',
-                      label: text.actions,
+                      priority: 'secondary' as const,
+                      header: text.actions,
                       render: (member: ProjectMember) =>
                         hasDirectGrant(member) ? (
                           <div className="access-actions">

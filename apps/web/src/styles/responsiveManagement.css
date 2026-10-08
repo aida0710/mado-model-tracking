@@ -1,0 +1,33 @@
+/*
+ * Narrow and touch layouts of the settings, global administration, Compute and Plugins screens:
+ * controls grow to the tap size and header actions wrap instead of leaving the screen. Up to
+ * --bp-lg covers tablets in landscape; a coarse pointer covers touch screens wider than that.
+ */
+@media (max-width: 1200px), (pointer: coarse) {
+  :is(.management-page, .admin-users, .admin-storage, .admin-audit)
+    :is(.button, select, input:not([type='checkbox'], [type='radio'])) {
+    min-height: var(--tap-target);
+  }
+  :is(.management-page, .admin-users, .admin-storage, .admin-audit) .icon-button {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+  :is(.management-page, .admin-users, .admin-storage, .admin-audit) .section-heading {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  /* A row of tap-sized buttons needs room between them. */
+  :is(.management-page, .admin-users, .admin-storage, .admin-audit)
+    :is(.access-actions, .user-actions, .storage-row-actions) {
+    gap: 8px;
+  }
+}
+/* A checkbox in a table cell gets a tap-sized hit area through its label. */
+.table-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-target);
+  min-height: var(--tap-target);
+  cursor: pointer;
+}

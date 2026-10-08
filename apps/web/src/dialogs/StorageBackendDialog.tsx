@@ -38,7 +38,7 @@ export function StorageBackendDialog({
   const mutation = useMutation();
   const title = backend ? text.editStorageBackend : text.newStorageBackend;
   return (
-    <Dialog title={title} onClose={onClose} busy={mutation.pending} wide>
+    <Dialog title={title} onClose={onClose} busy={mutation.pending} wide fullScreenOnNarrow>
       <form
         onSubmit={(event) => {
           event.preventDefault();

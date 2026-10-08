@@ -49,7 +49,7 @@ function ProjectForm({
   const [backend, setBackend] = useState(defaultBackend);
   const mutation = useMutation();
   return (
-    <Dialog title={text.newProject} onClose={onClose} busy={mutation.pending}>
+    <Dialog title={text.newProject} onClose={onClose} busy={mutation.pending} fullScreenOnNarrow>
       <form
         onSubmit={(event) => {
           event.preventDefault();

@@ -20,7 +20,7 @@ import {
   describeRuleFilter,
 } from '../lib/notificationInput';
 import type { FormField, FormValues } from '../types/form';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { ErrorNotice, Resource } from './Feedback';
 import { FormDialog } from './FormDialog';
 import { text, textTemplates } from '../i18n/catalog';
@@ -98,45 +98,56 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
       <ErrorNotice message={test.error} />
       <Resource query={settings.channels}>
         {(channels) => (
-          <DataTable
-            items={channels}
+          <ResponsiveTable
+            rows={channels}
             rowKey={(channel) => channel.id}
             empty={text.notificationChannelsEmpty}
             columns={[
-              { key: 'name', label: text.name, render: (channel) => channel.name },
+              {
+                key: 'name',
+                priority: 'primary',
+                header: text.name,
+                render: (channel) => channel.name,
+              },
               {
                 key: 'kind',
-                label: text.notificationChannelKind,
+                priority: 'secondary',
+                header: text.notificationChannelKind,
                 render: (channel) => notificationChannelKindLabels[channel.kind],
               },
               {
                 key: 'scope',
-                label: text.notificationChannelScope,
+                priority: 'secondary',
+                header: text.notificationChannelScope,
                 render: (channel) =>
                   channel.projectId ? text.notificationScopeProject : text.notificationScopeGlobal,
               },
               {
                 key: 'destination',
-                label: text.notificationDestination,
+                priority: 'secondary',
+                header: text.notificationDestination,
                 className: 'mono',
                 render: (channel) =>
                   channel.kind === 'email' ? channel.recipients.join(', ') : channel.urlEnv,
               },
               {
                 key: 'configured',
-                label: text.notificationConfigured,
+                priority: 'secondary',
+                header: text.notificationConfigured,
                 render: (channel) => configuredLabel(channel),
               },
               {
                 key: 'enabled',
-                label: text.status,
+                priority: 'primary',
+                header: text.status,
                 render: (channel) => (channel.enabled ? text.enabled : text.disabled),
               },
               ...(canEditChannels
                 ? [
                     {
                       key: 'actions',
-                      label: text.actions,
+                      priority: 'secondary' as const,
+                      header: text.actions,
                       render: (channel: NotificationChannel) => (
                         <div className="access-actions">
                           <button className="button small" onClick={() => setEditing(channel)}>
@@ -161,6 +172,7 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
       {editing && (
         <FormDialog
           title={editing === 'new' ? text.newNotificationChannel : text.editNotificationChannel}
+          fullScreenOnNarrow
           fields={channelFields(editing === 'new' ? undefined : editing)}
           onSubmit={(values) =>
             editing === 'new'
@@ -270,35 +282,40 @@ function RuleSection({ settings }: { settings: Settings }) {
       <ErrorNotice message={toggle.error} />
       <Resource query={settings.rules}>
         {(rules) => (
-          <DataTable
-            items={rules}
+          <ResponsiveTable
+            rows={rules}
             rowKey={(rule) => rule.id}
             empty={text.notificationRulesEmpty}
             columns={[
               {
                 key: 'channel',
-                label: text.notificationRuleChannel,
+                priority: 'primary',
+                header: text.notificationRuleChannel,
                 render: (rule) => channelName(rule.channelId),
               },
               {
                 key: 'events',
-                label: text.notificationRuleEvents,
+                priority: 'secondary',
+                header: text.notificationRuleEvents,
                 render: (rule) =>
                   rule.eventTypes.map((type) => notificationEventTypeLabels[type]).join('、'),
               },
               {
                 key: 'filter',
-                label: text.notificationRuleFilter,
+                priority: 'secondary',
+                header: text.notificationRuleFilter,
                 render: (rule) => describeRuleFilter(rule.filter, runKindLabel),
               },
               {
                 key: 'enabled',
-                label: text.status,
+                priority: 'primary',
+                header: text.status,
                 render: (rule) => (rule.enabled ? text.enabled : text.disabled),
               },
               {
                 key: 'actions',
-                label: text.actions,
+                priority: 'secondary',
+                header: text.actions,
                 render: (rule) => (
                   <button
                     className="button small"
@@ -316,6 +333,7 @@ function RuleSection({ settings }: { settings: Settings }) {
       {isCreating && (
         <FormDialog
           title={text.newNotificationRule}
+          fullScreenOnNarrow
           fields={ruleFields(settings)}
           onSubmit={(values) => settings.createRule(buildRuleCreate(values))}
           onSaved={() => {
@@ -385,39 +403,45 @@ function DeliverySection({ settings }: { settings: Settings }) {
       </div>
       <Resource query={settings.deliveries}>
         {(deliveries) => (
-          <DataTable<NotificationDelivery>
-            items={deliveries}
+          <ResponsiveTable<NotificationDelivery>
+            rows={deliveries}
             rowKey={(delivery) => delivery.id}
             empty={text.notificationDeliveriesEmpty}
             columns={[
               {
                 key: 'createdAt',
-                label: text.notificationDeliveryCreatedAt,
+                priority: 'primary',
+                header: text.notificationDeliveryCreatedAt,
                 render: (delivery) => formatDate(delivery.createdAt),
               },
               {
                 key: 'event',
-                label: text.notificationDeliveryEvent,
+                priority: 'primary',
+                header: text.notificationDeliveryEvent,
                 render: (delivery) => delivery.title,
               },
               {
                 key: 'channel',
-                label: text.notificationRuleChannel,
+                priority: 'secondary',
+                header: text.notificationRuleChannel,
                 render: (delivery) => delivery.channelName,
               },
               {
                 key: 'status',
-                label: text.status,
+                priority: 'primary',
+                header: text.status,
                 render: (delivery) => notificationDeliveryStatusLabels[delivery.status],
               },
               {
                 key: 'attempts',
-                label: text.notificationDeliveryAttempts,
+                priority: 'secondary',
+                header: text.notificationDeliveryAttempts,
                 render: (delivery) => delivery.attempts,
               },
               {
                 key: 'error',
-                label: text.notificationDeliveryError,
+                priority: 'secondary',
+                header: text.notificationDeliveryError,
                 render: (delivery) =>
                   delivery.lastError ? describeNotificationError(delivery.lastError) : '',
               },

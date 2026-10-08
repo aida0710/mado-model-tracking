@@ -11,7 +11,7 @@ export function PluginDialog({ plugin, onClose, onSaved }: {
 }) {
   const { project } = useProject();
   const form = usePluginForm({ projectId: project.id, plugin });
-  return <Dialog title={plugin ? text.editPlugin : text.newPlugin} onClose={onClose} busy={form.pending}>
+  return <Dialog title={plugin ? text.editPlugin : text.newPlugin} onClose={onClose} busy={form.pending} fullScreenOnNarrow>
     <form onSubmit={(event) => {
       event.preventDefault();
       void form.save().then((saved) => { if (saved) onSaved(saved); });

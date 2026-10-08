@@ -30,6 +30,7 @@ export function TargetDialog({
       {(auth) => (
         <FormDialog
           title={target ? text.editTarget : text.newTarget}
+          fullScreenOnNarrow
           onClose={onClose}
           onSaved={onSaved}
           fields={([
