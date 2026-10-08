@@ -108,6 +108,23 @@ export type {
   SweepTrialPage,
   SweepTrialState,
 } from './sweeps.js';
+export type {
+  ImportanceUnavailableReason,
+  ParameterExclusionReason,
+  ParameterImportanceEntry,
+  ParameterImportanceRequest,
+  ParameterImportanceResult,
+  RunAnalysisMetric,
+  RunAnalysisObjective,
+  RunAnalysisParam,
+  RunAnalysisParamKind,
+  RunAnalysisRange,
+  RunAnalysisRow,
+  RunAnalysisTableRequest,
+  RunAnalysisTableResponse,
+  RunSet,
+} from './runAnalysis.js';
+export { ANALYSIS_MAX_METRICS, ANALYSIS_MAX_PARAMS, ANALYSIS_MAX_RUNS } from './runAnalysis.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

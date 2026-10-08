@@ -74,6 +74,23 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - 権限: viewer以上と`read` scope（tokenのProject制限も確認）。runIdsに他ProjectのRunや存在しないRunが混じれば404 `not_found`（どちらか区別しない）。入力の誤り（上限、重複、xAxisとmetricKeyの組み合わせ、`xRange.min>=max`、runIdsとsearchの両方・どちらも無し）は422 `invalid_request`。Job限定tokenはこのendpointを許可していない。
 - MLflowの`ajax-api/2.0/mlflow/metrics/get-history-bulk-interval`（MLflow UI用）は今回足さない。公式SDKは呼ばず、必要になれば同じserviceを呼ぶだけで足せる。
 
+## 探索結果の分析（params×metrics表・パラメータ重要度）
+
+平行座標・散布図・重要度の表を、Run一覧・Compare・Sweepのどこからでも同じAPIで描くためのもの。型は`packages/contracts/src/runAnalysis.ts`。計算は`apps/api/src/domain/analysis/*`。
+
+- Run集合 `RunSet`: {runIds（重複不可）| search（`RunSearchRequest`から`limit`と`cursor`を除いたもの）| sweepId}のどれか1つ。searchは`POST /runs/search`と同じ検索（activeなRunだけ）を全ページ読む。sweepIdはそのSweepの試行のうちRunがactiveなもの。Run数が`ANALYSIS_MAX_RUNS`=5000を超えたら（runIdsの件数、searchの一致、Sweepの試行のどれでも）422 `too_many_runs`。
+- `POST /projects/:p/runs/analysis/table` body `RunAnalysisTableRequest` {runSet, params?（1〜100、重複不可）, metrics（1〜50、重複不可、各250文字まで）} → `RunAnalysisTableResponse` {runs:[{runId, name, experimentId, status, sweepTrialIndex?, params:{}, metrics:{}, objective?}], params:[{key, kind:'numeric'|'categorical', values?, coverage}], metrics:[{key, min, max}], objective?}。
+  - runsの並びは、sweepIdなら試行番号順、それ以外は作成日時の新しい順（runIdsの順ではない）。`sweepTrialIndex`はRunがSweepの試行なら付く（runIds・searchでも）。
+  - params: 実行parametersとSDKの記録値の合成で記録値が優先（run searchと同じ）。sweepIdでは試行の`parameters`がさらに優先する。値（nullでないもの）のあるparamだけを入れる。`params`省略時は値のある全param、100個を超えたら値のあるRunの多い順（同数は名前順）に100個を選び、名前順で返す。指定時は指定順。`kind`は値が全て数値か数値として読める文字列（`'1e-4'`など。`'0x10'`や`'Infinity'`は除く。重要度の計算と同じ規則）ならnumeric、それ以外はcategoricalで、`values`に値の文字列（文字列はそのまま、真偽値は`true`/`false`、object・配列はJSON）の重複なし一覧をコード単位順で返す。`coverage`は値のあるRunの割合。
+  - metrics: `latest_metrics`（最新値）。記録の無いkeyは入れず、NaN・±Infinityはnull。`min`/`max`は有限値の範囲で、無ければnull。
+  - sweepIdのときだけ、各runに試行の集約済みobjective（`sweep_trials.objective_value`、無ければnull）を`objective`として、応答に`objective` {metric, goal, aggregation, min, max}を返す。
+  - 取得は1回のSQLで、`executionSnapshot`などは読まない。
+- `POST /projects/:p/runs/analysis/parameter-importance` body `ParameterImportanceRequest` {runSet, targetMetric?, params?} → `ParameterImportanceResult` {targetMetric, targetSource:'latest_metric'|'sweep_objective', runCount, skippedRunCount, entries:[{param, kind, correlation, importance, permutationImportance, coverage}], excluded:[{param, reason:'high_cardinality'|'no_values'}], importanceUnavailableReason:'too_few_runs'|null, outOfBagR2}。
+  - 対象: `targetMetric`を指定すればそのmetricの最新値。省略はsweepIdのときだけ許し、試行の集約済みobjective（metric名は`objective.metric`）を使う。sweepId以外で省略すると422 `target_metric_required`。
+  - paramsの選び方は表と同じ。対象値が欠損・非有限のRunは除いて`skippedRunCount`に数える。Runが5件未満なら`importance`/`permutationImportance`はnullで`importanceUnavailableReason='too_few_runs'`（相関は返す）。種類が50を超えるカテゴリparamは`high_cardinality`で除外する。
+  - 同じRun集合なら、runIdsの順、search経由かどうかに関係なく同じ結果を返す（Run IDの順に並べ、固定seedで計算する）。上限付近（5000 Run×100 param）は同期計算で約1.6秒かかる。
+- 権限: viewer以上と`read` scope（tokenのProject制限も確認）。runIdsに他ProjectのRunや存在しないRunが混じれば404 `not_found`、sweepIdが他ProjectのSweepなら404。入力の誤り（runSetが無い・複数、上限、重複）は422 `invalid_request`。Job限定tokenはこのendpointを許可していない。
+
 ## Task・コード編集・テスト実行
 
 - `GET|POST /projects/:p/tasks`。POSTは`experimentId,name,description?,kind,codeVersionId,modelVersionId?,inputDatasetVersionIds?,parameters?,tags?,targetId?,gpuIds?`。参照は同じProjectに限定し、コードの実行種別・モデル系列・Runtime・GPUを検証する。
