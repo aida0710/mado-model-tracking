@@ -347,6 +347,21 @@ tr.selected td {
   }
 }
 /* ResponsiveTable: the row's open button and the secondary columns shown beneath an opened row. */
+/* Keeps the visually hidden header labels inside the scroll box instead of widening the page. */
+.responsive-table {
+  position: relative;
+}
+/* Text cells keep a few characters per line; a squeezed table scrolls inside its box instead. */
+.responsive-table td:not(.responsive-table-toggle) {
+  min-width: 6em;
+}
+/* URLs and digests have no spaces, so they break anywhere rather than widen their column. */
+.responsive-table .long-value {
+  overflow-wrap: anywhere;
+}
+.responsive-table-details dd :is(.access-actions, .user-actions, .storage-row-actions) {
+  flex-wrap: wrap;
+}
 .responsive-table .responsive-table-toggle {
   width: calc(var(--tap-target) + 8px);
   padding-left: 4px;

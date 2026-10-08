@@ -15,10 +15,13 @@ describe('width breakpoints', () => {
 
   it('どのスタイルシートのメディアクエリも共通の切り替え点だけを使う', () => {
     const allowed = new Set(Object.values(BREAKPOINT_PX).map((px) => `(width < ${px}px)`));
+    // A touch screen wider than a breakpoint may join it as `(width < …), (pointer: coarse)`.
+    const isAllowedCondition = (condition: string) =>
+      condition.startsWith('(prefers-') || condition === '(pointer: coarse)' || allowed.has(condition);
     const offending = stylesheetNames.flatMap((name) =>
       [...readStylesheet(name).matchAll(/@media\s+([^{]*?)\s*\{/g)]
         .map((match) => match[1]!)
-        .filter((query) => !query.startsWith('(prefers-') && !allowed.has(query))
+        .filter((query) => !query.split(/\s*,\s*/).every(isAllowedCondition))
         .map((query) => `${name}: ${query}`),
     );
     expect(offending).toEqual([]);

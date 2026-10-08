@@ -1,6 +1,6 @@
 import type { StorageBackend } from '@mmt/contracts';
 import { Lock } from 'lucide-react';
-import { DataTable } from '../DataTable';
+import { ResponsiveTable } from '../ResponsiveTable';
 import { text } from '../../i18n/catalog';
 
 /** Lists the storage backends with the actions a global administrator may take on each. */
@@ -21,14 +21,15 @@ export function StorageBackendsTable({
   onMakeDefault: (backend: StorageBackend) => void;
 }) {
   return (
-    <DataTable
-      items={backends}
+    <ResponsiveTable
+      rows={backends}
       rowKey={(backend) => backend.name}
       empty={text.storageNoBackends}
       columns={[
         {
           key: 'name',
-          label: text.name,
+          priority: 'primary',
+          header: text.name,
           render: (backend) => (
             <span className="storage-name">
               <strong>{backend.name}</strong>
@@ -38,26 +39,35 @@ export function StorageBackendsTable({
             </span>
           ),
         },
-        { key: 'kind', label: text.storageBackendKind, render: (backend) => text[backend.kind] },
+        {
+          key: 'kind',
+          priority: 'primary',
+          header: text.storageBackendKind,
+          render: (backend) => text[backend.kind],
+        },
         {
           key: 'location',
-          label: text.storageLocation,
+          priority: 'secondary',
+          header: text.storageLocation,
           className: 'storage-location',
           render: (backend) => <code>{describeLocation(backend)}</code>,
         },
         {
           key: 'signature',
-          label: text.storageSignature,
+          priority: 'secondary',
+          header: text.storageSignature,
           render: (backend) => (backend.kind === 's3' ? backend.signatureVersion : ''),
         },
         {
           key: 'state',
-          label: text.storageState,
+          priority: 'secondary',
+          header: text.storageState,
           render: (backend) => (backend.enabled ? text.enabled : text.disabled),
         },
         {
           key: 'source',
-          label: text.storageSource,
+          priority: 'secondary',
+          header: text.storageSource,
           render: (backend) =>
             backend.source === 'environment' ? (
               <span className="storage-readonly" title={text.storageEnvironmentReadOnly}>
@@ -70,7 +80,8 @@ export function StorageBackendsTable({
         },
         {
           key: 'actions',
-          label: <span className="sr-only">{text.edit}</span>,
+          priority: 'secondary',
+          header: <span className="sr-only">{text.edit}</span>,
           className: 'storage-actions',
           render: (backend) => (
             <span className="storage-row-actions">

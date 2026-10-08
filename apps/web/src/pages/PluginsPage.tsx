@@ -7,7 +7,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { PluginPanel } from '../components/PluginPanel';
 import { PluginDialog } from '../dialogs/PluginDialog';
@@ -24,7 +24,7 @@ export function PluginsPage() {
   const { user } = useAuth();
   if (!canManagePlugins(project.role, isGlobalAdmin(user)))
     return (
-      <section className="page">
+      <section className="page management-page">
         <PageHeader title={text.plugins} eyebrow={project.name} />
         <p className="notice">{text.pluginsAdminOnly}</p>
       </section>
@@ -41,7 +41,7 @@ function PluginConnections() {
     administrationApi.plugins(project.id, signal),
   );
   return (
-    <section className="page">
+    <section className="page management-page">
       <PageHeader
         title={text.plugins}
         eyebrow={project.name}
@@ -65,14 +65,15 @@ function PluginConnections() {
           return (
             <RegistryLayout
               list={
-                <DataTable
-                  items={items}
+                <ResponsiveTable
+                  rows={items}
                   rowKey={(plugin) => plugin.id}
                   selectedKey={selected?.id}
                   columns={[
                     {
                       key: 'name',
-                      label: text.name,
+                      priority: 'primary',
+                      header: text.name,
                       render: (plugin) => (
                         <button
                           className="link-button"
@@ -82,10 +83,17 @@ function PluginConnections() {
                         </button>
                       ),
                     },
-                    { key: 'url', label: text.baseUrl, render: (plugin) => plugin.baseUrl },
+                    {
+                      key: 'url',
+                      priority: 'secondary',
+                      header: text.baseUrl,
+                      className: 'long-value',
+                      render: (plugin) => plugin.baseUrl,
+                    },
                     {
                       key: 'enabled',
-                      label: text.enabled,
+                      priority: 'primary',
+                      header: text.enabled,
                       render: (plugin) => (
                         <input
                           type="checkbox"

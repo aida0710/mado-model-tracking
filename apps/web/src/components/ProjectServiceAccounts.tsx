@@ -3,7 +3,7 @@ import type { ServiceAccount } from '@mmt/contracts';
 import { useMutation } from '../hooks/useMutation';
 import { useProject } from '../hooks/useProject';
 import type { ServiceAccountsState } from '../hooks/useServiceAccounts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { ErrorNotice, Resource } from './Feedback';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ServiceAccountDialog } from '../dialogs/ServiceAccountDialog';
@@ -38,26 +38,34 @@ export function ProjectServiceAccounts({ access }: { access: ServiceAccountsStat
       <p className="muted">{text.serviceAccountsDescription}</p>
       <Resource query={serviceAccounts}>
         {(items) => (
-          <DataTable
-            items={items}
+          <ResponsiveTable
+            rows={items}
             rowKey={(account) => account.id}
             empty={text.serviceAccountsEmpty}
             columns={[
-              { key: 'name', label: text.name, render: (account) => account.name },
+              {
+                key: 'name',
+                priority: 'primary',
+                header: text.name,
+                render: (account) => account.name,
+              },
               {
                 key: 'description',
-                label: text.description,
+                priority: 'secondary',
+                header: text.description,
                 render: (account) => account.description,
               },
               {
                 key: 'role',
-                label: text.role,
+                priority: 'primary',
+                header: text.role,
                 render: (account) =>
                   account.role ? text[account.role] : text.serviceAccountRoleMissing,
               },
               {
                 key: 'status',
-                label: text.serviceAccountStatus,
+                priority: 'primary',
+                header: text.serviceAccountStatus,
                 render: (account) =>
                   account.status === 'active'
                     ? text.serviceAccountActive
@@ -65,12 +73,14 @@ export function ProjectServiceAccounts({ access }: { access: ServiceAccountsStat
               },
               {
                 key: 'createdAt',
-                label: text.created,
+                priority: 'secondary',
+                header: text.created,
                 render: (account) => formatDate(account.createdAt),
               },
               {
                 key: 'actions',
-                label: text.actions,
+                priority: 'secondary',
+                header: text.actions,
                 render: (account) => (
                   <div className="access-actions">
                     <button className="button small" onClick={() => setEditing(account)}>

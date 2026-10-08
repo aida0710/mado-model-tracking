@@ -7,14 +7,12 @@ import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { useMutation } from '../hooks/useMutation';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ComputeTargetsTable } from '../components/ComputeTargetsTable';
 import { WorkerPresenceTable } from '../components/WorkerPresenceTable';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { TargetCheckPanel } from '../components/TargetCheckPanel';
-import { formatTargetLocation } from '../lib/computeTargetDisplay';
 import { text } from '../i18n/catalog';
-import { runtimeLabels } from '../i18n/runtime';
 
 export function ComputePage() {
   const { user } = useAuth();
@@ -31,7 +29,7 @@ export function ComputePage() {
   );
   const checkedTarget = targets.value?.find((target) => target.id === checkedTargetId);
   return (
-    <section className="page">
+    <section className="page management-page">
       <PageHeader
         title={text.compute}
         eyebrow={project.name}
@@ -52,58 +50,22 @@ export function ComputePage() {
       <ErrorNotice message={mutation.error} />
       <Resource query={targets}>
         {(items) => (
-          <DataTable
-            items={items}
-            rowKey={(target) => target.id}
-            empty={text.noTargets}
-            columns={[
-              { key: 'name', label: text.name, render: (target) => target.name },
-              {
-                key: 'host',
-                label: text.host,
-                className: 'mono',
-                render: (target) => formatTargetLocation(target),
-              },
-              { key: 'executor', label: text.executor, render: (target) => target.executor },
-              {
-                key: 'runtime',
-                label: text.runtimeKinds,
-                render: (target) =>
-                  target.runtimeKinds.map((kind) => runtimeLabels[kind]).join(', '),
-              },
-              {
-                key: 'gpu',
-                label: text.gpuIds,
-                className: 'mono',
-                render: (target) => target.gpuIds.join(', ') || text.cpuOnly,
-              },
-              {
-                key: 'concurrent',
-                label: text.maxConcurrentJobs,
-                className: 'mono',
-                render: (target) => target.maxConcurrentJobs,
-              },
-              {
-                key: 'enabled',
-                label: text.enabled,
-                render: (target) => (
-                  <input
-                    type="checkbox"
-                    checked={target.enabled}
-                    disabled={!user.isAdmin || mutation.pending}
-                    aria-label={`${target.enabled ? text.disableTarget : text.enableTarget}: ${target.name}`}
-                    onChange={() => void mutation.run(() => executionApi.updateTarget(target.id, { enabled: !target.enabled }))
-                      .then((saved) => { if (saved) targets.reload(); })}
-                  />
-                ),
-              },
-              { key: 'edit', label: text.edit, render: (target) => user.isAdmin && <button className="button small"
-                data-testid={`target-edit-${target.id}`} onClick={() => { setEditingTarget(target); setShowDialog(true); }}>{text.editTarget}</button> },
-              ...(user.isAdmin
-                ? [{ key: 'check', label: text.targetCheck, render: (target: ComputeTarget) => <button className="button small"
-                  data-testid={`target-check-${target.id}`} onClick={() => setCheckedTargetId(target.id)}>{text.checkTarget}</button> }]
-                : []),
-            ]}
+          <ComputeTargetsTable
+            targets={items}
+            canManage={user.isAdmin}
+            pending={mutation.pending}
+            onToggleEnabled={(target) =>
+              void mutation
+                .run(() => executionApi.updateTarget(target.id, { enabled: !target.enabled }))
+                .then((saved) => {
+                  if (saved) targets.reload();
+                })
+            }
+            onEdit={(target) => {
+              setEditingTarget(target);
+              setShowDialog(true);
+            }}
+            onCheck={(target) => setCheckedTargetId(target.id)}
           />
         )}
       </Resource>

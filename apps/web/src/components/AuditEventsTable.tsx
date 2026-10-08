@@ -1,5 +1,5 @@
 import type { AuditEvent } from '@mmt/contracts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { summarizeAuditDetails } from '../lib/auditEventSummary';
 import { auditActionLabel, auditActorLabel, auditProjectLabel } from '../lib/auditEventDisplay';
 import { formatDate } from '../lib/format';
@@ -27,21 +27,23 @@ export function AuditEventsTable({
 }) {
   return (
     <>
-      <DataTable
-        items={events}
+      <ResponsiveTable
+        rows={events}
         rowKey={(event) => event.id}
         empty={accessText.auditEmpty}
         columns={[
           {
             key: 'occurredAt',
-            label: accessText.auditOccurredAt,
+            priority: 'primary',
+            header: accessText.auditOccurredAt,
             render: (event) => formatDate(event.occurredAt),
           },
           ...(showProject
             ? [
                 {
                   key: 'project',
-                  label: accessText.auditProject,
+                  priority: 'secondary' as const,
+                  header: accessText.auditProject,
                   className: 'audit-label',
                   render: (event: AuditEvent) => auditProjectLabel(event),
                 },
@@ -49,7 +51,8 @@ export function AuditEventsTable({
             : []),
           {
             key: 'actor',
-            label: accessText.auditActor,
+            priority: 'primary',
+            header: accessText.auditActor,
             className: 'audit-label',
             render: (event) => (
               <span title={event.actorUserId ?? undefined}>{auditActorLabel(event)}</span>
@@ -57,26 +60,30 @@ export function AuditEventsTable({
           },
           {
             key: 'action',
-            label: accessText.auditAction,
+            priority: 'primary',
+            header: accessText.auditAction,
             className: 'audit-label',
             render: (event) => <span title={event.action}>{auditActionLabel(event.action)}</span>,
           },
           {
             key: 'outcome',
-            label: accessText.auditOutcome,
+            priority: 'secondary',
+            header: accessText.auditOutcome,
             className: 'audit-label',
             render: (event) => outcomeLabels[event.outcome],
           },
           {
             key: 'resource',
-            label: accessText.auditResource,
+            priority: 'secondary',
+            header: accessText.auditResource,
             className: 'mono',
             render: (event) =>
               event.resourceId ? `${event.resourceType}/${event.resourceId}` : event.resourceType,
           },
           {
             key: 'details',
-            label: accessText.auditDetails,
+            priority: 'secondary',
+            header: accessText.auditDetails,
             render: (event) => (
               <span title={JSON.stringify(event.details)}>
                 {summarizeAuditDetails(event.details)}

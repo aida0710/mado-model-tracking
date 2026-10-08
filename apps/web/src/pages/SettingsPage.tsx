@@ -31,7 +31,7 @@ export function SettingsPage() {
     if (isProjectAdmin) serviceAccounts.projectTokens.reload();
   };
   return (
-    <section className="page">
+    <section className="page management-page">
       <PageHeader title={text.settings} eyebrow={project.name} />
       <div className="settings-grid">
         <ProjectList projects={projects} onCreated={reloadProjects} />

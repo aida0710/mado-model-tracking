@@ -3,7 +3,7 @@ import type { TokenSummary } from '@mmt/contracts';
 import { administrationApi } from '../api/administration';
 import { useProject } from '../hooks/useProject';
 import { useQuery, type QueryState } from '../hooks/useQuery';
-import { DataTable, type TableColumn } from './DataTable';
+import { ResponsiveTable, type ResponsiveTableColumn } from './ResponsiveTable';
 import { Resource } from './Feedback';
 import { ConfirmDialog } from './ConfirmDialog';
 import { TokenDialog } from '../dialogs/TokenDialog';
@@ -23,9 +23,10 @@ export function ProjectTokens({ projectTokens }: { projectTokens: QueryState<Tok
     personalTokens.reload();
     if (isProjectAdmin) projectTokens.reload();
   };
-  const revokeColumn: TableColumn<TokenSummary> = {
+  const revokeColumn: ResponsiveTableColumn<TokenSummary> = {
     key: 'revoke',
-    label: text.revoke,
+    priority: 'secondary',
+    header: text.revoke,
     render: (item) => (
       <button className="button small danger" onClick={() => setRevokingToken(item)}>
         {text.revoke}
@@ -43,8 +44,8 @@ export function ProjectTokens({ projectTokens }: { projectTokens: QueryState<Tok
         </div>
         <Resource query={personalTokens}>
           {(items) => (
-            <DataTable
-              items={items.filter(
+            <ResponsiveTable
+              rows={items.filter(
                 (item) => item.projectId === project.id || item.projectId === null,
               )}
               rowKey={(item) => item.id}
@@ -61,8 +62,8 @@ export function ProjectTokens({ projectTokens }: { projectTokens: QueryState<Tok
           <p className="muted">{text.projectTokensDescription}</p>
           <Resource query={projectTokens}>
             {(items) => (
-              <DataTable
-                items={items}
+              <ResponsiveTable
+                rows={items}
                 rowKey={(item) => item.id}
                 empty={text.projectTokensEmpty}
                 columns={[...tokenColumns({ withOwner: true }), revokeColumn]}
@@ -90,11 +91,12 @@ export function ProjectTokens({ projectTokens }: { projectTokens: QueryState<Tok
   );
 }
 
-function tokenColumns({ withOwner = false } = {}): TableColumn<TokenSummary>[] {
+function tokenColumns({ withOwner = false } = {}): ResponsiveTableColumn<TokenSummary>[] {
   return [
     {
       key: 'name',
-      label: text.name,
+      priority: 'primary',
+      header: text.name,
       render: (item) => (
         <>
           {item.name}
@@ -111,7 +113,8 @@ function tokenColumns({ withOwner = false } = {}): TableColumn<TokenSummary>[] {
       ? [
           {
             key: 'owner',
-            label: text.tokenOwner,
+            priority: 'secondary' as const,
+            header: text.tokenOwner,
             render: (item: TokenSummary) =>
               `${item.ownerName} (${
                 item.ownerType === 'service_account'
@@ -123,24 +126,28 @@ function tokenColumns({ withOwner = false } = {}): TableColumn<TokenSummary>[] {
       : []),
     {
       key: 'prefix',
-      label: text.tokenPrefix,
+      priority: 'secondary',
+      header: text.tokenPrefix,
       className: 'mono',
       render: (item) => (item.tokenPrefix ? `${item.tokenPrefix}…` : '—'),
     },
     {
       key: 'scopes',
-      label: text.scopes,
+      priority: 'secondary',
+      header: text.scopes,
       className: 'mono',
       render: (item) => item.scopes.join(', '),
     },
     {
       key: 'expires',
-      label: text.expiry,
+      priority: 'primary',
+      header: text.expiry,
       render: (item) => (item.expiresAt ? formatDate(item.expiresAt) : text.noExpiry),
     },
     {
       key: 'lastUsed',
-      label: text.lastUsed,
+      priority: 'secondary',
+      header: text.lastUsed,
       render: (item) => formatDate(item.lastUsedAt),
     },
   ];

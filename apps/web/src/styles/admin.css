@@ -95,7 +95,8 @@
   color: var(--muted);
   font-size: 12px;
 }
-@media (width < 900px) {
+/* The two-column settings stack below --bp-lg, before either column gets too narrow. */
+@media (width < 1200px) {
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;

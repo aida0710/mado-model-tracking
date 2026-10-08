@@ -6,7 +6,7 @@ import { useProject } from '../hooks/useProject';
 import { useAuth } from '../hooks/useAuth';
 import { useMutation } from '../hooks/useMutation';
 import { getPluginConnectionKey } from '../lib/pluginConnection';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { DetailsList, JsonDetails } from './JsonDetails';
 import { PluginDialog } from '../dialogs/PluginDialog';
 import { Empty, ErrorNotice } from './Feedback';
@@ -129,36 +129,41 @@ export function PluginPanel({
           </form>
           {datasets &&
             (datasets.length ? (
-              <DataTable
-                items={datasets}
+              <ResponsiveTable
+                rows={datasets}
                 rowKey={(dataset) => `${dataset.externalId}:${dataset.version}`}
                 columns={[
                   {
                     key: 'name',
-                    label: text.name,
+                    priority: 'primary',
+                    header: text.name,
                     render: (dataset) => `${dataset.namespace}/${dataset.name}`,
                   },
                   {
                     key: 'version',
-                    label: text.version,
+                    priority: 'primary',
+                    header: text.version,
                     className: 'mono',
                     render: (dataset) => dataset.version,
                   },
                   {
                     key: 'uri',
-                    label: text.uri,
-                    className: 'mono',
+                    priority: 'secondary',
+                    header: text.uri,
+                    className: 'mono long-value',
                     render: (dataset) => dataset.uri,
                   },
                   {
                     key: 'digest',
-                    label: text.digest,
-                    className: 'mono',
+                    priority: 'secondary',
+                    header: text.digest,
+                    className: 'mono long-value',
                     render: (dataset) => dataset.digest,
                   },
                   {
                     key: 'import',
-                    label: text.importing,
+                    priority: 'secondary',
+                    header: text.importing,
                     render: (dataset) => (
                       <button
                         className="button small"

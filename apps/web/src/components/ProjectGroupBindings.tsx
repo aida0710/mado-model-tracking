@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ProjectGroupBinding } from '@mmt/contracts';
 import { useProject } from '../hooks/useProject';
 import { useGroupNameCandidates, useProjectGroupBindings } from '../hooks/useProjectGroupBindings';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { Resource } from './Feedback';
 import { ConfirmDialog } from './ConfirmDialog';
 import { GroupBindingDialog } from '../dialogs/GroupBindingDialog';
@@ -34,28 +34,36 @@ export function ProjectGroupBindings({ onChanged }: { onChanged: () => void }) {
       <p className="muted">{text.groupBindingsDescription}</p>
       <Resource query={bindings}>
         {(items) => (
-          <DataTable
-            items={items}
+          <ResponsiveTable
+            rows={items}
             rowKey={(binding) => binding.group}
             empty={text.groupBindingsEmpty}
             columns={[
               {
                 key: 'group',
-                label: text.groupName,
+                priority: 'primary',
+                header: text.groupName,
                 className: 'mono',
                 render: (binding) => binding.group,
               },
-              { key: 'role', label: text.role, render: (binding) => text[binding.role] },
+              {
+                key: 'role',
+                priority: 'primary',
+                header: text.role,
+                render: (binding) => text[binding.role],
+              },
               {
                 key: 'createdAt',
-                label: text.grantedAt,
+                priority: 'secondary',
+                header: text.grantedAt,
                 render: (binding) => formatDate(binding.createdAt),
               },
               ...(isProjectAdmin
                 ? [
                     {
                       key: 'actions',
-                      label: text.actions,
+                      priority: 'secondary' as const,
+                      header: text.actions,
                       render: (binding: ProjectGroupBinding) => (
                         <div className="access-actions">
                           <button className="button small" onClick={() => setEditing(binding)}>
