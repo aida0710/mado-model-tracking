@@ -59,6 +59,8 @@ def build_runtime_bundle() -> bytes:
         archive.write(package_directory / "security.py", "runtime/security.py")
         archive.write(package_directory / "timestamps.py", "runtime/timestamps.py")
         archive.write(package_directory / "execution_runtime.py", "runtime/execution_runtime.py")
+        archive.write(package_directory / "code_source.py", "runtime/code_source.py")
+        archive.write(package_directory / "execution_snapshot.py", "runtime/execution_snapshot.py")
         for name in (
             "host_runner",
             "host_state",
@@ -71,13 +73,18 @@ def build_runtime_bundle() -> bytes:
             "docker_container",
             "sif_container",
             "job_execution",
+            "source_snapshot",
+            "source_tree",
+            "artifact_files",
         ):
             source = (package_directory / "worker" / f"{name}.py").read_text()
             archive.writestr(
                 f"runtime/{name}.py",
                 source.replace("from ..security", "from .security")
                 .replace("from ..timestamps", "from .timestamps")
-                .replace("from ..execution_runtime", "from .execution_runtime"),
+                .replace("from ..execution_runtime", "from .execution_runtime")
+                .replace("from ..code_source", "from .code_source")
+                .replace("from ..execution_snapshot", "from .execution_snapshot"),
             )
         for path in package_directory.glob("*.py"):
             archive.write(path, f"sdk/mado_tracking/{path.name}")
@@ -86,10 +93,15 @@ def build_runtime_bundle() -> bytes:
 
 
 def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[str, Any]:
+    snapshot = job.execution_snapshot
     return {
         "jobId": job.id,
         "leaseId": job.lease_id,
-        "codeVersion": {**job.code_version, "runtime": job.runtime},
+        "codeVersion": {**job.code_version, "runtime": snapshot["runtime"]},
+        "executionSnapshot": snapshot,
+        "runExecution": {
+            name: job.run[name] for name in ("executionMode", "executionSnapshot") if name in job.run
+        },
         "gpuIds": job.job["gpuIds"],
         "context": {
             "jobId": job.id,
@@ -101,6 +113,7 @@ def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[st
             "inputDatasets": job.input_datasets,
             "codeVersionId": job.code_version["id"],
             "gpuIds": job.job["gpuIds"],
+            "executionMode": snapshot["mode"],
         },
         "sdkEnvironment": build_tracking_environment(job, settings.api),
         "installDependencies": settings.install_dependencies,

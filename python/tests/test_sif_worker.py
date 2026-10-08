@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 from test_container_inputs import container_payload
 from test_docker_worker import ContainerServer, execute_job, workspace_for
+from test_execution_snapshot import pin_execution
 
 from mado_tracking.worker.contracts import WorkerJob
 from mado_tracking.worker.host_state import process_identity
@@ -111,14 +112,21 @@ def sif_fixture(payload, tmp_path, monkeypatch, *, kind, source):
 
 
 @pytest.mark.parametrize("kind", ["singularity", "apptainer"])
+@pytest.mark.parametrize("mode", ["run", "test"])
 def test_sif_backend_executes_real_source_collects_results_and_keeps_secrets_out_of_argv(
-    job_payload, worker_settings, tmp_path, monkeypatch, kind
+    job_payload, worker_settings, tmp_path, monkeypatch, kind, mode
 ):
     server = sif_fixture(job_payload, tmp_path, monkeypatch, kind=kind, source=ENTRYPOINT)
+    if mode == "test":
+        job_payload["codeVersion"]["testEntrypoint"] = job_payload["codeVersion"]["entrypoint"]
+        job_payload["codeVersion"]["entrypoint"] = ["python", "/mmt/source/must-not-run.py"]
+    pin_execution(job_payload, mode)
     settings = replace(worker_settings, telemetry_seconds=float("inf"), install_dependencies=True)
     asyncio.run(execute_job(server, settings))
     assert server.completions[-1]["status"] == "finished"
     assert server.uploads == [("container/output.bin", b"SIF process executed registered source")]
+    manifest = json.loads(dict(server.snapshot_uploads)[".mmt/source-manifest.json"])
+    assert manifest["mode"] == mode and manifest["runtime"]["kind"] == kind
     workspace = workspace_for(job_payload)
     assert not (workspace / "venv").exists()
     assert "opaque-$(never-evaluate)-secret" not in (workspace / "stdout.log").read_text()

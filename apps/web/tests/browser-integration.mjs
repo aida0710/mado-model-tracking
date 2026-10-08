@@ -28,7 +28,9 @@ const fill = (name, value) =>
 const select = (name, value) =>
   page.getByRole('dialog').getByLabel(name, { exact: false }).selectOption(value);
 const submit = async (name = '保存') => {
-  await page.getByRole('dialog').getByRole('button', { name, exact: true }).click();
+  const versionSave = page.getByRole('dialog').getByTestId('code-version-save');
+  if (name === '保存' && await versionSave.count()) await versionSave.click();
+  else await page.getByRole('dialog').getByRole('button', { name, exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
 };
 const screenshot = async (name) => {
@@ -110,13 +112,10 @@ try {
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
   await fill('Version', 'v1');
   await select('ソース形式', 'inline');
-  await fill(
-    'ファイル（パスと内容のJSON）',
-    JSON.stringify({
-      'main.py':
-        'import json\npairs = [(0, 1), (1, 3), (2, 5)]\nprint(json.dumps({"mean_y": sum(y for _, y in pairs) / len(pairs)}))\n',
-    }),
-  );
+  await fill('ファイルのパス', 'main.py');
+  await page.getByRole('dialog').getByRole('button', { name: 'ファイルを追加', exact: true }).click();
+  await page.getByRole('dialog').getByRole('textbox', { name: 'コードエディタ: main.py', exact: true }).focus();
+  await page.keyboard.insertText('import json\npairs = [(0, 1), (1, 3), (2, 5)]\nprint(json.dumps({"mean_y": sum(y for _, y in pairs) / len(pairs)}))\n');
   await fill('実行コマンド', '["python3","main.py"]');
   await fill('対応モデル系列', 'ui-linear');
   await select('対応する実行種別', ['training', 'finetuning']);

@@ -5,6 +5,16 @@ const optionalSetting = z.preprocess(
   z.string().optional(),
 );
 const optionalUrl = z.preprocess((value) => (value === '' ? undefined : value), z.url().optional());
+// Operator-owned SSH paths are never accepted from repository request bodies.
+const optionalSshPath = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .min(1)
+    .max(4000)
+    .refine((value) => value.startsWith('/') && !/[\x00-\x1f\x7f]/.test(value))
+    .optional(),
+);
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -27,6 +37,8 @@ const environmentSchema = z.object({
     .default('admin@localhost'),
   MMT_ALLOW_LOCAL_EXECUTOR: z.enum(['true', 'false']).default('false'),
   MMT_ALLOW_SEED: z.enum(['true', 'false']).default('false'),
+  MMT_GIT_SSH_KEY_PATH: optionalSshPath,
+  MMT_GIT_KNOWN_HOSTS_PATH: optionalSshPath,
 });
 
 export interface ApiConfig {
@@ -48,6 +60,7 @@ export interface ApiConfig {
   developmentAdminEmail: string;
   allowLocalExecutor: boolean;
   allowSeed: boolean;
+  repositorySsh: { keyPath: string; knownHostsPath: string } | null;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -58,6 +71,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       `Invalid configuration: ${parsed.error.issues.map((issue) => issue.path.join('.')).join(', ')}`,
     );
   const settings = parsed.data;
+  if (!!settings.MMT_GIT_SSH_KEY_PATH !== !!settings.MMT_GIT_KNOWN_HOSTS_PATH)
+    throw new Error('MMT_GIT_SSH_KEY_PATH and MMT_GIT_KNOWN_HOSTS_PATH must be set together');
   const databaseUrl = settings.MMT_DATABASE_URL ?? settings.DATABASE_URL;
   if (!databaseUrl) throw new Error('MMT_DATABASE_URL or DATABASE_URL is required');
   const isProduction = settings.NODE_ENV === 'production';
@@ -115,5 +130,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     allowLocalExecutor:
       settings.AUTH_MODE === 'development' && settings.MMT_ALLOW_LOCAL_EXECUTOR === 'true',
     allowSeed: settings.AUTH_MODE === 'development' && settings.MMT_ALLOW_SEED === 'true',
+    repositorySsh:
+      settings.MMT_GIT_SSH_KEY_PATH && settings.MMT_GIT_KNOWN_HOSTS_PATH
+        ? {
+            keyPath: settings.MMT_GIT_SSH_KEY_PATH,
+            knownHostsPath: settings.MMT_GIT_KNOWN_HOSTS_PATH,
+          }
+        : null,
   };
 }

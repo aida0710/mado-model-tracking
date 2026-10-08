@@ -8,11 +8,13 @@ import type {
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
-import { conflict, notFound } from '../domain/errors.js';
+import { conflict, DomainError } from '../domain/errors.js';
+import { createExecutionSnapshot } from '../domain/executionSnapshot.js';
 import type { RunCreate, RunPatch } from '../domain/validation.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { validatePinnedRuntime } from '../domain/runtimeCompatibility.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
+import { runSummarySelect } from '../repositories/runListProjection.js';
 import { isTerminalStatus, validateRunTransition } from '../domain/runTransitions.js';
 import {
   assertProjectReference,
@@ -20,6 +22,7 @@ import {
   findCodeVersion,
   findModelVersion,
   findRun,
+  lockActiveExperiment,
 } from '../repositories/registryRepository.js';
 import {
   appendLogs,
@@ -52,7 +55,7 @@ export class RunService {
       });
     return rows(
       this.database,
-      `SELECT * FROM runs WHERE project_id=$1 AND lifecycle_stage='active' AND ($2::uuid IS NULL OR experiment_id=$2)
+      `${runSummarySelect} WHERE project_id=$1 AND lifecycle_stage='active' AND ($2::uuid IS NULL OR experiment_id=$2)
       AND ($3::text IS NULL OR status=$3) AND ($4::text IS NULL OR name ILIKE '%'||$4||'%') ORDER BY created_at DESC,id DESC LIMIT $5`,
       [
         projectId,
@@ -77,16 +80,15 @@ export class RunService {
 
   async insertRun(
     connection: Connection,
-    registration: { projectId: string; createdBy: string; input: RunCreate },
+    registration: {
+      projectId: string;
+      createdBy: string;
+      input: RunCreate;
+      task?: { id: string; revision: number };
+    },
   ): Promise<Run> {
     const { projectId, input } = registration;
-    const experiment = await first<{ lifecycleStage: string }>(
-      connection,
-      'SELECT lifecycle_stage FROM experiments WHERE project_id=$1 AND id=$2 FOR SHARE',
-      [projectId, input.experimentId],
-    );
-    if (!experiment) notFound('Experiment');
-    if (experiment.lifecycleStage !== 'active') conflict('削除済みExperimentにはRunを作成できません');
+    await lockActiveExperiment(connection, { projectId, id: input.experimentId });
     await assertProjectReferences(connection, {
       table: 'dataset_versions',
       projectId,
@@ -109,10 +111,14 @@ export class RunService {
       if (input.environment.runtime !== undefined)
         validatePinnedRuntime(code.runtime, input.environment.runtime);
     }
+    const mode = input.executionMode ?? 'run';
+    if (!code && mode === 'test')
+      throw new DomainError(422, 'テストにはCodeVersionが必要です', 'code_required');
+    const snapshot = code ? createExecutionSnapshot(code, mode) : null;
     return (await first<Run>(
       connection,
-      `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         projectId,
         input.experimentId,
@@ -126,6 +132,10 @@ export class RunService {
         input.parentRunId ?? null,
         JSON.stringify(code ? { ...input.environment, runtime: code.runtime } : input.environment),
         registration.createdBy,
+        mode,
+        snapshot ? JSON.stringify(snapshot) : null,
+        registration.task?.id ?? null,
+        registration.task?.revision ?? null,
       ],
     ))!;
   }

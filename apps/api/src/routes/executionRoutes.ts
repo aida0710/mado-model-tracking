@@ -7,6 +7,7 @@ import {
   heartbeatSchema,
   jobCreateSchema,
   targetSchema,
+  targetPatchSchema,
   workerClaimSchema,
   workerResumeSchema,
   workerLogSchema,
@@ -23,6 +24,15 @@ export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
     context.json(
       await targets.create(principal(context), await jsonBody(context, targetSchema)),
       201,
+    ),
+  );
+  routes.patch('/:id', async (context) =>
+    context.json(
+      await targets.patch(
+        principal(context),
+        uuidParam(context, 'id'),
+        await jsonBody(context, targetPatchSchema),
+      ),
     ),
   );
   return routes;

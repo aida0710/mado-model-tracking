@@ -7,6 +7,7 @@ import threading
 
 import pytest
 from test_container_inputs import container_payload
+from test_execution_snapshot import pin_execution
 
 from mado_tracking.security import SecretMasker
 from mado_tracking.worker.contracts import WorkerJob
@@ -143,3 +144,28 @@ def test_cancel_with_no_supervisor_never_releases_a_daemon_container_by_killing_
     assert state["status"] == "unknown" and state["processAlive"] is True
     assert (tmp_path / "cancel.request").exists()
     assert json.loads((tmp_path / "state.json").read_text())["status"] == "running"
+
+
+@pytest.mark.parametrize("mode", ["run", "test"])
+def test_docker_uses_the_snapshot_command_for_normal_or_test_execution(
+    job_payload, worker_settings, tmp_path, monkeypatch, mode
+):
+    container_payload(job_payload)
+    job_payload["codeVersion"].update(
+        entrypoint=["/app/train", "normal arguments"], testEntrypoint=["/app/test", "test arguments"]
+    )
+    pin_execution(job_payload, mode)
+    specification = execution_specification(WorkerJob.parse(job_payload), worker_settings)
+    execution = CommandExecution(
+        tmp_path,
+        {"status": "running"},
+        environment={},
+        masker=SecretMasker([]),
+        cancel_grace_seconds=0.01,
+    )
+    monkeypatch.setattr("mado_tracking.worker.docker_container.runtime_binary", lambda _kind: "/test/docker")
+    owner = DockerContainer(tmp_path, specification, execution)
+    argv = owner._create_argv([], tmp_path / "container.env")
+    command = job_payload["run"]["executionSnapshot"]["entrypoint"]
+    assert argv[argv.index("--entrypoint") + 1] == command[0]
+    assert argv[-1] == command[1]

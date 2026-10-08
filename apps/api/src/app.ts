@@ -22,6 +22,9 @@ import { ArtifactService } from './services/artifactService.js';
 import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
+import { TaskService } from './services/taskService.js';
+import { RepositoryFilesService } from './services/repositoryFilesService.js';
+import { GitRepositoryReader, type RepositoryReader } from './services/repositoryReader.js';
 import { ModelAutomationService } from './services/modelAutomationService.js';
 import { LineageService } from './services/lineageService.js';
 import { TargetService } from './services/targetService.js';
@@ -36,6 +39,8 @@ import { projectRoutes } from './routes/projectRoutes.js';
 import { registryRoutes } from './routes/registryRoutes.js';
 import { modelAutomationRoutes } from './routes/modelAutomationRoutes.js';
 import { runRoutes } from './routes/runRoutes.js';
+import { taskRoutes } from './routes/taskRoutes.js';
+import { repositoryRoutes } from './routes/repositoryRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
 import { jobRoutes, targetRoutes, workerRoutes } from './routes/executionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
@@ -47,6 +52,7 @@ export interface ApplicationOptions {
   stores?: ArtifactStores;
   environment?: NodeJS.ProcessEnv;
   pluginClientFactory?: PluginClientFactory;
+  repositoryReader?: RepositoryReader;
 }
 
 // Registry JSON and code uploads are bounded separately from streamed artifact bodies.
@@ -62,6 +68,12 @@ export function createApplication(options: ApplicationOptions) {
   const artifacts = new ArtifactService(database, stores);
   const targets = new TargetService(database, config);
   const jobs = new JobService(database, runs, config);
+  const tasks = new TaskService(database, runs, jobs);
+  const gitRepositories = new GitRepositoryReader({ ssh: config.repositorySsh });
+  const repositories = new RepositoryFilesService(
+    database,
+    options.repositoryReader ?? ((request) => gitRepositories.read(request)),
+  );
   const automation = new ModelAutomationService(database, runs, jobs);
   const registry = new RegistryService(database, automation);
   const worker = new WorkerService(database, jobs, config);
@@ -160,6 +172,8 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', registryRoutes(registry));
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
+  app.route('/api/projects', taskRoutes(tasks));
+  app.route('/api/projects', repositoryRoutes(repositories));
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
@@ -183,6 +197,8 @@ export function createApplication(options: ApplicationOptions) {
       registry,
       automation,
       runs,
+      tasks,
+      repositories,
       lineage,
       artifacts,
       targets,

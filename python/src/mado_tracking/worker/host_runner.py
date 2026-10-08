@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from ..execution_runtime import validate_runtime
+from ..execution_snapshot import resolve_runner_execution_snapshot
 from ..security import SecretMasker, secret_values
 from .container_layout import host_environment
 from .container_outputs import read_output_chunk, validate_results
@@ -22,6 +23,8 @@ from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
 from .job_execution import execute_registered_code
 from .runtime_capability import ContainerStateUncertain, RuntimeUnavailable
+from .source_snapshot import read_source_snapshot_chunk
+from .source_tree import MAX_SOURCE_ARCHIVE_BYTES
 from .telemetry import collect_system_metrics
 
 # A single status request returns bounded log output, regardless of job duration.
@@ -32,6 +35,10 @@ ORPHAN_CANCEL_GRACE_SECONDS = 10.0
 
 
 def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -> dict[str, Any]:
+    specification["executionSnapshot"] = resolve_runner_execution_snapshot(specification)
+    instructions_hash = hashlib.sha256(
+        json.dumps(specification["executionSnapshot"], sort_keys=True, allow_nan=False).encode()
+    ).hexdigest()
     with (workspace / "start.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state_path = workspace / "state.json"
@@ -41,6 +48,10 @@ def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -
                 previous.get("jobId") != specification["jobId"]
                 or previous.get("codeVersionId") != specification["codeVersion"]["id"]
                 or previous.get("leaseId") != specification.get("leaseId")
+                or previous.get("executionMode", "run") != specification["executionSnapshot"]["mode"]
+                or previous.get("runId", specification["context"]["runId"])
+                != specification["context"]["runId"]
+                or previous.get("instructionsHash", instructions_hash) != instructions_hash
             ):
                 raise ValueError("Workspace belongs to a different pinned job")
             return read_state(workspace)
@@ -49,6 +60,10 @@ def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -
             "jobId": specification["jobId"],
             "codeVersionId": specification["codeVersion"]["id"],
             "leaseId": specification.get("leaseId"),
+            "runId": specification["context"]["runId"],
+            "executionMode": specification["executionSnapshot"]["mode"],
+            "instructionsHash": instructions_hash,
+            "sourceSnapshotRequired": True,
             "status": "starting",
             "supervisorPid": 0,
             "processPid": 0,
@@ -74,6 +89,8 @@ def serve(workspace: Path) -> None:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = read_json(workspace / "state.json")
         specification = read_json(workspace / "spec.json")
+        # A saved supervisor spec from before snapshots still needs cancellation/container cleanup.
+        specification["executionSnapshot"] = resolve_runner_execution_snapshot(specification)
         if state.get("supervisorPid") not in {0, os.getpid()}:
             return
         if specification.get("recoverOnly") and not terminate_owned_process_group(
@@ -182,6 +199,7 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
         CUDA_VISIBLE_DEVICES=",".join(specification["gpuIds"]),
         PYTHONUNBUFFERED="1",
         MMT_JOB_KIND=specification["context"]["kind"],
+        MMT_EXECUTION_MODE=specification["executionSnapshot"]["mode"],
         MMT_JOB_CONTEXT_FILE=str(workspace / "context.json"),
         MMT_PARAMETERS_FILE=str(workspace / "parameters.json"),
         MMT_MODEL_VERSION_FILE=str(workspace / "model-version.json"),
@@ -281,6 +299,8 @@ def receive_archive(workspace: Path, *, kind: str = "source") -> dict[str, Any]:
                 output.write(chunk)
                 checksum.update(chunk)
                 size += len(chunk)
+                if kind == "source" and size > MAX_SOURCE_ARCHIVE_BYTES:
+                    raise ValueError("Code archive exceeds its upload size limit")
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary_path, path)
@@ -316,6 +336,11 @@ def main() -> None:
                 response = read_output_chunk(workspace, request, read_state(workspace))
             except (OSError, ValueError, KeyError):
                 response = {"error": "Container output failed validation"}
+        elif command == "snapshot":
+            try:
+                response = read_source_snapshot_chunk(workspace, request, read_state(workspace))
+            except (OSError, ValueError, KeyError, TypeError):
+                response = {"error": "Source snapshot failed validation"}
         else:
             raise ValueError("Unknown runner command")
     print(json.dumps(response, allow_nan=False))

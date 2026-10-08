@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Dataset, DatasetVersion, Model, ModelVersion, Project, Run } from '@mmt/contracts';
+import type {
+  Code,
+  Dataset,
+  DatasetVersion,
+  Model,
+  ModelVersion,
+  Project,
+  Run,
+} from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import { executionFixture, projectFixture } from './fixtures.js';
 
@@ -245,6 +253,71 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
       ).status,
     ).toBe(422);
   });
+
+  it.each([
+    {
+      conflict: '編集した子孫と削除した祖先',
+      files: { 'folder/new.py': 'pass' },
+      deletedFiles: ['folder'],
+    },
+    {
+      conflict: '編集した祖先と削除した子孫',
+      files: { folder: 'pass' },
+      deletedFiles: ['folder/old.py'],
+    },
+    {
+      conflict: '削除した祖先と子孫',
+      deletedFiles: ['folder', 'folder/old.py'],
+    },
+    {
+      conflict: '逆順に削除した子孫と祖先',
+      deletedFiles: ['folder/old.py', 'folder'],
+    },
+  ])(
+    '$conflictの版登録は422になり、コード版・Run・Jobを作らない',
+    async ({ conflict: _conflict, ...overlay }) => {
+      const fixture = await projectFixture(harness);
+      const code = await entity<Code>(
+        await request(harness.app, `${fixture.basePath}/codes`, {
+          method: 'POST',
+          cookie: fixture.editor.cookie,
+          body: { name: 'Conflicting paths' },
+        }),
+      );
+      const versionsPath = `${fixture.basePath}/codes/${code.id}/versions`;
+      const response = await request(harness.app, versionsPath, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: {
+          version: 'invalid-overlay',
+          source: {
+            kind: 'git',
+            url: 'https://example.test/repo.git',
+            commit: 'a'.repeat(40),
+            ...overlay,
+          },
+          entrypoint: ['python', 'folder/new.py'],
+          supportedModelFamilies: ['qwen2'],
+          taskTypes: ['training'],
+        },
+      });
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({ code: 'invalid_request' });
+      expect(
+        await entity(
+          await request(harness.app, versionsPath, { cookie: fixture.editor.cookie }),
+          200,
+        ),
+      ).toEqual({ items: [] });
+      const persisted = await harness.database.query(
+        `SELECT
+         (SELECT count(*)::int FROM code_versions) AS code_versions,
+         (SELECT count(*)::int FROM runs) AS runs,
+         (SELECT count(*)::int FROM jobs) AS jobs`,
+      );
+      expect(persisted.rows).toEqual([{ code_versions: 0, runs: 0, jobs: 0 }]);
+    },
+  );
 
   it('別projectの実験・親Run・モデル・コード・データセット・Artifact・親版は参照できない', async () => {
     const fixture = await executionFixture(harness);

@@ -7,10 +7,11 @@ import type {
 } from '@mmt/contracts';
 import { createPluginClient, type PluginClient } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Database } from '../db/database.js';
+import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { datasetVersionSelect } from '../repositories/registryRepository.js';
 import { requireGlobalAdmin, requireProject } from './accessService.js';
+import type { PluginPatch } from '../domain/validation.js';
 import type { RegistryService } from './registryService.js';
 
 export type PluginClientFactory = typeof createPluginClient;
@@ -76,11 +77,49 @@ export class PluginService {
       pluginId,
     });
     const manifest = await this.callPlugin(() => this.client(plugin).manifest());
-    await this.database.query('UPDATE plugin_connections SET manifest=$2 WHERE id=$1', [
-      plugin.id,
-      JSON.stringify(manifest),
-    ]);
+    const saved = await first(
+      this.database,
+      `UPDATE plugin_connections SET manifest=$2 WHERE id=$1 AND project_id=$3 AND enabled
+      AND base_url=$4 AND token_env=$5 RETURNING id`,
+      [plugin.id, JSON.stringify(manifest), projectId, plugin.baseUrl, plugin.tokenEnv],
+    );
+    if (!saved) conflict('Pluginの接続設定が変更されています。再確認してください');
     return manifest;
+  }
+
+  async patch(
+    principal: Principal,
+    projectId: string,
+    request: { pluginId: string; input: PluginPatch },
+  ): Promise<PluginConnection> {
+    requireGlobalAdmin(principal);
+    return transaction(this.database, async (connection) => {
+      await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
+      const plugin = await first<PluginConnection>(
+        connection,
+        'SELECT * FROM plugin_connections WHERE project_id=$1 AND id=$2 FOR UPDATE',
+        [projectId, request.pluginId],
+      );
+      if (!plugin) notFound('Plugin');
+      const updated = { ...plugin, ...request.input };
+      updated.baseUrl = updated.baseUrl.replace(/\/$/, '');
+      const manifest =
+        plugin.baseUrl !== updated.baseUrl || plugin.tokenEnv !== updated.tokenEnv
+          ? null
+          : plugin.manifest;
+      return (await first<PluginConnection>(
+        connection,
+        'UPDATE plugin_connections SET name=$2,base_url=$3,token_env=$4,enabled=$5,manifest=$6::jsonb WHERE id=$1 RETURNING *',
+        [
+          plugin.id,
+          updated.name,
+          updated.baseUrl,
+          updated.tokenEnv,
+          updated.enabled,
+          manifest ? JSON.stringify(manifest) : null,
+        ],
+      ))!;
+    });
   }
 
   async search(
@@ -120,16 +159,12 @@ export class PluginService {
     projectId: string,
     request: { pluginId: string; dataset: PluginDataset },
   ): Promise<DatasetVersion> {
-    await this.authorizedConnection(principal, {
-      projectId,
-      pluginId: request.pluginId,
-    });
     return transaction(this.database, async (connection) => {
-      await requireProject(connection, principal, {
-        projectId,
-        role: 'admin',
-        scope: 'admin',
-      });
+      await this.authorizedConnection(
+        principal,
+        { projectId, pluginId: request.pluginId, lock: true },
+        connection,
+      );
       // Serialize imports of the same remote version, including first-time dataset creation.
       await connection.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [
         JSON.stringify([projectId, request.dataset.namespace, request.dataset.name]),
@@ -183,12 +218,14 @@ export class PluginService {
     projectId: string,
     pluginId: string,
   ): Promise<{ queued: number }> {
-    await this.authorizedConnection(principal, { projectId, pluginId });
-    const queued = await this.database.query(
-      "UPDATE plugin_outbox SET next_attempt_at=now(),last_error=NULL WHERE plugin_id=$1 AND status='pending' RETURNING id",
-      [pluginId],
-    );
-    return { queued: queued.rowCount ?? 0 };
+    return transaction(this.database, async (connection) => {
+      await this.authorizedConnection(principal, { projectId, pluginId, lock: true }, connection);
+      const queued = await connection.query(
+        "UPDATE plugin_outbox SET next_attempt_at=now(),last_error=NULL WHERE plugin_id=$1 AND status='pending' RETURNING id",
+        [pluginId],
+      );
+      return { queued: queued.rowCount ?? 0 };
+    });
   }
 
   client(plugin: Pick<PluginConnection, 'baseUrl' | 'tokenEnv'>): PluginClient {
@@ -204,16 +241,17 @@ export class PluginService {
 
   private async authorizedConnection(
     principal: Principal,
-    reference: { projectId: string; pluginId: string },
+    reference: { projectId: string; pluginId: string; lock?: boolean },
+    connection: Connection = this.database,
   ): Promise<PluginConnection> {
-    await requireProject(this.database, principal, {
+    await requireProject(connection, principal, {
       projectId: reference.projectId,
       role: 'admin',
       scope: 'admin',
     });
     const plugin = await first<PluginConnection>(
-      this.database,
-      'SELECT * FROM plugin_connections WHERE project_id=$1 AND id=$2',
+      connection,
+      `SELECT * FROM plugin_connections WHERE project_id=$1 AND id=$2 ${reference.lock ? 'FOR SHARE' : ''}`,
       [reference.projectId, reference.pluginId],
     );
     if (!plugin) notFound('Plugin');

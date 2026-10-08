@@ -11,6 +11,7 @@ from .api import WorkerApi
 from .config import WorkerSettings
 from .contracts import WorkerJob
 from .event_wait import wait_interval
+from .job_responses import InvalidWorkerJob
 from .journal import JobJournal
 from .runtime import JobExecutor
 from .session import JobSession
@@ -32,6 +33,7 @@ class Worker:
         self.executor_factory = executor_factory
         self.stopping = asyncio.Event()
         self.tasks: dict[str, asyncio.Task[None]] = {}
+        self.retained_job_ids: set[str] = set()
         self.resume_available = True
 
     async def run_job(self, job: WorkerJob) -> None:
@@ -42,6 +44,12 @@ class Worker:
         record = self.journal.load(job.id)
         if "snapshot" in record and record["snapshot"]["job"]["leaseId"] != job.lease_id:
             raise ConfigurationError("Saved job lease differs; refusing a replacement execution")
+        if "snapshot" in record:
+            previous = WorkerJob.parse(record["snapshot"])
+            if previous.run["id"] != job.run["id"] or previous.execution_snapshot != job.execution_snapshot:
+                raise ConfigurationError(
+                    "Saved executionSnapshot differs; refusing changed execution instructions"
+                )
         self.journal.save(
             job,
             offsets=record["offsets"],
@@ -64,13 +72,40 @@ class Worker:
         try:
             resumed = await self.api.resume(self.settings.worker_id, self.settings.target_ids)
             self.resume_available = True
-            pending.update({job.id: job for job in resumed})
+            for job in resumed:
+                if isinstance(job, InvalidWorkerJob):
+                    await self.reject_invalid_job(job, resumed=True)
+                else:
+                    pending[job.id] = job
         except ApiError as error:
             if error.status_code != 404:
                 raise
             self.resume_available = False
             LOGGER.warning("Worker resume endpoint is unavailable; recovering only saved local leases")
         return list(pending.values())
+
+    async def reject_invalid_job(self, job: InvalidWorkerJob, *, resumed: bool = False) -> None:
+        if (
+            resumed
+            or job.status != "claimed"
+            or job.id in self.tasks
+            or job.id in self.retained_job_ids
+            or self.journal.has_job(job.id)
+        ):
+            # A response cannot prove a previously started execution stopped. Keep saved monitoring.
+            LOGGER.error(
+                "Job %s instructions failed validation; lease retained for monitoring/recovery: %s",
+                job.id,
+                self.api.masker.mask(job.error),
+            )
+            # Exclude retained leases from claim replay without declaring their executions stopped.
+            self.retained_job_ids.add(job.id)
+            return
+        try:
+            await self.api.complete(job, status="failed", error=f"WorkerJob validation failed: {job.error}")
+            LOGGER.error("Unstarted claimed Job %s failed validation and was completed as failed", job.id)
+        except LeaseRejected:
+            LOGGER.error("Invalid claimed Job %s lease rejected; no execution started", job.id)
 
     def launch(self, job: WorkerJob) -> None:
         if job.id not in self.tasks:
@@ -82,6 +117,8 @@ class Worker:
                 continue
             del self.tasks[job_id]
             if not task.cancelled() and task.exception() is not None:
+                if isinstance(task.exception(), ConfigurationError):
+                    self.retained_job_ids.add(job_id)
                 LOGGER.error(
                     "Job %s monitoring stopped; durable state remains for recovery: %s",
                     job_id,
@@ -100,9 +137,11 @@ class Worker:
                         claimed_job = await self.api.claim(
                             self.settings.worker_id,
                             self.settings.target_ids,
-                            active_job_ids=tuple(self.tasks),
+                            active_job_ids=(*self.tasks, *sorted(self.retained_job_ids - self.tasks.keys())),
                         )
-                        if claimed_job is not None and claimed_job.id not in self.tasks:
+                        if isinstance(claimed_job, InvalidWorkerJob):
+                            await self.reject_invalid_job(claimed_job)
+                        elif claimed_job is not None and claimed_job.id not in self.tasks:
                             self.launch(claimed_job)
                             continue
                     except ApiError as error:

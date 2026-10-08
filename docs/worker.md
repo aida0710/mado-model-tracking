@@ -78,7 +78,7 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 ## workerを起動する
 
-管理者がproject限定のservice tokenを作る。worker APIには`worker:execute`、実行コードがSDKで記録・登録する場合は前節のscopeも必要。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
+管理者がproject限定のservice tokenを作る。workerには`read`、`worker:execute`、実行前のコードを保存するための`artifacts:write`が必要。実行コードがSDKで記録・登録する場合は前節のscopeも付ける。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
 
 ```bash
 export MMT_API_URL=http://127.0.0.1:4182
@@ -138,13 +138,15 @@ sourceは次の3種類を実行できる。
 
 | source.kind | 内容 | workerの確認 |
 |---|---|---|
-| `git` | `url`, `commit` | commitは40桁または64桁の完全なhash。fetch後のhashが一致することを確認してdetach checkoutする |
+| `git` | `url`, `commit`, `files?`, `deletedFiles?` | 完全なhashを照合してdetach checkoutし、編集ファイルと削除パスを反映する |
 | `inline` | `files: {path: text}` | UTF-8で保存し、絶対パス・`..`・symlinkを拒否する |
 | `artifact` | `artifactId` | projectの認証済みcontent APIからstreamで取得。zip/tarのパス、symlink、hardlink、特殊ファイルを検査する |
 
 zip/tarは展開量4GiB、10万entryまで。展開時に既存ファイルを上書きしない。Git sourceのsymlinkも拒否する。CodeVersionの`entrypoint`は`["python", "training.py", "--steps", "40"]`のようなargvを渡す。`python` / `python3` / `{python}` / `${PYTHON}`はjob専用venvのPythonへ置き換える。requirementsにはpipのオプションを渡さず、依存の指定だけを書く。
 
 workerはRun kindとCodeVersionの`taskTypes`、モデル系列、project、pinned version、GPU一覧を確認する。`inference`, `evaluation`, `training`, `finetuning`, `processing`を扱う。`CUDA_VISIBLE_DEVICES`はjobの`gpuIds`を使い、CodeVersionの環境変数より優先する。
+
+Runの`executionSnapshot`とコード版を照合し、`executionMode=test`では保存済みの`testEntrypoint`を使う。実行前に`.mmt/source.zip`と`.mmt/source-manifest.json`を作成し、終了時にRunのArtifactsへ保存する。manifestにはRun・Job・コード版・commit・コマンドとファイルのhashを記録し、環境変数の値は含めない。sourceなしコンテナはmanifestだけを保存する。再接続時は作成済みのsnapshotを回収し、コードを再展開しない。
 
 ## 実行コードはcontextファイルから入力を読む
 

@@ -87,4 +87,10 @@ describe('コード版のコンテナ登録', () => {
     expect(() => build({ entrypoint: '["", "main.py"]' })).toThrow();
     expect(() => build({ entrypoint: '{"command":"python"}' })).toThrow();
   });
+  it('任意のtestコマンドを保存し、空の配列ではテストを無効にする', () => {
+    expect(build({ testEntrypoint: '["python", "-m", "unittest"]' }).testEntrypoint).toEqual(['python', '-m', 'unittest']);
+    expect(build({ testEntrypoint: ' [ ] ' }).testEntrypoint).toEqual([]);
+    expect(() => build({ testEntrypoint: '["python", ""]' })).toThrow();
+    expect(() => build({ entrypoint: '["python", ""]' })).toThrow();
+  });
 });

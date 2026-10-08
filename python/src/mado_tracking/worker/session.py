@@ -19,7 +19,8 @@ from .event_wait import wait_interval
 from .journal import JobJournal
 from .runtime import JobExecutor
 from .session_inputs import stage_container_inputs
-from .session_outputs import forward_container_outputs
+from .session_outputs import forward_container_outputs, forward_source_snapshot
+from .source_tree import MAX_SOURCE_ARCHIVE_BYTES
 
 LOGGER = logging.getLogger(__name__)
 
@@ -118,6 +119,17 @@ class JobSession:
                 except PreparationCanceled:
                     await self.complete({"status": "canceled", "exit_code": None, "error": None})
                     return
+                except LeaseRejected:
+                    raise
+                except (ApiError, ValueError) as error:
+                    await self.complete(
+                        {
+                            "status": "failed",
+                            "exit_code": None,
+                            "error": f"Code source download failed: {error}",
+                        }
+                    )
+                    return
                 finally:
                     archive_path.unlink(missing_ok=True)
             if self.job.runtime["kind"] != "python":
@@ -180,7 +192,10 @@ class JobSession:
             try:
                 with archive_path.open("wb") as destination:
                     await self.api.download_artifact(
-                        self.job.job["projectId"], self.job.code_version["source"]["artifactId"], destination
+                        self.job.job["projectId"],
+                        self.job.code_version["source"]["artifactId"],
+                        destination,
+                        maximum_bytes=MAX_SOURCE_ARCHIVE_BYTES,
                     )
                 return
             except ApiError as error:
@@ -226,9 +241,11 @@ class JobSession:
                     and not state.get("processPending")
                     and not container_unreleased
                 ):
+                    state["status"] = "failed"
+                    status = await self.collect_results(state)
                     await self.complete(
                         {
-                            "status": "failed",
+                            "status": status,
                             "exit_code": None,
                             "error": state.get("error", "Remote execution state is unknown"),
                         }
@@ -277,6 +294,31 @@ class JobSession:
 
     async def collect_results(self, state: dict[str, Any]) -> str:
         status = str(state["status"])
+        try:
+            if state.get("sourceSnapshot") is not None:
+                await forward_source_snapshot(
+                    self.job,
+                    state["sourceSnapshot"],
+                    api=self.api,
+                    executor=self.executor,
+                    acknowledgments=self.result_acknowledgments,
+                    persist=self.persist,
+                    temporary_path=self.journal.transfer_path(self.job.id, "snapshot"),
+                )
+            elif status == "finished" and state.get("sourceSnapshotRequired"):
+                raise ConfigurationError("Source snapshot is missing; execution evidence could not be saved")
+        except LeaseRejected:
+            raise
+        except (ConfigurationError, ApiError) as error:
+            if isinstance(error, ApiError) and (
+                error.status_code is None or error.status_code >= 500 or error.status_code in {408, 429}
+            ):
+                raise
+            original_error = state.get("error")
+            state["error"] = "; ".join(
+                message for message in (original_error, f"Source snapshot save failed: {error}") if message
+            )
+            return "failed"
         if status != "finished" or state.get("results") is None:
             return status
         try:

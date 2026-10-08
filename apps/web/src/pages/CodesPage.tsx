@@ -184,6 +184,8 @@ export function CodesPage() {
       {dialog === 'version' && registry.selected && (
         <CodeVersionDialog
           code={registry.selected}
+          initialVersion={registry.selectedVersion}
+          versions={registry.versions.value}
           onClose={() => setDialog(null)}
           onSaved={(version) => {
             setDialog(null);

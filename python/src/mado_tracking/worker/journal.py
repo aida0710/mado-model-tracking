@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import fcntl
+import json
+import logging
 import os
 from pathlib import Path
 from typing import Any, TextIO
@@ -10,6 +12,8 @@ from typing import Any, TextIO
 from ..errors import ConfigurationError
 from .contracts import WorkerJob
 from .host_state import read_json, write_json
+
+LOGGER = logging.getLogger(__name__)
 
 
 def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
@@ -71,7 +75,21 @@ class JobJournal:
         return read_json(path) if path.exists() else {"offsets": {"stdout": 0, "stderr": 0}, "step": 0}
 
     def pending(self) -> list[WorkerJob]:
-        return [WorkerJob.parse(read_json(path)["snapshot"]) for path in self.directory.glob("*.json")]
+        jobs = []
+        for path in self.directory.glob("*.json"):
+            try:
+                jobs.append(WorkerJob.parse(read_json(path)["snapshot"]))
+            except ConfigurationError as error:
+                LOGGER.error(
+                    "Saved Job %s failed validation; journal and lease retained: %s", path.stem, error
+                )
+            except (json.JSONDecodeError, KeyError, TypeError):
+                LOGGER.error("Saved Job %s has an incomplete journal; journal and lease retained", path.stem)
+        return jobs
+
+    def has_job(self, job_id: str) -> bool:
+        path = self.directory / f"{job_id}.json"
+        return path.exists() or path.is_symlink()
 
     def forget(self, job_id: str) -> None:
         (self.directory / f"{job_id}.json").unlink(missing_ok=True)
@@ -87,7 +105,7 @@ class JobJournal:
         return self.transfer_path(job_id, "source")
 
     def transfer_path(self, job_id: str, kind: str) -> Path:
-        if kind not in {"source", "weights", "sif", "output"}:
+        if kind not in {"source", "weights", "sif", "output", "snapshot"}:
             raise ValueError("Unknown transfer kind")
         path = self.directory / f"{job_id}.{kind}"
         descriptor = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)

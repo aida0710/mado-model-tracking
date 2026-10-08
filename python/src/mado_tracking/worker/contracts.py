@@ -8,7 +8,8 @@ from typing import Any
 from uuid import UUID
 
 from ..errors import ConfigurationError
-from ..execution_runtime import RUNTIME_KINDS, validate_entrypoint, validate_runtime
+from ..execution_runtime import RUNTIME_KINDS
+from ..execution_snapshot import resolve_execution_snapshot
 
 RUN_KINDS = {"inference", "evaluation", "training", "finetuning", "processing"}
 TERMINAL_STATUSES = {"finished", "failed", "canceled"}
@@ -60,11 +61,14 @@ class WorkerJob:
 
     @property
     def runtime(self) -> dict[str, Any]:
-        return validate_runtime(
-            self.code_version.get("runtime"),
-            source=self.code_version["source"],
-            requirements=self.code_version["requirements"],
-        )
+        return dict(self.execution_snapshot["runtime"])
+
+    @property
+    def execution_snapshot(self) -> dict[str, Any]:
+        try:
+            return resolve_execution_snapshot(self.code_version, self.run)
+        except ValueError as error:
+            raise ConfigurationError(str(error)) from None
 
     def validate(self) -> None:
         for entity_name, entity in (
@@ -112,10 +116,9 @@ class WorkerJob:
             raise ConfigurationError("gpuIds must be a list of strings")
         if not set(gpu_ids).issubset(self.target["gpuIds"]):
             raise ConfigurationError("Job requests GPUs outside the compute target")
-        entrypoint = self.code_version["entrypoint"]
-        if not isinstance(entrypoint, list):
-            raise ConfigurationError("CodeVersion.entrypoint must be a nonempty argv")
-        validate_entrypoint(entrypoint)
+        snapshot = self.execution_snapshot
+        if "runtime" in self.run and self.run["runtime"] != snapshot["runtime"]:
+            raise ConfigurationError("Run.runtime does not match its immutable executionSnapshot")
         if self.target["executor"] not in {"local", "ssh"}:
             raise ConfigurationError("Unknown compute executor")
         runtime_kinds = self.target.get("runtimeKinds", ["python"])

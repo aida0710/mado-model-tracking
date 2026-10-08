@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import type { PluginConnection, PluginDataset, PluginManifest } from '@mmt/contracts';
 import { administrationApi } from '../api/administration';
 import { useProject } from '../hooks/useProject';
+import { useAuth } from '../hooks/useAuth';
 import { useMutation } from '../hooks/useMutation';
+import { getPluginConnectionKey } from '../lib/pluginConnection';
 import { DataTable } from './DataTable';
-import { DetailsList } from './JsonDetails';
+import { DetailsList, JsonDetails } from './JsonDetails';
+import { PluginDialog } from '../dialogs/PluginDialog';
 import { Empty, ErrorNotice } from './Feedback';
 import { PluginStorageMetrics } from './PluginStorageMetrics';
 import { text } from '../i18n/catalog';
@@ -18,6 +21,8 @@ export function PluginPanel({
   onChanged: () => void;
 }) {
   const { project, isProjectAdmin } = useProject();
+  const { user } = useAuth();
+  const [showEdit, setShowEdit] = useState(false);
   const [query, setQuery] = useState('');
   const [datasets, setDatasets] = useState<PluginDataset[] | null>(null);
   const [manifest, setManifest] = useState<PluginManifest | null>(plugin.manifest);
@@ -32,11 +37,11 @@ export function PluginPanel({
     <>
       <div className="section-heading">
         <h2>{plugin.name}</h2>
-        {isProjectAdmin && (
+        {(isProjectAdmin || user.isAdmin) && (
           <div>
             <button
               className="button small"
-              disabled={mutation.pending}
+              disabled={mutation.pending || !plugin.enabled}
               onClick={() =>
                 void runPluginOperation(async () => {
                   const checked = await administrationApi.checkPlugin(project.id, plugin.id);
@@ -50,7 +55,7 @@ export function PluginPanel({
             </button>
             <button
               className="button small"
-              disabled={mutation.pending}
+              disabled={mutation.pending || !plugin.enabled}
               onClick={() =>
                 void runPluginOperation(async () => {
                   const retried = await administrationApi.retryEvents(project.id, plugin.id);
@@ -71,16 +76,26 @@ export function PluginPanel({
           [text.capabilities, manifest?.capabilities.join(', ')],
         ]}
       />
+      {user.isAdmin && <div className="section-actions">
+        <button className="button small" onClick={() => setShowEdit(true)} disabled={mutation.pending}>{text.editPlugin}</button>
+        <button className="button small" disabled={mutation.pending} data-testid="plugin-toggle"
+          onClick={() => void runPluginOperation(async () => {
+            await administrationApi.updatePlugin(project.id, plugin.id, { enabled: !plugin.enabled }); onChanged();
+          })}>{plugin.enabled ? text.disablePlugin : text.enablePlugin}</button>
+      </div>}
+      <details className="plugin-manifest"><summary>{text.manifest}</summary>
+        {manifest ? <JsonDetails value={manifest} /> : <p className="muted">{text.manifestUnchecked}</p>}
+      </details>
       <ErrorNotice message={mutation.error} />
       {success && (
         <p className="notice success" role="status">
           {success}
         </p>
       )}
-      {isProjectAdmin && manifest?.capabilities.includes('storage:metrics') && (
+      {(isProjectAdmin || user.isAdmin) && plugin.enabled && manifest?.capabilities.includes('storage:metrics') && (
         <PluginStorageMetrics pluginId={plugin.id} />
       )}
-      {isProjectAdmin && (
+      {(isProjectAdmin || user.isAdmin) && plugin.enabled && (
         <>
           <form
             className="plugin-search"
@@ -168,6 +183,24 @@ export function PluginPanel({
       <Link className="button small" to={`/projects/${project.id}/datasets`}>
         {text.datasets}
       </Link>
+      {user.isAdmin && showEdit && (
+        <PluginDialog
+          plugin={plugin}
+          onClose={() => setShowEdit(false)}
+          onSaved={(savedPlugin) => {
+            // The saved connection is active before the parent GET finishes.
+            if (getPluginConnectionKey(savedPlugin) !== getPluginConnectionKey(plugin)) {
+              setManifest(savedPlugin.manifest);
+              setDatasets(null);
+              setQuery('');
+              setSuccess('');
+              mutation.clearError();
+            }
+            setShowEdit(false);
+            onChanged();
+          }}
+        />
+      )}
     </>
   );
 }

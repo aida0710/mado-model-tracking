@@ -20,6 +20,7 @@ export function CodeRuntimeDetails({ version }: { version: CodeVersion }) {
     text.entrypoint,
     <code className="break-word">{JSON.stringify(version.entrypoint)}</code>,
   ]);
+  entries.push([text.testEntrypoint, <code className="break-word">{JSON.stringify(version.testEntrypoint ?? [])}</code>]);
   if (runtime.kind === 'python' && version.requirements.length)
     entries.push([text.requirements, <pre>{version.requirements.join('\n')}</pre>]);
   return <DetailsList entries={entries} />;

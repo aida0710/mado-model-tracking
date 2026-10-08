@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PluginEvent } from '@mmt/contracts';
+import type { PluginConnection, PluginEvent } from '@mmt/contracts';
 import { first, transaction, type Database } from '../db/database.js';
 import type { PluginService } from './pluginService.js';
 
@@ -17,6 +17,7 @@ interface Delivery {
   tokenEnv: string;
   event: PluginEvent;
   attempts: number;
+  pluginId: string;
 }
 
 export class OutboxDispatcher {
@@ -71,18 +72,25 @@ export class OutboxDispatcher {
     return transaction(this.database, async (connection) => {
       const delivery = await first<Omit<Delivery, 'deliveryId'>>(
         connection,
-        `SELECT o.id,o.event,o.attempts,p.base_url,p.token_env FROM plugin_outbox o JOIN plugin_connections p ON p.id=o.plugin_id
+        `SELECT o.id,o.event,o.attempts,o.plugin_id,p.base_url,p.token_env FROM plugin_outbox o JOIN plugin_connections p ON p.id=o.plugin_id
         WHERE p.enabled AND ((o.status='pending' AND o.next_attempt_at<=now()) OR (o.status='sending' AND o.locked_at<now()-make_interval(secs=>$1)))
         ORDER BY o.created_at LIMIT 1 FOR UPDATE OF o SKIP LOCKED`,
         [DELIVERY_LEASE_SECONDS],
       );
       if (!delivery) return null;
+      // Serialize the claim with plugin edits; already claimed HTTP calls can finish.
+      const plugin = await first<PluginConnection>(
+        connection,
+        'SELECT * FROM plugin_connections WHERE id=$1 AND enabled FOR SHARE SKIP LOCKED',
+        [delivery.pluginId],
+      );
+      if (!plugin) return null;
       const deliveryId = randomUUID();
       await connection.query(
         "UPDATE plugin_outbox SET status='sending',delivery_id=$2,locked_at=now(),attempts=attempts+1 WHERE id=$1",
         [delivery.id, deliveryId],
       );
-      return { ...delivery, deliveryId };
+      return { ...delivery, baseUrl: plugin.baseUrl, tokenEnv: plugin.tokenEnv, deliveryId };
     });
   }
 

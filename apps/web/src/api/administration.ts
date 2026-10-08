@@ -37,6 +37,11 @@ export const administrationApi = {
     projectId: string,
     body: { name: string; baseUrl: string; tokenEnv: string; enabled?: boolean },
   ) => request<PluginConnection>(pluginPath(projectId), jsonRequest('POST', body)),
+  updatePlugin: (
+    projectId: string,
+    id: string,
+    body: { name?: string; baseUrl?: string; tokenEnv?: string; enabled?: boolean },
+  ) => request<PluginConnection>(pluginPath(projectId, id), jsonRequest('PATCH', body)),
   checkPlugin: (projectId: string, id: string) =>
     request<PluginManifest>(`${pluginPath(projectId, id)}/check`, { method: 'POST' }),
   pluginMetrics: async (projectId: string, id: string, signal?: AbortSignal) => {

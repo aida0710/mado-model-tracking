@@ -8,12 +8,14 @@ export function Dialog({
   onClose,
   busy = false,
   wide = false,
+  className = '',
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   busy?: boolean;
   wide?: boolean;
+  className?: string;
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -27,7 +29,7 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
-      className={wide ? 'dialog wide' : 'dialog'}
+      className={`${wide ? 'dialog wide' : 'dialog'} ${className}`.trim()}
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onClose();

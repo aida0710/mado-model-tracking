@@ -13,7 +13,7 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET /projects` / `POST /projects` (name,description?,artifactBackend?) / `PATCH /projects/:id` (description?,artifactBackend?)。
 - `GET /projects/:p/members` / `PUT /projects/:p/members/:userId` (role)。管理者以外は権限変更不可。
 - `GET|POST /projects/:p/experiments` (name,description?)。
-- `GET /projects/:p/runs?experimentId=&status=&q=&limit=` / `POST /projects/:p/runs` (experimentId,name,kind,parameters?,tags?,modelVersionId?,codeVersionId?,inputDatasetVersionIds?,parentRunId?,environment?)。
+- `GET /projects/:p/runs?experimentId=&status=&q=&limit=` / `POST /projects/:p/runs` (experimentId,name,kind,parameters?,tags?,modelVersionId?,codeVersionId?,inputDatasetVersionIds?,parentRunId?,environment?,executionMode?)。
 - `GET|PATCH /projects/:p/runs/:r` (PATCH:name?,parameters?,tags?,status?,environment?; job紐付きの状態はworkerが管理)。parametersはキー単位merge。job実行開始後は実行設定の変更を拒否する。CodeVersionがあるRunは`environment.runtime`に実際のruntimeを固定し、environmentの置換でも維持する。異なるruntimeへの変更は拒否する。再実行は新しいRun。
 - `GET|POST /projects/:p/runs/:r/metrics` (POST:{metrics:MetricPoint[]})。
 - `GET|POST /projects/:p/runs/:r/logs` (POST:{entries:LogEntry[]})。
@@ -22,15 +22,33 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET /projects/:p/artifacts/:a/content` (Range対応。危険なHTML/SVG等はattachment)。`GET /storage/backends` → `{items:('filesystem'|'s3')[]}`。
 - `GET|POST /projects/:p/models` (name,family,description?) / `GET|POST /projects/:p/models/:id/versions` (version,parentModelVersionIds?,sourceRunId?,weightsUri?,artifactId?,defaultCodeVersionId?,metadata?)。
 - `PUT /projects/:p/models/:id/aliases/:alias` ({versionId})。実行時はaliasではなく実際のModelVersion IDをRunへ保存。
-- `GET|POST /projects/:p/codes` (name,description?) / `GET|POST /projects/:p/codes/:id/versions` (version,source?,runtime?,entrypoint,requirements?,environment?,supportedModelFamilies,taskTypes)。source/runtime/entrypointは下記とcontracts参照。Qwen2/Qwen3の組合せをサービスで検証。training/finetuningも同じCodeVersion契約を使う。
+- `GET|POST /projects/:p/codes` (name,description?) / `GET|POST /projects/:p/codes/:id/versions` (version,source?,runtime?,entrypoint,testEntrypoint?,requirements?,environment?,supportedModelFamilies,taskTypes)。source/runtime/entrypointは下記とcontracts参照。Qwen2/Qwen3の組合せをサービスで検証。training/finetuningも同じCodeVersion契約を使う。
 - `GET|POST /projects/:p/datasets` (name,namespace?,description?) / `GET|POST /projects/:p/datasets/:id/versions` (version,uri,digest,schema?,metadata?,sourceRunId?,parentDatasetVersionIds?,externalRef?)。sourceRunIdがあればRun.outputへ関係を保存。
 - `GET /projects/:p/lineage` → LineageGraph。
 - `GET|POST /targets` (ComputeTargetのidを除く。作成はglobal admin)。`runtimeKinds`は重複のないPython/Docker/Singularity/Apptainerの一覧で、省略時は`['python']`。取得時に鍵パス等を一般viewerへ出さない。executor=localはdevelopmentの明示許可のみ。
+- `PATCH /targets/:id` → ComputeTarget。全体管理者が設定・有効状態を変更する。queued/claimed/runningのJobが参照中なら接続先・Runtime・GPU等の変更を409で拒否する。有効切替は可能で、無効targetは新規claimの候補から外す。実行中Jobのleaseを取り消さない。
 - `GET /projects/:p/jobs` / `POST /projects/:p/jobs` (runId,targetId,gpuIds?,maxAttempts?)。Run kindとCodeVersion taskTypes、モデル系列、固定runtimeとtargetの対応runtime、GPU一覧、参照projectを検証。
 - `POST /projects/:p/jobs/:j/cancel` / `POST /projects/:p/jobs/:j/retry`。retryは新Run/Jobを作り`{run,job}`。生きているleaseのGPUを解放しない。
 - `GET|POST /tokens` (POST:name,kind,projectId,scopes,expiresAt?; `{token:string,item:TokenSummary}`一度だけ返す)。`DELETE /tokens/:id`。tokenはhashのみ保存。scope候補は`read`,`runs:write`,`registry:write`,`artifacts:write`,`jobs:write`,`worker:execute`,`admin`。worker tokenは設定されたprojectのみclaim可能。
 - `GET|POST /projects/:p/plugins` (POST:name,baseUrl,tokenEnv,enabled?)。登録は全体管理者に限定し、plugin secretは環境変数参照。Project adminは登録済みのpluginを利用する。`POST /projects/:p/plugins/:id/check` → manifest。`POST /projects/:p/plugins/:id/datasets/search` ({query}) → `{items:PluginDataset[]}`。
+- `PATCH /projects/:p/plugins/:id` (name?,baseUrl?,tokenEnv?,enabled?) → PluginConnection。変更も全体管理者に限定する。接続設定を変えると保存済みmanifestを消し、再確認を要求する。確認中に設定が変わった場合は古いmanifestを保存しない。無効pluginへはoutboxを送らず、再び有効にすると配信を再開する。
 - `POST /projects/:p/plugins/:id/datasets/import` ({dataset:PluginDataset}) → DatasetVersion。`POST /projects/:p/plugins/:id/events/retry` → `{queued:number}`。`GET /projects/:p/plugins/:id/metrics` → `{prometheus:string}`（storage:metrics対応pluginのみ）。event outboxはRun状態のtransactionと一緒に保存し、plugin障害でRunを失敗させない。
+
+## Task・コード編集・テスト実行
+
+- `GET|POST /projects/:p/tasks`。POSTは`experimentId,name,description?,kind,codeVersionId,modelVersionId?,inputDatasetVersionIds?,parameters?,tags?,targetId?,gpuIds?`。参照は同じProjectに限定し、コードの実行種別・モデル系列・Runtime・GPUを検証する。
+- `GET|PATCH /projects/:p/tasks/:id`。PATCHは`expectedRevision`と変更する設定を送る。Experimentは変更しない。保存時にrevisionを増やし、競合は409。登録・編集はeditorと`registry:write`を要求する。
+- `POST /projects/:p/tasks/:id/launch` ({expectedRevision,executionMode,targetId?,gpuIds?,name?,parameters?,modelVersionId?,inputDatasetVersionIds?}) → `{run,job}`、201。editorに`runs:write`と`jobs:write`を要求する。Taskの指定revisionを固定し、RunとJobを同じtransactionで作る。parametersはキー単位merge、GPUと入力Datasetの配列は置換。古いrevisionならRun/Jobを作らず409を返す。
+- `GET /projects/:p/tasks/:id/runs?limit=&cursor=` → `{items:Run[],nextCursor:string|null}`。以前のrevisionを含むactiveな実行履歴を返す。limitは既定50、最大200。cursorには前ページ末尾のRun IDを指定する。同じProjectとTaskのRunだけを境界に使い、作成日時とIDで古い実行へ進む。
+- `POST /projects/:p/repository-files` ({url,commit}) → `{commit,files,omittedPaths}`。editorと`registry:write`を要求する。完全なcommit hashを照合し、テキストを制限内で返す。URLの認証情報・不正protocol・symlink・危険なパスを拒否する。既存Git設定や認証情報を引き継がず、SSHはAPI server側の明示設定を使う。
+
+Git sourceは`{kind:'git',url,commit,files?,deletedFiles?}`。`files`は編集ファイル、`deletedFiles`は固定commitから削除する相対パス。`.git`、絶対パス、`..`、重複・編集と削除の衝突を拒否する。Inline sourceも同じパス・サイズ検証を使う。既存のArtifact sourceとsourceなしコンテナを維持する。
+
+`executionMode`は`run`または`test`。省略時は`run`。コード版のあるRunにはAPIが`executionSnapshot`を保存し、クライアントからの指定・上書きを認めない。コード版ID・version・source・Runtime・実行コマンド・依存関係・環境設定を固定する。テストは空でない`testEntrypoint`を要求する。Runの`taskId`と`taskRevision`も固定し、再実行はこれらと実行モードを引き継ぐ。MLflow経路もDB triggerで同じsnapshotを保存する。
+
+通常のRun一覧とTask履歴は、SQLで`executionSnapshot`を読み込まず概要だけを返す。コード全文と環境設定はRun詳細とworkerのclaim/resumeで取得する。MLflowで削除したRunは通常の履歴から除外し、復元すると再表示する。
+
+workerは実行前のソースを`.mmt/source.zip`と`.mmt/source-manifest.json`へ保存し、RunのArtifactsへアップロードする。sourceなしコンテナはmanifestだけ。manifestにはJobごとのファイルhashを記録する。外部pluginのeventにはコード本文と環境設定を持つ`executionSnapshot`を含めない。
 
 ## MLflow 3互換API
 

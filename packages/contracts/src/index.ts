@@ -13,7 +13,9 @@ export type JobStatus = RunStatus | 'claimed';
 export type ArtifactBackend = 'filesystem' | 's3';
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
+export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
+import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 
 export interface User {
   id: string;
@@ -61,6 +63,10 @@ export interface Run {
   latestMetrics: Record<string, number>;
   modelVersionId: string | null;
   codeVersionId: string | null;
+  taskId?: string | null;
+  taskRevision?: number | null;
+  executionMode?: ExecutionMode;
+  executionSnapshot?: ExecutionSnapshot | null;
   inputDatasetVersionIds: string[];
   outputDatasetVersionIds: string[];
   parentRunId: string | null;
@@ -96,7 +102,7 @@ export interface ModelVersion {
   createdAt: string;
 }
 export type CodeSource =
-  | { kind: 'git'; url: string; commit: string }
+  | { kind: 'git'; url: string; commit: string; files?: Record<string, string>; deletedFiles?: string[] }
   | { kind: 'inline'; files: Record<string, string> }
   | { kind: 'artifact'; artifactId: string };
 export interface Code {
@@ -115,6 +121,7 @@ export interface CodeVersion {
   source: CodeSource | null;
   runtime: ExecutionRuntime;
   entrypoint: string[];
+  testEntrypoint?: string[];
   requirements: string[];
   environment: Record<string, string>;
   supportedModelFamilies: string[];

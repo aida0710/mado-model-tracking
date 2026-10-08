@@ -4,6 +4,8 @@
 
 React/Viteの画面、TypeScript/HonoのAPI、PostgreSQL、Python SDKとSSH workerで構成します。学習・fine-tuning・推論・評価・データ加工を扱います。ArtifactsはファイルシステムまたはS3互換ストレージをProjectごとに選びます。[公式MLflow 3 SDK](docs/mlflow.md)からも記録できます。
 
+[タスクとコード編集](docs/workbench.md)では、リポジトリまたは単体コードをMonaco Editorで編集し、通常実行・テストのコマンドを登録できます。Taskのrevisionと実行内容を固定し、Jobごとのコードsnapshotと結果を追跡します。Computeとpluginも画面から追加・編集できます。
+
 ## ローカルで起動する
 
 Node.js 22.12以降、PostgreSQL 16以降、Python 3.11以降が必要です。workerにはOpenSSH clientも必要です。

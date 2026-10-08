@@ -14,6 +14,7 @@ import { text } from '../i18n/catalog';
 
 const screens = [
   'experiments',
+  'tasks',
   'models',
   'codes',
   'datasets',
@@ -47,6 +48,7 @@ export function AppShell() {
               .filter(
                 (screen) =>
                   screen !== 'plugins' ||
+                  auth.user.isAdmin ||
                   projects.value?.find((project) => project.id === projectId)?.role === 'admin',
               )
               .map((screen) => (

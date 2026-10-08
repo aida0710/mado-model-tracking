@@ -8,6 +8,8 @@ export const executionApi = {
   targets: (signal?: AbortSignal) => requestItems<ComputeTarget>('/targets', signal),
   createTarget: (body: CreateTarget) =>
     request<ComputeTarget>('/targets', jsonRequest('POST', body)),
+  updateTarget: (id: string, body: Partial<CreateTarget>) =>
+    request<ComputeTarget>(`/targets/${encodeId(id)}`, jsonRequest('PATCH', body)),
   jobs: (projectId: string, signal?: AbortSignal) => requestItems<Job>(jobPath(projectId), signal),
   createJob: (
     projectId: string,

@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
+import type { ComputeTarget } from '@mmt/contracts';
 import { executionApi } from '../api/execution';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
 import { useQuery } from '../hooks/useQuery';
+import { useMutation } from '../hooks/useMutation';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable } from '../components/DataTable';
-import { Resource } from '../components/Feedback';
+import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { text } from '../i18n/catalog';
 import { runtimeLabels } from '../i18n/runtime';
@@ -15,6 +17,8 @@ export function ComputePage() {
   const { user } = useAuth();
   const { project } = useProject();
   const [showDialog, setShowDialog] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<ComputeTarget | undefined>();
+  const mutation = useMutation();
   const targets = useQuery('compute-targets', executionApi.targets);
   return (
     <section className="page">
@@ -24,7 +28,7 @@ export function ComputePage() {
         actions={
           <>
             {user.isAdmin && (
-              <button className="button primary" onClick={() => setShowDialog(true)}>
+              <button className="button primary" onClick={() => { setEditingTarget(undefined); setShowDialog(true); }}>
                 <Plus size={15} />
                 {text.newTarget}
               </button>
@@ -35,6 +39,7 @@ export function ComputePage() {
           </>
         }
       />
+      <ErrorNotice message={mutation.error} />
       <Resource query={targets}>
         {(items) => (
           <DataTable
@@ -76,18 +81,22 @@ export function ComputePage() {
                   <input
                     type="checkbox"
                     checked={target.enabled}
-                    readOnly
-                    disabled
-                    aria-label={text.enabled}
+                    disabled={!user.isAdmin || mutation.pending}
+                    aria-label={`${target.enabled ? text.disableTarget : text.enableTarget}: ${target.name}`}
+                    onChange={() => void mutation.run(() => executionApi.updateTarget(target.id, { enabled: !target.enabled }))
+                      .then((saved) => { if (saved) targets.reload(); })}
                   />
                 ),
               },
+              { key: 'edit', label: text.edit, render: (target) => user.isAdmin && <button className="button small"
+                data-testid={`target-edit-${target.id}`} onClick={() => { setEditingTarget(target); setShowDialog(true); }}>{text.editTarget}</button> },
             ]}
           />
         )}
       </Resource>
       {showDialog && (
         <TargetDialog
+          target={editingTarget}
           onClose={() => setShowDialog(false)}
           onSaved={() => {
             setShowDialog(false);

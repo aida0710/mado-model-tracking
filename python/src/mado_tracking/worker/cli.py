@@ -9,6 +9,7 @@ import signal
 
 from ..errors import ApiError, ConfigurationError
 from .config import WorkerSettings
+from .job_responses import InvalidWorkerJob
 from .service import Worker
 
 
@@ -24,8 +25,13 @@ async def run(settings: WorkerSettings, *, once: bool) -> None:
     try:
         jobs = await worker.recover()
         if not jobs:
-            job = await worker.api.claim(settings.worker_id, settings.target_ids)
-            jobs = [job] if job is not None else []
+            job = await worker.api.claim(
+                settings.worker_id, settings.target_ids, active_job_ids=tuple(sorted(worker.retained_job_ids))
+            )
+            if isinstance(job, InvalidWorkerJob):
+                await worker.reject_invalid_job(job)
+            elif job is not None:
+                jobs = [job]
         for job in jobs:
             await worker.run_job(job)
     finally:

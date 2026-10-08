@@ -118,6 +118,7 @@ def container_environment(specification: dict[str, Any]) -> dict[str, str]:
     environment.update(specification["sdkEnvironment"])
     environment.update(
         MMT_JOB_KIND=context["kind"],
+        MMT_EXECUTION_MODE=specification["executionSnapshot"]["mode"],
         MMT_JOB_CONTEXT_FILE=f"{CONTEXT_PATH}/context.json",
         MMT_PARAMETERS_FILE=f"{CONTEXT_PATH}/parameters.json",
         MMT_MODEL_VERSION_FILE=f"{CONTEXT_PATH}/model-version.json",

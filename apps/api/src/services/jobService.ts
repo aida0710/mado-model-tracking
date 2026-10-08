@@ -5,6 +5,7 @@ import type { ApiConfig } from '../config.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
+import { validateExecutionSnapshot } from '../domain/executionSnapshot.js';
 import {
   validatePinnedRuntime,
   validateTargetCompatibility,
@@ -63,6 +64,9 @@ export class JobService {
     );
     if (!activeRun) conflict('削除済みRunにはJobを作成できません');
     if (run.status !== 'queued') conflict('JobはqueuedのRunにだけ作成できます');
+    // Reject duplicates before taking a target lock: a worker locks target before this existing Run.
+    const existing = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
+    if (existing) conflict('Runには既にJobがあります');
     if (!run.codeVersionId)
       throw new DomainError(422, '実行するCodeVersionが必要です', 'code_required');
     const code = await findCodeVersion(connection, {
@@ -74,6 +78,7 @@ export class JobService {
       : null;
     validateCodeCompatibility(code, { model, kind: run.kind });
     validatePinnedRuntime(code.runtime, run.environment.runtime);
+    validateExecutionSnapshot(code, run);
     await validateCodeArtifacts(connection, code);
     await findDatasetVersions(connection, {
       projectId: run.projectId,
@@ -84,8 +89,6 @@ export class JobService {
       gpuIds: input.gpuIds,
       runtime: code.runtime,
     });
-    const existing = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
-    if (existing) conflict('Runには既にJobがあります');
     return (await first<Job>(
       connection,
       `INSERT INTO jobs(project_id,run_id,target_id,gpu_ids,max_attempts,attempt) VALUES($1,$2,$3,$4,$5,$6) RETURNING ${jobColumns()}`,
@@ -103,7 +106,7 @@ export class JobService {
   ): Promise<void> {
     const target = await first<ComputeTarget>(
       connection,
-      'SELECT * FROM compute_targets WHERE id=$1 AND enabled=true',
+      'SELECT * FROM compute_targets WHERE id=$1 AND enabled=true FOR SHARE',
       [execution.targetId],
     );
     if (!target) notFound('ComputeTarget');
@@ -175,6 +178,9 @@ export class JobService {
       const run = await this.runs.insertRun(connection, {
         projectId,
         createdBy: principal.user.id,
+        ...(previousRun.taskId && previousRun.taskRevision
+          ? { task: { id: previousRun.taskId, revision: previousRun.taskRevision } }
+          : {}),
         input: {
           experimentId: previousRun.experimentId,
           name: `${previousRun.name} (retry ${previousJob.attempt + 1})`,
@@ -183,6 +189,7 @@ export class JobService {
           tags: previousRun.tags,
           modelVersionId: previousRun.modelVersionId,
           codeVersionId: previousRun.codeVersionId,
+          executionMode: previousRun.executionMode ?? 'run',
           inputDatasetVersionIds: previousRun.inputDatasetVersionIds,
           parentRunId: previousRun.id,
           environment: previousRun.environment,
@@ -227,6 +234,7 @@ export class JobService {
       kind: run.kind,
     });
     validatePinnedRuntime(codeVersion.runtime, run.environment.runtime);
+    validateExecutionSnapshot(codeVersion, run);
     validateTargetCompatibility(target, {
       runtime: codeVersion.runtime,
       gpuIds: job.gpuIds,

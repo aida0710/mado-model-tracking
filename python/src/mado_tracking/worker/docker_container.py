@@ -115,7 +115,7 @@ class DockerContainer:
         self._persist()
 
     def _create_argv(self, mounts: list[ContainerMount], environment_file: Path) -> list[str]:
-        entrypoint = self.specification["codeVersion"]["entrypoint"]
+        entrypoint = self.specification["executionSnapshot"]["entrypoint"]
         argv = [
             self.binary,
             "container",

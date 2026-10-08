@@ -22,7 +22,11 @@ const projectBase = base + '/projects/' + api.state.project.id;
 const dialog = () => page.getByRole('dialog').last();
 const fill = (label, value) => dialog().getByLabel(label).fill(value);
 const select = (label, value) => dialog().getByLabel(label).selectOption(value);
-const clickSave = () => dialog().getByRole('button', { name: '保存', exact: true }).click();
+const clickSave = async () => {
+  const versionSave = dialog().getByTestId('code-version-save');
+  if (await versionSave.count()) await versionSave.click();
+  else await dialog().getByRole('button', { name: '保存', exact: true }).click();
+};
 const waitClosed = () => page.getByRole('dialog').waitFor({ state: 'hidden' });
 const codePosts = () =>
   api.state.calls.filter(
@@ -37,10 +41,14 @@ async function fillCodeCommand() {
   await fill(modelFamilies, 'test-family');
   await select('対応する実行種別', 'inference');
 }
+async function openNewVersion() {
+  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await dialog().getByLabel('編集元のコード版').selectOption('');
+}
 try {
   console.log('Browser containers: Docker, command, optional source, digest validation');
   await page.goto(projectBase + '/codes');
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await openNewVersion();
   await fill('Version', 'docker-v1');
   await select('Runtime', 'docker');
   assert.equal(await dialog().getByLabel('ソース形式').inputValue(), 'none');
@@ -84,7 +92,7 @@ try {
     sha256: 'b'.repeat(64),
   };
   api.state.artifacts.push(storedSif);
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await openNewVersion();
   await fill('Version', 'singularity-v1');
   await select('Runtime', 'singularity');
   api.state.failProjectArtifacts = true;
@@ -106,7 +114,10 @@ try {
   );
   await fillCodeCommand();
   await select('ソース形式', 'inline');
-  await fill('ファイル（パスと内容のJSON）', '{"main.py":"print(1)"}');
+  await fill('ファイルのパス', 'main.py');
+  await dialog().getByRole('button', { name: 'ファイルを追加', exact: true }).click();
+  await dialog().getByRole('textbox', { name: 'コードエディタ: main.py', exact: true }).focus();
+  await page.keyboard.insertText('print(1)');
   await clickSave();
   await waitClosed();
   const singularityVersion = api.state.codeVersions.find(
@@ -118,7 +129,7 @@ try {
     sha256: storedSif.sha256,
   });
   assert.equal(singularityVersion.source.kind, 'inline');
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await openNewVersion();
   await fill('Version', 'apptainer-v1');
   await select('Runtime', 'apptainer');
   await dialog().getByRole('button', { name: 'Artifactをアップロード', exact: true }).click();

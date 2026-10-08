@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import json
 import shlex
@@ -31,12 +32,20 @@ class WorkerServer:
         self.completions: list[dict] = []
         self.log_notifications: dict[str, asyncio.Event] = {}
         self.artifact: bytes | None = None
+        self.snapshot_uploads: list[tuple[str, bytes]] = []
 
     def serve(self, request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer test-api-secret"
         if request.method == "GET":
             assert request.url.path.endswith("/content") and self.artifact is not None
             return httpx.Response(200, content=self.artifact)
+        if request.method == "PUT":
+            assert request.url.params["path"].startswith(".mmt/")
+            self.snapshot_uploads.append((request.url.params["path"], request.content))
+            return httpx.Response(
+                200,
+                json={"sha256": hashlib.sha256(request.content).hexdigest(), "size": len(request.content)},
+            )
         body = json.loads(request.content)
         self.calls.append((request.url.path, body))
         if request.url.path.endswith("/claim"):
@@ -374,6 +383,10 @@ def test_fake_ssh_transport_preserves_argv_and_detached_runner_state(job_payload
         entry["message"] for path, body in server.calls if path.endswith("/logs") for entry in body["entries"]
     )
     assert json.dumps(arguments) in messages
+    assert {path for path, _content in server.snapshot_uploads} == {
+        ".mmt/source.zip",
+        ".mmt/source-manifest.json",
+    }
     assert not (
         Path(job_payload["target"]["workDirectory"]) / job_payload["job"]["id"] / "source/never-created"
     ).exists()

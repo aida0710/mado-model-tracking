@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import gzip
 import hashlib
+import io
 import json
 import os
 import runpy
 import signal
 import subprocess
 import threading
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
@@ -103,6 +105,8 @@ class ContainerServer(WorkerServer):
                 stream=EncodedArtifact(),
             )
         if request.method == "PUT":
+            if request.url.params["path"].startswith(".mmt/"):
+                return super().serve(request)
             content = await request.aread()
             self.uploads.append((request.url.params["path"], content))
             if self.lose_first_upload_response and len(self.uploads) == 1:
@@ -368,6 +372,34 @@ def test_optional_source_runs_readonly_with_its_default_container_working_direct
     asyncio.run(execute_job(server, worker_settings))
     assert server.completions[-1]["status"] == "finished"
     assert not (workspace_for(job_payload) / "source/new-file").exists()
+
+
+def test_artifact_source_keeps_empty_directories_in_the_snapshot_of_a_readonly_container_source(
+    job_payload, worker_settings, docker_image
+):
+    docker_job(job_payload, docker_image)
+    job_payload["codeVersion"]["runtime"].pop("workingDirectory")
+    script = "test -d /mmt/source/cache\n" + FIXTURE_SCRIPT.replace(
+        'test "$PWD" = /tmp', 'test "$PWD" = /mmt/source'
+    )
+    script = "if printf changed > /mmt/source/cache/new-file 2>/dev/null; then exit 22; fi\n" + script
+    job_payload["codeVersion"].update(
+        source={"kind": "artifact", "artifactId": str(uuid4())},
+        entrypoint=["/bin/sh", "/mmt/source/fixture.sh"],
+    )
+    source_archive = io.BytesIO()
+    with zipfile.ZipFile(source_archive, "w") as archive:
+        archive.writestr("cache/", b"")
+        archive.writestr("fixture.sh", script)
+    server = ContainerServer(job_payload)
+    server.artifact = source_archive.getvalue()
+    asyncio.run(execute_job(server, worker_settings))
+    assert server.completions[-1]["status"] == "finished"
+    with zipfile.ZipFile(io.BytesIO(dict(server.snapshot_uploads)[".mmt/source.zip"])) as archive:
+        assert "cache/" in archive.namelist()
+        assert archive.read("fixture.sh").decode() == script
+    assert not (workspace_for(job_payload) / "source/cache/new-file").exists()
+    assert not container_exists(job_payload)
 
 
 def test_output_metrics_lease_rejection_stops_reporting_without_completing_the_job(

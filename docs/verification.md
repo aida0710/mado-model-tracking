@@ -82,7 +82,7 @@ Run・nested Run、paramsの不変性、メトリクス履歴/検索、6MiB・�
 
 TypeScriptの公式protobuf検証2件は、上記の`artifacts/verification/mlflow3-venv/bin/python`を使います。別のSDK環境を使う場合は`MMT_TEST_MLFLOW_PYTHON`にそのPythonの絶対パスを指定して`npm test`を実行します。SDKが未インストールの場合はこの2件だけskipします。
 
-同日の最終検証はTypeScript 349件成功・実S3 fixture未起動の2件skip、Python 188件と実Docker worker 20件が成功しました。型検査、ビルド、strict mypy、ruffも通過しています。レビューで見つかった並行保存・改名のlock順、NaN検索、モデルの全メトリクス履歴/検索/並び順、SDK記録後のUIの数値・真偽値filterを回帰テストで確認しました。
+同日のMLflow互換追加時はTypeScript349件成功・実S3 fixture未起動の2件skip、Python188件と実Docker worker20件が成功しました。型検査、ビルド、strict mypy、ruffも通過しています。レビューで見つかった並行保存・改名のlock順、NaN検索、モデルの全メトリクス履歴/検索/並び順、SDK記録後のUIの数値・真偽値filterを回帰テストで確認しました。
 
 画面の確認は3.17の結果ファイルを使います。
 
@@ -93,3 +93,35 @@ node scripts/verify_mlflow_browser.mjs
 ```
 
 SDKで作成したRunのメトリクス/params、モデル一式のArtifact、自動評価の推論結果、alias、data/model lineageを確認して画像と`browser-integration.json`を保存します。`MMT_WEB_URL`にLAN URLを指定すればprivate Originも含めて確認できます。
+
+## Task・コード編集・実行前ソース保存を確認する
+
+```bash
+PYTHONPATH=python/src python/.venv/bin/python scripts/verify_workbench.py
+```
+
+公開Gitリポジトリの固定commitを読み込み、編集・削除したファイルを実CPU workerで実行します。通常とテストのコマンド、Task改版後も固定されるqueued Job、古いrevisionの409、失敗テストと再実行、実行前のsource ZIPとmanifest、履歴を確認します。コード自身がmain.pyを書き換えた場合も、ZIPが実行前の内容を保つことを照合します。検証用tokenは最後に失効し、targetを無効にします。結果は`artifacts/verification/<日付>/workbench/task-integration.json`です。
+
+ブラウザからCompute/plugin登録、Monacoの編集・改版、Task作成・テスト・学習・推論を確認する場合は、開発APIとworkerのlocal executorを許可します。`.env`の`MMT_WORKBENCH_PLUGIN_TOKEN`に検証専用の値を用意してAPIを起動し、別terminalでloopbackのHTTP fixtureを起動します。
+
+```bash
+python/.venv/bin/python scripts/serve_workbench_plugin.py
+```
+
+```bash
+PYTHONPATH=python/src python/.venv/bin/python scripts/setup_workbench_playground.py
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_WEB_URL=http://<LANのIP>:5182 \
+node scripts/verify_workbench_browser.mjs
+```
+
+この操作はPlaygroundを残し、そのProjectとCPU targetだけを扱うworkerを起動します。Service Account tokenは7日で失効し、`var/playground/worker-settings.json`へmode600で保存します。ブラウザの確認後もTaskを編集・実行できます。再起動は`PYTHONPATH=python/src python/.venv/bin/python scripts/serve_workbench_worker.py`。workerの停止には`var/playground/worker.pid`のprocessを確認してSIGTERMを送り、設定画面で当該tokenを失効してください。
+
+HTTP fixtureはMadoのprotocol・metrics・Dataset importを確認するための専用サンプルです。実Madoへの接続確認は前節の別plugin検証を使います。PlaygroundのIDと実行結果、閲覧用画像は`artifacts/verification/<日付>/workbench/`へ保存し、tokenの値を含めません。
+
+2026-10-08の追加機能では、API・ストレージ366件、Web98件、Python316件、実Docker20件が成功しました。S3接続fixtureの2件はskipです。型検査・build・ruff・strict mypy、wheel/sdistの45ファイルと現ソースの一致も確認しました。
+
+実APIとCPU workerの5 Jobで、Task改版、通常・失敗テスト、旧版の再実行、Git差分、実行前ZIP、2件ずつの履歴取得を確認しました。実ブラウザでは8 Jobを実行し、Monacoで編集した係数によるメトリクスの7→10の変化、学習モデルを別の推論コードで読み込んだ予測値の一致、Compute/plugin管理、manifest・metrics・Dataset importを確認しました。ブラウザ回帰5本では未保存編集の戻る・進む、ネストした編集、保存待ちと履歴ページ切替も検証しています。公式MLflow 3.17.0の実SDK結合は再確認済みです。
+
+実Authentik、SSH/GPU、実S3、実SIF runtime、本番Madoへの接続はこの結果に含みません。

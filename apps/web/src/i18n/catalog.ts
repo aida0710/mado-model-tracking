@@ -1,3 +1,5 @@
+import { workbenchText } from './workbench';
+
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
   modelVersion: 'モデル版',
@@ -19,6 +21,7 @@ export const lineageRelationLabels: Record<string, string> = {
 };
 
 export const text = {
+  ...workbenchText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

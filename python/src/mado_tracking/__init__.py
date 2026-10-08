@@ -9,6 +9,7 @@ from .execution_runtime import (
     PythonRuntime,
     SifRuntime,
 )
+from .execution_snapshot import ExecutionMode
 from .run import Run
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Client",
     "ConfigurationError",
     "DockerRuntime",
+    "ExecutionMode",
     "ExecutionRuntime",
     "ExecutionRuntimeKind",
     "PythonRuntime",

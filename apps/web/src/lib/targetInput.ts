@@ -1,0 +1,18 @@
+import type { CreateTarget } from '../api/inputs';
+import type { FormValues } from '../types/form';
+import { getFieldValue, getSelectedValues, parsePositiveInteger, splitLines } from './formValues';
+import { parseRuntimeKinds } from './runtimeValidation';
+
+export function buildTargetInput(values: FormValues): CreateTarget {
+  return {
+    name: getFieldValue(values, 'name'), executor: getFieldValue(values, 'executor') as CreateTarget['executor'],
+    host: getFieldValue(values, 'host'), port: parsePositiveInteger(getFieldValue(values, 'port')),
+    username: getFieldValue(values, 'username'), sshKeyPath: getFieldValue(values, 'sshKeyPath'),
+    knownHostsPath: getFieldValue(values, 'knownHostsPath'), workDirectory: getFieldValue(values, 'workDirectory'),
+    pythonExecutable: getFieldValue(values, 'pythonExecutable'),
+    runtimeKinds: parseRuntimeKinds(getSelectedValues(values, 'runtimeKinds')),
+    gpuIds: splitLines(getFieldValue(values, 'gpuIds')),
+    maxConcurrentJobs: parsePositiveInteger(getFieldValue(values, 'maxConcurrentJobs')),
+    enabled: getFieldValue(values, 'enabled') === 'true',
+  };
+}

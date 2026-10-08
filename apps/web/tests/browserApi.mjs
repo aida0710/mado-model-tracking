@@ -448,6 +448,8 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       state.artifacts.push(created);
       return reply(created);
     }
+    if (resource === 'artifacts' && key && !subresource && method === 'GET')
+      return reply(item(state.artifacts, key));
     if (resource === 'artifacts' && subresource === 'content')
       return route.fulfill({ contentType: 'text/plain', body: 'Browser test artifact' });
     if (['models', 'codes', 'datasets'].includes(resource)) {

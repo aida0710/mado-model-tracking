@@ -50,6 +50,8 @@ export const trackingApi = {
     ),
   artifactUrl: (projectId: string, artifactId: string) =>
     `/api${projectPath(projectId)}/artifacts/${encodeId(artifactId)}/content`,
+  artifact: (projectId: string, artifactId: string, signal?: AbortSignal) =>
+    request<Artifact>(`${projectPath(projectId)}/artifacts/${encodeId(artifactId)}`, { signal }),
   lineage: (projectId: string, signal?: AbortSignal) =>
     request<LineageGraph>(`${projectPath(projectId)}/lineage`, { signal }),
 };

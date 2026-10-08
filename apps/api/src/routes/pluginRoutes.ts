@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { PluginService } from '../services/pluginService.js';
-import { pluginCreateSchema, pluginDatasetSchema } from '../domain/validation.js';
+import {
+  pluginCreateSchema,
+  pluginDatasetSchema,
+  pluginPatchSchema,
+} from '../domain/validation.js';
 import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 
 export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
@@ -17,6 +21,14 @@ export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
         await jsonBody(context, pluginCreateSchema),
       ),
       201,
+    ),
+  );
+  routes.patch('/:p/plugins/:id', async (context) =>
+    context.json(
+      await plugins.patch(principal(context), uuidParam(context, 'p'), {
+        pluginId: uuidParam(context, 'id'),
+        input: await jsonBody(context, pluginPatchSchema),
+      }),
     ),
   );
   routes.post('/:p/plugins/:id/check', async (context) =>

@@ -1,6 +1,6 @@
 import type { CodeVersion, DatasetVersion, ModelVersion, Run } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
-import { notFound } from '../domain/errors.js';
+import { conflict, notFound } from '../domain/errors.js';
 
 export const modelSelect = `SELECT m.*, (SELECT version FROM model_versions v WHERE v.model_id=m.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_version,
   (SELECT COALESCE(jsonb_object_agg(alias,version_id::text),'{}'::jsonb) FROM model_aliases WHERE model_id=m.id) AS aliases FROM models m`;
@@ -22,6 +22,19 @@ type ReferenceTable =
   | 'dataset_versions'
   | 'artifacts'
   | 'plugin_connections';
+
+export async function lockActiveExperiment(
+  connection: Connection,
+  reference: { projectId: string; id: string },
+): Promise<void> {
+  const experiment = await first<{ lifecycleStage: string }>(
+    connection,
+    'SELECT lifecycle_stage FROM experiments WHERE project_id=$1 AND id=$2 FOR SHARE',
+    [reference.projectId, reference.id],
+  );
+  if (!experiment) notFound('Experiment');
+  if (experiment.lifecycleStage !== 'active') conflict('削除済みExperimentは変更・実行できません');
+}
 
 export async function assertProjectReference(
   connection: Connection,

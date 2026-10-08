@@ -173,9 +173,13 @@ async def verify_jobs(
         metrics = client.request("GET", training_run.api_path + "/metrics")["items"]
         loss = [point for point in metrics if point["name"] == "train.loss"]
         assert len(loss) == 40 and loss[-1]["value"] < loss[0]["value"]
-        artifact = client.request("GET", training_run.api_path + "/artifacts")["items"][
-            0
-        ]
+        artifact = next(
+            artifact
+            for artifact in client.request("GET", training_run.api_path + "/artifacts")[
+                "items"
+            ]
+            if artifact["path"] == "model/weights.json"
+        )
         weights = json.loads(
             b"".join(client.download_artifact(project_id, artifact["id"]))
         )
@@ -200,9 +204,13 @@ async def verify_jobs(
         assert (
             client.get_run(project_id, inference_run.id).entity["status"] == "finished"
         )
-        prediction_artifact = client.request(
-            "GET", inference_run.api_path + "/artifacts"
-        )["items"][0]
+        prediction_artifact = next(
+            artifact
+            for artifact in client.request(
+                "GET", inference_run.api_path + "/artifacts"
+            )["items"]
+            if artifact["path"] == "inference/predictions.json"
+        )
         predictions = json.loads(
             b"".join(client.download_artifact(project_id, prediction_artifact["id"]))
         )

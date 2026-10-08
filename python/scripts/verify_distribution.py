@@ -17,6 +17,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import mado_tracking
+from mado_tracking.execution_snapshot import resolve_execution_snapshot
 from mado_tracking.worker.runtime import build_runtime_bundle
 
 # Catch broken distribution/runner imports promptly and keep protocol calls bounded.
@@ -30,6 +31,10 @@ REQUIRED_RUNTIME_MODULES = {
     "job_execution",
     "runtime_capability",
     "sif_container",
+    "artifact_files",
+    "code_source",
+    "execution_snapshot",
+    "source_snapshot",
 }
 
 
@@ -67,6 +72,7 @@ def verify_runtime(bundle: bytes, *, kind: str, image: str | None = None) -> Non
             "leaseId": str(uuid4()),
             "codeVersion": {
                 "id": str(uuid4()),
+                "version": "v1",
                 "runtime": definition,
                 "source": source,
                 "entrypoint": entrypoint,
@@ -76,6 +82,7 @@ def verify_runtime(bundle: bytes, *, kind: str, image: str | None = None) -> Non
             "gpuIds": [],
             "context": {
                 "projectId": str(uuid4()),
+                "runId": str(uuid4()),
                 "parameters": {},
                 "modelVersion": None,
                 "inputDatasets": [],
@@ -89,6 +96,9 @@ def verify_runtime(bundle: bytes, *, kind: str, image: str | None = None) -> Non
             "installDependencies": False,
             "cancelGraceSeconds": 0.15,
         }
+        snapshot = resolve_execution_snapshot(specification["codeVersion"], {})
+        specification["executionSnapshot"] = snapshot
+        specification["runExecution"] = {"executionMode": "run", "executionSnapshot": snapshot}
         try:
             run_remote(runtime, workspace, command="start", payload=specification)
             deadline = time.monotonic() + VERIFICATION_TIMEOUT_SECONDS
@@ -97,6 +107,9 @@ def verify_runtime(bundle: bytes, *, kind: str, image: str | None = None) -> Non
                 state = response["state"]
                 if state["status"] in {"finished", "failed", "canceled"}:
                     assert state["status"] == "finished", state.get("error")
+                    manifest = json.loads((workspace / "source-snapshot/source-manifest.json").read_text())
+                    assert manifest["runId"] == specification["context"]["runId"]
+                    assert manifest["runtime"] == definition and manifest["mode"] == "run"
                     break
                 time.sleep(POLL_SECONDS)
             else:

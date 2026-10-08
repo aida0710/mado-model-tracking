@@ -8,7 +8,6 @@ import json
 import math
 import os
 import re
-import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -17,6 +16,7 @@ from typing import Any, BinaryIO
 
 from ..execution_runtime import SHA256_PATTERN
 from ..timestamps import utc_timestamp
+from .artifact_files import open_regular_file
 
 # Bound protocol metadata and each SSH response; artifact contents remain streamed.
 MAX_RESULT_BYTES = 1024 * 1024
@@ -47,24 +47,8 @@ def output_path_parts(path: str) -> list[str]:
 @contextmanager
 def open_output(root: Path, path: str) -> Iterator[BinaryIO]:
     parts = output_path_parts(path)
-    directory_descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for part in parts[:-1]:
-            nested_descriptor = os.open(
-                part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory_descriptor
-            )
-            os.close(directory_descriptor)
-            directory_descriptor = nested_descriptor
-        descriptor = os.open(
-            parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_descriptor
-        )
-        with os.fdopen(descriptor, "rb") as content:
-            properties = os.fstat(content.fileno())
-            if not stat.S_ISREG(properties.st_mode) or properties.st_nlink != 1:
-                raise ValueError("Outputs must be regular files, without symlinks or hardlinks")
-            yield content
-    finally:
-        os.close(directory_descriptor)
+    with open_regular_file(root, parts) as content:
+        yield content
 
 
 def file_checksum(content: BinaryIO) -> tuple[str, int]:

@@ -9,8 +9,11 @@ from urllib.parse import quote
 
 import httpx
 
+from .code_version import build_code_version_payload
 from .errors import ConfigurationError
-from .execution_runtime import ExecutionRuntime, validate_entrypoint, validate_runtime
+from .execution_runtime import ExecutionRuntime
+from .execution_snapshot import ExecutionMode, validate_execution_mode
+from .experiment_tasks import ExperimentTasksClient
 from .http import REQUEST_TIMEOUT_SECONDS, request_sync
 from .security import SecretMasker, secret_values
 from .settings import ApiSettings
@@ -22,7 +25,7 @@ def path_id(identifier: str) -> str:
     return quote(identifier, safe="")
 
 
-class Client:
+class Client(ExperimentTasksClient):
     def __init__(
         self,
         *,
@@ -84,9 +87,14 @@ class Client:
         input_dataset_version_ids: Sequence[str] = (),
         parent_run_id: str | None = None,
         environment: Mapping[str, Any] | None = None,
+        execution_mode: ExecutionMode = "run",
     ) -> Run:
         from .run import Run
 
+        try:
+            validate_execution_mode(execution_mode)
+        except ValueError as error:
+            raise ConfigurationError(str(error)) from None
         run = self.request(
             "POST",
             self.project_path(project_id, "runs"),
@@ -101,6 +109,7 @@ class Client:
                 "inputDatasetVersionIds": list(input_dataset_version_ids),
                 "parentRunId": parent_run_id,
                 "environment": dict(environment or {}),
+                "executionMode": execution_mode,
             },
         )
         return Run(self, project_id, run)
@@ -221,6 +230,7 @@ class Client:
         version: str,
         source: Mapping[str, Any] | None = None,
         entrypoint: Sequence[str],
+        test_entrypoint: Sequence[str] = (),
         runtime: ExecutionRuntime | None = None,
         requirements: Sequence[str] = (),
         environment: Mapping[str, str] | None = None,
@@ -230,8 +240,17 @@ class Client:
         code_id: str | None = None,
     ) -> dict[str, Any]:
         try:
-            validate_runtime(runtime, source=source, requirements=requirements)
-            validate_entrypoint(entrypoint)
+            payload = build_code_version_payload(
+                version=version,
+                source=source,
+                entrypoint=entrypoint,
+                test_entrypoint=test_entrypoint,
+                runtime=runtime,
+                requirements=requirements,
+                environment=environment,
+                supported_model_families=supported_model_families,
+                task_types=task_types,
+            )
         except ValueError as error:
             raise ConfigurationError(str(error)) from None
         if code_id is None:
@@ -241,19 +260,44 @@ class Client:
                 json={"name": name, "description": description},
             )
             code_id = code["id"]
+        return self._save_code_version(project_id, code_id, payload=payload)
+
+    def create_code_version(
+        self,
+        project_id: str,
+        *,
+        code_id: str,
+        version: str,
+        source: Mapping[str, Any] | None = None,
+        entrypoint: Sequence[str],
+        test_entrypoint: Sequence[str] = (),
+        runtime: ExecutionRuntime | None = None,
+        requirements: Sequence[str] = (),
+        environment: Mapping[str, str] | None = None,
+        supported_model_families: Sequence[str] = (),
+        task_types: Sequence[str] = (),
+    ) -> dict[str, Any]:
+        try:
+            payload = build_code_version_payload(
+                version=version,
+                source=source,
+                entrypoint=entrypoint,
+                test_entrypoint=test_entrypoint,
+                runtime=runtime,
+                requirements=requirements,
+                environment=environment,
+                supported_model_families=supported_model_families,
+                task_types=task_types,
+            )
+        except ValueError as error:
+            raise ConfigurationError(str(error)) from None
+        return self._save_code_version(project_id, code_id, payload=payload)
+
+    def _save_code_version(self, project_id: str, code_id: str, *, payload: dict[str, Any]) -> dict[str, Any]:
         return self.request(
             "POST",
             self.project_path(project_id, f"codes/{path_id(code_id)}/versions"),
-            json={
-                "version": version,
-                "source": dict(source) if source is not None else None,
-                **({"runtime": dict(runtime)} if runtime is not None else {}),
-                "entrypoint": list(entrypoint),
-                "requirements": list(requirements),
-                "environment": dict(environment or {}),
-                "supportedModelFamilies": list(supported_model_families),
-                "taskTypes": list(task_types),
-            },
+            json=payload,
         )
 
     def create_automation_rule(

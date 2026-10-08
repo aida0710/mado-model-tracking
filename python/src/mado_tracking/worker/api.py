@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -13,11 +14,13 @@ from ..http import REQUEST_TIMEOUT_SECONDS, request_async
 from ..security import SecretMasker
 from .contracts import WorkerJob
 from .download_content import DOWNLOAD_ACCEPT_ENCODING, write_downloaded_content
+from .job_responses import InvalidWorkerJob, parse_worker_job_response
 
 # Artifact uploads share the SDK's bounded one-MiB memory budget.
 ARTIFACT_CHUNK_BYTES = 1024 * 1024
 
 LEASE_REJECTED_STATUSES = {401, 403, 404, 409, 410}
+LOGGER = logging.getLogger(__name__)
 
 
 class WorkerApi:
@@ -54,7 +57,7 @@ class WorkerApi:
 
     async def claim(
         self, worker_id: str, target_ids: Sequence[str], *, active_job_ids: Sequence[str] = ()
-    ) -> WorkerJob | None:
+    ) -> WorkerJob | InvalidWorkerJob | None:
         # A lost claim response is recovered through resume; replay could claim another job.
         payload: dict[str, Any] = {"workerId": worker_id, "activeJobIds": list(active_job_ids)}
         if target_ids:
@@ -62,9 +65,13 @@ class WorkerApi:
         response = await self.request("worker/claim", payload, retryable=False)
         if "item" not in response or response["item"] is not None and not isinstance(response["item"], dict):
             raise ConfigurationError("Worker claim response must contain item or null")
-        return WorkerJob.parse(response["item"]) if response["item"] is not None else None
+        return (
+            parse_worker_job_response(response["item"], worker_id=worker_id)
+            if response["item"] is not None
+            else None
+        )
 
-    async def resume(self, worker_id: str, target_ids: Sequence[str]) -> list[WorkerJob]:
+    async def resume(self, worker_id: str, target_ids: Sequence[str]) -> list[WorkerJob | InvalidWorkerJob]:
         payload: dict[str, Any] = {"workerId": worker_id}
         if target_ids:
             payload["targetIds"] = list(target_ids)
@@ -72,7 +79,18 @@ class WorkerApi:
         items = response.get("items")
         if not isinstance(items, list):
             raise ConfigurationError("Worker resume response must contain items")
-        return [WorkerJob.parse(item) for item in items]
+        jobs: list[WorkerJob | InvalidWorkerJob] = []
+        for item in items:
+            try:
+                if not isinstance(item, dict):
+                    raise ConfigurationError("Resumed WorkerJob must be an object")
+                jobs.append(parse_worker_job_response(item, worker_id=worker_id))
+            except ConfigurationError as error:
+                # Unverified identities cannot authorize a mutation of any lease in the batch.
+                LOGGER.error(
+                    "Resumed Job has no verified lease; no completion sent: %s", self.masker.mask(str(error))
+                )
+        return jobs
 
     async def heartbeat(self, job: WorkerJob, *, running: bool = False) -> bool:
         payload: dict[str, Any] = {"leaseId": job.lease_id}
@@ -94,7 +112,12 @@ class WorkerApi:
         )
 
     async def complete(
-        self, job: WorkerJob, *, status: str, exit_code: int | None = None, error: str | None = None
+        self,
+        job: WorkerJob | InvalidWorkerJob,
+        *,
+        status: str,
+        exit_code: int | None = None,
+        error: str | None = None,
     ) -> None:
         payload: dict[str, Any] = {"leaseId": job.lease_id, "status": status}
         if exit_code is not None:
@@ -103,23 +126,44 @@ class WorkerApi:
             payload["error"] = self.masker.mask(error)
         await self.request(f"worker/jobs/{job.id}/complete", payload, leased=True)
 
-    async def download_artifact(self, project_id: str, artifact_id: str, destination: Any) -> dict[str, Any]:
+    async def download_artifact(
+        self, project_id: str, artifact_id: str, destination: Any, *, maximum_bytes: int | None = None
+    ) -> dict[str, Any]:
         try:
             async with self.http.stream(
                 "GET",
                 f"projects/{project_id}/artifacts/{artifact_id}/content",
-                headers={"Accept-Encoding": DOWNLOAD_ACCEPT_ENCODING},
+                headers={
+                    "Accept-Encoding": "identity" if maximum_bytes is not None else DOWNLOAD_ACCEPT_ENCODING
+                },
             ) as response:
                 if not response.is_success:
                     from ..http import check_response
 
                     await response.aread()
                     check_response(response, self.masker)
-                return await write_downloaded_content(response, destination, label="Artifact")
+                return await write_downloaded_content(
+                    response, destination, label="Artifact", maximum_bytes=maximum_bytes
+                )
         except (httpx.TransportError, httpx.DecodingError, httpx.StreamError):
             raise ApiError("Artifact download interrupted or invalid; retry from the beginning") from None
 
     async def upload_output_artifact(self, job: WorkerJob, artifact: dict[str, Any], source: Path) -> None:
+        await self.upload_run_artifact(job, artifact, source, path=f"container/{artifact['path']}")
+
+    async def upload_source_snapshot_artifact(
+        self, job: WorkerJob, artifact: dict[str, Any], source: Path
+    ) -> None:
+        from .source_snapshot import SNAPSHOT_FILENAMES
+
+        if artifact.get("path") not in SNAPSHOT_FILENAMES:
+            raise ConfigurationError("Source snapshot requires a reserved Artifact path")
+        await self.heartbeat(job)
+        await self.upload_run_artifact(job, artifact, source, path=artifact["path"])
+
+    async def upload_run_artifact(
+        self, job: WorkerJob, artifact: dict[str, Any], source: Path, *, path: str
+    ) -> None:
         async def chunks() -> AsyncIterator[bytes]:
             with source.open("rb") as content:
                 while chunk := content.read(ARTIFACT_CHUNK_BYTES):
@@ -129,7 +173,7 @@ class WorkerApi:
             self.http,
             "PUT",
             f"projects/{job.job['projectId']}/runs/{job.run['id']}/artifacts",
-            params={"path": f"container/{artifact['path']}"},
+            params={"path": path},
             headers={"Content-Type": artifact["mimeType"]},
             content=chunks(),
             masker=self.masker,
@@ -139,4 +183,4 @@ class WorkerApi:
             artifact["sha256"],
             artifact["size"],
         ):
-            raise ConfigurationError("Saved container Artifact checksum or size does not match")
+            raise ConfigurationError("Saved Run Artifact checksum or size does not match")

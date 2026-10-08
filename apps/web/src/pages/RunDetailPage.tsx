@@ -11,6 +11,7 @@ import { MetricsChart } from '../components/MetricsChart';
 import { Tabs } from '../components/Tabs';
 import { RunLogs } from '../components/RunLogs';
 import { RunArtifacts } from '../components/RunArtifacts';
+import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { DetailsList, KeyValues } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
 import { ArtifactUploadDialog } from '../dialogs/ArtifactUploadDialog';
@@ -21,7 +22,7 @@ import { isSystemMetric } from '../lib/metricSeries';
 import { getRunParameters } from '../lib/runParameters';
 import { text } from '../i18n/catalog';
 
-const tabs = ['metrics', 'artifacts', 'systemMetrics', 'logs', 'details'] as const;
+const tabs = ['metrics', 'artifacts', 'systemMetrics', 'logs', 'details', 'executionSnapshot'] as const;
 export function RunDetailPage() {
   const { project, canEdit } = useProject();
   const { runId = '' } = useParams();
@@ -45,7 +46,7 @@ export function RunDetailPage() {
     EXECUTION_POLL_MS,
   );
   const artifacts = useQuery(
-    tab === 'artifacts' ? `${runId}:artifacts` : null,
+    tab === 'artifacts' || tab === 'executionSnapshot' ? `${runId}:artifacts` : null,
     (signal) => trackingApi.artifacts(project.id, runId, signal),
     EXECUTION_POLL_MS,
   );
@@ -77,6 +78,8 @@ export function RunDetailPage() {
                   <StatusBadge status={item.status} />
                   <span className="mono">{item.id}</span>
                   <span>{text[item.kind]}</span>
+                  <span>{item.executionMode === 'test' ? text.testMode : text.runMode}</span>
+                  {item.taskId && <Link to={`${base}/tasks?id=${item.taskId}`}>{text.taskRevision}: {item.taskRevision}</Link>}
                   <span>{formatDuration(item.startedAt, item.endedAt)}</span>
                 </>
               }
@@ -139,6 +142,9 @@ export function RunDetailPage() {
               {tab === 'logs' && (
                 <Resource query={logs}>{(entries) => <RunLogs entries={entries} />}</Resource>
               )}
+              {tab === 'executionSnapshot' && <Resource query={artifacts}>
+                {(files) => <RunExecutionSnapshot run={item} artifacts={files} />}
+              </Resource>}
               {tab === 'artifacts' && (
                 <>
                   {canEdit && (

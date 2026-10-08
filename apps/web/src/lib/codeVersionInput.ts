@@ -1,10 +1,9 @@
-import type { Artifact, CodeSource, ExecutionRuntime, RunKind } from '@mmt/contracts';
+import type { Artifact, CodeSource, CodeVersion, ExecutionRuntime, RunKind } from '@mmt/contracts';
 import type { CreateCodeVersion } from '../api/inputs';
 import type { FormValues } from '../types/form';
 import {
   getFieldValue,
   getSelectedValues,
-  parseStringArray,
   parseStringMap,
   splitLines,
 } from './formValues';
@@ -15,6 +14,9 @@ import {
   validateDockerImage,
 } from './runtimeValidation';
 import { text } from '../i18n/catalog';
+import type { CodeWorkspace } from '../types/codeWorkspace';
+import { buildWorkspaceSource, validateFilePaths, validateGitRepository } from './codeWorkspace';
+import { parseCommand } from './commandInput';
 
 export function createCodeVersionValues(): FormValues {
   return {
@@ -31,10 +33,36 @@ export function createCodeVersionValues(): FormValues {
     files: '{}',
     sourceArtifactId: '',
     entrypoint: '',
+    testEntrypoint: '',
     requirements: '',
     environment: '{}',
     families: '',
     taskTypes: [],
+  };
+}
+
+export function createValuesFromCodeVersion(version?: CodeVersion): FormValues {
+  if (!version) return createCodeVersionValues();
+  const runtime = version.runtime;
+  const source = version.source;
+  return {
+    ...createCodeVersionValues(),
+    runtimeKind: runtime.kind,
+    image: runtime.kind === 'docker' ? runtime.image : '',
+    sifArtifactId: runtime.kind === 'singularity' || runtime.kind === 'apptainer' ? runtime.artifactId : '',
+    sha256: runtime.kind === 'singularity' || runtime.kind === 'apptainer' ? runtime.sha256 : '',
+    workingDirectory: runtime.kind !== 'python' ? runtime.workingDirectory ?? '' : '',
+    sourceKind: source?.kind ?? 'none',
+    url: source?.kind === 'git' ? source.url : '',
+    commit: source?.kind === 'git' ? source.commit : '',
+    files: JSON.stringify(source && (source.kind === 'inline' || source.kind === 'git') ? source.files ?? {} : {}, null, 2),
+    sourceArtifactId: source?.kind === 'artifact' ? source.artifactId : '',
+    entrypoint: JSON.stringify(version.entrypoint),
+    testEntrypoint: version.testEntrypoint?.length ? JSON.stringify(version.testEntrypoint) : '',
+    requirements: version.requirements.join('\n'),
+    environment: JSON.stringify(version.environment, null, 2),
+    families: version.supportedModelFamilies.join('\n'),
+    taskTypes: [...version.taskTypes],
   };
 }
 
@@ -77,16 +105,23 @@ function buildRuntime(values: FormValues, artifacts: Artifact[]): ExecutionRunti
   return { kind, artifactId, sha256: artifact.sha256, ...directory };
 }
 
-function buildSource(values: FormValues): CodeSource | null {
+function buildSource(values: FormValues, workspace?: CodeWorkspace): CodeSource | null {
   const kind = getFieldValue(values, 'sourceKind');
   if (kind === 'none') return null;
   if (kind === 'git') {
     const url = getFieldValue(values, 'url').trim();
     const commit = getFieldValue(values, 'commit').trim();
     if (!url || !commit) throw new Error(text.required);
+    if (workspace) return buildWorkspaceSource({ url, commit }, workspace);
+    validateGitRepository({ url, commit });
     return { kind, url, commit };
   }
-  if (kind === 'inline') return { kind, files: parseStringMap(getFieldValue(values, 'files')) };
+  if (kind === 'inline') {
+    const files = workspace?.files ?? parseStringMap(getFieldValue(values, 'files'));
+    if (!Object.keys(files).length) throw new Error(text.noFiles);
+    validateFilePaths(Object.keys(files));
+    return { kind, files };
+  }
   if (kind !== 'artifact' || !getFieldValue(values, 'sourceArtifactId'))
     throw new Error(text.required);
   return { kind, artifactId: getFieldValue(values, 'sourceArtifactId') };
@@ -96,14 +131,16 @@ export function buildCodeVersionInput({
   values,
   artifacts,
   projectId,
+  workspace,
 }: {
   values: FormValues;
   artifacts: Artifact[];
   projectId: string;
+  workspace?: CodeWorkspace;
 }): CreateCodeVersion {
   const projectArtifacts = artifacts.filter((artifact) => artifact.projectId === projectId);
   const runtime = buildRuntime(values, projectArtifacts);
-  const source = buildSource(values);
+  const source = buildSource(values, workspace);
   if (
     source?.kind === 'artifact' &&
     !projectArtifacts.some((artifact) => artifact.id === source.artifactId)
@@ -111,9 +148,8 @@ export function buildCodeVersionInput({
     throw new Error(text.sourceArtifactError);
   if (runtime.kind === 'python' && !source) throw new Error(text.pythonSourceError);
   const version = getFieldValue(values, 'version').trim();
-  const entrypoint = parseStringArray(getFieldValue(values, 'entrypoint'));
-  if (!entrypoint[0]?.trim() || entrypoint.some((argument) => argument.includes('\0')))
-    throw new Error(text.emptyCommandError);
+  const entrypoint = parseCommand(getFieldValue(values, 'entrypoint'));
+  const testEntrypoint = parseCommand(getFieldValue(values, 'testEntrypoint'), { optional: true });
   const supportedModelFamilies = splitLines(getFieldValue(values, 'families'));
   const taskTypes = getSelectedValues(values, 'taskTypes');
   if (!version || !supportedModelFamilies.length || !taskTypes.length)
@@ -125,6 +161,7 @@ export function buildCodeVersionInput({
     runtime,
     source,
     entrypoint,
+    testEntrypoint,
     requirements:
       runtime.kind === 'python' ? splitLines(getFieldValue(values, 'requirements')) : [],
     environment: parseStringMap(getFieldValue(values, 'environment')),

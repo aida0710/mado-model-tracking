@@ -243,8 +243,8 @@ export class RegistryService {
       });
       return (await first<CodeVersion>(
         connection,
-        `INSERT INTO code_versions(code_id,project_id,version,source,entrypoint,requirements,environment,supported_model_families,task_types,runtime)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+        `INSERT INTO code_versions(code_id,project_id,version,source,entrypoint,requirements,environment,supported_model_families,task_types,runtime,test_entrypoint)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
         [
           registration.codeId,
           projectId,
@@ -256,6 +256,7 @@ export class RegistryService {
           input.supportedModelFamilies,
           input.taskTypes,
           JSON.stringify(input.runtime),
+          input.testEntrypoint,
         ],
       ))!;
     });

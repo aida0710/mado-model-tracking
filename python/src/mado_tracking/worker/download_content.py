@@ -96,13 +96,23 @@ async def _decoded_chunks(response: httpx.Response) -> AsyncIterator[tuple[bytes
 
 
 async def write_downloaded_content(
-    response: httpx.Response, destination: BinaryIO, *, label: str
+    response: httpx.Response, destination: BinaryIO, *, label: str, maximum_bytes: int | None = None
 ) -> dict[str, Any]:
+    if maximum_bytes is not None:
+        # Bounded code archives request identity; reject unexpected encodings before decompression.
+        encoding = response.headers.get("content-encoding", "identity").strip().lower()
+        if encoding not in {"", "identity"}:
+            raise ValueError(f"{label} bounded download requires identity encoding")
+        declared_size = response.headers.get("content-length")
+        if declared_size is not None and declared_size.isdigit() and int(declared_size) > maximum_bytes:
+            raise ValueError(f"{label} exceeds its download size limit")
     stream_already_consumed = response.is_stream_consumed
     checksum, stored_size, transfer_bytes = hashlib.sha256(), 0, 0
     async for chunk, received_bytes in _decoded_chunks(response):
         transfer_bytes += received_bytes
         if chunk:
+            if maximum_bytes is not None and stored_size + len(chunk) > maximum_bytes:
+                raise ValueError(f"{label} exceeds its download size limit")
             destination.write(chunk)
             checksum.update(chunk)
             stored_size += len(chunk)

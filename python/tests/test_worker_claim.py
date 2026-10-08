@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 from pathlib import Path
 from uuid import uuid4
@@ -37,6 +38,14 @@ class ClaimServer:
 
     def serve(self, request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer test-api-secret"
+        if request.method == "PUT":
+            run_id = request.url.path.split("/")[-2]
+            assert any(payload["run"]["id"] == run_id for payload in self.payloads.values())
+            assert request.url.params["path"].startswith(".mmt/")
+            return httpx.Response(
+                200,
+                json={"sha256": hashlib.sha256(request.content).hexdigest(), "size": len(request.content)},
+            )
         body = json.loads(request.content)
         path = request.url.path
         self.calls.append((path, body))

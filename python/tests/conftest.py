@@ -56,6 +56,7 @@ def job_payload(tmp_path: Path) -> dict:
             "id": code_id,
             "projectId": project_id,
             "source": {"kind": "inline", "files": {"main.py": "print('hello worker')\n"}},
+            "version": "v1",
             "entrypoint": ["python", "main.py"],
             "requirements": [],
             "environment": {"MY_PASSWORD": "configured-secret"},

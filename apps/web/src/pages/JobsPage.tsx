@@ -11,6 +11,7 @@ import { Resource } from '../components/Feedback';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailsList } from '../components/JsonDetails';
 import { RunLogs } from '../components/RunLogs';
+import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { FormDialog } from '../components/FormDialog';
 import { LaunchDialog } from '../dialogs/LaunchDialog';
 import { formatDate } from '../lib/format';
@@ -32,6 +33,10 @@ export function JobsPage() {
   );
   const targets = useQuery('job-targets', executionApi.targets);
   const selected = jobs.value?.find((job) => job.id === selectedId);
+  const selectedRun = useQuery(selected ? `${project.id}:job-run:${selected.runId}` : null,
+    (signal) => trackingApi.run(project.id, selected!.runId, signal), EXECUTION_POLL_MS);
+  const sourceArtifacts = useQuery(selected ? `${project.id}:job-artifacts:${selected.runId}` : null,
+    (signal) => trackingApi.artifacts(project.id, selected!.runId, signal), EXECUTION_POLL_MS);
   const logs = useQuery(
     selected ? `${selected.runId}:logs` : null,
     (signal) => trackingApi.logs(project.id, selected!.runId, signal),
@@ -178,6 +183,13 @@ export function JobsPage() {
               [text.jobError, selected.error],
             ]}
           />
+          <Resource query={selectedRun}>
+            {(run) => (
+              <Resource query={sourceArtifacts}>
+                {(artifacts) => <RunExecutionSnapshot run={run} artifacts={artifacts} />}
+              </Resource>
+            )}
+          </Resource>
           <h3>{text.logs}</h3>
           <Resource query={logs}>{(entries) => <RunLogs entries={entries} />}</Resource>
         </section>

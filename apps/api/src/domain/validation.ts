@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
+import { codeSourceSchema } from './codeSourceValidation.js';
+export { codeSourceSchema } from './codeSourceValidation.js';
 
 export const uuidSchema = z.uuid();
 export const nameSchema = z.string().trim().min(1).max(200);
@@ -45,24 +47,6 @@ export function isRelativeFilePath(path: string): boolean {
     path.split('/').every((part) => !!part && part !== '.' && part !== '..')
   );
 }
-const filePathSchema = z
-  .string()
-  .min(1)
-  .max(1024)
-  .refine(isRelativeFilePath, 'A safe relative file path is required');
-
-function isGitSourceUrl(value: string): boolean {
-  if (/^git@[\w.-]+:[^\s\0]+$/.test(value)) return true;
-  try {
-    const url = new URL(value);
-    return (
-      !url.password && ((url.protocol === 'https:' && !url.username) || url.protocol === 'ssh:')
-    );
-  } catch {
-    return false;
-  }
-}
-
 export const projectCreateSchema = z.strictObject({
   name: nameSchema,
   description: z.string().max(20000).default(''),
@@ -79,41 +63,21 @@ export const modelCreateSchema = namedEntitySchema.extend({ family: nameSchema }
 export const datasetCreateSchema = namedEntitySchema.extend({
   namespace: nameSchema.default('local'),
 });
-export const codeSourceSchema = z.discriminatedUnion('kind', [
-  z.strictObject({
-    kind: z.literal('git'),
-    url: z
-      .string()
-      .min(1)
-      .max(2048)
-      .refine(isGitSourceUrl, 'Use a Git HTTPS or SSH URL without credentials'),
-    commit: z
-      .string()
-      .regex(/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i, 'A full immutable commit is required'),
-  }),
-  z.strictObject({
-    kind: z.literal('inline'),
-    files: z
-      .record(filePathSchema, z.string().max(2000000))
-      .refine((files) => Object.keys(files).length > 0 && Object.keys(files).length <= 1000),
-  }),
-  z.strictObject({ kind: z.literal('artifact'), artifactId: uuidSchema }),
-]);
+// Commands use argv rather than a shell; bound arguments before handing them to workers.
+const commandArgumentSchema = z
+  .string()
+  .min(1)
+  .max(4000)
+  .refine((value) => !value.includes('\0'));
+const commandSchema = z.array(commandArgumentSchema).max(100);
+export const executionModeSchema = z.enum(['run', 'test']);
 export const codeVersionSchema = z
   .strictObject({
     version: nameSchema,
     source: codeSourceSchema.nullable().default(null),
     runtime: executionRuntimeSchema.default({ kind: 'python' }),
-    entrypoint: z
-      .array(
-        z
-          .string()
-          .min(1)
-          .max(4000)
-          .refine((value) => !value.includes('\0')),
-      )
-      .min(1)
-      .max(100),
+    entrypoint: commandSchema.min(1),
+    testEntrypoint: commandSchema.default([]),
     requirements: z.array(z.string().min(1).max(2000)).max(1000).default([]),
     environment: z
       .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(10000))
@@ -173,6 +137,7 @@ export const runCreateSchema = z.strictObject({
   tags: tagsSchema.default({}),
   modelVersionId: uuidSchema.nullish(),
   codeVersionId: uuidSchema.nullish(),
+  executionMode: executionModeSchema.optional(),
   inputDatasetVersionIds: uniqueIdsSchema.default([]),
   parentRunId: uuidSchema.nullish(),
   environment: jsonObjectSchema.default({}),
@@ -245,6 +210,9 @@ export const jobCreateSchema = z.strictObject({
   gpuIds: gpuIdsSchema.default([]),
   maxAttempts: maxAttemptsSchema,
 });
+export const targetPatchSchema = targetSchema.partial().extend({
+  runtimeKinds: targetSchema.shape.runtimeKinds.removeDefault().optional(),
+});
 export const tokenCreateSchema = z.strictObject({
   name: nameSchema,
   kind: z.enum(['personal', 'service']),
@@ -274,6 +242,9 @@ export const pluginCreateSchema = z.strictObject({
   tokenEnv: z.string().regex(/^[A-Z][A-Z0-9_]*$/),
   enabled: z.boolean().default(true),
 });
+export const pluginPatchSchema = pluginCreateSchema
+  .partial()
+  .extend({ enabled: z.boolean().optional() });
 export const pluginDatasetSchema = z.strictObject({
   externalId: nameSchema,
   namespace: nameSchema,
@@ -310,3 +281,5 @@ export type CodeVersionCreate = z.infer<typeof codeVersionSchema>;
 export type ModelVersionCreate = z.infer<typeof modelVersionSchema>;
 export type DatasetVersionCreate = z.infer<typeof datasetVersionSchema>;
 export type JobCreate = z.infer<typeof jobCreateSchema>;
+export type TargetPatch = z.infer<typeof targetPatchSchema>;
+export type PluginPatch = z.infer<typeof pluginPatchSchema>;

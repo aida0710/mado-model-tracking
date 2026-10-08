@@ -1,8 +1,13 @@
 import type { ComputeTarget } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
-import { first, rows, type Database } from '../db/database.js';
-import { DomainError } from '../domain/errors.js';
+import { first, rows, transaction, type Database } from '../db/database.js';
+import { conflict, notFound } from '../domain/errors.js';
+import {
+  hasTargetExecutionChanges,
+  validateTargetConfiguration,
+} from '../domain/targetConfiguration.js';
+import type { TargetPatch } from '../domain/validation.js';
 import { requireGlobalAdmin, requireScope } from './accessService.js';
 
 export class TargetService {
@@ -32,18 +37,7 @@ export class TargetService {
 
   async create(principal: Principal, input: Omit<ComputeTarget, 'id'>): Promise<ComputeTarget> {
     requireGlobalAdmin(principal);
-    if (input.executor === 'local' && !this.config.allowLocalExecutor)
-      throw new DomainError(
-        422,
-        'Local executorにはdevelopment modeでの明示許可が必要です',
-        'local_executor_disabled',
-      );
-    if (input.executor === 'ssh' && (!input.sshKeyPath || !input.knownHostsPath))
-      throw new DomainError(
-        422,
-        'SSH targetには鍵とknown_hostsのパスが必要です',
-        'ssh_config_required',
-      );
+    validateTargetConfiguration(input, this.config.allowLocalExecutor);
     return (await first<ComputeTarget>(
       this.database,
       `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor,runtime_kinds)
@@ -64,5 +58,51 @@ export class TargetService {
         input.runtimeKinds,
       ],
     ))!;
+  }
+
+  async patch(principal: Principal, targetId: string, input: TargetPatch): Promise<ComputeTarget> {
+    requireGlobalAdmin(principal);
+    return transaction(this.database, async (connection) => {
+      const target = await first<ComputeTarget>(
+        connection,
+        'SELECT * FROM compute_targets WHERE id=$1 FOR UPDATE',
+        [targetId],
+      );
+      if (!target) notFound('ComputeTarget');
+      const updated = { ...target, ...input };
+      validateTargetConfiguration(updated, this.config.allowLocalExecutor);
+      const occupancy = (await first<{ pending: number; active: number }>(
+        connection,
+        `SELECT count(*)::int AS pending,count(*) FILTER(WHERE status IN ('claimed','running'))::int AS active
+        FROM jobs WHERE target_id=$1 AND status IN ('queued','claimed','running')`,
+        [targetId],
+      ))!;
+      if (occupancy.pending && hasTargetExecutionChanges(target, updated))
+        conflict('未完了JobがあるComputeTargetの実行設定は変更できません');
+      if (updated.maxConcurrentJobs < occupancy.active)
+        conflict('同時実行数を実行中Jobの数より小さくできません');
+      return (await first<ComputeTarget>(
+        connection,
+        `UPDATE compute_targets SET name=$2,host=$3,port=$4,username=$5,ssh_key_path=$6,known_hosts_path=$7,
+        work_directory=$8,python_executable=$9,gpu_ids=$10,max_concurrent_jobs=$11,enabled=$12,executor=$13,runtime_kinds=$14
+        WHERE id=$1 RETURNING *`,
+        [
+          targetId,
+          updated.name,
+          updated.host,
+          updated.port,
+          updated.username,
+          updated.sshKeyPath,
+          updated.knownHostsPath,
+          updated.workDirectory,
+          updated.pythonExecutable,
+          updated.gpuIds,
+          updated.maxConcurrentJobs,
+          updated.enabled,
+          updated.executor,
+          updated.runtimeKinds,
+        ],
+      ))!;
+    });
   }
 }

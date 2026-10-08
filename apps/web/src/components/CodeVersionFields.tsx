@@ -15,11 +15,13 @@ export function CodeVersionFields({
   artifacts,
   onChange,
   onUpload,
+  workspaceEnabled = false,
 }: {
   values: FormValues;
   artifacts: Artifact[];
   onChange: (values: FormValues) => void;
   onUpload: (purpose: ArtifactUploadPurpose) => void;
+  workspaceEnabled?: boolean;
 }) {
   const runtimeKind = getFieldValue(values, 'runtimeKind');
   const isContainer = runtimeKind !== 'python';
@@ -93,7 +95,7 @@ export function CodeVersionFields({
       label: text.inlineFiles,
       type: 'textarea',
       required: true,
-      visible: () => sourceKind === 'inline',
+      visible: () => sourceKind === 'inline' && !workspaceEnabled,
     },
     {
       name: 'sourceArtifactId',
@@ -118,6 +120,7 @@ export function CodeVersionFields({
       type: 'textarea',
       visible: () => !isContainer,
     },
+    { name: 'testEntrypoint', label: text.testEntrypoint, type: 'textarea', placeholder: text.entrypointPlaceholder },
     { name: 'environment', label: text.codeEnvironment, type: 'textarea' },
     { name: 'families', label: text.supportedFamilies, type: 'textarea', required: true },
     {

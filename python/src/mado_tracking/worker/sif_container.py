@@ -63,6 +63,6 @@ def execute_sif(
     if directory is not None:
         argv.extend(["--pwd", directory])
     # exec bypasses the image runscript and uses exactly the registered entrypoint argv.
-    argv.extend([str(workspace / "runtime.sif"), *specification["codeVersion"]["entrypoint"]])
+    argv.extend([str(workspace / "runtime.sif"), *specification["executionSnapshot"]["entrypoint"]])
     exit_code, _captured = execution.run(argv)
     return exit_code

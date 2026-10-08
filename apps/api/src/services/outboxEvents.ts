@@ -5,12 +5,14 @@ import { findDatasetVersions } from '../repositories/registryRepository.js';
 
 export async function enqueueRunEvent(connection: Connection, run: Run): Promise<void> {
   if (run.status === 'queued') return;
+  // Code text and CodeVersion environment belong to the execution API, not external lineage consumers.
+  const { executionSnapshot: _executionSnapshot, ...eventRun } = run;
   const event: PluginEvent = {
     id: randomUUID(),
     type: run.status === 'running' ? 'run.started' : `run.${run.status}`,
     timestamp: run.endedAt ?? run.startedAt ?? new Date().toISOString(),
     projectId: run.projectId,
-    run,
+    run: eventRun,
     inputDatasets: await findDatasetVersions(connection, {
       projectId: run.projectId,
       ids: run.inputDatasetVersionIds,

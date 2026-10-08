@@ -10,8 +10,8 @@ import { Resource } from '../components/Feedback';
 import { DataTable } from '../components/DataTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { PluginPanel } from '../components/PluginPanel';
-import { FormDialog } from '../components/FormDialog';
-import { getFieldValue } from '../lib/formValues';
+import { PluginDialog } from '../dialogs/PluginDialog';
+import { getPluginConnectionKey } from '../lib/pluginConnection';
 import { text } from '../i18n/catalog';
 
 export function PluginsPage() {
@@ -83,30 +83,15 @@ export function PluginsPage() {
               }
             >
               {selected && (
-                <PluginPanel key={selected.id} plugin={selected} onChanged={plugins.reload} />
+                <PluginPanel key={getPluginConnectionKey(selected)} plugin={selected} onChanged={plugins.reload} />
               )}
             </RegistryLayout>
           );
         }}
       </Resource>
       {user.isAdmin && showDialog && (
-        <FormDialog
-          title={text.newPlugin}
+        <PluginDialog
           onClose={() => setShowDialog(false)}
-          fields={[
-            { name: 'name', label: text.name, required: true },
-            { name: 'baseUrl', label: text.baseUrl, type: 'url', required: true },
-            { name: 'tokenEnv', label: text.tokenEnv, required: true },
-            { name: 'enabled', label: text.enabled, type: 'checkbox', defaultValue: 'true' },
-          ]}
-          onSubmit={(values) =>
-            administrationApi.createPlugin(project.id, {
-              name: getFieldValue(values, 'name'),
-              baseUrl: getFieldValue(values, 'baseUrl'),
-              tokenEnv: getFieldValue(values, 'tokenEnv'),
-              enabled: getFieldValue(values, 'enabled') === 'true',
-            })
-          }
           onSaved={(plugin) => {
             setShowDialog(false);
             plugins.reload();

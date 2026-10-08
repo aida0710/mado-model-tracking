@@ -27,6 +27,9 @@ const LineagePage = lazy(() =>
 const JobsPage = lazy(() =>
   import('./pages/JobsPage').then((module) => ({ default: module.JobsPage })),
 );
+const TasksPage = lazy(() =>
+  import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })),
+);
 const ComputePage = lazy(() =>
   import('./pages/ComputePage').then((module) => ({ default: module.ComputePage })),
 );
@@ -53,6 +56,7 @@ export function App() {
             <Route path="datasets" element={<DatasetsPage />} />
             <Route path="lineage" element={<LineagePage />} />
             <Route path="jobs" element={<JobsPage />} />
+            <Route path="tasks" element={<TasksPage />} />
             <Route path="compute" element={<ComputePage />} />
             <Route path="plugins" element={<PluginsPage />} />
             <Route path="settings" element={<SettingsPage />} />
