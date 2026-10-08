@@ -42,6 +42,8 @@ export function Tabs({
       {tabs.map((tab) => (
         <button
           key={tab.key}
+          // Tabs also sit inside forms (MarkdownEditor); switching must not submit them.
+          type="button"
           id={`${id}-${tab.key}`}
           className={`tab ${tab.key === selected ? 'active' : ''}`}
           role="tab"
