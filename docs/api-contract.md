@@ -195,6 +195,14 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - `PATCH /projects/:p/comments/:c` ({body}) → Comment。作成者（editor以上）だけで、他人は403 `comment_author_required`、削除済みは409 `comment_deleted`。`editedAt`を更新する。`DELETE /projects/:p/comments/:c` → 204。作成者（editor以上）かProject adminだけで、ほかは403 `comment_delete_forbidden`。削除済みへの再削除も204で、監査は増えない。編集・削除もtokenには対象種別のscopeを要求する。Job限定tokenは投稿・編集・削除とも403 `job_token_forbidden`。
 - 監査`comment.create`・`comment.update`・`comment.delete`（resource_type `comment`、resource_idはComment ID、detailsに`targetType`・`targetId`。createは`parentCommentId`、deleteは`byAuthor`も）。本文は入れない。
 
+## Runの再開
+
+- `POST /projects/:p/runs/:r/resume` ({reason?}) → RunResumeResult `{run,resumed,event:RunResumeEvent|null,lastSteps:{[metricKey]:number}}`。editor＋`runs:write`。bodyは`{}`か`{reason}`（2000文字まで、空白だけは理由なし）。終わったRun（finished/failed/canceled）をrunningへ戻し、`ended_at`と`error`をNULLにして、同じtransactionでRunを行lock（FOR UPDATE）して再開イベントを1件入れる。`startedAt`は変えない。runningのRunへは`resumed:false`・`event:null`で何も変えない。`lastSteps`はmetricのkeyごとの最大step（SDKが続きのstepを決めるため）で、no-opでも返す。
+- 拒否: Jobが付いたRunは終端後409 `run_finalized`（Jobの状態はworkerが正本。checkpointからの新しいRunで再開する）。queuedと、開始前に取り消したRun（`startedAt`がnull）は409 `run_not_started`。削除済みは409 `run_deleted`。別ProjectのURLは404。Job限定tokenは自分のRunでも403。監査`run.resume`（resource_type `run`、detailsは`eventId`・`previousStatus`・`hasReason`。理由の本文は入れない）。403/409の拒否は`denied`で残る。
+- `GET /projects/:p/runs/:r/resume-events` → `{items:RunResumeEvent[],segments:RunSegment[]}`。viewer＋`read`。RunResumeEvent `{id,runId,resumedAt,previousStatus,previousEndedAt,maxStepAtResume,source:'native'|'mlflow'|'sync',actorUserId,reason}`を`resumedAt`順に返す。`maxStepAtResume`は再開時点の全metricの最大step（metricが無ければnull）。RunSegment `{startedAt,endedAt|null,endStatus|null,firstStep|null}`: 最初の区間は`startedAt`〜最初のイベントの`previousEndedAt`、以降は`resumedAt`〜次のイベントの`previousEndedAt`（最後は現在の`endedAt`。実行中はnull）。`firstStep`は直前のイベントの`maxStepAtResume+1`で、最初の区間とmetricの無かった区間はnull。開始前のRunは`segments:[]`。
+- MLflow: Jobの無い終端Runへの`runs/update` `status=RUNNING`（`start_run(run_id=)`。SDK 3.0.0と3.17.0はどちらも前回の`end_time`を付けて送る）は同じ再開として扱い、`source='mlflow'`のイベントを入れ、`end_time`を消し`error`もNULLにする。Job付きRunは従来どおり状態を変えず、イベントも入れない。runningへのRUNNINGもイベントを入れない。
+- `run_resume_events`は追記専用（UPDATE/DELETEはtriggerで拒否）。再開したRunが再び終端になると、終端handler（出力登録、保留自動実行など）は新しい終端遷移として再び呼ばれる。
+
 ## 監査ログ
 
 認証・Project・token・権限などの操作を`audit_events`へ記録する。AuditEventは`{id,occurredAt,actorType:'user'|'token'|'system',actorUserId,actorTokenId,action,outcome:'success'|'denied'|'failed',resourceType,resourceId,projectId,details,ip,userAgent}`。成功の記録は業務と同じtransactionでINSERTし、業務がrollbackすれば記録も残らない。拒否・失敗の記録は業務のtransactionの外で書く。`details`へpassword・token・secretの値を入れない。`ip`はAPIが受けたsocketの接続元で、転送ヘッダーは信頼しない。

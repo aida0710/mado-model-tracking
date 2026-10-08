@@ -59,6 +59,7 @@ import { AutomationSourceRunHandler } from './services/automationSourceRunHandle
 import { AutomationChainHandler } from './services/automationChainHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { RunNoteService } from './services/runNoteService.js';
+import { RunResumeService } from './services/runResumeService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { requireScope } from './services/accessService.js';
@@ -87,6 +88,7 @@ import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
+import { runResumeRoutes } from './routes/runResumeRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
@@ -193,6 +195,7 @@ export function createApplication(options: ApplicationOptions) {
   });
   const outbox = new OutboxDispatcher(database, plugins);
   const runNotes = new RunNoteService(database);
+  const runResumes = new RunResumeService(database, runCompletion);
   // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
   const commentTargets = createCommentTargetRegistry();
   const comments = new CommentService(database, commentTargets);
@@ -304,6 +307,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/projects', promotionRoutes(promotion));
   app.route('/api/projects', runNoteRoutes(runNotes));
+  app.route('/api/projects', runResumeRoutes(runResumes));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
@@ -362,6 +366,7 @@ export function createApplication(options: ApplicationOptions) {
       evaluation,
       promotion,
       runNotes,
+      runResumes,
       commentTargets,
       comments,
       storageBackends,
