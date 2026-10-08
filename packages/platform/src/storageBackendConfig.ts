@@ -22,6 +22,11 @@ export interface S3BackendConfig {
   tlsVerify: boolean;
   checksumMode: S3ChecksumMode;
   multipartPartSizeBytes: number;
+  /**
+   * false stores every Artifact with one PutObject, for S3-compatible services whose multipart
+   * API does not work. Backends saved before this setting existed lack it, which means true.
+   */
+  multipartEnabled?: boolean;
 }
 export type StorageBackendConfig = FilesystemBackendConfig | S3BackendConfig;
 
@@ -38,6 +43,7 @@ export interface StorageBackendConfigInput {
   tlsVerify?: boolean;
   checksumMode?: S3ChecksumMode;
   multipartPartSizeBytes?: number;
+  multipartEnabled?: boolean;
 }
 
 // Two parts of this size are buffered per streamed upload, so the default bounds memory at 16 MiB.
@@ -118,9 +124,22 @@ function normalizePartSize(size: number | undefined): number {
 }
 
 /**
- * Validates an administrator's backend settings and fills defaults. Signature v2 is refused until
- * the self-implemented v2 signer exists, so no backend is saved that cannot be used.
+ * Signature v2 signs no payload checksum, and the SDK's WHEN_SUPPORTED checksums arrive as
+ * aws-chunked trailers that v2-only services cannot parse, so v2 accepts only WHEN_REQUIRED.
+ * The region is still kept for v2: the SDK resolves the AWS endpoint from it, the signature
+ * does not use it.
  */
+function normalizeChecksumMode(
+  checksumMode: S3ChecksumMode | undefined,
+  signatureVersion: S3SignatureVersion,
+): S3ChecksumMode {
+  const mode = checksumMode ?? 'when_required';
+  if (!['when_required', 'when_supported'].includes(mode)) invalid('checksumMode');
+  if (signatureVersion === 'v2' && mode !== 'when_required') invalid('checksumMode');
+  return mode;
+}
+
+/** Validates an administrator's backend settings and fills defaults. */
 export function normalizeStorageBackendConfig(
   input: StorageBackendConfigInput,
 ): StorageBackendConfig {
@@ -128,14 +147,13 @@ export function normalizeStorageBackendConfig(
     return { kind: 'filesystem', rootPath: normalizeRootPath(input.rootPath) };
   if (input.kind !== 's3') invalid('kind');
   const signatureVersion = input.signatureVersion ?? 'v4';
-  if (signatureVersion === 'v2')
-    throw new StorageBackendConfigError('storage_signature_unsupported', 'signatureVersion');
-  if (signatureVersion !== 'v4') invalid('signatureVersion');
+  if (!['v4', 'v2'].includes(signatureVersion)) invalid('signatureVersion');
   if (!input.bucket || !S3_BUCKET_NAME_PATTERN.test(input.bucket)) invalid('bucket');
   const region = input.region || DEFAULT_S3_REGION;
   if (!S3_REGION_PATTERN.test(region)) invalid('region');
-  const checksumMode = input.checksumMode ?? 'when_required';
-  if (!['when_required', 'when_supported'].includes(checksumMode)) invalid('checksumMode');
+  const checksumMode = normalizeChecksumMode(input.checksumMode, signatureVersion);
+  if (input.multipartEnabled !== undefined && typeof input.multipartEnabled !== 'boolean')
+    invalid('multipartEnabled');
   const endpoint = normalizeEndpoint(input.endpoint);
   return {
     kind: 's3',
@@ -148,6 +166,7 @@ export function normalizeStorageBackendConfig(
     tlsVerify: input.tlsVerify ?? true,
     checksumMode,
     multipartPartSizeBytes: normalizePartSize(input.multipartPartSizeBytes),
+    multipartEnabled: input.multipartEnabled ?? true,
   };
 }
 

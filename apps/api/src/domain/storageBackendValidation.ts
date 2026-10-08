@@ -24,6 +24,7 @@ const backendSettingsShape = {
   tlsVerify: z.boolean(),
   checksumMode: z.enum(['when_required', 'when_supported']),
   multipartPartSizeBytes: z.number().int().positive(),
+  multipartEnabled: z.boolean(),
   caBundle: caBundleSchema.nullable(),
   accessKeyId: z.string().min(1).max(MAX_ACCESS_KEY_ID_LENGTH).nullable(),
   secretAccessKey: z.string().min(1).max(MAX_SECRET_ACCESS_KEY_LENGTH).nullable(),

@@ -68,6 +68,7 @@ function configInput(
     tlsVerify: input.tlsVerify,
     checksumMode: input.checksumMode,
     multipartPartSizeBytes: input.multipartPartSizeBytes,
+    multipartEnabled: input.multipartEnabled,
   };
 }
 
