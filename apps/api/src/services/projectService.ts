@@ -2,8 +2,16 @@ import type { ArtifactBackend, Experiment, Project, ProjectRole, User } from '@m
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
+import type { RequestMetadata } from '../http/requestMetadata.js';
+import { writeAuditEvent } from '../repositories/auditRepository.js';
 import { findUser, listMembers } from '../repositories/identityRepository.js';
 import { requireProject, requireScope } from './accessService.js';
+import {
+  auditActor,
+  NO_REQUEST_METADATA,
+  recordDenial,
+  type AuditEventDraft,
+} from './auditService.js';
 
 export class ProjectService {
   constructor(
@@ -80,34 +88,51 @@ export class ProjectService {
 
   async setMember(
     principal: Principal,
-    projectId: string,
-    member: { userId: string; role: ProjectRole },
+    membership: { projectId: string; userId: string; role: ProjectRole },
+    request: RequestMetadata = NO_REQUEST_METADATA,
   ): Promise<User & { role: ProjectRole }> {
-    return transaction(this.database, async (connection) => {
-      await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
-      // Serialize membership edits so the last administrator cannot be removed concurrently.
-      await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
-      const user = await findUser(connection, member.userId);
-      if (!user) notFound('User');
-      const previous = await first<{ role: ProjectRole }>(
-        connection,
-        'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2',
-        [projectId, member.userId],
-      );
-      if (previous?.role === 'admin' && member.role !== 'admin') {
-        const administrators = await rows<{ userId: string }>(
+    const { projectId, userId, role } = membership;
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'project.member.set',
+      resourceType: 'project_member',
+      resourceId: userId,
+      projectId,
+      details: { userId, role },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
+        // Serialize membership edits so the last administrator cannot be removed concurrently.
+        await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+        const user = await findUser(connection, userId);
+        if (!user) notFound('User');
+        const previous = await first<{ role: ProjectRole }>(
           connection,
-          "SELECT user_id FROM project_members WHERE project_id=$1 AND role='admin'",
-          [projectId],
+          'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2',
+          [projectId, userId],
         );
-        if (administrators.length <= 1) conflict('最後のProject管理者は権限を下げられません');
-      }
-      await connection.query(
-        'INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(project_id,user_id) DO UPDATE SET role=EXCLUDED.role',
-        [projectId, member.userId, member.role],
-      );
-      return { ...user, role: member.role };
-    });
+        if (previous?.role === 'admin' && role !== 'admin') {
+          const administrators = await rows<{ userId: string }>(
+            connection,
+            "SELECT user_id FROM project_members WHERE project_id=$1 AND role='admin'",
+            [projectId],
+          );
+          if (administrators.length <= 1) conflict('最後のProject管理者は権限を下げられません');
+        }
+        await connection.query(
+          'INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(project_id,user_id) DO UPDATE SET role=EXCLUDED.role',
+          [projectId, userId, role],
+        );
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: { userId, previousRole: previous?.role ?? null, role },
+        });
+        return { ...user, role };
+      }),
+    );
   }
 
   async experiments(principal: Principal, projectId: string): Promise<Experiment[]> {

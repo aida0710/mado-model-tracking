@@ -72,7 +72,11 @@ export async function seedDemo(
         displayName: role === 'editor' ? '開発編集者' : '開発閲覧者',
         isAdmin: false,
       });
-      await services.projects.setMember(principal, project.id, { userId: user.id, role });
+      await services.projects.setMember(principal, {
+        projectId: project.id,
+        userId: user.id,
+        role,
+      });
     }
     const experiment = await services.projects.createExperiment(principal, project.id, {
       name: 'CPU examples',
