@@ -18,7 +18,7 @@ const MAX_NAME_LENGTH = 200;
 const MAX_CURSOR_LENGTH = 1000;
 
 const uuidListSchema = z.array(uuidSchema).max(MAX_ID_CONDITIONS).default([]);
-const runSearchSchema = z.strictObject({
+export const runSearchSchema = z.strictObject({
   experimentIds: uuidListSchema,
   filter: z.string().max(MAX_FILTER_LENGTH).default(''),
   orderBy: z.array(z.string().max(MAX_ORDER_BY_LENGTH)).max(MAX_ORDER_BY).default([]),

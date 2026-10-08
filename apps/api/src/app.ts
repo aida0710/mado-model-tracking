@@ -27,6 +27,7 @@ import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
 import { RunSearchService } from './services/runSearchService.js';
+import { MetricSeriesService } from './services/metricSeriesService.js';
 import { TaskService } from './services/taskService.js';
 import { AuditService } from './services/auditService.js';
 import {
@@ -61,6 +62,7 @@ import { registryRoutes } from './routes/registryRoutes.js';
 import { modelAutomationRoutes } from './routes/modelAutomationRoutes.js';
 import { runRoutes } from './routes/runRoutes.js';
 import { runSearchRoutes } from './routes/runSearchRoutes.js';
+import { metricSeriesRoutes } from './routes/metricSeriesRoutes.js';
 import { taskRoutes } from './routes/taskRoutes.js';
 import { repositoryRoutes } from './routes/repositoryRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
@@ -106,6 +108,7 @@ export function createApplication(options: ApplicationOptions) {
   const runCompletion = new RunCompletionService(terminalHandlers);
   const runs = new RunService(database, runCompletion);
   const runSearch = new RunSearchService(database);
+  const metricSeries = new MetricSeriesService(database, runSearch);
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores, {
     maxBytes: config.artifactMaxBytes,
@@ -235,6 +238,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', runSearchRoutes(runSearch));
+  app.route('/api/projects', metricSeriesRoutes(metricSeries));
   app.route('/api/projects', taskRoutes(tasks));
   app.route(
     '/api/projects',
@@ -275,6 +279,7 @@ export function createApplication(options: ApplicationOptions) {
       runCompletion,
       runs,
       runSearch,
+      metricSeries,
       tasks,
       repositories,
       lineage,

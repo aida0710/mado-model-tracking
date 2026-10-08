@@ -29,6 +29,27 @@ export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, Artifa
 export type { RunSearchPage, RunSearchRequest } from './runSearch.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
+export type { ChartPanelConfig, ChartPanelLayout, ChartSmoothing, ChartXAxis, RunGroupBy } from './chartPanels.js';
+export type {
+  MetricGroup,
+  MetricGroupPoint,
+  MetricGroupsRequest,
+  MetricGroupsResponse,
+  MetricSeries,
+  MetricSeriesPoint,
+  MetricSeriesRequest,
+  MetricSeriesResponse,
+  MetricXRange,
+} from './metricSeries.js';
+export {
+  DEFAULT_SERIES_POINTS,
+  MAX_GROUPED_RUNS,
+  MAX_SERIES_GROUPS,
+  MAX_SERIES_KEYS,
+  MAX_SERIES_POINTS,
+  MAX_SERIES_RUNS,
+  RUN_GROUP_NONE,
+} from './metricSeries.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
