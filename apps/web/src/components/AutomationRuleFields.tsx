@@ -4,10 +4,16 @@ import { FormFields } from './FormFields';
 import { CodeRuntimeDetails } from './CodeRuntimeDetails';
 import { getFieldValue, getSelectedValues } from '../lib/formValues';
 import { buildCatalogOptions, withEmptyOption } from '../lib/catalogOptions';
-import { AUTOMATION_KINDS, isAutomationCodeCompatible } from '../lib/modelAutomationInput';
+import {
+  AUTOMATION_KINDS,
+  AUTOMATION_TRIGGERS,
+  isAutomationCodeCompatible,
+  upstreamRuleCandidates,
+} from '../lib/modelAutomationInput';
 import { MAX_JOB_ATTEMPTS } from '../lib/executionValidation';
 import { isTargetCompatible } from '../lib/runtimeValidation';
 import { text } from '../i18n/catalog';
+import { automationText, automationTriggerLabels } from '../i18n/automation';
 
 export function AutomationRuleFields({
   values,
@@ -40,6 +46,29 @@ export function AutomationRuleFields({
   ].sort();
   const fields: FormField[] = [
     { name: 'name', label: text.name, required: true },
+    {
+      name: 'trigger',
+      label: automationText.trigger,
+      type: 'select',
+      required: true,
+      options: AUTOMATION_TRIGGERS.map((item) => ({
+        value: item,
+        label: automationTriggerLabels[item],
+      })),
+    },
+    {
+      name: 'upstreamRuleId',
+      label: automationText.upstreamRule,
+      type: 'select',
+      required: true,
+      visible: (current) => getFieldValue(current, 'trigger') === 'upstream_run_finished',
+      options: withEmptyOption(
+        upstreamRuleCandidates(catalog.rules).map((rule) => ({
+          value: rule.id,
+          label: `${rule.name} · ${text[rule.kind]}`,
+        })),
+      ),
+    },
     {
       name: 'modelFamilies',
       label: text.automationModelFamilies,

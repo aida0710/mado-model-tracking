@@ -27,9 +27,10 @@ export function ModelAutomationPanel({
   const automation = useModelAutomation(project.id, view === 'history');
   const registry = useExecutionCatalog(project.id);
   const targets = useQuery('automation-targets', executionApi.targets);
+  const rules = automation.rules.value ?? [];
   const catalog =
     registry.value && targets.value
-      ? { registry: registry.value, targets: targets.value }
+      ? { registry: registry.value, targets: targets.value, rules }
       : undefined;
   const selectedRule = automation.rules.value?.find(
     (rule) => rule.id === automation.selectedRuleId,
@@ -83,7 +84,15 @@ export function ModelAutomationPanel({
             )}
           </Resource>
           {selectedRule && (
-            <AutomationRuleDetails rule={selectedRule} catalog={catalog} projectId={project.id} />
+            <AutomationRuleDetails
+              rule={selectedRule}
+              rules={rules}
+              catalog={catalog}
+              projectId={project.id}
+              canManage={canManage}
+              onSelectRule={automation.selectRule}
+              onApplied={automation.reload}
+            />
           )}
         </>
       ) : (
@@ -91,7 +100,7 @@ export function ModelAutomationPanel({
           {(executions) => (
             <AutomationExecutionsTable
               executions={executions}
-              rules={automation.rules.value ?? []}
+              rules={rules}
               projectId={project.id}
               catalog={registry.value}
             />
@@ -112,7 +121,7 @@ export function ModelAutomationPanel({
             >
               {(computeTargets) => (
                 <AutomationRuleDialog
-                  catalog={{ registry: choices, targets: computeTargets }}
+                  catalog={{ registry: choices, targets: computeTargets, rules }}
                   initialFamilies={initialFamily ? [initialFamily] : []}
                   onClose={automation.stopCreating}
                   onSaved={(rule) => {

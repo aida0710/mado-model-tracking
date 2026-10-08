@@ -1,4 +1,8 @@
-import type { ModelAutomationExecution, ModelAutomationRule } from '@mmt/contracts';
+import type {
+  CreateAutomationExecution,
+  ModelAutomationExecution,
+  ModelAutomationRule,
+} from '@mmt/contracts';
 import type { CreateAutomationRule } from './inputs';
 import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
 
@@ -12,6 +16,12 @@ export const automationApi = {
     request<ModelAutomationRule>(
       `${rulesPath(projectId)}/${encodeId(ruleId)}`,
       jsonRequest('PATCH', { enabled }),
+    ),
+  // Applies a rule to an existing version (or upstream Run) by hand; Project admin only.
+  createExecution: (projectId: string, ruleId: string, body: CreateAutomationExecution) =>
+    request<ModelAutomationExecution>(
+      `${rulesPath(projectId)}/${encodeId(ruleId)}/executions`,
+      jsonRequest('POST', body),
     ),
   executions: (projectId: string, signal?: AbortSignal) =>
     requestItems<ModelAutomationExecution>(
