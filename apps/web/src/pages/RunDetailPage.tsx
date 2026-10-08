@@ -209,15 +209,7 @@ export function RunDetailPage() {
                             </Link>
                           )),
                         ],
-                        [
-                          text.outputModels,
-                          item.outputModelVersionIds.length ? (
-                            <RunOutputModels
-                              projectId={project.id}
-                              versionIds={item.outputModelVersionIds}
-                            />
-                          ) : null,
-                        ],
+                        [text.outputModels, <RunOutputModels run={item} />],
                         [
                           text.outputDatasets,
                           item.outputDatasetVersionIds.map((id) => (

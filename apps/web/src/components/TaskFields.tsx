@@ -5,7 +5,9 @@ import { getFieldValue } from '../lib/formValues';
 import { buildCatalogOptions, withEmptyOption } from '../lib/catalogOptions';
 import { isCodeCompatible, RUN_KINDS } from '../lib/executionValidation';
 import { isTargetCompatible } from '../lib/runtimeValidation';
+import { hasOutputModel } from '../lib/taskInput';
 import { FormFields } from './FormFields';
+import { TaskOutputModelFields } from './TaskOutputModelFields';
 import { text } from '../i18n/catalog';
 
 export function TaskFields({ values, catalog, targets, onChange, isEditing = false, launchOnly = false }: {
@@ -37,5 +39,9 @@ export function TaskFields({ values, catalog, targets, onChange, isEditing = fal
     { name: 'parameters', label: launchOnly ? text.taskParameterOverrides : text.parametersJson, type: 'textarea' },
     { name: 'tags', label: text.tagsJson, type: 'textarea', visible: () => !launchOnly },
   ];
-  return <FormFields fields={fields} values={values} onChange={onChange} />;
+  return <>
+    <FormFields fields={fields} values={values} onChange={onChange} />
+    {!launchOnly && hasOutputModel(kind) &&
+      <TaskOutputModelFields values={values} catalog={catalog} code={code} onChange={onChange} />}
+  </>;
 }

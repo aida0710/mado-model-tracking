@@ -1,6 +1,9 @@
-import type { ExperimentTask, TaskExecution, TaskRunPage } from '@mmt/contracts';
+import type { ExperimentTask, RunOutputRegistration, TaskExecution, TaskRunPage } from '@mmt/contracts';
 import type { CreateTask, LaunchTask, UpdateTask } from './inputs';
-import { encodeId, invalidResponseError, jsonRequest, projectPath, request, requestItems } from './http';
+import { encodeId, invalidResponseError, jsonRequest, projectPath, request, RequestError, requestItems } from './http';
+
+const HTTP_NOT_FOUND = 404;
+const REGISTRATION_STATUSES: RunOutputRegistration['status'][] = ['registered', 'failed', 'skipped'];
 
 // Match the API's bounded default rather than polling the entire task history.
 const TASK_RUN_PAGE_SIZE = 50;
@@ -27,5 +30,17 @@ export const tasksApi = {
     if (!Array.isArray(page.items) || (page.nextCursor !== null && typeof page.nextCursor !== 'string'))
       throw invalidResponseError();
     return page;
+  },
+  /** null until the Task-side registration has an outcome: the API answers 204 or 404 then. */
+  runOutputRegistration: async (projectId: string, runId: string, signal?: AbortSignal) => {
+    try {
+      const registration = await request<RunOutputRegistration | undefined>(
+        `${projectPath(projectId)}/runs/${encodeId(runId)}/output-registration`, { signal });
+      if (registration && !REGISTRATION_STATUSES.includes(registration.status)) throw invalidResponseError();
+      return registration ?? null;
+    } catch (error) {
+      if (error instanceof RequestError && error.status === HTTP_NOT_FOUND) return null;
+      throw error;
+    }
   },
 };

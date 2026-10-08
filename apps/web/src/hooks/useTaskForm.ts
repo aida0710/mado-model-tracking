@@ -28,7 +28,7 @@ export function useTaskForm({ projectId, task, experimentId, catalog, targets }:
   }
   function save() {
     return mutation.run(() => {
-      const input = buildTaskInput({ values, catalog: currentCatalog, targets });
+      const input = buildTaskInput({ values, catalog: currentCatalog, targets, task });
       if (!task) return tasksApi.create(projectId, input);
       const { experimentId: _experimentId, ...changes } = input;
       return tasksApi.update(projectId, task.id, { ...changes, expectedRevision: task.revision });

@@ -5,6 +5,22 @@ import { administrationApi } from './administration';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('Taskと管理設定の変更', () => {
+  it('出力モデルの登録結果が未確定（404・204）の間はnullを返し、確定後は結果を返す', async () => {
+    const registration = { status: 'skipped', modelVersionId: 'version', error: null, reason: 'already_registered_by_run' };
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'not found' }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(registration), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await tasksApi.runOutputRegistration('project', 'run')).toBeNull();
+    expect(await tasksApi.runOutputRegistration('project', 'run')).toBeNull();
+    expect(await tasksApi.runOutputRegistration('project', 'run')).toEqual(registration);
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/projects/project/runs/run/output-registration');
+  });
+  it('出力モデルの登録結果の取得失敗をnullとして隠さない', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'denied' }), { status: 403 })));
+    await expect(tasksApi.runOutputRegistration('project', 'run')).rejects.toThrow();
+  });
   it('Task更新は期待revisionを送り実験の変更をAPI入力に含めない', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
