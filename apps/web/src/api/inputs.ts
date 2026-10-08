@@ -2,6 +2,7 @@ import type {
   ArtifactBackend,
   CodeSource,
   ComputeTarget,
+  DatasetVersionContent,
   ExecutionRuntime,
   ExecutionMode,
   ExperimentTask,
@@ -55,14 +56,16 @@ export type CreateAutomationRule = Omit<
   ModelAutomationRule,
   'id' | 'projectId' | 'createdBy' | 'createdAt' | 'summaryMetrics'
 > & { summaryMetrics?: string[] };
+/** Without content: a reference version (version, uri, digest). With content: the server sets uri and digest. */
 export interface CreateDatasetVersion {
-  version: string;
-  uri: string;
-  digest: string;
+  version?: string;
+  uri?: string;
+  digest?: string;
   schema?: JsonObject;
   metadata?: JsonObject;
   sourceRunId?: string;
   parentDatasetVersionIds?: string[];
+  content?: DatasetVersionContent;
 }
 export interface CreateToken {
   name: string;

@@ -7,7 +7,6 @@ import type {
   ModelAliasEventPage,
   ModelAliasEventSource,
   ModelVersion,
-  Run,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { PoolClient } from 'pg';
@@ -17,25 +16,23 @@ import type {
   DatasetVersionCreate,
   ModelVersionCreate,
 } from '../domain/validation.js';
-import { conflict, notFound } from '../domain/errors.js';
-import { isTerminalStatus } from '../domain/runTransitions.js';
+import type { DatasetVersionRequest } from '../domain/datasetContentValidation.js';
+import { DomainError, notFound } from '../domain/errors.js';
 import {
   assertProjectReference,
-  assertProjectReferences,
   codeSelect,
   datasetSelect,
   datasetVersionSelect,
-  findRun,
   modelColumns,
   modelSelect,
   modelVersionSelect,
 } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
-import { enqueueRunEvent } from './outboxEvents.js';
+import { resolveDatasetContent } from './datasetContentService.js';
+import { registerDatasetVersion } from './datasetVersionRegistration.js';
 import type { ModelAutomationService } from './modelAutomationService.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { registerModelVersion, type ModelVersionRegistration } from './modelVersionRegistration.js';
-import { runColumns } from '../repositories/runListProjection.js';
 import {
   assignModelAlias,
   listModelAliasEvents,
@@ -336,82 +333,78 @@ export class RegistryService {
     );
   }
 
+  /**
+   * Native version creation. Artifact content is resolved after the write check, so a caller
+   * without access learns nothing about the Project's Artifacts or Runs.
+   */
   async createDatasetVersion(
     principal: Principal,
     projectId: string,
-    registration: { datasetId: string; input: DatasetVersionCreate },
+    registration: { datasetId: string; input: DatasetVersionRequest },
   ): Promise<DatasetVersion> {
     return transaction(this.database, async (connection) => {
       await this.requireWriteAccess(connection, principal, projectId);
-      return this.insertDatasetVersion(connection, projectId, registration);
+      const { input } = registration;
+      const common = {
+        projectId,
+        datasetId: registration.datasetId,
+        version: input.version,
+        schema: input.schema,
+        metadata: input.metadata,
+        parentDatasetVersionIds: input.parentDatasetVersionIds,
+        actor: { type: 'callerAuthorized' as const },
+      };
+      if (!input.content)
+        return registerDatasetVersion(connection, {
+          ...common,
+          // The request schema requires uri and digest when content is absent.
+          uri: input.uri!,
+          digest: input.digest!,
+          sourceRunId: input.sourceRunId,
+          externalRef: input.externalRef,
+        });
+      const resolved = await resolveDatasetContent(connection, {
+        projectId,
+        content: input.content,
+      });
+      if (resolved.sourceRunId && input.sourceRunId && input.sourceRunId !== resolved.sourceRunId)
+        throw new DomainError(
+          422,
+          'sourceRunIdはfromRunArtifactsのRunと同じにしてください',
+          'dataset_source_run_mismatch',
+        );
+      return registerDatasetVersion(connection, {
+        ...common,
+        content: { files: resolved.files },
+        digest: input.digest,
+        sourceRunId: input.sourceRunId ?? resolved.sourceRunId,
+      });
     });
   }
 
-  async insertDatasetVersion(
+  /**
+   * Reference versions for callers that authorized the principal themselves: MLflow log_inputs
+   * and plugin imports.
+   */
+  insertDatasetVersion(
     connection: Connection,
     projectId: string,
     registration: { datasetId: string; input: DatasetVersionCreate },
   ): Promise<DatasetVersion> {
-    const dataset = await first<Dataset>(
-      connection,
-      'SELECT * FROM datasets WHERE id=$1 AND project_id=$2',
-      [registration.datasetId, projectId],
-    );
-    if (!dataset) notFound('Dataset');
-    const input = registration.input;
-    await assertProjectReferences(connection, {
-      table: 'dataset_versions',
+    const { input } = registration;
+    return registerDatasetVersion(connection, {
       projectId,
-      ids: input.parentDatasetVersionIds,
+      datasetId: registration.datasetId,
+      version: input.version,
+      uri: input.uri,
+      digest: input.digest,
+      schema: input.schema,
+      metadata: input.metadata,
+      sourceRunId: input.sourceRunId,
+      parentDatasetVersionIds: input.parentDatasetVersionIds,
+      externalRef: input.externalRef,
+      actor: { type: 'callerAuthorized' },
     });
-    const sourceRun = input.sourceRunId
-      ? await findRun(connection, {
-          projectId,
-          id: input.sourceRunId,
-          lock: true,
-        })
-      : null;
-    if (input.externalRef) {
-      await assertProjectReference(connection, {
-        table: 'plugin_connections',
-        projectId,
-        id: input.externalRef.pluginId,
-      });
-      if (
-        input.externalRef.version !== input.version ||
-        input.externalRef.name !== dataset.name ||
-        input.externalRef.namespace !== dataset.namespace
-      )
-        conflict('External datasetの参照が登録する版と一致しません');
-    }
-    const version = (await first<Omit<DatasetVersion, 'name' | 'namespace'>>(
-      connection,
-      `INSERT INTO dataset_versions(dataset_id,project_id,version,uri,digest,schema,metadata,source_run_id,parent_dataset_version_ids,external_ref)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-      [
-        dataset.id,
-        projectId,
-        input.version,
-        input.uri,
-        input.digest,
-        JSON.stringify(input.schema),
-        JSON.stringify(input.metadata),
-        input.sourceRunId ?? null,
-        input.parentDatasetVersionIds,
-        input.externalRef ? JSON.stringify(input.externalRef) : null,
-      ],
-    ))!;
-    if (sourceRun) {
-      const updatedRun = await first<Run>(
-        connection,
-        `UPDATE runs SET output_dataset_version_ids=array_append(output_dataset_version_ids,$2::uuid) WHERE id=$1 RETURNING ${runColumns}`,
-        [sourceRun.id, version.id],
-      );
-      // A late registration must refresh external lineage in the same transaction.
-      if (updatedRun && isTerminalStatus(updatedRun.status))
-        await enqueueRunEvent(connection, updatedRun);
-    }
-    return { ...version, name: dataset.name, namespace: dataset.namespace };
   }
 
   private async requireReadAccess(principal: Principal, projectId: string): Promise<void> {

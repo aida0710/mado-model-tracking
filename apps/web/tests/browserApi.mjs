@@ -99,6 +99,9 @@ export function createBrowserApi() {
     sourceRunId: null,
     parentDatasetVersionIds: [],
     externalRef: null,
+    contentKind: 'reference',
+    fileCount: null,
+    totalSize: null,
     createdAt: now,
   };
   const makeRun = (body) => ({

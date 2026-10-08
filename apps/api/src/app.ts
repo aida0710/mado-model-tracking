@@ -29,6 +29,7 @@ import { ArtifactUploadFinalizer } from './services/artifactUploadFinalizer.js';
 import { ArtifactUploadSweeper } from './services/artifactUploadSweeper.js';
 import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
+import { DatasetContentService } from './services/datasetContentService.js';
 import { RunService } from './services/runService.js';
 import { RunSearchService } from './services/runSearchService.js';
 import { MetricSeriesService } from './services/metricSeriesService.js';
@@ -136,6 +137,10 @@ const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
 // An offline sync batch carries up to 10000 metrics and 10000 log lines in one JSON body.
 const SYNC_BATCH_MAX_BYTES = 32 * 1024 * 1024;
 const SYNC_BATCH_PATH = /^\/api\/projects\/[^/]+\/sync\/runs\/[^/]+\/batches$/;
+// A DatasetVersion lists up to MAX_DATASET_VERSION_FILES files of up to 1024-character paths
+// (about 1.1 KB each with the Artifact ID), so its creation request gets a larger JSON limit.
+const DATASET_VERSION_CREATE_PATH = /^\/api\/projects\/[^/]+\/datasets\/[^/]+\/versions$/;
+const MAX_DATASET_VERSION_BODY_BYTES = 128 * 1024 * 1024;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
@@ -296,8 +301,15 @@ export function createApplication(options: ApplicationOptions) {
       (context.req.path.endsWith('/artifacts') || ARTIFACT_UPLOAD_PART_PATH.test(context.req.path));
     if (!isNativeArtifactUpload && !isMlflowArtifactUpload(context.req)) {
       const isSyncBatch = context.req.method === 'POST' && SYNC_BATCH_PATH.test(context.req.path);
+      const isDatasetVersionCreate =
+        context.req.method === 'POST' && DATASET_VERSION_CREATE_PATH.test(context.req.path);
+      const maxSize = isSyncBatch
+        ? SYNC_BATCH_MAX_BYTES
+        : isDatasetVersionCreate
+          ? MAX_DATASET_VERSION_BODY_BYTES
+          : MAX_JSON_BODY_BYTES;
       return bodyLimit({
-        maxSize: isSyncBatch ? SYNC_BATCH_MAX_BYTES : MAX_JSON_BODY_BYTES,
+        maxSize,
         onError: () => {
           throw new DomainError(413, 'JSONの上限サイズを超えています', 'body_too_large');
         },
@@ -331,7 +343,7 @@ export function createApplication(options: ApplicationOptions) {
     ),
   );
   app.route('/api', userRoutes(new UserDirectoryService(database)));
-  app.route('/api/projects', registryRoutes(registry));
+  app.route('/api/projects', registryRoutes(registry, new DatasetContentService(database)));
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', runSearchRoutes(runSearch));

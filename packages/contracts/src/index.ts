@@ -43,6 +43,9 @@ export type { ArtifactMediaInfo } from './artifactMediaInfo.js';
 export { ARTIFACT_MEDIA_INFO_BATCH_LIMIT } from './artifactMediaInfo.js';
 export type { ArtifactPreview, ArtifactPreviewKind, ArtifactPreviewStatus, WaveformPeaksPreview } from './artifactPreviews.js';
 export { ARTIFACT_PREVIEW_KINDS, BROWSER_AUDIO_ANALYSIS_MAX_BYTES } from './artifactPreviews.js';
+import type { DatasetContentKind } from './datasetContent.js';
+export type { DatasetContentKind, DatasetVersionContent, DatasetVersionFile, DatasetVersionFileInput, DatasetVersionFilePage } from './datasetContent.js';
+export { MAX_DATASET_VERSION_FILES } from './datasetContent.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
 export type { ProjectGroupBinding, ProjectMember, ProjectMemberGroupRole, UserSearchResult } from './projectAccess.js';
@@ -303,6 +306,10 @@ export interface DatasetVersion {
   sourceRunId: string | null;
   parentDatasetVersionIds: string[];
   externalRef: ExternalDatasetRef | null;
+  contentKind: DatasetContentKind;
+  /** Files and their total bytes for 'artifacts' versions; null for 'reference' versions. */
+  fileCount: number | null;
+  totalSize: number | null;
   createdAt: string;
 }
 export interface Artifact {

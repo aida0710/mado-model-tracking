@@ -1,23 +1,39 @@
-import type { Dataset, DatasetVersion, JsonObject, Run } from '@mmt/contracts';
+import { randomUUID } from 'node:crypto';
+import type { Dataset, DatasetVersion, ExternalDatasetRef, JsonObject, Run } from '@mmt/contracts';
 import { first, type Connection } from '../db/database.js';
-import { DomainError, notFound } from '../domain/errors.js';
+import { datasetManifestDigest } from '../domain/datasetManifestDigest.js';
+import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { isTerminalStatus } from '../domain/runTransitions.js';
-import { assertProjectReferences, findRun } from '../repositories/registryRepository.js';
+import {
+  assertProjectReference,
+  assertProjectReferences,
+  findRun,
+} from '../repositories/registryRepository.js';
 import { runColumns } from '../repositories/runListProjection.js';
 import { requireProject } from './accessService.js';
 import type { ModelVersionRegistrationActor } from './modelVersionRegistration.js';
 import { enqueueRunEvent } from './outboxEvents.js';
 
-// Dataset versions are registered by the same two kinds of actor as model versions.
-export type DatasetVersionRegistrationActor = ModelVersionRegistrationActor;
+// Dataset versions are registered by the same two kinds of actor as model versions, plus callers
+// that already checked the principal with their own rule (plugin imports need Project admin,
+// MLflow log_inputs checks scopes per dataset).
+export type DatasetVersionRegistrationActor =
+  | ModelVersionRegistrationActor
+  | { type: 'callerAuthorized' };
 
-export interface DatasetVersionRegistration {
+/** A file of an 'artifacts' version, with the Artifact's size and sha256 already looked up. */
+export interface DatasetManifestFile {
+  path: string;
+  artifactId: string;
+  size: number;
+  sha256: string;
+}
+
+interface DatasetVersionRegistrationBase {
   projectId: string;
   datasetId: string;
   // Omitted versions take the next integer after the dataset's integer versions.
   version?: string;
-  uri: string;
-  digest: string;
   schema: JsonObject;
   metadata: JsonObject;
   sourceRunId?: string | null;
@@ -25,14 +41,39 @@ export interface DatasetVersionRegistration {
   actor: DatasetVersionRegistrationActor;
 }
 
+/** Data stored elsewhere: the client's uri and digest are kept as given. */
+interface ReferenceContentRegistration {
+  uri: string;
+  digest: string;
+  externalRef?: ExternalDatasetRef | null;
+  content?: undefined;
+}
+
+/**
+ * The version is these Artifacts. The server sets uri to `mmt-dataset://<versionId>` and computes
+ * the manifest digest; a digest the client sent must equal it.
+ */
+interface ArtifactContentRegistration {
+  content: { files: DatasetManifestFile[] };
+  digest?: string;
+  uri?: undefined;
+  externalRef?: undefined;
+}
+
+export type DatasetVersionRegistration = DatasetVersionRegistrationBase &
+  (ReferenceContentRegistration | ArtifactContentRegistration);
+
+// Resolved by the API itself (GET .../versions/:v/files); W5 workers fetch the files through it.
+const DATASET_VERSION_URI_SCHEME = 'mmt-dataset://';
+
 // Non-integer versions ("2026-10", "v1") stay as they are and do not take part in numbering.
 // 18 digits keeps the value inside bigint.
 const INTEGER_VERSION_PATTERN = '^[1-9][0-9]{0,17}$';
 
 /**
- * Inserts an immutable DatasetVersion in the caller's transaction and lists it in the source
- * Run's outputs. A registration that arrives after the Run ended resends the Run's outbox event
- * so external lineage sees the new output.
+ * Inserts an immutable DatasetVersion, and for Artifact content its file list, in the caller's
+ * transaction and lists it in the source Run's outputs. A registration that arrives after the Run
+ * ended resends the Run's outbox event so external lineage sees the new output.
  */
 export async function registerDatasetVersion(
   connection: Connection,
@@ -75,23 +116,49 @@ export async function registerDatasetVersion(
       userId: sourceRun.createdBy,
     });
   }
+  if (registration.externalRef) {
+    const reference = registration.externalRef;
+    await assertProjectReference(connection, {
+      table: 'plugin_connections',
+      projectId,
+      id: reference.pluginId,
+    });
+    if (
+      reference.version !== registration.version ||
+      reference.name !== dataset.name ||
+      reference.namespace !== dataset.namespace
+    )
+      conflict('External datasetの参照が登録する版と一致しません');
+  }
+  const stored = describeStoredContent(registration);
   const version = registration.version ?? (await nextDatasetVersion(connection, dataset.id));
   const inserted = (await first<Omit<DatasetVersion, 'name' | 'namespace'>>(
     connection,
-    `INSERT INTO dataset_versions(dataset_id,project_id,version,uri,digest,schema,metadata,source_run_id,parent_dataset_version_ids)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    `INSERT INTO dataset_versions(id,dataset_id,project_id,version,uri,digest,schema,metadata,source_run_id,parent_dataset_version_ids,external_ref,content_kind,file_count,total_size)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
     [
+      stored.id,
       dataset.id,
       projectId,
       version,
-      registration.uri,
-      registration.digest,
+      stored.uri,
+      stored.digest,
       JSON.stringify(registration.schema),
       JSON.stringify(registration.metadata),
       sourceRun?.id ?? null,
       registration.parentDatasetVersionIds,
+      registration.externalRef ? JSON.stringify(registration.externalRef) : null,
+      stored.contentKind,
+      stored.fileCount,
+      stored.totalSize,
     ],
   ))!;
+  if (registration.content)
+    await insertDatasetVersionFiles(connection, {
+      projectId,
+      datasetVersionId: inserted.id,
+      files: registration.content.files,
+    });
   if (sourceRun) {
     const updatedRun = (await first<Run>(
       connection,
@@ -101,6 +168,66 @@ export async function registerDatasetVersion(
     if (isTerminalStatus(updatedRun.status)) await enqueueRunEvent(connection, updatedRun);
   }
   return { ...inserted, name: dataset.name, namespace: dataset.namespace };
+}
+
+interface StoredDatasetContent {
+  id: string;
+  uri: string;
+  digest: string;
+  contentKind: DatasetVersion['contentKind'];
+  fileCount: number | null;
+  totalSize: number | null;
+}
+
+function describeStoredContent(registration: DatasetVersionRegistration): StoredDatasetContent {
+  // The id is chosen here because the immutable row must carry its own uri from the INSERT.
+  const id = randomUUID();
+  if (!registration.content)
+    return {
+      id,
+      uri: registration.uri,
+      digest: registration.digest,
+      contentKind: 'reference',
+      fileCount: null,
+      totalSize: null,
+    };
+  const { files } = registration.content;
+  const digest = datasetManifestDigest(files);
+  if (registration.digest !== undefined && registration.digest !== digest)
+    throw new DomainError(
+      422,
+      `digestがファイル一覧から計算した値（${digest}）と一致しません`,
+      'dataset_digest_mismatch',
+    );
+  return {
+    id,
+    uri: `${DATASET_VERSION_URI_SCHEME}${id}`,
+    digest,
+    contentKind: 'artifacts',
+    fileCount: files.length,
+    totalSize: files.reduce((total, file) => total + file.size, 0),
+  };
+}
+
+// One statement with array parameters inserts up to MAX_DATASET_VERSION_FILES rows.
+async function insertDatasetVersionFiles(
+  connection: Connection,
+  manifest: { projectId: string; datasetVersionId: string; files: DatasetManifestFile[] },
+): Promise<void> {
+  const { files } = manifest;
+  await connection.query(
+    `INSERT INTO dataset_version_files(dataset_version_id,project_id,path,artifact_id,size,sha256)
+    SELECT $1,$2,file.path,file.artifact_id,file.size,file.sha256
+    FROM unnest($3::text[],$4::uuid[],$5::bigint[],$6::text[]) AS file(path,artifact_id,size,sha256)`,
+    [
+      manifest.datasetVersionId,
+      manifest.projectId,
+      files.map((file) => file.path),
+      files.map((file) => file.artifactId),
+      files.map((file) => file.size),
+      files.map((file) => file.sha256),
+    ],
+  );
 }
 
 // The caller holds the dataset row FOR UPDATE, so concurrent registrations take distinct numbers.

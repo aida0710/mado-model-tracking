@@ -39,7 +39,7 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `PUT /projects/:p/models/:id/aliases/:alias` ({versionId, reason?}) → Model。実行時はaliasではなく実際のModelVersion IDをRunへ保存。reasonは任意で最大2000文字。`DELETE /projects/:p/models/:id/aliases/:alias`（bodyは省略可、{reason?}）→ 204。未設定のaliasは404。変更はeditor+`registry:write`、別Projectのmodel IDとversionは404。
 - `GET /projects/:p/models/:id/alias-events?alias=&limit=&cursor=` → `{items:ModelAliasEvent[], nextCursor}`（viewer+read。新しい順、limitは既定50・最大200、cursorは前ページ最後のevent id。別Modelのcursorは404）。alias変更はすべてappend-onlyの`model_alias_events`に1件ずつ残る（UPDATE/DELETEはDBで拒否）。versionIdがnullなら解除、previousVersionIdがnullなら初回設定。同じ版への再設定はeventを増やさない（MLflow SDKの再送対策）。sourceはnativeのbrowser sessionが`web`、API tokenが`api`、MLflow互換の設定・解除が`mlflow`（reasonは空）、MLflowのModelVersion削除・Registered Model削除で外れたaliasが`version_deleted`・`model_deleted`、`promotion_policy`は昇格ポリシー用に予約。actorは操作したユーザーとtoken（無い場合はnull。移行時点の既存aliasは`source='api'`、`reason='migration snapshot'`、actor nullの初期eventになる）。同じModelのalias変更はModelの行lockで直列化し、previousVersionIdは直前のeventの版と必ず連鎖する。
 - `GET|POST /projects/:p/codes` (name,description?) / `GET|POST /projects/:p/codes/:id/versions` (version,source?,runtime?,entrypoint,testEntrypoint?,requirements?,environment?,supportedModelFamilies,taskTypes)。source/runtime/entrypointは下記とcontracts参照。Qwen2/Qwen3の組合せをサービスで検証。training/finetuningも同じCodeVersion契約を使う。
-- `GET|POST /projects/:p/datasets` (name,namespace?,description?) / `GET|POST /projects/:p/datasets/:id/versions` (version,uri,digest,schema?,metadata?,sourceRunId?,parentDatasetVersionIds?,externalRef?)。sourceRunIdがあればRun.outputへ関係を保存。
+- `GET|POST /projects/:p/datasets` (name,namespace?,description?) / `GET|POST /projects/:p/datasets/:id/versions` (version,uri,digest,schema?,metadata?,sourceRunId?,parentDatasetVersionIds?,externalRef?)。sourceRunIdがあればRun.outputへ関係を保存。`content`を付けるとArtifactを本体とする版になる（下の「Artifactを本体とするDatasetVersion」）。
 - `GET /projects/:p/lineage` → LineageGraph。
 - `GET|POST /targets` (ComputeTargetのidを除く。作成はglobal admin)。`runtimeKinds`は重複のないPython/Docker/Singularity/Apptainerの一覧で、省略時は`['python']`。取得時に鍵パス等を一般viewerへ出さない。executor=localはdevelopmentの明示許可のみ。
 - `PATCH /targets/:id` → ComputeTarget。全体管理者が設定・有効状態を変更する。queued/claimed/runningのJobが参照中なら接続先・Runtime・GPU等の変更を409で拒否する。有効切替は可能で、無効targetは新規claimの候補から外す。実行中Jobのleaseを取り消さない。
@@ -363,6 +363,19 @@ API serverはSSH鍵を持たないので、Compute targetの接続確認はそ�
 - 監査: `storage.backend.create`／`storage.backend.update`（変更した項目名）／`storage.backend.test`（`ok`と失敗した段階）／`storage.settings.update`（新旧の既定）。detailsにsecret、access key id、CAの本文を入れない。403・409は`denied`として記録する。
 - DB由来のsecretを現在の鍵で復号できない保存先は起動時に`storage_backend_unavailable`をログへ出し（名前と理由だけ）、その保存先のArtifactは503 `artifact_read_failed`になる。
 - `scripts/verify_s3_artifacts.ts`は`MMT_VERIFY_S3_BACKEND=<名前>`でDB上のS3保存先を検証する（`MMT_DATABASE_URL`と`MMT_STORAGE_SECRET_KEY`が必要。結果に値を出さない）。
+
+## Artifactを本体とするDatasetVersion
+
+DatasetVersionは`contentKind`を持つ。`reference`は従来どおりクライアントのuri・digestを保存した版（MLflow `log_inputs`、plugin取り込み、`content`無しのnative作成）、`artifacts`は保存済みArtifactの一覧を本体とする版。どちらも`fileCount`・`totalSize`を返し、`reference`ではnull。版は不変で、ファイル一覧も作成と同じtransactionで保存した後は変わらない。
+
+- `POST /projects/:p/datasets/:id/versions`に`content`を付ける。`{kind:'artifacts', files:[{path,artifactId}]}`はArtifactを直接並べる。`{kind:'artifacts', fromRunArtifacts:{runId, prefix?}}`はRunの各pathで現在表示される版（latest。古いuploadは使わない）のうち、`prefix`（ディレクトリ。`/`は付けても付けなくてもよく、空ならRun全体）の下にあるものを、prefixからの相対パスで使う。editorと`registry:write`。
+- `content`があるとき: `uri`と`externalRef`は指定できない（422 `invalid_request`）。`version`を省略すると整数で自動採番する（整数でない版名は採番に数えない）。uriはサーバーが`mmt-dataset://<版のID>`にする。digestはサーバーが計算する: path（UTF-8のbyte順）に並べた`[{"path","sha256","size"}]`を空白なし・非ASCIIをescapeしないJSONにしたもののSHA-256を`sha256:<hex>`で表す（Pythonなら`json.dumps(entries, separators=(",", ":"), ensure_ascii=False)`と同じ）。Artifact IDはdigestに含めないので、同じ中身を上げ直しても同じdigestになる。クライアントが`digest`を送った場合は計算値と違えば422 `dataset_digest_mismatch`。
+- 検証: pathは安全な相対パス（`/`始まり・`.`・`..`・空のsegment・`\`・制御文字を含まない、1024文字以内）で重複不可。ファイルは1件以上、最大10万件（`MAX_DATASET_VERSION_FILES`。超えれば422）。Artifactは同じProjectで保存済みのものに限り、他ProjectのIDや存在しないIDは422 `dataset_artifact_not_found`。`fromRunArtifacts`のRunが無ければ404、prefixの下にArtifactが無ければ422 `dataset_content_empty`、10万件を超えれば422 `dataset_too_many_files`。同じversionの再作成は409 `already_exists`。このPOSTだけJSON本文の上限は128MiB（ほかは4MiB）。
+- `fromRunArtifacts`の版は`sourceRunId`をそのRunにし、Runの`outputDatasetVersionIds`とlineageの`output`の辺に入る。`sourceRunId`を別のRunにすると422 `dataset_source_run_mismatch`。Job tokenでは従来どおり`sourceRunId`がtokenのRunである必要があるので、自分のRunのArtifactから作るときは`sourceRunId`も送る。
+- `GET /projects/:p/datasets/:id/versions/:v/files?prefix=&delimiter=/&limit=&cursor=` → `DatasetVersionFilePage {items:DatasetVersionFile[], nextCursor?}`。viewerと`read`。`DatasetVersionFile {path,artifactId,size,sha256,mimeType}`。path順（UTF-8のbyte順）、limitは既定・最大1000、cursorは前ページ末尾のpath。`delimiter=/`はprefix直下のファイルだけ。`reference`の版は空。別DatasetやProjectの版は404。
+- `GET /projects/:p/datasets/:id/versions/:v/files/tree?prefix=` → ArtifactTree（Run Artifactのtreeと同じ形。ディレクトリごとの件数・合計サイズ、直下のファイル数）。
+- `GET /projects/:p/artifacts/by-digest?sha256=&size=` → Artifact。viewerと`read`。同じProjectの保存済みArtifactのうち、SHA-256（小文字hex 64桁）とsizeが一致する最新のもの。無ければ404 `not_found`。SDKはupload前にこれを引き、見つかればuploadせずにそのArtifact IDを版のfilesに使う。blobは共有しない（Artifactの削除を単純に保つため）。
+- `dataset_version_files`のArtifactは外部キーで参照しているので、版が参照しているArtifactは削除できない。worker側の取得（`mmt-dataset://`の解決）は後続の担当（dataset-materialization-worker）が行う。
 
 ## Artifactのmedia情報
 

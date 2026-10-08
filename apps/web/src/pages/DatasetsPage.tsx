@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import type { DatasetVersion } from '@mmt/contracts';
 import { Link } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import { registryApi } from '../api/registry';
@@ -10,13 +11,15 @@ import { RegistryLayout } from '../components/RegistryLayout';
 import { Empty, ErrorNotice, Resource } from '../components/Feedback';
 import { DetailsList, JsonDetails } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
-import { DatasetVersionDialog } from '../dialogs/DatasetVersionDialog';
+import { DatasetVersionDialog, type DatasetVersionSource } from '../dialogs/DatasetVersionDialog';
+import { DatasetFiles } from '../components/DatasetFiles';
+import { formatBytes } from '../lib/format';
 import { getFieldValue } from '../lib/formValues';
-import { text } from '../i18n/catalog';
+import { text, textTemplates } from '../i18n/catalog';
 
 export function DatasetsPage() {
   const { project, canEdit, isProjectAdmin } = useProject();
-  const [dialog, setDialog] = useState<'dataset' | 'version' | null>(null);
+  const [dialog, setDialog] = useState<'dataset' | DatasetVersionSource | null>(null);
   const registry = useRegistry(`${project.id}:datasets`, {
     list: (signal) => registryApi.datasets(project.id, signal),
     versions: (id, signal) => registryApi.datasetVersions(project.id, id, signal),
@@ -85,9 +88,14 @@ export function DatasetsPage() {
                 <div className="section-heading">
                   <h2>{registry.selected.name}</h2>
                   {canEdit && (
-                    <button className="button small" onClick={() => setDialog('version')}>
-                      {text.newVersion}
-                    </button>
+                    <div>
+                      <button className="button small" onClick={() => setDialog('folder')}>
+                        {text.datasetVersionFromFolder}
+                      </button>
+                      <button className="button small" onClick={() => setDialog('reference')}>
+                        {text.newVersion}
+                      </button>
+                    </div>
                   )}
                 </div>
                 <Resource query={registry.versions}>
@@ -109,6 +117,17 @@ export function DatasetsPage() {
                                 {version.version}
                               </button>
                             ),
+                          },
+                          {
+                            key: 'content',
+                            label: text.datasetContentKind,
+                            render: (version) =>
+                              version.contentKind === 'artifacts'
+                                ? textTemplates.datasetContentArtifacts(
+                                    version.fileCount ?? 0,
+                                    formatBytes(version.totalSize ?? 0),
+                                  )
+                                : text.datasetContentReference,
                           },
                           {
                             key: 'uri',
@@ -142,6 +161,9 @@ export function DatasetsPage() {
                                   </Link>
                                 )),
                               ],
+                              ...(registry.selectedVersion.contentKind === 'artifacts'
+                                ? artifactContentEntries(registry.selectedVersion)
+                                : []),
                               [
                                 text.sourceRun,
                                 registry.selectedVersion.sourceRunId ? (
@@ -152,6 +174,15 @@ export function DatasetsPage() {
                               ],
                             ]}
                           />
+                          <h3>{text.datasetFiles}</h3>
+                          {registry.selectedVersion.contentKind === 'artifacts' ? (
+                            <DatasetFiles
+                              key={registry.selectedVersion.id}
+                              version={registry.selectedVersion}
+                            />
+                          ) : (
+                            <p className="muted">{text.datasetFilesReferenceOnly}</p>
+                          )}
                           <h3>{text.schema}</h3>
                           <JsonDetails value={registry.selectedVersion.schema} />
                           <h3>{text.metadata}</h3>
@@ -197,9 +228,10 @@ export function DatasetsPage() {
           }}
         />
       )}
-      {dialog === 'version' && registry.selected && (
+      {(dialog === 'reference' || dialog === 'folder') && registry.selected && (
         <DatasetVersionDialog
           dataset={registry.selected}
+          source={dialog}
           onClose={() => setDialog(null)}
           onSaved={(version) => {
             setDialog(null);
@@ -210,4 +242,11 @@ export function DatasetsPage() {
       )}
     </section>
   );
+}
+
+function artifactContentEntries(version: DatasetVersion): Array<[string, ReactNode]> {
+  return [
+    [text.datasetFileCount, version.fileCount],
+    [text.datasetTotalSize, formatBytes(version.totalSize ?? 0)],
+  ];
 }
