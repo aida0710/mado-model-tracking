@@ -81,11 +81,13 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
   });
 
   it('token発行と失効で1件ずつ増え、detailsにtoken原文もhashも入らない', async () => {
+    // Within the default 365-day lifetime limit.
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
     const minted = await mintToken(fixture.administrator.cookie, {
       name: 'Audit CI',
       projectId: fixture.project.id,
       scopes: ['runs:write'],
-      expiresAt: '2099-01-01T00:00:00.000Z',
+      expiresAt,
     });
     const created = await storedEvents('token.create');
     expect(created).toHaveLength(1);
@@ -98,7 +100,8 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
         name: 'Audit CI',
         kind: 'personal',
         scopes: ['runs:write'],
-        expiresAt: '2099-01-01T00:00:00.000Z',
+        expiresAt,
+        ownerType: 'user',
       },
     });
 
@@ -222,7 +225,7 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
       expect.objectContaining({
         actorUserId: fixture.editor.userId,
         resourceId: personal.item.id,
-        details: { code: 'token_forbidden' },
+        details: expect.objectContaining({ code: 'token_forbidden', ownerType: 'user' }),
       }),
     ]);
   });

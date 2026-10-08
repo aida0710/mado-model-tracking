@@ -79,7 +79,13 @@ export class LocalAuthService {
         input.password,
       ),
     );
-    if (!credential || !isPasswordValid || credential.status !== 'active') {
+    // A Service Account acts only through its tokens, even if a password row was added to it.
+    if (
+      !credential ||
+      !isPasswordValid ||
+      credential.status !== 'active' ||
+      credential.kind !== 'human'
+    ) {
       this.rateLimiter.record(usernameKey, LOCAL_LOGIN_USERNAME_FAILURE_LIMIT);
       await writeAuditEvent(this.database, {
         ...loginAudit('local', metadata),

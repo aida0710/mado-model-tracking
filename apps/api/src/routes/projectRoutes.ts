@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { ProjectGroupBindingService } from '../services/projectGroupBindingService.js';
 import type { ProjectService } from '../services/projectService.js';
+import type { TokenService } from '../services/tokenService.js';
 import {
   groupNameSchema,
   namedEntitySchema,
@@ -14,6 +15,7 @@ import { requestMetadata } from '../http/requestMetadata.js';
 export function projectRoutes(
   projects: ProjectService,
   groupBindings: ProjectGroupBindingService,
+  tokens: TokenService,
 ): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/', async (context) =>
@@ -89,6 +91,9 @@ export function projectRoutes(
     );
     return context.body(null, 204);
   });
+  routes.get('/:p/tokens', async (context) =>
+    context.json({ items: await tokens.listProject(principal(context), uuidParam(context, 'p')) }),
+  );
   routes.get('/:p/experiments', async (context) =>
     context.json({
       items: await projects.experiments(principal(context), uuidParam(context, 'p')),
