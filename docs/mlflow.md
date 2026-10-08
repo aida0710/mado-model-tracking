@@ -18,13 +18,13 @@ API tokenの画面で対象Projectのtokenを作成します。記録するユ�
 
 Authentikのログインはブラウザでの操作に使います。Pythonの記録には個人tokenまたはService Account tokenを使い、失効・期限・Projectへの所属・scopeはリクエストごとに確認します。自動実行やworkerなど、人の異動で止めたくない記録には、Projectの設定画面「Service Accounts」で作ったService Accountのtokenを使います。tokenの期限は最長365日です。
 
-学習を実行するマシンのターミナルで設定します。`PROJECT_ID`は記録先ProjectのUUIDへ置き換えてください。`http://10.0.10.160:5182`はこの開発環境のURLです。別の配置ではそのWeb/APIのURLに変更します。
+学習を実行するマシンのターミナルで設定します。`PROJECT_ID`は記録先ProjectのUUIDへ置き換えてください。`http://localhost:5182`は手元の開発環境のURLです。別の配置ではそのWeb/APIのURLに変更します。
 
 Webの設定画面「MLflow 3から接続」に、このProjectの`MLFLOW_TRACKING_URI`／`MLFLOW_REGISTRY_URI`と、コピーできる設定例があります。「このProject用のtokenを発行」は、read・runs:write・registry:write・artifacts:write を選んだ状態でtokenの作成画面を開きます（viewerには表示しません）。
 
 ```bash
 python -m pip install 'mlflow>=3,<4'
-export MLFLOW_TRACKING_URI='http://10.0.10.160:5182/api/mlflow/projects/PROJECT_ID'
+export MLFLOW_TRACKING_URI='http://localhost:5182/api/mlflow/projects/PROJECT_ID'
 export MLFLOW_REGISTRY_URI="$MLFLOW_TRACKING_URI"
 read -r -s -p 'API token: ' MLFLOW_TRACKING_TOKEN
 export MLFLOW_TRACKING_TOKEN

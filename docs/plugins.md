@@ -31,4 +31,4 @@ PluginのUI部品や任意のJavaScriptはブラウザで実行しません。�
 
 read/write keyは許可Namespaceを限定します。metricsはstorage全体の値なのでNamespaceを設定しません。本体の`MMT_MADO_PLUGIN_TOKEN`とpluginの`MMT_PLUGIN_TOKEN`は同じ値にし、Mado用keyとは分けます。
 
-Mado API拡張の変更は`/home/aida/projects/mado-api-model-tracking`の`feat/model-tracking-api`branchにあります。本番Madoへ適用したものではありません。詳細はそのリポジトリの`docs/model-tracking-api.md`を参照してください。
+Mado API拡張の変更はMadoリポジトリの`feat/model-tracking-api`branchにあります。本番Madoへ適用したものではありません。詳細はそのリポジトリの`docs/model-tracking-api.md`を参照してください。

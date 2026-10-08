@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
 if (!modulePath) throw new Error('MMT_PLAYWRIGHT_MODULE is required');
 const { chromium } = await import(pathToFileURL(modulePath).href);
-const base = process.env.MMT_WEB_URL ?? 'http://10.0.10.160:5182';
+const base = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182';
 const verificationDate = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(new Date());

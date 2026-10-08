@@ -21,7 +21,7 @@ describe.skipIf(!testDatabaseUrl)('プライベートOriginの認証と変更操
     await harness?.close();
   });
 
-  async function privateLogin(origin = 'http://10.0.10.160:5182'): Promise<string> {
+  async function privateLogin(origin = 'http://192.168.1.20:5182'): Promise<string> {
     const response = await request(app, '/api/auth/dev-login', {
       method: 'POST',
       body: {},
@@ -33,7 +33,7 @@ describe.skipIf(!testDatabaseUrl)('プライベートOriginの認証と変更操
   }
 
   it.each([
-    'http://10.0.10.160:5182',
+    'http://192.168.1.20:5182',
     'http://localhost:5182',
     'https://100.64.0.1:5182',
     'http://[fd00::1]:5182',
@@ -76,14 +76,14 @@ describe.skipIf(!testDatabaseUrl)('プライベートOriginの認証と変更操
   });
 
   it('CORSのpreflightも同じ許可判定でOriginを返す', async () => {
-    for (const origin of ['http://10.0.10.160:5182', 'https://attacker.test', 'null']) {
+    for (const origin of ['http://192.168.1.20:5182', 'https://attacker.test', 'null']) {
       const response = await request(app, '/api/projects', {
         method: 'OPTIONS',
         headers: { Origin: origin, 'Access-Control-Request-Method': 'POST' },
       });
       expect(response.status).toBe(204);
       expect(response.headers.get('Access-Control-Allow-Origin')).toBe(
-        origin.startsWith('http://10.') ? origin : null,
+        origin.startsWith('http://192.168.') ? origin : null,
       );
       expect(response.headers.get('Vary')).toContain('Origin');
     }
@@ -93,7 +93,7 @@ describe.skipIf(!testDatabaseUrl)('プライベートOriginの認証と変更操
     const response = await request(harness.app, '/api/auth/dev-login', {
       method: 'POST',
       body: {},
-      headers: { Origin: 'http://10.0.10.160:5182' },
+      headers: { Origin: 'http://192.168.1.20:5182' },
     });
     expect(response.status).toBe(403);
     expect((await response.json()).code).toBe('invalid_origin');
@@ -106,7 +106,7 @@ describe.skipIf(!testDatabaseUrl)('プライベートOriginの認証と変更操
       method: 'POST',
       cookie,
       body: { name: 'SDK origin regression', kind: 'personal', scopes: ['read'] },
-      headers: { Origin: 'http://10.0.10.160:5182' },
+      headers: { Origin: 'http://192.168.1.20:5182' },
     });
     expect(created.status).toBe(201);
     const { token } = await created.json();

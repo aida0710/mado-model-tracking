@@ -46,9 +46,9 @@ describe.skipIf(!testDatabaseUrl)('オフライン記録の後送り（独立Pos
       name: 'Offline training',
       kind: 'training',
       parameters: { lr: 0.001 },
-      tags: { cluster: 'hokudai' },
+      tags: { cluster: 'hpc-cluster' },
       startedAt: STARTED_AT,
-      origin: 'grand2',
+      origin: 'gpu-node-1',
       ...overrides,
     };
   }
@@ -162,8 +162,8 @@ describe.skipIf(!testDatabaseUrl)('オフライン記録の後送り（独立Pos
       startedAt: STARTED_AT,
       createdBy: fixture.editor.userId,
       parameters: { lr: 0.001 },
-      tags: { cluster: 'hokudai' },
-      syncOrigin: 'grand2',
+      tags: { cluster: 'hpc-cluster' },
+      syncOrigin: 'gpu-node-1',
     });
     const again = await entity<Run>(await putRun(runId, syncRunBody({ name: 'Renamed' })), 200);
     expect(again).toMatchObject({
@@ -248,7 +248,7 @@ describe.skipIf(!testDatabaseUrl)('オフライン記録の後送り（独立Pos
     expect(await runLogs(run.id)).toHaveLength(1);
     expect(await nativeRun(run.id)).toMatchObject({
       parameters: { lr: 0.001, epochs: 3 },
-      tags: { cluster: 'hokudai', stage: 'a' },
+      tags: { cluster: 'hpc-cluster', stage: 'a' },
       latestMetrics: { loss: 1 / 3 },
     });
   });

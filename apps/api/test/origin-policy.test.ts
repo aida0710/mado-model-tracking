@@ -52,7 +52,7 @@ describe('プライベートネットワークのOrigin許可', () => {
     'http://10.0.0.1:5182?query=1',
     'http://10.0.0.1:5182#fragment',
     'http://0x0a000001:5182',
-    'http://r540.lan:5182',
+    'http://workstation.lan:5182',
     'ftp://10.0.0.1:5182',
   ])('%sはプライベートOrigin許可が有効でも拒否する', (origin) => {
     expect(isAllowedOrigin(origin, policy)).toBe(false);
