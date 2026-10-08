@@ -18,6 +18,7 @@ import { RunPagination } from '../components/runs/RunPagination';
 import { getRunColumnNames } from '../components/runs/runColumnNames';
 import { RunDialog } from '../dialogs/RunDialog';
 import { getFieldValue } from '../lib/formValues';
+import { downloadBlob } from '../lib/fileDownload';
 import { runSortOrderBy, toRunSearchConditions } from '../lib/runFilter';
 import { text } from '../i18n/catalog';
 
@@ -47,6 +48,8 @@ export function ExperimentsPage() {
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
   const [dialog, setDialog] = useState<'experiment' | 'run' | 'tag' | null>(null);
   const mutation = useMutation();
+  const csvExport = useMutation();
+  const [isExportTruncated, setIsExportTruncated] = useState(false);
   useEffect(() => setSelectedIds([]), [experimentId, searchText, status]);
   const experiments = useQuery(`${project.id}:experiments`, (signal) =>
     trackingApi.experiments(project.id, signal),
@@ -61,6 +64,17 @@ export function ExperimentsPage() {
     ...(cursor ? { cursor } : {}),
   };
   const runs = useRunSearch(project.id, search);
+  async function exportSearchCsv() {
+    setIsExportTruncated(false);
+    // The export covers the whole search; paging fields would be ignored by the API anyway.
+    const { limit: _limit, cursor: _cursor, ...conditions } = search;
+    const exported = await csvExport.run(() =>
+      trackingApi.exportRunSearchCsv(project.id, conditions),
+    );
+    if (!exported) return;
+    downloadBlob(exported.blob, exported.fileName);
+    setIsExportTruncated(exported.truncated);
+  }
   const experiment = experiments.value?.find((item) => item.id === experimentId);
   const shownRuns = runs.value?.items ?? [];
   const { metricNames, parameterNames } = getRunColumnNames(shownRuns);
@@ -153,8 +167,16 @@ export function ExperimentsPage() {
           onColumnToggle={(name) =>
             setColumnVisibility((current) => ({ ...current, [name]: !isColumnVisible(name) }))
           }
+          exportingCsv={csvExport.pending}
+          onExportCsv={() => void exportSearchCsv()}
         />
         <ErrorNotice message={mutation.error} />
+        <ErrorNotice message={csvExport.error} />
+        {isExportTruncated && (
+          <p className="notice" role="status">
+            {text.exportRunsTruncated}
+          </p>
+        )}
         <Resource query={runs}>
           {(page) => (
             <>

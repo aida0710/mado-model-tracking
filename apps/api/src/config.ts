@@ -40,6 +40,8 @@ const DEFAULT_UPLOAD_IDLE_TIMEOUT_MS = 120_000;
 const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
 // New API tokens expire within a year; it is also the expiry of a token issued without one.
 const DEFAULT_TOKEN_MAX_LIFETIME_DAYS = 365;
+// Rows of one CSV export (decisions.md); beyond this Excel use gets slow and the filter should narrow.
+const DEFAULT_CSV_EXPORT_MAX_ROWS = 50_000;
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -121,6 +123,7 @@ const environmentSchema = z.object({
     .int()
     .min(1)
     .default(DEFAULT_CHECKPOINT_KEEP_COUNT),
+  MMT_CSV_EXPORT_MAX_ROWS: z.coerce.number().int().positive().default(DEFAULT_CSV_EXPORT_MAX_ROWS),
 });
 
 export interface ApiConfig {
@@ -163,6 +166,8 @@ export interface ApiConfig {
   tokenMaxLifetimeDays: number;
   // Checkpoints per Run shown by default; older ones get retained=false (their files are kept).
   checkpointKeepCount: number;
+  // Rows of POST /runs/search/export.csv; further matches are cut and marked at the end.
+  csvExportMaxRows: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -279,5 +284,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     storageSecretKey,
     tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
     checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
+    csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,
   };
 }

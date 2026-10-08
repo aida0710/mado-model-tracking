@@ -171,6 +171,8 @@ export type {
   RunSet,
 } from './runAnalysis.js';
 export { ANALYSIS_MAX_METRICS, ANALYSIS_MAX_PARAMS, ANALYSIS_MAX_RUNS } from './runAnalysis.js';
+export type { ComparedDatasetVersion, ComparedModelVersion, RunComparison, RunComparisonNamespace, RunComparisonRequest, RunComparisonRow, RunComparisonValue } from './runComparison.js';
+export { RUN_COMPARISON_MAX_METRIC_KEYS, RUN_COMPARISON_MAX_RUNS, RUN_COMPARISON_MIN_RUNS, RUN_EXPORT_TRUNCATED_HEADER } from './runComparison.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

@@ -86,6 +86,8 @@ import { registryRoutes } from './routes/registryRoutes.js';
 import { modelAutomationRoutes } from './routes/modelAutomationRoutes.js';
 import { runRoutes } from './routes/runRoutes.js';
 import { runSearchRoutes } from './routes/runSearchRoutes.js';
+import { RunComparisonService } from './services/runComparisonService.js';
+import { RunExportService } from './services/runExportService.js';
 import { metricSeriesRoutes } from './routes/metricSeriesRoutes.js';
 import { runAnalysisRoutes } from './routes/runAnalysisRoutes.js';
 import { taskRoutes } from './routes/taskRoutes.js';
@@ -182,6 +184,12 @@ export function createApplication(options: ApplicationOptions) {
   const runSearch = new RunSearchService(database);
   const metricSeries = new MetricSeriesService(database, runSearch);
   const runAnalysis = new RunAnalysisService(database, runSearch);
+  const runComparison = new RunComparisonService(database, metricSeries);
+  const runExport = new RunExportService(
+    database,
+    { runSearch, runComparison },
+    { maxRows: config.csvExportMaxRows },
+  );
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores, {
     maxBytes: config.artifactMaxBytes,
@@ -370,7 +378,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api', userRoutes(new UserDirectoryService(database)));
   app.route('/api/projects', registryRoutes(registry, new DatasetContentService(database)));
   app.route('/api/projects', modelAutomationRoutes(automation));
-  app.route('/api/projects', runRoutes(runs, lineage));
+  app.route('/api/projects', runRoutes({ runs, lineage, runComparison, runExport }));
   app.route('/api/projects', runSearchRoutes(runSearch));
   app.route('/api/projects', metricSeriesRoutes(metricSeries));
   app.route('/api/projects', runAnalysisRoutes(runAnalysis));
