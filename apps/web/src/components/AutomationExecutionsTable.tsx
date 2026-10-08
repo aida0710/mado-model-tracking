@@ -6,7 +6,19 @@ import { StatusBadge } from './StatusBadge';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
-import { automationOutcomeLabels } from '../i18n/automation';
+import {
+  automationOutcomeLabels,
+  automationSourceRunSkipLabels,
+  automationText,
+} from '../i18n/automation';
+import { sourceRunSkipReason } from '../lib/automationSourceRunSkip';
+
+function outcomeLabel(execution: ModelAutomationExecution): string {
+  const skipReason = sourceRunSkipReason(execution);
+  return skipReason
+    ? automationSourceRunSkipLabels[skipReason]
+    : automationOutcomeLabels[execution.status];
+}
 
 export function AutomationExecutionsTable({
   executions,
@@ -51,7 +63,12 @@ export function AutomationExecutionsTable({
         {
           key: 'outcome',
           label: text.automationOutcome,
-          render: (execution) => automationOutcomeLabels[execution.status],
+          render: (execution) =>
+            execution.status === 'pending' ? (
+              <span title={automationText.pendingHint}>{outcomeLabel(execution)}</span>
+            ) : (
+              outcomeLabel(execution)
+            ),
         },
         {
           key: 'run-status',
@@ -70,13 +87,16 @@ export function AutomationExecutionsTable({
           label: text.details,
           render: (execution) => (
             <div className="automation-links">
+              {execution.sourceRunId && (
+                <Link to={`${base}/runs/${execution.sourceRunId}`}>{automationText.sourceRun}</Link>
+              )}
               {execution.runId && (
                 <Link to={`${base}/runs/${execution.runId}`}>{text.automationRun}</Link>
               )}
               {execution.jobId && (
                 <Link to={`${base}/jobs?job=${execution.jobId}`}>{text.automationJob}</Link>
               )}
-              {!execution.runId && !execution.jobId && '—'}
+              {!execution.sourceRunId && !execution.runId && !execution.jobId && '—'}
             </div>
           ),
         },

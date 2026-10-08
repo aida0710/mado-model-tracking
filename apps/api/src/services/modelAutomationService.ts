@@ -1,21 +1,27 @@
 import type { ModelAutomationExecution, ModelAutomationRule, ModelVersion } from '@mmt/contracts';
-import type { PoolClient } from 'pg';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { automationFailureMessage } from '../domain/automationFailure.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { notFound } from '../domain/errors.js';
 import type { ModelAutomationRuleCreate } from '../domain/modelAutomationValidation.js';
+import { isTerminalStatus } from '../domain/runTransitions.js';
 import {
-  automationExecutionSelect,
   hasAutomationCreatorAccess,
+  insertAutomationEvent,
   insertAutomationExecution,
+  listAutomationExecutions,
+  lockExpiredAutomationEvents,
+  lockPendingAutomationEvents,
+  resolveAutomationEvent,
+  type PendingAutomationEvent,
 } from '../repositories/modelAutomationRepository.js';
 import {
   assertProjectReference,
   assertProjectReferences,
   findCodeVersion,
   findModelVersion,
+  findRun,
 } from '../repositories/registryRepository.js';
 import {
   findSavedArtifact,
@@ -29,6 +35,14 @@ import type { RunService } from './runService.js';
 const AUTOMATION_EXECUTION_LIMIT = 100;
 // Generated names follow the same limit as user-created Run names.
 const RUN_NAME_LIMIT = 200;
+
+// Why a pending registration ended without running its rules; the codes are part of the API contract.
+const UNSUCCESSFUL_SOURCE_ERRORS = {
+  source_unsuccessful: 'source_run_unsuccessful: 学習Runが成功しなかったため起動しません',
+  source_timeout:
+    'source_run_timeout: 学習Runの成功を期限内に確認できなかったか、学習Runが削除されたため起動しません',
+} as const;
+type UnsuccessfulSourceState = keyof typeof UNSUCCESSFUL_SOURCE_ERRORS;
 
 export class ModelAutomationService {
   constructor(
@@ -129,39 +143,113 @@ export class ModelAutomationService {
       role: 'viewer',
       scope: 'read',
     });
-    return rows(
-      this.database,
-      `${automationExecutionSelect} WHERE e.project_id=$1 ORDER BY e.created_at DESC,e.id DESC LIMIT $2`,
-      [projectId, AUTOMATION_EXECUTION_LIMIT],
-    );
+    return listAutomationExecutions(this.database, {
+      projectId,
+      limit: AUTOMATION_EXECUTION_LIMIT,
+    });
   }
 
   async processRegistration(
-    connection: PoolClient,
+    connection: Connection,
     reference: { projectId: string; modelVersionId: string },
   ): Promise<void> {
     const model = await findModelVersion(connection, {
       projectId: reference.projectId,
       id: reference.modelVersionId,
     });
-    // ON CONFLICT waits for concurrent registration processing; a rollback leaves the event retryable.
-    const event = await first(
-      connection,
-      'INSERT INTO model_automation_events(model_version_id,project_id) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING model_version_id',
-      [model.id, model.projectId],
-    );
-    if (!event) return;
-    const rules = await rows<ModelAutomationRule>(
+    // registerModelVersion holds a key-share lock on the source Run, so its status cannot become terminal
+    // until this transaction ends; a still-running Run may yet fail, so its versions wait for
+    // AutomationSourceRunHandler instead of starting inference on unfinished training.
+    const sourceRun = model.sourceRunId
+      ? await findRun(connection, { projectId: model.projectId, id: model.sourceRunId })
+      : null;
+    const isPending = sourceRun !== null && !isTerminalStatus(sourceRun.status);
+    const isNewEvent = await insertAutomationEvent(connection, {
+      modelVersionId: model.id,
+      projectId: model.projectId,
+      sourceRunId: sourceRun?.id ?? null,
+      isPending,
+    });
+    if (!isNewEvent || isPending) return;
+    await this.executeEnabledRules(connection, model);
+  }
+
+  // The source Run finished: run the rules enabled at this moment for every version it registered.
+  async releasePendingRegistrations(connection: Connection, sourceRunId: string): Promise<void> {
+    for (const event of await lockPendingAutomationEvents(connection, sourceRunId)) {
+      const model = await findModelVersion(connection, {
+        projectId: event.projectId,
+        id: event.modelVersionId,
+      });
+      await this.executeEnabledRules(connection, model);
+      await resolveAutomationEvent(connection, {
+        modelVersionId: event.modelVersionId,
+        state: 'processed',
+      });
+    }
+  }
+
+  async skipPendingRegistrations(connection: Connection, sourceRunId: string): Promise<void> {
+    await this.skipRegistrations(connection, {
+      events: await lockPendingAutomationEvents(connection, sourceRunId),
+      state: 'source_unsuccessful',
+    });
+  }
+
+  // Returns the number of expired events so the sweeper can keep going while a backlog remains.
+  async expirePendingRegistrations(
+    connection: Connection,
+    expiry: { maxAgeHours: number; limit: number },
+  ): Promise<number> {
+    const events = await lockExpiredAutomationEvents(connection, expiry);
+    await this.skipRegistrations(connection, { events, state: 'source_timeout' });
+    return events.length;
+  }
+
+  private async skipRegistrations(
+    connection: Connection,
+    resolution: { events: PendingAutomationEvent[]; state: UnsuccessfulSourceState },
+  ): Promise<void> {
+    for (const event of resolution.events) {
+      const model = await findModelVersion(connection, {
+        projectId: event.projectId,
+        id: event.modelVersionId,
+      });
+      for (const rule of await this.lockEnabledRules(connection, model))
+        await insertAutomationExecution(connection, {
+          projectId: model.projectId,
+          ruleId: rule.id,
+          modelVersionId: model.id,
+          status: 'skipped',
+          error: UNSUCCESSFUL_SOURCE_ERRORS[resolution.state],
+        });
+      await resolveAutomationEvent(connection, {
+        modelVersionId: model.id,
+        state: resolution.state,
+      });
+    }
+  }
+
+  private async executeEnabledRules(connection: Connection, model: ModelVersion): Promise<void> {
+    for (const rule of await this.lockEnabledRules(connection, model))
+      await this.executeRule(connection, { rule, model });
+  }
+
+  // FOR SHARE makes a concurrent enable/disable wait, so the rule set is the one at this moment.
+  private async lockEnabledRules(
+    connection: Connection,
+    model: ModelVersion,
+  ): Promise<ModelAutomationRule[]> {
+    return rows<ModelAutomationRule>(
       connection,
       `SELECT * FROM model_automation_rules WHERE project_id=$1 AND enabled AND $2=ANY(model_families)
       ORDER BY created_at,id FOR SHARE`,
       [model.projectId, model.family],
     );
-    for (const rule of rules) await this.executeRule(connection, { rule, model });
   }
 
   private async executeRule(
-    connection: PoolClient,
+    connection: Connection,
     registration: { rule: ModelAutomationRule; model: ModelVersion },
   ): Promise<void> {
     const { rule, model } = registration;

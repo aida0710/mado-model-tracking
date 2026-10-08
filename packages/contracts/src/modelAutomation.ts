@@ -26,7 +26,11 @@ export interface ModelAutomationExecution {
   modelVersionId: string;
   runId: string | null;
   jobId: string | null;
-  status: 'queued' | 'failed' | 'skipped';
+  // 'pending' rows are not stored executions: they show the enabled rules that will run once the
+  // source Run finishes, and are replaced by a stored execution at that point.
+  status: 'pending' | 'queued' | 'failed' | 'skipped';
+  // The training Run that produced the version; automation waits for it to finish successfully.
+  sourceRunId: string | null;
   runStatus: RunStatus | null;
   jobStatus: JobStatus | null;
   error: string | null;
