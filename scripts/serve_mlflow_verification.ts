@@ -8,6 +8,9 @@ const verificationPort = Number(process.env.MMT_VERIFY_API_PORT ?? DEFAULT_VERIF
 const harness = await createHarness();
 // MLflow's mpu/complete waits for the finalizer, which the server normally runs in the background.
 harness.artifactUploadFinalizer.start();
+// Sweep early stopping (hyperband) runs in this scheduler; checks that use sweeps opt in.
+const runsSweepScheduler = process.env.MMT_VERIFY_SWEEP_SCHEDULER === 'true';
+if (runsSweepScheduler) harness.sweepScheduler.start();
 const app = new Hono();
 // Multipart checks count the part requests the SDK sent; only the path and status are logged.
 app.use('/api/mlflow/*', async (context, next) => {
@@ -34,6 +37,7 @@ async function shutdown(): Promise<void> {
     server.close((error) => (error ? reject(error) : resolve())),
   );
   await harness.artifactUploadFinalizer.stop();
+  if (runsSweepScheduler) await harness.sweepScheduler.stop();
   await harness.close();
 }
 process.once('SIGINT', () => {

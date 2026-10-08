@@ -26,6 +26,7 @@ import numpy as np
 from mlflow import MlflowClient
 from mlflow.exceptions import MlflowException
 from mlflow.store.artifact.mlflow_artifacts_repo import MlflowArtifactsRepository
+from mlflow3_checks import media_steps, system_metrics
 from mlflow3_checks.common import (
     AutomationEnvironment,
     create_local_cpu_target,
@@ -251,6 +252,42 @@ def verify_autolog(client: MlflowClient) -> dict:
         mlflow.sklearn.autolog(disable=True)
 
 
+def verify_system_metrics(client: MlflowClient) -> dict:
+    """mlflow.enable_system_metrics_logging() records readable system/ histories (system_metrics.py)."""
+    result = system_metrics.log_run_with_system_metrics(
+        client, run_seconds=system_metrics.DEFAULT_RUN_SECONDS
+    )
+    failures = system_metrics.failures_of(result)
+    assert not failures, failures
+    return {key: result[key] for key in ("runId", "systemMetricNames", "historyPoints")}
+
+
+def verify_media_steps(session: httpx.Client, *, project_id: str, experiment_id: str) -> dict:
+    """log_image(key=, step=) and log_table appear in the native media API (media_steps.py)."""
+    run_id = media_steps.log_media_run(f"media-steps-{datetime.now(UTC).timestamp()}")
+    # log_media_run switches the active experiment; the later checks log to the main one.
+    mlflow.set_experiment(experiment_id=experiment_id)
+    media = media_steps.read_media(session, project_id=project_id, run_id=run_id)
+    failures = media_steps.failures_of(media)
+    assert not failures, failures
+    return {"runId": run_id, "imagePaths": [item["path"] for item in media["images"]]}
+
+
+def verify_resume(client: MlflowClient, session: httpx.Client, *, project_id: str) -> dict:
+    """Reopening a finished Run with start_run(run_id=) leaves an 'mlflow' resume event."""
+    with mlflow.start_run(run_name="Resumed with start_run(run_id=)") as run:
+        mlflow.log_metric("loss", 1.0, step=0)
+    run_id = run.info.run_id
+    with mlflow.start_run(run_id=run_id):
+        mlflow.log_metric("loss", 0.5, step=1)
+    events = session_request(session, "GET", f"projects/{project_id}/runs/{run_id}/resume-events")
+    assert [event["source"] for event in events["items"]] == ["mlflow"], events
+    assert len(events["segments"]) == 2 and events["segments"][1]["firstStep"] == 1, events
+    assert client.get_run(run_id).info.status == "FINISHED"
+    assert [point.step for point in client.get_metric_history(run_id, "loss")] == [0, 1]
+    return {"runId": run_id, "events": len(events["items"]), "segments": events["segments"]}
+
+
 def verify_deferred_webhooks(client: MlflowClient) -> dict | str:
     if not hasattr(client, "create_webhook"):
         return "not available in this SDK version"
@@ -431,6 +468,14 @@ def main() -> None:
             summary["checks"].append("logged models, native registry, alias, pyfunc load, dataset lineage")
             summary["autolog"] = verify_autolog(client)
             summary["checks"].append("sklearn autolog with model and dataset logging")
+            summary["systemMetrics"] = verify_system_metrics(client)
+            summary["checks"].append("enable_system_metrics_logging records system/ metric histories")
+            summary["mediaSteps"] = verify_media_steps(
+                session, project_id=project["id"], experiment_id=summary["tracking"]["experimentId"]
+            )
+            summary["checks"].append("log_image(key=, step=) and log_table in the native media API")
+            summary["resume"] = verify_resume(client, session, project_id=project["id"])
+            summary["checks"].append("start_run(run_id=) on a finished Run leaves an mlflow resume event")
             summary["evaluation"] = verify_evaluation(
                 client,
                 model_uri=summary["models"]["modelUri"],

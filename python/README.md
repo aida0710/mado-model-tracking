@@ -213,6 +213,7 @@ mado-tracking sync --project-id P --prune   # Project Pの分だけ送り、送�
 - **media**: `media.jsonl`の1行は`{id, key, step, kind, artifactPath, caption, metadata}`。`artifactPath`は同じRunで`log_artifact`したpath。syncは`POST /projects/:p/runs/:r/media`へ`id`付きで送る。
 - **sync**: Runごとに`PUT /sync/runs/:id` → batchをsequence順に → `artifacts/check`でpresentと返らなかったArtifactを再開可能なupload sessionで → media → 最後に終了状態。終了状態を最後に送るので、Run終了時の自動処理（出力登録など）はArtifactが揃ってから動く。各段階のあとに`sync-state.json`を更新するので、途中で失敗しても次の`mado-tracking sync`はそこから続く。同じディレクトリを2回syncしてもAPI側は増えない（Run ID・batchId・Artifactのsha256・media idで重複を判定する。`sync-state.json`を失っても送り直すだけで済む）。記録中のRun（書き込み側がlockを持っている）は飛ばす。終了状態の無いRunは送るがrunningのまま残し、完了扱いにしない。tokenには`runs:write`と`artifacts:write`が要る。失敗したRunがあれば終了コードは1。
 - **システムメトリクス**: `start_run(system_metrics=True, system_metrics_interval=None)`で、GPU/CPU/メモリ/ディスク/ネットワークを`system.*`のmetricとして一定間隔（既定15秒、最短1秒）で記録する。送り先はRunと同じ（offlineならspool）。`finish`と`with`の終了で止まり、終了状態のあとに標本は届かない。`MMT_SYSTEM_METRICS=false`で止められる。workerのJob内（`MMT_JOB_ID`がある）ではworkerのtelemetryと重なるので起動しない。`run.start_system_metrics()`で後から始めることもできる。stepは0から数えるので、再開したRunでは`system.*`のstepが前の区間と重なる。
+- **例**: `examples/research_features.py`（system metrics、10 stepごとのmedia、checkpoint、`--resume RUN_ID`での再開。`MMT_MODE=offline`ならAPIなしでspoolへ記録し、後で`mado-tracking sync`で送る）。
 
 | やりたいこと | Mado | W&B | MLflow |
 | --- | --- | --- | --- |
