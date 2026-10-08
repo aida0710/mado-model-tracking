@@ -17,7 +17,7 @@ from typing import Any
 from ..execution_runtime import validate_runtime
 from ..execution_snapshot import resolve_runner_execution_snapshot
 from ..security import SecretMasker, secret_values
-from .container_layout import host_environment
+from .container_layout import UPSTREAM_RUN_FILENAME, host_environment, upstream_environment
 from .container_outputs import RESULT_FILENAME, read_output_chunk, validate_results
 from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned_process_group
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
@@ -218,6 +218,8 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
             [dataset["id"] for dataset in specification["context"]["inputDatasets"]]
         ),
     )
+    upstream_run_file = workspace / UPSTREAM_RUN_FILENAME
+    environment.update(upstream_environment(specification["context"], str(upstream_run_file)))
     write_json(workspace / "context.json", specification["context"])
     write_json(workspace / "parameters.json", specification["context"]["parameters"])
     # Separate JSON files are objects even when a Run has no model / datasets.
@@ -225,6 +227,9 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
     write_json(
         workspace / "dataset-versions.json", {"inputDatasets": specification["context"]["inputDatasets"]}
     )
+    # A spec saved before upstream inputs existed has no upstreamRun key.
+    if specification["context"].get("upstreamRun") is not None:
+        write_json(upstream_run_file, specification["context"]["upstreamRun"])
     return environment
 
 

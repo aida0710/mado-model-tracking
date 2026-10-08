@@ -11,6 +11,7 @@ from typing import Any
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker, secret_values
 from .config import WorkerSettings
+from .container_layout import upstream_run_document
 from .contracts import WorkerJob
 from .tracking_environment import build_tracking_environment
 from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, LocalTransport, SSHTransport
@@ -116,6 +117,7 @@ def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[st
             "codeVersionId": job.code_version["id"],
             "gpuIds": job.job["gpuIds"],
             "executionMode": snapshot["mode"],
+            "upstreamRun": upstream_run_document(job.run, job.model_version),
         },
         "sdkEnvironment": build_tracking_environment(job, settings.api),
         "installDependencies": settings.install_dependencies,

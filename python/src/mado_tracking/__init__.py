@@ -11,6 +11,7 @@ from .execution_runtime import (
 )
 from .execution_snapshot import ExecutionMode
 from .run import Run
+from .upstream import download_upstream_artifacts, list_upstream_artifacts, upstream_run_id
 
 __all__ = [
     "ApiError",
@@ -23,7 +24,10 @@ __all__ = [
     "PythonRuntime",
     "Run",
     "SifRuntime",
+    "download_upstream_artifacts",
+    "list_upstream_artifacts",
     "start_run",
+    "upstream_run_id",
 ]
 
 

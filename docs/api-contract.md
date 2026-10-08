@@ -177,6 +177,13 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
   - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
 - workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
 
+### 上流Runの受け渡し
+
+- 上流Runは`WorkerJob.run.parentRunId`。保留自動実行では学習Run、自動実行の連鎖では上流の推論Runが入る。APIの追加はない。`parentRunId`がnullのJobには何も渡さない（変数もファイルも作らない）。
+- workerは全runtime（host python、Docker、Singularity/Apptainer）へ`MMT_UPSTREAM_RUN_ID`と`MMT_UPSTREAM_RUN_FILE`を渡す。ファイルは`upstream-run.json`で、host pythonはworkspace直下、コンテナは`/mmt/context/upstream-run.json`。
+- `upstream-run.json`は`{runId, outputDatasetVersionIds?, outputModelVersionIds?}`。WorkerJobから分かる事実だけを書き、分からない項目（上流のkindなど）は省く。`outputDatasetVersionIds`はこのRunの`upstreamDatasetVersionIds`（上流の出力のうち入力に取ったもの）、`outputModelVersionIds`は入力ModelVersionの`sourceRunId`が上流Runのときのその版。DatasetVersionの記述子は従来どおり`dataset-versions.json`に入る。
+- SDKの`upstream_run_id()`、`list_upstream_artifacts(prefix=None)`、`download_upstream_artifacts(destination, prefix=None)`は、Job限定tokenで`GET /projects/:p/runs/:upstream/artifacts?versions=latest&limit=500&prefix=&cursor=`と`GET /projects/:p/artifacts/:a/content`を呼ぶ（Job限定tokenはProject内のRunを読める）。`nextCursor`が無い古いAPIでは1回の応答を全件とみなし、prefixの絞り込みとpathごとの最新（先頭）の選択をSDK側でも行う。保存は一時ファイル→renameで、空・`.`・`..`の区間、先頭`/`、`\`を含むpathがあれば何も書かずに拒否する。
+
 ## 再開可能なArtifact upload
 
 単一PUTは失敗すると全量を送り直すので、大きなArtifactはupload sessionで分割して送る。API経由の独自sessionで、S3ではmultipart upload、filesystemでは`<ARTIFACT_FILESYSTEM_ROOT>/.uploads/<uploadId>/<n>.part`にpartを置く。presigned URLでの直接転送は今回作らない。
