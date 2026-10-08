@@ -168,7 +168,8 @@ export async function findSavedArtifacts(
 ): Promise<SavedArtifact[]> {
   return rows<SavedArtifact>(
     connection,
-    'SELECT id,run_id,path,size,sha256 FROM artifacts WHERE project_id=$1 AND id=ANY($2::uuid[])',
+    `SELECT id,run_id,path,size,sha256 FROM artifacts
+    WHERE project_id=$1 AND id=ANY($2::uuid[]) AND deleted_at IS NULL`,
     [reference.projectId, reference.ids],
   );
 }

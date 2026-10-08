@@ -57,7 +57,7 @@ export class ArtifactPreviewService {
     });
     const artifact = await first<{ id: string }>(
       this.database,
-      'SELECT id FROM artifacts WHERE id=$1 AND project_id=$2',
+      'SELECT id FROM artifacts WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL',
       [target.artifactId, target.projectId],
     );
     if (!artifact) notFound('Artifact');

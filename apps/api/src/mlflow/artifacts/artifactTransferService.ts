@@ -1,6 +1,11 @@
 import { transaction, type Database } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
+import {
+  ARTIFACT_DELETE_PERMISSION,
+  type ArtifactDeletionService,
+} from '../../services/artifactDeletionService.js';
 import type { ArtifactService } from '../../services/artifactService.js';
+import { requireProject } from '../../services/accessService.js';
 import type { CheckpointService } from '../../services/checkpointService.js';
 import { indexMlflowMediaArtifact } from '../../services/runMediaIndexer.js';
 import { requireArtifactOwner, requireArtifactProject } from './artifactAccess.js';
@@ -17,12 +22,23 @@ import { MlmodelCapture, saveLoggedModelMlmodel } from './mlmodelCapture.js';
 import { modelVersionArtifactManifest } from './modelVersionArtifactRepository.js';
 
 export class ArtifactTransferService {
-  constructor(
-    private readonly database: Database,
-    private readonly artifacts: ArtifactService,
+  private readonly database: Database;
+  private readonly artifacts: ArtifactService;
+  private readonly checkpoints?: CheckpointService;
+  private readonly deletions: ArtifactDeletionService;
+
+  constructor(options: {
+    database: Database;
+    artifacts: ArtifactService;
     // Registers files under checkpoints/step-<N>/ as Run checkpoints; absent in tests that skip it.
-    private readonly checkpoints?: CheckpointService,
-  ) {}
+    checkpoints?: CheckpointService;
+    deletions: ArtifactDeletionService;
+  }) {
+    this.database = options.database;
+    this.artifacts = options.artifacts;
+    this.checkpoints = options.checkpoints;
+    this.deletions = options.deletions;
+  }
 
   async list(access: ArtifactAccess & { path: string }): Promise<ArtifactFile[]> {
     access = { ...access, owner: validateArtifactOwner(access.owner) };
@@ -124,5 +140,37 @@ export class ArtifactTransferService {
     await requireArtifactOwner(this.database, access);
     const artifactId = await findArtifactPath(this.database, access);
     return this.artifacts.content(identity, access.projectId, { artifactId, range: access.range });
+  }
+
+  /**
+   * MLflow delete_artifacts: a file, a directory or ('' path) everything of a Run or Logged Model.
+   * Project admins only, like native deletion. Artifacts a registered model version or another
+   * record references stay stored and only disappear from this owner; a missing path succeeds,
+   * as it does on the MLflow server, so a retried request is harmless.
+   */
+  async delete(access: ArtifactAccess & { path: string }): Promise<void> {
+    access = { ...access, owner: validateArtifactOwner(access.owner) };
+    if (access.owner.kind === 'model-version')
+      throw new DomainError(409, '登録モデル版のArtifactは削除できません', 'conflict');
+    const path = validateArtifactPath(access.path, { directory: true });
+    await transaction(this.database, async (connection) => {
+      const identity = await requireArtifactProject(connection, access, { lock: true });
+      await requireProject(connection, identity, {
+        projectId: access.projectId,
+        ...ARTIFACT_DELETE_PERMISSION,
+      });
+      await requireArtifactOwner(connection, access, { lock: true });
+      const deletion = { principal: identity, projectId: access.projectId, path };
+      if (access.owner.kind === 'run')
+        await this.deletions.deleteMlflowRunPath(connection, {
+          ...deletion,
+          runId: access.owner.id,
+        });
+      else
+        await this.deletions.deleteMlflowModelPath(connection, {
+          ...deletion,
+          modelId: access.owner.id,
+        });
+    });
   }
 }

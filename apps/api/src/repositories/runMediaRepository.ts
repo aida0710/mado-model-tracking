@@ -279,7 +279,8 @@ export async function findProjectArtifacts(
 ): Promise<{ id: string; runId: string | null; path: string; mimeType: string; size: number }[]> {
   return rows(
     connection,
-    'SELECT id,run_id,path,mime_type,size FROM artifacts WHERE project_id=$1 AND id=ANY($2::uuid[])',
+    `SELECT id,run_id,path,mime_type,size FROM artifacts
+    WHERE project_id=$1 AND id=ANY($2::uuid[]) AND deleted_at IS NULL`,
     [reference.projectId, [...new Set(reference.ids)]],
   );
 }
@@ -307,7 +308,7 @@ export async function findCurrentRunArtifacts(
     `SELECT a.id,a.run_id,a.path,a.mime_type,a.size,a.created_at FROM artifacts a
      JOIN (SELECT DISTINCT * FROM unnest($2::uuid[],$3::text[]) AS file(run_id,path)) file
        ON file.run_id=a.run_id AND file.path=a.path
-     WHERE a.project_id=$1 AND ${currentRunArtifactCondition('a')}`,
+     WHERE a.project_id=$1 AND a.deleted_at IS NULL AND ${currentRunArtifactCondition('a')}`,
     [query.projectId, query.files.map((file) => file.runId), query.files.map((file) => file.path)],
   );
 }

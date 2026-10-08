@@ -170,7 +170,7 @@ export async function findPresentArtifactPaths(
     connection,
     `SELECT current.path FROM (
       SELECT DISTINCT ON (path) path,sha256,size FROM artifacts
-      WHERE project_id=$1 AND run_id=$2 AND path=ANY($3::text[])
+      WHERE project_id=$1 AND run_id=$2 AND path=ANY($3::text[]) AND deleted_at IS NULL
       ORDER BY path,created_at DESC,id DESC
     ) current
     JOIN jsonb_to_recordset($4::jsonb) AS item(path text,sha256 text,size bigint)

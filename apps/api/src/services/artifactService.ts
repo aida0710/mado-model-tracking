@@ -63,7 +63,7 @@ export class ArtifactService {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     const artifact = await first<Artifact>(
       this.database,
-      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2',
+      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL',
       [artifactId, projectId],
     );
     if (!artifact) notFound('Artifact');

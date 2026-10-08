@@ -70,14 +70,17 @@ export function parseArtifactLocation(
   return { owner, path: validateArtifactPath(segments.join('/'), options) };
 }
 
-export function decodeArtifactLocation(encodedPath: string): ArtifactLocation {
+export function decodeArtifactLocation(
+  encodedPath: string,
+  options: { directory?: boolean } = {},
+): ArtifactLocation {
   let decodedPath: string;
   try {
     decodedPath = decodeURIComponent(encodedPath);
   } catch {
     invalidPath();
   }
-  return parseArtifactLocation(decodedPath);
+  return parseArtifactLocation(decodedPath, options);
 }
 
 export function artifactRootUri(owner: ArtifactOwner): string {

@@ -2,8 +2,11 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { uuidSchema } from '../domain/validation.js';
+import type { ArtifactDeletionService } from '../services/artifactDeletionService.js';
 import type { ArtifactService } from '../services/artifactService.js';
+import type { ArtifactUsageService } from '../services/artifactUsageService.js';
 import { requestBodyStream } from '../http/requestBodyStream.js';
+import { requestMetadata } from '../http/requestMetadata.js';
 import {
   artifactContentHeaders,
   artifactValidatorHeaders,
@@ -74,7 +77,10 @@ function setResponseHeaders(context: ApiContext, headers: Record<string, string>
   for (const [name, value] of Object.entries(headers)) context.header(name, value);
 }
 
-export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment> {
+export function artifactRoutes(
+  artifacts: ArtifactService,
+  lifecycle: { deletions: ArtifactDeletionService; usage: ArtifactUsageService },
+): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   const upload = async (context: ApiContext, runId?: string) => {
     return context.json(
@@ -126,6 +132,18 @@ export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment>
         uuidParam(context, 'a'),
       ),
     ),
+  );
+  routes.delete('/:p/artifacts/:a', async (context) =>
+    context.json(
+      await lifecycle.deletions.delete(
+        principal(context),
+        { projectId: uuidParam(context, 'p'), artifactId: uuidParam(context, 'a') },
+        requestMetadata(context),
+      ),
+    ),
+  );
+  routes.get('/:p/artifact-usage', async (context) =>
+    context.json(await lifecycle.usage.usage(principal(context), uuidParam(context, 'p'))),
   );
   routes.get('/:p/artifacts/:a/content', async (context) => {
     const artifact = await artifacts.getMetadata(

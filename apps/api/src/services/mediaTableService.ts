@@ -43,7 +43,7 @@ export class MediaTableService {
   async load(connection: Connection, location: Omit<MediaTableLocation, 'runId'>): Promise<ParsedMediaTable> {
     const artifact = await first<Artifact>(
       connection,
-      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2',
+      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL',
       [location.artifactId, location.projectId],
     );
     if (!artifact) notFound('Artifact');

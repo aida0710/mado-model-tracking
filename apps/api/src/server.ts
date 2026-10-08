@@ -12,7 +12,7 @@ const {
   outbox,
   automationSweeper,
   artifactUploadFinalizer,
-  artifactUploadSweeper,
+  artifactGarbageCollector,
   sweepScheduler,
   notificationDispatcher,
   operationsMonitor,
@@ -21,11 +21,12 @@ const {
   database,
 });
 // Background tasks share the server lifetime; stop() waits for the run in progress.
+// The garbage collector runs the artifact upload sweeper as part of each collection.
 const backgroundTasks = [
   outbox,
   automationSweeper,
   artifactUploadFinalizer,
-  artifactUploadSweeper,
+  artifactGarbageCollector,
   sweepScheduler,
   notificationDispatcher,
   operationsMonitor,

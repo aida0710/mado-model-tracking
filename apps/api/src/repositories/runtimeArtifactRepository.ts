@@ -9,7 +9,7 @@ export async function findSavedArtifact(
   // Artifact rows are inserted only after the streaming store write has completed.
   const artifact = await first<Artifact>(
     connection,
-    'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2',
+    'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2 AND deleted_at IS NULL',
     [reference.artifactId, reference.projectId],
   );
   if (!artifact) notFound('Artifact');

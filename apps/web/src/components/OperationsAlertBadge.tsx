@@ -1,7 +1,8 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useId } from 'react';
+import { Link } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useOperationsAlerts } from '../hooks/useOperationsAlerts';
+import { usePopover } from '../hooks/usePopover';
 import { describeOperationsAlertSubject } from '../lib/operationsAlertSubject';
 import { formatDate } from '../lib/format';
 import { operationsAlertKindLabels } from '../i18n/operations';
@@ -10,29 +11,10 @@ import { text, textTemplates } from '../i18n/catalog';
 /** The header bell: open operations alerts of the Project, listed in a popover on click. */
 export function OperationsAlertBadge({ projectId }: { projectId: string }) {
   const alerts = useOperationsAlerts(projectId);
-  const location = useLocation();
   const popoverId = useId();
-  const container = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const { container, isOpen, toggle } = usePopover();
   const items = alerts.value ?? [];
   const label = items.length ? textTemplates.operationsAlertCount(items.length) : text.operationsAlerts;
-
-  useEffect(() => setIsOpen(false), [location.pathname]);
-  useEffect(() => {
-    if (!isOpen) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [isOpen]);
 
   return (
     <div className="operations-alerts" ref={container}>
@@ -43,7 +25,7 @@ export function OperationsAlertBadge({ projectId }: { projectId: string }) {
         title={label}
         aria-expanded={isOpen}
         aria-controls={popoverId}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={toggle}
       >
         <Bell size={17} />
         {items.length > 0 && <span className="operations-alert-count">{items.length}</span>}
