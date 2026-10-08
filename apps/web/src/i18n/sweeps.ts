@@ -91,7 +91,7 @@ export const sweepsText = {
   sweepObjectiveHistory: '試行の目的メトリクス',
   sweepDefinition: '定義',
   sweepSeedValue: 'Seed',
-  sweepTaskRevision: 'Task revision',
+  sweepTaskRevision: 'Taskの改訂番号',
 } as const;
 
 // Text that embeds values; merged into catalog's textTemplates.

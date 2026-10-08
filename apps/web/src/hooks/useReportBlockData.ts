@@ -1,4 +1,4 @@
-import type { ReportEmbedBlock, ReportRunSet } from '@mmt/contracts';
+import type { ReportEmbedBlock, ReportRunSet, RunMediaKind } from '@mmt/contracts';
 import { loadLiveBlockData, loadRunSetSample } from '../api/reportLiveData';
 import { reportsApi } from '../api/reports';
 import { runMediaApi } from '../api/runMedia';
@@ -41,6 +41,23 @@ export function useRunTableMedia(projectId: string, runId: string) {
       keys.map((summary) => runMediaApi.page(projectId, runId, { key: summary.key, kind: 'table', limit: TABLE_MEDIA_PER_KEY }, signal)),
     );
     return pages.flatMap((page) => page.items);
+  });
+}
+
+/** Where an embedded table comes from: its Run's name and the table's key and step. */
+export function useMediaTableSource(projectId: string, target: { runId: string; mediaId: string }) {
+  const { runId, mediaId } = target;
+  const run = useQuery(runId ? `${projectId}:run:${runId}` : null, (signal) => trackingApi.run(projectId, runId, signal));
+  const tables = useRunTableMedia(projectId, runId);
+  const media = tables.value?.find((item) => item.id === mediaId);
+  return run.value && media ? { runName: run.value.name, key: media.key, step: media.step } : null;
+}
+
+/** Which of the Runs recorded media of the kind, so a picker can leave out Runs without any. */
+export function useRunsWithMediaKind(projectId: string, runIds: string[], kind: RunMediaKind | undefined) {
+  return useQuery(kind && runIds.length > 0 ? `${projectId}:runs-with-media:${kind}:${runIds.join(',')}` : null, async (signal) => {
+    const keysOfRuns = await Promise.all(runIds.map((runId) => runMediaApi.keys(projectId, runId, signal)));
+    return new Set(runIds.filter((_runId, index) => keysOfRuns[index]!.some((summary) => summary.kind === kind)));
   });
 }
 

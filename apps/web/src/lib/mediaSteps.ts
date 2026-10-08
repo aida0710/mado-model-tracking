@@ -146,6 +146,20 @@ export function parseStepList(input: string): StepListParseResult {
   return { ok: true, steps };
 }
 
+/** A step kept in the URL; null when the parameter is missing or not a step, so the latest is shown. */
+export function parseStepParam(value: string | null): number | null {
+  if (value === null || !/^\d+$/.test(value)) return null;
+  const step = Number(value);
+  return Number.isSafeInteger(step) ? step : null;
+}
+
+/** Steps kept in the URL; a broken or too long list falls back to each Run's latest step. */
+export function parseStepsParam(value: string | null): number[] {
+  if (!value) return [];
+  const parsed = parseStepList(value);
+  return parsed.ok ? parsed.steps : [];
+}
+
 /** A /media/compare response laid out as a rectangle: cells[runIndex][stepIndex]. */
 export interface CompareTable {
   runIds: string[];

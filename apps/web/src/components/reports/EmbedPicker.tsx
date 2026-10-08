@@ -384,6 +384,7 @@ function MediaTableFields({
           projectId={projectId}
           selectedIds={block.runId ? [block.runId] : []}
           maxCount={1}
+          mediaKind="table"
           onChange={(runIds) => onChange({ ...block, runId: runIds[0] ?? '', mediaId: '' })}
         />
       </fieldset>

@@ -78,6 +78,10 @@
 .media-compare-grid table td {
   padding: 4px;
 }
+/* Header cells align to the bottom by default, which puts a Run's name next to the row below. */
+.media-compare-grid tbody th {
+  vertical-align: middle;
+}
 .media-compare-cell {
   display: grid;
   place-items: center;
@@ -145,6 +149,12 @@
   display: block;
   max-width: 120px;
   max-height: 90px;
+}
+.media-cell-text {
+  /* An open waveform widens its own column; text columns keep room for a short phrase. */
+  display: block;
+  min-width: 10em;
+  overflow-wrap: anywhere;
 }
 .media-cell-json {
   font-family: var(--mono);

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { MEDIA_COMPARE_MAX_RUNS, MEDIA_COMPARE_MAX_STEPS } from '@mmt/contracts';
 import { useMediaCompare } from '../../hooks/useMediaCompare';
+import { useMediaLocation } from '../../hooks/useMediaLocation';
 import { evenlySpacedSteps, parseStepList } from '../../lib/mediaSteps';
 import { Empty, ErrorNotice, Resource } from '../Feedback';
 import { MediaCompareGrid } from './MediaCompareGrid';
@@ -14,11 +15,11 @@ const EVENLY_SPACED_COLUMNS = 8;
 /**
  * The Compare page's media tab: one key across the compared Runs, as a Run × step grid. Without
  * typed steps each Run shows its latest step; typed steps are shown as asked, empty where absent.
+ * The key and steps stay in the URL so a link opens the same grid.
  */
 export function MediaCompare({ projectId, runIds }: MediaCompareProps) {
-  const [chosenKey, setChosenKey] = useState<string | null>(null);
-  const [stepsInput, setStepsInput] = useState('');
-  const [steps, setSteps] = useState<number[]>([]);
+  const { chosenKey, steps, setKeyAndSteps, setSteps } = useMediaLocation();
+  const [stepsInput, setStepsInput] = useState(() => steps.join(', '));
   const [stepsError, setStepsError] = useState<string | null>(null);
   const comparedRunIds = runIds.slice(0, MEDIA_COMPARE_MAX_RUNS);
   const { choices, selectedKey, recordedSteps, grid } = useMediaCompare({
@@ -62,8 +63,9 @@ export function MediaCompare({ projectId, runIds }: MediaCompareProps) {
                 <select
                   value={selectedKey}
                   onChange={(event) => {
-                    setChosenKey(event.target.value);
-                    applySteps('');
+                    setStepsInput('');
+                    setStepsError(null);
+                    setKeyAndSteps(event.target.value, []);
                   }}
                 >
                   {keys.map((summary) => (

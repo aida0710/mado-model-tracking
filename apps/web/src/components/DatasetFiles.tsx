@@ -20,7 +20,7 @@ export function DatasetFiles({ version }: { version: DatasetVersion }) {
   );
   const entries = files.items.map((file) => datasetFileTreeEntry(file, version.projectId));
   return (
-    <div className="artifact-layout artifact-browser">
+    <div className="artifact-layout artifact-browser dataset-files">
       <div>
         <Resource query={tree}>
           {(level) => (

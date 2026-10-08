@@ -288,6 +288,14 @@ describe.skipIf(!testDatabaseUrl)('Runのmedia（独立PostgreSQL）', () => {
       expect((await listMedia(run.id, '?cursor=broken')).status).toBe(400);
     });
 
+    it('artifactIdで、そのArtifactを指すmediaだけを引ける', async () => {
+      const [, twenty] = await seedSteps(run, 'eval/audio', [10, 20]);
+      const found = await entity<RunMediaPage>(await listMedia(run.id, `?artifactId=${twenty!.artifactId}`), 200);
+      expect(found.items.map((item) => [item.key, item.step])).toEqual([['eval/audio', 20]]);
+      const none = await entity<RunMediaPage>(await listMedia(run.id, `?artifactId=${randomUUID()}`), 200);
+      expect(none.items).toEqual([]);
+    });
+
     it('media情報のある音声は一覧に同梱する', async () => {
       const wav = Buffer.alloc(44 + 3200);
       wav.write('RIFF', 0);

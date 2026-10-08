@@ -206,7 +206,9 @@ export class RunMediaService {
       (query.stepFrom === undefined || query.stepFrom === 0);
     const loggedTables = includesLoggedTables
       ? (await this.loggedTables(this.database, query.projectId, [run])).filter(
-          (table) => query.key === undefined || table.key === query.key,
+          (table) =>
+            (query.key === undefined || table.key === query.key) &&
+            (query.artifactId === undefined || table.artifactId === query.artifactId),
         )
       : [];
     const items = await this.toRunMedia(this.database, query.projectId, [...loggedTables, ...page.items]);

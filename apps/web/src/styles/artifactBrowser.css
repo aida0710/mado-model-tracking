@@ -22,6 +22,10 @@
   flex: none;
   color: var(--muted);
 }
+/* Names wrap at any character, so without a floor a narrow pane breaks them every few letters. */
+.artifact-tree-name {
+  min-width: 12em;
+}
 .artifact-tree-size {
   white-space: nowrap;
 }
@@ -66,6 +70,11 @@
   .artifact-catalog .artifact-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+/* A dataset version's files sit in the narrow detail pane beside the dataset list, so the tree
+   takes the full width and the preview follows below it. */
+.dataset-files.artifact-layout {
+  grid-template-columns: minmax(0, 1fr);
 }
 .artifact-browser > .artifact-preview,
 .artifact-catalog .artifact-layout > .artifact-preview {

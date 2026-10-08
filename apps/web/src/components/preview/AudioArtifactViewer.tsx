@@ -110,11 +110,13 @@ export function AudioArtifactViewer({
     setMediaRevision((value) => value + 1);
     analysis.retry();
   };
-  const audioElement = (
+  // The browser's own controls show whole seconds and would disagree with the toolbar's time, so
+  // they appear only where the viewer has no toolbar (files too large to analyze).
+  const audioElement = (withControls: boolean) => (
     <audio
       key={mediaRevision}
       ref={setAudio}
-      controls
+      controls={withControls}
       preload="metadata"
       src={url}
       onPlay={onPlay}
@@ -138,7 +140,7 @@ export function AudioArtifactViewer({
           <p className="notice">{serverPreviewNotices[serverPreview.status]}</p>
         )}
         {headerSummary && <AudioMetaList summary={headerSummary} />}
-        {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement}
+        {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement(true)}
       </div>
     );
   }
@@ -308,7 +310,7 @@ export function AudioArtifactViewer({
         />
       )}
       {summary && <AudioMetaList summary={summary} />}
-      {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement}
+      {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement(false)}
       <p className="muted audio-hint">{text.audioTimelineHint}</p>
     </div>
   );

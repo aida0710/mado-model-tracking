@@ -9,7 +9,8 @@ export const datasetsText = {
   datasetFolderUploadAndCreate: 'uploadして版を作成',
   datasetFolderCreating: '版を作成しています',
   datasetFolderRetryCreate: '版の作成を再試行',
-  datasetFolderWaitingFailed: 'uploadに失敗したファイルがあります。再試行するか、ダイアログを閉じてください。',
+  datasetFolderResendUnfinished: '残りのファイルを再送',
+  datasetFolderCreateWithoutUnfinished: '残りのファイルを除いて版を作成',
   datasetContentKind: '本体',
   datasetContentReference: '参照（URI）',
   datasetFiles: 'ファイル',
@@ -21,5 +22,8 @@ export const datasetsText = {
 
 export const datasetsTextTemplates = {
   datasetFolderSelected: (count: number, size: string) => `${count}件のファイル（${size}）`,
+  datasetFolderUnfinished: (unfinished: number, stored: number) =>
+    `${unfinished}件のファイルがuploadされていないため、版はまだ作っていません。再送するか、それらを除いて版を作ってください。` +
+    (stored > 0 ? `閉じると、upload済みの${stored}件はどの版にも属さないArtifact（Runなし）として残ります。` : ''),
   datasetContentArtifacts: (count: number, size: string) => `Artifact ${count}件 · ${size}`,
 };

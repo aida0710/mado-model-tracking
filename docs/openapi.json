@@ -15266,6 +15266,15 @@
             }
           },
           {
+            "name": "artifactId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "cursor",
             "in": "query",
             "required": false,
@@ -19555,6 +19564,15 @@
           },
           {
             "name": "modelVersionId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "modelId",
             "in": "query",
             "required": false,
             "schema": {

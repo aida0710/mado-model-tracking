@@ -140,3 +140,11 @@
 .upload-resumable li .button {
   margin-left: auto;
 }
+/* The folder dialog's question after an upload stopped: the explanation, then its two answers. */
+.notice.dataset-folder-choice {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.dataset-folder-choice p {
+  margin: 0;
+}

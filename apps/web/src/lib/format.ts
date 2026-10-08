@@ -19,12 +19,24 @@ export const formatCompactNumber = (value: number) =>
 // The divisor is binary, so the displayed units must be KiB/MiB rather than KB/MB.
 const BYTES_PER_BINARY_UNIT = 1024;
 const BINARY_BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+// One decimal place in every unit above bytes, so sizes in a column and "sent / total" line up.
+const BYTE_UNIT_FRACTION_DIGITS = 1;
+const byteUnitNumber = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: BYTE_UNIT_FRACTION_DIGITS,
+  maximumFractionDigits: BYTE_UNIT_FRACTION_DIGITS,
+});
+const roundToShownDigits = (value: number) =>
+  Math.round(value * 10 ** BYTE_UNIT_FRACTION_DIGITS) / 10 ** BYTE_UNIT_FRACTION_DIGITS;
 export function formatBytes(bytes: number): string {
-  const unitIndex = Math.min(
+  let unitIndex = Math.min(
     Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(BYTES_PER_BINARY_UNIT)),
     BINARY_BYTE_UNITS.length - 1,
   );
-  return `${formatNumber(bytes / BYTES_PER_BINARY_UNIT ** unitIndex)} ${BINARY_BYTE_UNITS[unitIndex]}`;
+  if (unitIndex === 0) return `${Math.round(bytes)} B`;
+  // 1023.96 KiB would round to "1024.0 KiB"; it reads as 1.0 MiB instead.
+  if (roundToShownDigits(bytes / BYTES_PER_BINARY_UNIT ** unitIndex) >= BYTES_PER_BINARY_UNIT)
+    unitIndex = Math.min(unitIndex + 1, BINARY_BYTE_UNITS.length - 1);
+  return `${byteUnitNumber.format(bytes / BYTES_PER_BINARY_UNIT ** unitIndex)} ${BINARY_BYTE_UNITS[unitIndex]}`;
 }
 export function formatDuration(start: string | null, end: string | null): string {
   if (!start) return '—';

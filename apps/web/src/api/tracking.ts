@@ -49,6 +49,8 @@ export interface ProjectArtifactPageQuery {
   mimeType?: string;
   runId?: string;
   modelVersionId?: string;
+  /** Every version of the Model; with modelVersionId as well, that version only. */
+  modelId?: string;
   versions?: ArtifactListVersions;
   cursor?: string;
 }

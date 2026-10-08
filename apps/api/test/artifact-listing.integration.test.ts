@@ -326,6 +326,33 @@ describe.skipIf(!testDatabaseUrl)('Artifactブラウザの一覧・tree・catalo
     expect(await ids(`modelVersionId=${version.id}&versions=latest`)).toEqual(
       [weights.id, replaced.id].sort(),
     );
+    // modelId alone covers every version of that Model and nothing of another Model.
+    const secondWeights = await entity<Artifact>(
+      await request(harness.app, `${fixture.basePath}/artifacts?path=weights-v2.bin`, {
+        method: 'PUT',
+        cookie: fixture.editor.cookie,
+        binary: 'weights-v2',
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }),
+    );
+    await entity<ModelVersion>(
+      await request(harness.app, `${fixture.basePath}/models/${model.id}/versions`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { version: 'v2', artifactId: secondWeights.id },
+      }),
+    );
+    const otherModel = await entity<Model>(
+      await request(harness.app, `${fixture.basePath}/models`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { name: 'Other Listing Model', family: 'qwen3' },
+      }),
+    );
+    expect(await ids(`modelId=${model.id}`)).toEqual(
+      [weights.id, secondWeights.id, output.id, replaced.id].sort(),
+    );
+    expect(await ids(`modelId=${otherModel.id}`)).toEqual([]);
     expect(
       (
         await request(harness.app, `${catalog}?mimeType=${encodeURIComponent('audio')}`, {

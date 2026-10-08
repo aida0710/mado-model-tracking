@@ -360,10 +360,15 @@ export function useArtifactUploadQueue({
     [pump],
   );
 
+  /** Paused and failed files continue from their session; a canceled file starts over from the first byte. */
   const resume = useCallback(
     (id: string) => {
       const job = findJob(id);
-      if (!job || (job.status !== 'paused' && job.status !== 'failed')) return;
+      if (!job || (job.status !== 'paused' && job.status !== 'failed' && job.status !== 'canceled')) return;
+      if (job.status === 'canceled') {
+        job.confirmedBytes = 0;
+        job.resumedBytes = 0;
+      }
       job.controller = new AbortController();
       job.status = 'queued';
       job.error = null;

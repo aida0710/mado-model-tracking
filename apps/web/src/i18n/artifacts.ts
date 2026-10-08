@@ -67,6 +67,7 @@ export const artifactsText = {
   artifactModelFilter: 'モデル',
   artifactModelVersionFilter: 'モデル版',
   artifactAllModels: 'すべてのモデル',
+  artifactAllModelVersions: 'すべての版',
   artifactIncludePreviousVersions: '以前の版も表示',
   artifactNoCatalogResults: '条件に合うArtifactはありません',
   artifactNoRun: 'Runなし',

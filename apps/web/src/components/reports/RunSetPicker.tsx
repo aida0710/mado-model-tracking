@@ -1,8 +1,8 @@
 import { useId, useState } from 'react';
-import { REPORT_RUN_SET_MAX_RUN_IDS, type ReportRunSet } from '@mmt/contracts';
-import { useRunCandidates, useRunSetSources } from '../../hooks/useReportBlockData';
+import { REPORT_RUN_SET_MAX_RUN_IDS, type ReportRunSet, type RunMediaKind } from '@mmt/contracts';
+import { useRunCandidates, useRunSetSources, useRunsWithMediaKind } from '../../hooks/useReportBlockData';
 import { ErrorNotice, Loading } from '../Feedback';
-import { StatusBadge } from '../StatusBadge';
+import { RunStatusBadge } from '../runs/RunStatusBadge';
 import { text, textTemplates } from '../../i18n/catalog';
 
 type RunSetSource = 'runIds' | 'savedViewId' | 'search' | 'sweepId';
@@ -124,20 +124,30 @@ export function RunSetPicker({
   );
 }
 
-/** Runs found by name, checked to pick them. Runs picked earlier stay picked when the search hides them. */
+/**
+ * Runs found by name, checked to pick them. Runs picked earlier stay picked when the search hides them.
+ * With mediaKind, only Runs that recorded media of that kind are offered.
+ */
 export function RunChecklist({
   projectId,
   selectedIds,
   maxCount,
+  mediaKind,
   onChange,
 }: {
   projectId: string;
   selectedIds: string[];
   maxCount: number;
+  mediaKind?: RunMediaKind;
   onChange: (runIds: string[]) => void;
 }) {
   const [name, setName] = useState('');
   const candidates = useRunCandidates(projectId, name);
+  const withMedia = useRunsWithMediaKind(projectId, candidates.value?.items.map((run) => run.id) ?? [], mediaKind);
+  const offeredRuns = candidates.value?.items.filter(
+    (run) => !mediaKind || selectedIds.includes(run.id) || withMedia.value?.has(run.id),
+  );
+  const isLoading = !offeredRuns || (mediaKind !== undefined && candidates.value!.items.length > 0 && !withMedia.value);
   const isFull = selectedIds.length >= maxCount;
   return (
     <div className="report-run-checklist">
@@ -152,13 +162,14 @@ export function RunChecklist({
         <span className="muted">{textTemplates.reportSelectedRunCount(selectedIds.length, maxCount)}</span>
       </div>
       <ErrorNotice message={candidates.error} retry={candidates.reload} />
-      {!candidates.value ? (
-        <Loading />
-      ) : candidates.value.items.length === 0 ? (
-        <p className="muted">{text.reportRunNone}</p>
+      <ErrorNotice message={withMedia.error} retry={withMedia.reload} />
+      {isLoading ? (
+        withMedia.error ? null : <Loading />
+      ) : offeredRuns.length === 0 ? (
+        <p className="muted">{mediaKind === 'table' ? text.reportRunNoneWithTable : text.reportRunNone}</p>
       ) : (
         <ul>
-          {candidates.value.items.map((run) => {
+          {offeredRuns.map((run) => {
             const isChecked = selectedIds.includes(run.id);
             return (
               <li key={run.id}>
@@ -172,7 +183,7 @@ export function RunChecklist({
                     }
                   />
                   <span className="report-run-name">{run.name}</span>
-                  <StatusBadge status={run.status} />
+                  <RunStatusBadge run={run} />
                 </label>
               </li>
             );

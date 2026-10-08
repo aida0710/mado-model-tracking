@@ -43,15 +43,26 @@ function AudioCell({ projectId, media, playback }: { projectId: string; media: R
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
       />
+      {/* The open viewer has its own play button; one control per cell keeps it clear which one plays. */}
+      {!expanded && (
+        <button
+          type="button"
+          className="button small"
+          aria-label={playing ? text.mediaCellPause : text.mediaCellPlay}
+          onClick={() => (audio?.paused ? void audio.play().catch(() => undefined) : audio?.pause())}
+        >
+          {playing ? <Pause size={14} /> : <Play size={14} />}
+        </button>
+      )}
       <button
         type="button"
         className="button small"
-        aria-label={playing ? text.mediaCellPause : text.mediaCellPlay}
-        onClick={() => (audio?.paused ? void audio.play().catch(() => undefined) : audio?.pause())}
+        aria-expanded={expanded}
+        onClick={() => {
+          audio?.pause();
+          setExpanded(!expanded);
+        }}
       >
-        {playing ? <Pause size={14} /> : <Play size={14} />}
-      </button>
-      <button type="button" className="button small" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
         <AudioLines size={14} />
         {text.mediaCellWaveform}
       </button>

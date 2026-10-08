@@ -200,7 +200,7 @@ export const text = {
   download: 'ダウンロード',
   artifactPath: '保存パス',
   uploadArtifact: 'Artifactをアップロード',
-  size: 'Size',
+  size: 'サイズ',
   digest: 'Digest',
   previewUnsupported: 'この形式はダウンロードして確認してください。',
   contentError: 'プレビューの取得に失敗しました',

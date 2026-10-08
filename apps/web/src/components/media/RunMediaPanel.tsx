@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { RunMediaKeySummary } from '@mmt/contracts';
+import { useMediaLocation } from '../../hooks/useMediaLocation';
 import { useRunMedia } from '../../hooks/useRunMedia';
 import { groupMediaByStep, nearestStep } from '../../lib/mediaSteps';
 import { DataTable } from '../DataTable';
@@ -49,11 +50,11 @@ function KeyList({
 
 /**
  * The Run's media tab: choose a key, then move through its recorded steps with the slider. The
- * step is kept when switching keys, snapped to the nearest step the new key recorded.
+ * step is kept when switching keys, snapped to the nearest step the new key recorded. The key and
+ * step stay in the URL, so a link or a reload opens the same media.
  */
 export function RunMediaPanel({ projectId, runId }: RunMediaPanelProps) {
-  const [chosenKey, setChosenKey] = useState<string | null>(null);
-  const [requestedStep, setRequestedStep] = useState<number | null>(null);
+  const { chosenKey, requestedStep, setKey, setStep } = useMediaLocation();
   const { keys: keysQuery, selectedKey, items } = useRunMedia({ projectId, runId, chosenKey });
   const groups = useMemo(() => (items.value ? groupMediaByStep(items.value.items) : null), [items.value]);
   const steps = useMemo(() => (groups ? [...groups.keys()] : []), [groups]);
@@ -68,7 +69,7 @@ export function RunMediaPanel({ projectId, runId }: RunMediaPanelProps) {
         ) : (
           <div className="run-media-panel">
             <section aria-label={text.mediaKeys}>
-              <KeyList keys={keys} selectedKey={selectedKey} onSelect={setChosenKey} />
+              <KeyList keys={keys} selectedKey={selectedKey} onSelect={setKey} />
             </section>
             <section className="run-media-step" aria-label={selectedKey}>
               <h3>{selectedKey}</h3>
@@ -78,7 +79,7 @@ export function RunMediaPanel({ projectId, runId }: RunMediaPanelProps) {
                     <Empty />
                   ) : (
                     <>
-                      <MediaStepSlider steps={steps} step={step} onStepChange={setRequestedStep} />
+                      <MediaStepSlider steps={steps} step={step} onStepChange={setStep} />
                       <p className="muted media-hint">{text.mediaStepHint}</p>
                       {list.truncated && <p className="notice">{text.mediaTruncated}</p>}
                       {/* Keyed by step so the previous step's players unmount (and stop) on every move. */}

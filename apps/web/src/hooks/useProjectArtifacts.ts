@@ -29,6 +29,8 @@ export interface ProjectArtifactFilter {
   /** `type/*`, or '' for every type. */
   mimeType: string;
   runId: string;
+  /** '' with modelVersionId '' for every Artifact; a Model alone covers all of its versions. */
+  modelId: string;
   modelVersionId: string;
   includePreviousVersions: boolean;
 }
@@ -48,6 +50,7 @@ export function useProjectArtifactCatalog(projectId: string, filter: ProjectArti
           query: filter.query || undefined,
           mimeType: filter.mimeType || undefined,
           runId: filter.runId || undefined,
+          modelId: filter.modelId || undefined,
           modelVersionId: filter.modelVersionId || undefined,
           versions: filter.includePreviousVersions ? 'all' : 'latest',
           cursor,

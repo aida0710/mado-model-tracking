@@ -29,6 +29,9 @@ const WEB_URL = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:47031';
 const SAMPLE_RATE = 16000;
 const TONE_HZ = 440;
 const VERSION_TIMEOUT_MS = 60_000;
+// Above the 8 MiB single-PUT limit, so the file is sent in parts that can be held back and canceled.
+const LARGE_FILE_BYTES = 24 * 1024 * 1024;
+const PART_DELAY_MS = 3000;
 
 const databaseUrl = process.env.MMT_TEST_DATABASE_URL;
 if (!databaseUrl || !/^\/mmt_test(?:_|$)/.test(new URL(databaseUrl).pathname))
@@ -96,6 +99,8 @@ try {
     port: API_PORT,
     serverOptions: serverTimeouts(config).serverOptions,
   });
+  // Multipart uploads are verified by the finalizer, which the API process runs in the background.
+  application.artifactUploadFinalizer.start();
   const folder = path.join(fileDirectory, 'speech-corpus');
   await mkdir(path.join(folder, 'train'), { recursive: true });
   await writeFile(path.join(folder, 'train', 'tone.wav'), sineWave());
@@ -148,11 +153,52 @@ try {
   await page.getByRole('button', { name: '再生' }).waitFor();
   await screenshot(page, 'dataset-version-files-audio');
 
+  // A file canceled midway holds the version back; the dialog offers to leave it out or resend it.
+  const largeFolder = path.join(fileDirectory, 'with-large');
+  await mkdir(path.join(largeFolder, 'sub'), { recursive: true });
+  await writeFile(path.join(largeFolder, 'tone.wav'), sineWave());
+  await writeFile(path.join(largeFolder, 'sub', 'big.bin'), Buffer.alloc(LARGE_FILE_BYTES, 7));
+  // Parts are held back so the large file is still sending when 取消 is pressed.
+  await page.route('**/artifact-uploads/*/parts/*', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, PART_DELAY_MS));
+    // A canceled part's request is gone by the time the delay ends.
+    await route.continue().catch(() => undefined);
+  });
+  async function uploadAndCancelLarge() {
+    await page.getByRole('button', { name: 'フォルダから作る' }).click();
+    const folderDialog = page.getByRole('dialog');
+    await folderDialog.getByLabel('フォルダを選択').setInputFiles(largeFolder);
+    await folderDialog.getByText('2件のファイル').waitFor();
+    await folderDialog.getByRole('button', { name: 'uploadして版を作成' }).click();
+    const largeRow = folderDialog.locator('[data-testid="upload-queue-row"]', { hasText: 'big.bin' });
+    await folderDialog.locator('[data-testid="upload-queue-row"][data-status="uploading"]', { hasText: 'big.bin' }).waitFor();
+    await folderDialog.locator('[data-testid="upload-queue-row"][data-status="completed"]', { hasText: 'tone.wav' }).waitFor({ timeout: VERSION_TIMEOUT_MS });
+    await largeRow.getByRole('button', { name: '取消' }).click();
+    await folderDialog.getByText('1件のファイルがuploadされていないため').waitFor();
+    return folderDialog;
+  }
+  const leftOut = await uploadAndCancelLarge();
+  await screenshot(page, 'dataset-folder-canceled-choice');
+  await leftOut.getByRole('button', { name: '残りのファイルを除いて版を作成' }).click();
+  await leftOut.waitFor({ state: 'detached', timeout: VERSION_TIMEOUT_MS });
+  const afterLeftOut = await (await page.request.get(`${WEB_URL}/api/projects/${project.id}/datasets/${dataset.id}/versions`)).json();
+  assert.equal(afterLeftOut.items.length, 2);
+  assert.equal(afterLeftOut.items[0].fileCount, 1);
+
+  const resent = await uploadAndCancelLarge();
+  await page.unroute('**/artifact-uploads/*/parts/*');
+  await resent.getByRole('button', { name: '残りのファイルを再送' }).click();
+  await resent.waitFor({ state: 'detached', timeout: VERSION_TIMEOUT_MS });
+  const afterResend = await (await page.request.get(`${WEB_URL}/api/projects/${project.id}/datasets/${dataset.id}/versions`)).json();
+  assert.equal(afterResend.items.length, 3);
+  assert.equal(afterResend.items[0].fileCount, 2);
+
   assert.deepEqual(pageErrors, []);
-  console.log(JSON.stringify({ versionId: version.id, files: files.items.length }, null, 2));
+  console.log(JSON.stringify({ versionId: version.id, files: files.items.length, canceledFlows: 'passed' }, null, 2));
 } finally {
   await browser.close();
   await application.outbox.stop();
+  await application.artifactUploadFinalizer.stop();
   await new Promise((resolve) => (server ? server.close(() => resolve()) : resolve()));
   await database.end();
   await administrator.query(`DROP SCHEMA ${schema} CASCADE`);

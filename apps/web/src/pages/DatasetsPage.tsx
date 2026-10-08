@@ -1,10 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import type { DatasetVersion } from '@mmt/contracts';
+import type { Dataset, DatasetVersion } from '@mmt/contracts';
 import { Link } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import { registryApi } from '../api/registry';
+import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { useRegistry } from '../hooks/useRegistry';
+import { useQuery } from '../hooks/useQuery';
+import { useDatasetVersionsById } from '../hooks/useDatasetVersionsById';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable } from '../components/DataTable';
 import { RegistryLayout } from '../components/RegistryLayout';
@@ -13,6 +16,7 @@ import { DetailsList, JsonDetails } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
 import { DatasetVersionDialog, type DatasetVersionSource } from '../dialogs/DatasetVersionDialog';
 import { DatasetFiles } from '../components/DatasetFiles';
+import { datasetVersionLabel } from '../lib/datasetVersionLabel';
 import { formatBytes } from '../lib/format';
 import { getFieldValue } from '../lib/formValues';
 import { text, textTemplates } from '../i18n/catalog';
@@ -151,15 +155,13 @@ export function DatasetsPage() {
                             entries={[
                               [
                                 text.parents,
-                                registry.selectedVersion.parentDatasetVersionIds.map((id) => (
-                                  <Link
-                                    key={id}
-                                    className="version-link mono"
-                                    to={`${base}/datasets?version=${id}`}
-                                  >
-                                    {id}
-                                  </Link>
-                                )),
+                                registry.selectedVersion.parentDatasetVersionIds.length > 0 ? (
+                                  <ParentVersionLinks
+                                    version={registry.selectedVersion}
+                                    loadedVersions={versions}
+                                    datasets={items}
+                                  />
+                                ) : null,
                               ],
                               ...(registry.selectedVersion.contentKind === 'artifacts'
                                 ? artifactContentEntries(registry.selectedVersion)
@@ -167,9 +169,10 @@ export function DatasetsPage() {
                               [
                                 text.sourceRun,
                                 registry.selectedVersion.sourceRunId ? (
-                                  <Link to={`${base}/runs/${registry.selectedVersion.sourceRunId}`}>
-                                    {registry.selectedVersion.sourceRunId}
-                                  </Link>
+                                  <SourceRunLink
+                                    projectId={project.id}
+                                    runId={registry.selectedVersion.sourceRunId}
+                                  />
                                 ) : null,
                               ],
                             ]}
@@ -241,6 +244,53 @@ export function DatasetsPage() {
         />
       )}
     </section>
+  );
+}
+
+// Run ids are UUIDs; the first block stands in until the Run's name is loaded.
+const SHORT_RUN_ID_LENGTH = 8;
+
+/** The parents by version name (with the dataset's name when it is another dataset). */
+function ParentVersionLinks({
+  version,
+  loadedVersions,
+  datasets,
+}: {
+  version: DatasetVersion;
+  loadedVersions: DatasetVersion[];
+  datasets: Dataset[];
+}) {
+  const { project } = useProject();
+  const parents = useDatasetVersionsById({
+    projectId: project.id,
+    ids: version.parentDatasetVersionIds,
+    loadedVersions,
+    datasets,
+  });
+  return (
+    <>
+      {version.parentDatasetVersionIds.map((id) => {
+        const parent = parents.get(id);
+        return (
+          <Link
+            key={id}
+            className={parent ? 'version-link' : 'version-link mono'}
+            to={`/projects/${project.id}/datasets?version=${id}`}
+          >
+            {parent ? datasetVersionLabel(parent, version.datasetId) : id}
+          </Link>
+        );
+      })}
+    </>
+  );
+}
+
+function SourceRunLink({ projectId, runId }: { projectId: string; runId: string }) {
+  const run = useQuery(`${projectId}:run:${runId}`, (signal) => trackingApi.run(projectId, runId, signal));
+  return (
+    <Link to={`/projects/${projectId}/runs/${runId}`}>
+      {run.value?.name ?? runId.slice(0, SHORT_RUN_ID_LENGTH)}
+    </Link>
   );
 }
 
