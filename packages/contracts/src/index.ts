@@ -15,6 +15,7 @@ export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';
+export type { ModelAliasEvent, ModelAliasEventPage, ModelAliasEventSource } from './modelAliases.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 

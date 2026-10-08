@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
-import { registryApi } from '../api/registry';
+import { MAX_MODEL_ALIAS_REASON_LENGTH, registryApi } from '../api/registry';
 import { useProject } from '../hooks/useProject';
 import { useRegistry } from '../hooks/useRegistry';
+import { useModelAliasHistory } from '../hooks/useModelAliasHistory';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PageHeader } from '../components/PageHeader';
 import { StandaloneArtifactUpload } from '../components/StandaloneArtifactUpload';
 import { FormDialog } from '../components/FormDialog';
@@ -12,16 +14,25 @@ import { ModelRegistryPanel } from '../components/ModelRegistryPanel';
 import { Tabs } from '../components/Tabs';
 import { getFieldValue } from '../lib/formValues';
 import { text } from '../i18n/catalog';
+import { modelsTextTemplates } from '../i18n/models';
 
 export function ModelsPage() {
   const { project, canEdit } = useProject();
   const [dialog, setDialog] = useState<'model' | 'version' | 'alias' | null>(null);
   const [view, setView] = useState<'registry' | 'rules' | 'history'>('registry');
+  const [aliasToRemove, setAliasToRemove] = useState<{ alias: string; version: string } | null>(
+    null,
+  );
   const registry = useRegistry(`${project.id}:models`, {
     list: (signal) => registryApi.models(project.id, signal),
     versions: (id, signal) => registryApi.modelVersions(project.id, id, signal),
     parentId: (version) => version.modelId,
   });
+  const aliasHistory = useModelAliasHistory(project.id, registry.selected?.id ?? null);
+  const reloadRegistryAndAliasHistory = () => {
+    registry.reload();
+    aliasHistory.reload();
+  };
   return (
     <section className="page">
       <PageHeader
@@ -36,7 +47,11 @@ export function ModelsPage() {
                 {text.newModel}
               </button>
             )}
-            <button className="icon-button" aria-label={text.refresh} onClick={registry.reload}>
+            <button
+              className="icon-button"
+              aria-label={text.refresh}
+              onClick={reloadRegistryAndAliasHistory}
+            >
               <RefreshCw size={17} />
             </button>
           </>
@@ -60,8 +75,10 @@ export function ModelsPage() {
             registry={registry}
             projectId={project.id}
             canEdit={canEdit}
+            aliasHistory={aliasHistory}
             onCreateVersion={() => setDialog('version')}
             onAssignAlias={() => setDialog('alias')}
+            onRemoveAlias={setAliasToRemove}
           />
         )}
       </div>
@@ -116,19 +133,44 @@ export function ModelsPage() {
                 label: version.version,
               })),
             },
+            {
+              name: 'reason',
+              label: text.aliasReason,
+              type: 'textarea',
+              placeholder: text.aliasReasonPlaceholder,
+              maxLength: MAX_MODEL_ALIAS_REASON_LENGTH,
+            },
           ]}
           onSubmit={(values) =>
-            registryApi.assignAlias(
-              project.id,
-              registry.selected!.id,
-              getFieldValue(values, 'alias'),
-              getFieldValue(values, 'version'),
-            )
+            registryApi.assignAlias(project.id, registry.selected!.id, {
+              alias: getFieldValue(values, 'alias'),
+              versionId: getFieldValue(values, 'version'),
+              reason: getFieldValue(values, 'reason').trim(),
+            })
           }
           onSaved={() => {
             setDialog(null);
-            registry.reload();
+            reloadRegistryAndAliasHistory();
           }}
+        />
+      )}
+      {aliasToRemove && registry.selected && (
+        <ConfirmDialog
+          title={text.removeAlias}
+          message={modelsTextTemplates.removeAliasConfirm(
+            aliasToRemove.alias,
+            aliasToRemove.version,
+          )}
+          confirmLabel={text.removeAlias}
+          destructive
+          onConfirm={() =>
+            registryApi.removeAlias(project.id, registry.selected!.id, aliasToRemove.alias)
+          }
+          onConfirmed={() => {
+            setAliasToRemove(null);
+            reloadRegistryAndAliasHistory();
+          }}
+          onClose={() => setAliasToRemove(null)}
         />
       )}
     </section>

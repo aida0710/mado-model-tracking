@@ -4,6 +4,8 @@ import { DataTable } from './DataTable';
 import { RegistryLayout } from './RegistryLayout';
 import { Empty, ErrorNotice, Resource } from './Feedback';
 import { DetailsList, JsonDetails } from './JsonDetails';
+import { ModelAliasHistory } from './ModelAliasHistory';
+import type { ModelAliasHistoryState } from '../hooks/useModelAliasHistory';
 import { formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
 
@@ -11,16 +13,22 @@ export function ModelRegistryPanel({
   registry,
   projectId,
   canEdit,
+  aliasHistory,
   onCreateVersion,
   onAssignAlias,
+  onRemoveAlias,
 }: {
   registry: ModelRegistryState;
   projectId: string;
   canEdit: boolean;
+  aliasHistory: ModelAliasHistoryState;
   onCreateVersion: () => void;
   onAssignAlias: () => void;
+  onRemoveAlias: (assignment: { alias: string; version: string }) => void;
 }) {
   const base = `/projects/${projectId}`;
+  const versionLabel = (versionId: string) =>
+    registry.versions.value?.find((version) => version.id === versionId)?.version ?? versionId;
   return (
     <Resource query={registry.list}>
       {(items) => (
@@ -80,6 +88,43 @@ export function ModelRegistryPanel({
                 )}
               </div>
               <p className="muted">{registry.selected.description}</p>
+              <DataTable
+                items={Object.entries(registry.selected.aliases)}
+                rowKey={([alias]) => alias}
+                empty={text.aliasesEmpty}
+                columns={[
+                  {
+                    key: 'alias',
+                    label: text.alias,
+                    className: 'mono',
+                    render: ([alias]) => alias,
+                  },
+                  {
+                    key: 'version',
+                    label: text.version,
+                    className: 'mono',
+                    render: ([, versionId]) => versionLabel(versionId),
+                  },
+                  ...(canEdit
+                    ? [
+                        {
+                          key: 'actions',
+                          label: '',
+                          render: ([alias, versionId]: [string, string]) => (
+                            <button
+                              className="button small"
+                              onClick={() =>
+                                onRemoveAlias({ alias, version: versionLabel(versionId) })
+                              }
+                            >
+                              {text.removeAlias}
+                            </button>
+                          ),
+                        },
+                      ]
+                    : []),
+                ]}
+              />
               <Resource query={registry.versions}>
                 {(versions) => (
                   <>
@@ -163,6 +208,7 @@ export function ModelRegistryPanel({
                   </>
                 )}
               </Resource>
+              <ModelAliasHistory history={aliasHistory} />
             </>
           ) : (
             <Empty>{text.selectItem}</Empty>

@@ -4,6 +4,8 @@ import type {
   Dataset,
   DatasetVersion,
   Model,
+  ModelAliasEventPage,
+  ModelAliasEventSource,
   ModelVersion,
   Run,
 } from '@mmt/contracts';
@@ -34,6 +36,19 @@ import type { ModelAutomationService } from './modelAutomationService.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { registerModelVersion, type ModelVersionRegistration } from './modelVersionRegistration.js';
 import { runColumns } from '../repositories/runListProjection.js';
+import {
+  assignModelAlias,
+  listModelAliasEvents,
+  modelAliasActor,
+  modelAliasEventCursorExists,
+  removeModelAliases,
+} from '../repositories/modelAliasRepository.js';
+import type { ModelAliasEventQuery } from '../domain/modelAliasValidation.js';
+
+// Browser sessions are the Web UI; API tokens are scripts and the SDK's native client.
+function nativeAliasSource(principal: Principal): ModelAliasEventSource {
+  return principal.method === 'session' ? 'web' : 'api';
+}
 
 export class RegistryService {
   constructor(
@@ -119,7 +134,7 @@ export class RegistryService {
   async setAlias(
     principal: Principal,
     projectId: string,
-    registration: { modelId: string; alias: string; versionId: string },
+    registration: { modelId: string; alias: string; versionId: string; reason?: string },
   ): Promise<Model> {
     return transaction(this.database, async (connection) => {
       await this.requireWriteAccess(connection, principal, projectId);
@@ -134,14 +149,72 @@ export class RegistryService {
         [registration.versionId, projectId, registration.modelId],
       );
       if (!version) notFound('ModelVersion');
-      await connection.query(
-        'INSERT INTO model_aliases(model_id,alias,version_id) VALUES($1,$2,$3) ON CONFLICT(model_id,alias) DO UPDATE SET version_id=EXCLUDED.version_id',
-        [registration.modelId, registration.alias, registration.versionId],
-      );
+      await assignModelAlias(connection, {
+        modelId: registration.modelId,
+        alias: registration.alias,
+        versionId: registration.versionId,
+        actor: modelAliasActor(principal),
+        source: nativeAliasSource(principal),
+        reason: registration.reason,
+      });
       return (await first<Model>(connection, `${modelSelect} WHERE m.id=$1`, [
         registration.modelId,
       ]))!;
     });
+  }
+
+  async removeAlias(
+    principal: Principal,
+    projectId: string,
+    removal: { modelId: string; alias: string; reason?: string },
+  ): Promise<void> {
+    await transaction(this.database, async (connection) => {
+      await this.requireWriteAccess(connection, principal, projectId);
+      await assertProjectReference(connection, {
+        table: 'models',
+        projectId,
+        id: removal.modelId,
+      });
+      const removed = await removeModelAliases(connection, {
+        modelId: removal.modelId,
+        alias: removal.alias,
+        actor: modelAliasActor(principal),
+        source: nativeAliasSource(principal),
+        reason: removal.reason,
+      });
+      if (!removed.length) notFound('Model alias');
+    });
+  }
+
+  async aliasEvents(
+    principal: Principal,
+    projectId: string,
+    request: { modelId: string; query: ModelAliasEventQuery },
+  ): Promise<ModelAliasEventPage> {
+    await this.requireReadAccess(principal, projectId);
+    await assertProjectReference(this.database, {
+      table: 'models',
+      projectId,
+      id: request.modelId,
+    });
+    const { query } = request;
+    if (
+      query.cursor &&
+      !(await modelAliasEventCursorExists(this.database, {
+        id: query.cursor,
+        modelId: request.modelId,
+      }))
+    )
+      notFound('ModelAliasEvent cursor');
+    // Fetch one extra row to know whether another page exists without a count query.
+    const events = await listModelAliasEvents(this.database, {
+      modelId: request.modelId,
+      alias: query.alias,
+      cursor: query.cursor,
+      limit: query.limit + 1,
+    });
+    const items = events.slice(0, query.limit);
+    return { items, nextCursor: events.length > query.limit ? items.at(-1)!.id : null };
   }
 
   async codes(principal: Principal, projectId: string): Promise<Code[]> {
