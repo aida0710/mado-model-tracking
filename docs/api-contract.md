@@ -344,9 +344,23 @@ API serverはSSH鍵を持たないので、Compute targetの接続確認はそ�
 
 - 対象はmime typeが`audio/wav`・`audio/x-wav`・`audio/wave`・`audio/flac`・`audio/x-flac`のArtifact。native・MLflow・upload sessionのどの経路でも、登録のtransaction内で保存先から先頭64KiBをRangeで読む。WAVは`fmt `（`WAVE_FORMAT_EXTENSIBLE`はSubFormatとvalid bits）と`data` chunk、FLACは`fLaC`直後のSTREAMINFOを解析する。`data` chunkが先頭64KiBより後ろ、圧縮WAV、総サンプル数0のFLAC、壊れたヘッダーは保存しない（推測で埋めない）。`data`の宣言sizeがファイル末尾を超える場合は実際に残っているbyte数で長さを求める。
 - 読み込み・解析・保存の失敗はsavepointで戻し、Artifactの登録は成功させる（ログは`artifact_media_info_failed`）。この機能より前に登録したArtifactには無い。
-- `GET /projects/:p/artifacts/:a/media-info` → ArtifactMediaInfo `{artifactId,durationSeconds,sampleRate,channels,bitsPerSample:number|null,codec,source:'header'}`。viewer+`read`。media情報が無い、または別ProjectのArtifactは404 `not_found`。`codec`はffprobeの`codec_name`と同じ名前（`pcm_s16le`、`pcm_s24le`、`pcm_f32le`、`pcm_alaw`、`flac`など）。
+- `GET /projects/:p/artifacts/:a/media-info` → ArtifactMediaInfo `{artifactId,durationSeconds,sampleRate,channels,bitsPerSample:number|null,codec,source:'header'|'ffprobe'}`。viewer+`read`。media情報が無い、または別ProjectのArtifactは404 `not_found`。`codec`はffprobeの`codec_name`と同じ名前（`pcm_s16le`、`pcm_s24le`、`pcm_f32le`、`pcm_alaw`、`flac`など）。
 - `GET /projects/:p/artifact-media-info?artifactIds=<id>,<id>,…` → `{items:ArtifactMediaInfo[]}`。viewer+`read`。IDはカンマ区切りで重複を除き最大200件（`ARTIFACT_MEDIA_INFO_BATCH_LIMIT`）。超過・UUIDでない値は422 `invalid_request`。media情報が無いIDや別ProjectのIDは結果から除くだけでエラーにしない。
 - Webの音声viewerはdecode前でもmedia情報があれば長さ・sample rate・チャンネル数を表示し、decode結果が出たらそちらを正として置き換える。
+
+## 長い音声・動画のサーバー側preview
+
+ブラウザで解析できない長い音声（64MiB超、`BROWSER_AUDIO_ANALYSIS_MAX_BYTES`）と動画のために、APIとは別のpreview worker（`apps/api/src/previewWorker.ts`、ffmpeg入りの`Dockerfile.preview`、composeの`preview` service）が波形のpeaks、スペクトログラム画像、動画のposterを作る。API imageにはffmpegを入れない。
+
+- 対象は登録時に決める。`audio/*`はヘッダーでmedia情報を読めない形式（mp3、m4a、ogg、opus、aacなど）か、64MiBを超えるもの。`waveform-peaks`と`spectrogram`を作る。`video/*`は常に`video-poster`を作る。空のArtifactと、64MiB以下のWAV/FLACは対象外（ブラウザとヘッダー解析で足りる）。native・MLflow・upload sessionのどの経路でも、登録のtransaction内でmedia情報のヘッダー解析の後に`artifact_previews`へ`queued`で入れる。投入の失敗はsavepointで戻し、Artifactの登録は成功させる（ログは`artifact_preview_enqueue_failed`）。
+- `artifact_previews`は`(artifact_id, kind)`ごとに`status`が`queued`→`running`→`ready`／`failed`／`skipped`。workerはArtifact単位で未処理の行を`FOR UPDATE SKIP LOCKED`で取り、本体を一時ディレクトリへ1回だけ読み出して処理する。`running`のまま2時間更新の無い行は別のworkerが引き継ぎ、古いworkerの結果は捨てる。保存先の読み書き失敗（`source_unreadable`、`storage_failed`）は`queued`に戻し、3回目で`failed`。ffprobeが読めない（`probe_failed`）、ffmpegの失敗（`render_failed`）・時間切れ（`render_timeout`）は再試行しない。ffmpeg/ffprobeが無い環境は`skipped`（`ffmpeg_unavailable`）、音声streamの無いファイルの波形は`skipped`（`no_audio_stream`）、映像streamの無いposterは`skipped`（`no_video_stream`）。`error`はこの短いコードだけで、ffmpegの出力や保存先のパスを含めない。
+- ffprobe/ffmpegはshellを使わずargvで実行する。音声は先頭の音声streamを元のsample rateのmonoで1回だけdecodeし、streamのまま波形とスペクトログラムを計算する（GB級でも全体をメモリに載せない）。
+- 生成物はRunの無い通常のArtifactとして同じProjectの現在の保存先へ保存し、`preview_artifact_id`から参照する。pathは`.previews/<元のArtifact ID>/waveform-peaks.json`（`application/json`、WaveformPeaksPreview `{version:1,sampleRate,durationSeconds,samplesPerPeak,min:number[],max:number[]}`。ファイル全体を最大8192区間（短い音声を除き4096区間以上）に分けたmono mixの最小・最大）、`spectrogram.png`（Hann窓1024点・重なり無しのフレームの平均パワーをdBにした線形周波数の画像。最大2048列（短い音声を除き1024列以上）×513行、下が0Hz、上端がsampleRate/2。色はWebのviewerと同じ）、`poster.png`（1秒目または長さの10%の早い方のフレーム、幅は最大1280px）。元のArtifactは変更しない。
+- media情報: workerはffprobeで読んだ先頭の音声streamを`artifact_media_info`に`source='ffprobe'`で入れる。ヘッダー由来の行（`source='header'`）があれば上書きしない。長さが読めない、値が範囲外（sample rateが768kHz超、チャンネル数1024超、長さ31日超など）、音声streamが無い（動画のみ、MP3のカバー画像はvideoとして扱わない）ときは入れない。
+- `GET /projects/:p/artifacts/:a/previews` → `{items:ArtifactPreview[]}`（`{artifactId,kind,status,previewArtifactId:string|null,error:string|null,attempts,updatedAt}`、kind順）。viewer+`read`。previewの不要なArtifactは`items:[]`。別ProjectのArtifactは404 `not_found`。生成物の中身は通常の`GET /projects/:p/artifacts/:id/content`で読む。
+- Webの音声viewerは64MiBを超えるファイルでpreviewが`ready`なら、peaks JSONとスペクトログラム画像で全体を表示し、クリックでその位置へ移動する（拡大・チャンネル選択・melは使えない）。再生は従来どおりRangeのstream。生成中は5秒ごとに状態を読み直す。
+- preview workerの設定: `MMT_DATABASE_URL`、保存先の環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）、DB由来の保存先がある場合は`MMT_STORAGE_SECRET_KEY`をAPIと同じ値で渡す。`MMT_PREVIEW_FFMPEG_PATH`／`MMT_PREVIEW_FFPROBE_PATH`（既定`ffmpeg`／`ffprobe`）、`MMT_PREVIEW_POLL_INTERVAL_MS`（既定5000）、`MMT_PREVIEW_TOOL_TIMEOUT_MS`（ffprobe/ffmpeg 1回の上限。既定30分、最大40分）、`MMT_PREVIEW_WORK_DIR`（一時ディレクトリの親。最大のArtifactが入る容量が要る。既定はOSの一時ディレクトリ）。起動は`npm run preview-worker -w @mmt/api`。
+- この機能より前に登録したArtifactは対象にならない（backfillは未実装）。
 
 ## Platform保存API（親担当）
 

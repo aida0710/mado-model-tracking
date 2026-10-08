@@ -30,6 +30,27 @@ services:
     volumes:
       - artifacts:/app/var/artifacts
     restart: unless-stopped
+  # Generates waveform peaks, spectrograms and video posters with ffmpeg for long audio and video.
+  # A separate image so the API carries no ffmpeg; it shares the DB and the Artifact storage.
+  preview:
+    build:
+      context: .
+      dockerfile: Dockerfile.preview
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      MMT_DATABASE_URL: postgresql://mmt:${MMT_POSTGRES_PASSWORD:?Set MMT_POSTGRES_PASSWORD}@postgres:5432/mmt
+      ARTIFACT_FILESYSTEM_ROOT: /app/var/artifacts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - artifacts:/app/var/artifacts
+      # Holds one downloaded source file at a time; it needs room for the largest Artifact.
+      - preview-work:/app/var/preview-work
+    # Lets the Artifact being processed finish its current step before the container stops.
+    stop_grace_period: 30s
+    restart: unless-stopped
   web:
     build:
       context: .
@@ -67,3 +88,4 @@ volumes:
   postgres:
   artifacts:
   worker-state:
+  preview-work:
