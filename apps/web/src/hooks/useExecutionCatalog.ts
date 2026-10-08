@@ -1,27 +1,8 @@
-import type {
-  Code,
-  CodeVersion,
-  Dataset,
-  DatasetVersion,
-  Experiment,
-  Model,
-  ModelVersion,
-  Run,
-} from '@mmt/contracts';
+import type { ExecutionCatalog } from '../types/executionCatalog';
 import { registryApi } from '../api/registry';
 import { trackingApi } from '../api/tracking';
 import { useQuery } from './useQuery';
 
-export interface ExecutionCatalog {
-  experiments: Experiment[];
-  models: Model[];
-  codes: Code[];
-  datasets: Dataset[];
-  runs: Run[];
-  modelVersions: ModelVersion[];
-  codeVersions: CodeVersion[];
-  datasetVersions: DatasetVersion[];
-}
 // Registry selectors use the same bounded list as the Run browser.
 export const RUN_LIST_LIMIT = 500;
 export function useExecutionCatalog(projectId: string) {

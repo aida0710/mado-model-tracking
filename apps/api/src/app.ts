@@ -16,6 +16,7 @@ import { ArtifactService } from './services/artifactService.js';
 import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
+import { ModelAutomationService } from './services/modelAutomationService.js';
 import { LineageService } from './services/lineageService.js';
 import { TargetService } from './services/targetService.js';
 import { JobService } from './services/jobService.js';
@@ -27,6 +28,7 @@ import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { projectRoutes } from './routes/projectRoutes.js';
 import { registryRoutes } from './routes/registryRoutes.js';
+import { modelAutomationRoutes } from './routes/modelAutomationRoutes.js';
 import { runRoutes } from './routes/runRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
 import { jobRoutes, targetRoutes, workerRoutes } from './routes/executionRoutes.js';
@@ -49,12 +51,13 @@ export function createApplication(options: ApplicationOptions) {
   const stores = options.stores ?? createArtifactStoresFromEnv(options.environment);
   const auth = new AuthService(database, config);
   const projects = new ProjectService(database, () => stores.backends());
-  const registry = new RegistryService(database);
   const runs = new RunService(database);
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores);
   const targets = new TargetService(database, config);
   const jobs = new JobService(database, runs, config);
+  const automation = new ModelAutomationService(database, runs, jobs);
+  const registry = new RegistryService(database, automation);
   const worker = new WorkerService(database, jobs, config);
   const tokens = new TokenService(database);
   const plugins = new PluginService({
@@ -133,6 +136,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/auth', authRoutes(auth));
   app.route('/api/projects', projectRoutes(projects));
   app.route('/api/projects', registryRoutes(registry));
+  app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', jobRoutes(jobs));
@@ -151,6 +155,7 @@ export function createApplication(options: ApplicationOptions) {
       auth,
       projects,
       registry,
+      automation,
       runs,
       lineage,
       artifacts,

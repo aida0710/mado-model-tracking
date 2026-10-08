@@ -4,7 +4,14 @@ import { authApi } from '../api/auth';
 import { useQuery } from '../hooks/useQuery';
 import { QueryDialog } from '../components/QueryDialog';
 import { FormDialog } from '../components/FormDialog';
-import { getFieldValue, splitLines, parsePositiveInteger } from '../lib/formValues';
+import {
+  getFieldValue,
+  getSelectedValues,
+  splitLines,
+  parsePositiveInteger,
+} from '../lib/formValues';
+import { EXECUTION_RUNTIME_KINDS, parseRuntimeKinds } from '../lib/runtimeValidation';
+import { runtimeLabels } from '../i18n/runtime';
 import { text } from '../i18n/catalog';
 
 export function TargetDialog({
@@ -64,7 +71,18 @@ export function TargetDialog({
               required: true,
               defaultValue: 'python3',
             },
-            { name: 'gpuIds', label: `${text.gpuIds}（1行に1件）`, type: 'textarea' },
+            {
+              name: 'runtimeKinds',
+              label: text.runtimeKinds,
+              type: 'multiselect',
+              required: true,
+              defaultValue: ['python'],
+              options: EXECUTION_RUNTIME_KINDS.map((kind) => ({
+                value: kind,
+                label: runtimeLabels[kind],
+              })),
+            },
+            { name: 'gpuIds', label: text.gpuIdsPerLine, type: 'textarea' },
             {
               name: 'maxConcurrentJobs',
               label: text.maxConcurrentJobs,
@@ -87,6 +105,7 @@ export function TargetDialog({
               knownHostsPath: getFieldValue(values, 'knownHostsPath'),
               workDirectory: getFieldValue(values, 'workDirectory'),
               pythonExecutable: getFieldValue(values, 'pythonExecutable'),
+              runtimeKinds: parseRuntimeKinds(getSelectedValues(values, 'runtimeKinds')),
               gpuIds: splitLines(getFieldValue(values, 'gpuIds')),
               maxConcurrentJobs: parsePositiveInteger(getFieldValue(values, 'maxConcurrentJobs')),
               enabled: getFieldValue(values, 'enabled') === 'true',

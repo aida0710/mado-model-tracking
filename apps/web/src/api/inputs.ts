@@ -2,7 +2,9 @@ import type {
   ArtifactBackend,
   CodeSource,
   ComputeTarget,
+  ExecutionRuntime,
   JsonObject,
+  ModelAutomationRule,
   PluginDataset,
   ProjectRole,
   RunKind,
@@ -38,13 +40,18 @@ export interface CreateModelVersion {
 }
 export interface CreateCodeVersion {
   version: string;
-  source: CodeSource;
+  source: CodeSource | null;
+  runtime: ExecutionRuntime;
   entrypoint: string[];
   requirements?: string[];
   environment?: Record<string, string>;
   supportedModelFamilies: string[];
   taskTypes: RunKind[];
 }
+export type CreateAutomationRule = Omit<
+  ModelAutomationRule,
+  'id' | 'projectId' | 'createdBy' | 'createdAt'
+>;
 export interface CreateDatasetVersion {
   version: string;
   uri: string;

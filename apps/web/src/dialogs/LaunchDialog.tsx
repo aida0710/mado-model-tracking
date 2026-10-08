@@ -7,19 +7,31 @@ import { useQuery } from '../hooks/useQuery';
 import { useLaunch } from '../hooks/useLaunch';
 import { executionApi } from '../api/execution';
 import { Dialog } from '../components/Dialog';
-import { FormFields, type FormField } from '../components/FormFields';
+import { FormFields } from '../components/FormFields';
+import type { FormField } from '../types/form';
+import { CodeRuntimeDetails } from '../components/CodeRuntimeDetails';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { DetailsList } from '../components/JsonDetails';
 import { buildCatalogOptions, withEmptyOption } from '../lib/catalogOptions';
 import {
   getFieldValue,
   parseJsonObject,
-  parsePositiveInteger,
   getSelectedValues,
   parseStringMap,
   type FormValues,
 } from '../lib/formValues';
-import { isCodeCompatible, RUN_KINDS } from '../lib/executionValidation';
+import {
+  isCodeCompatible,
+  RUN_KINDS,
+  MAX_JOB_ATTEMPTS,
+  DEFAULT_JOB_ATTEMPTS,
+  parseMaxAttempts,
+} from '../lib/executionValidation';
+import {
+  isTargetCompatible,
+  validateTargetGpuIds,
+  validateTargetRuntime,
+} from '../lib/runtimeValidation';
 import { text } from '../i18n/catalog';
 
 export function LaunchDialog({
@@ -49,11 +61,15 @@ export function LaunchDialog({
     environment: JSON.stringify(existingRun?.environment ?? {}, null, 2),
     targetId: '',
     gpuIds: [],
-    maxAttempts: '3',
+    maxAttempts: String(DEFAULT_JOB_ATTEMPTS),
   });
   function changeValues(next: FormValues) {
     if (next.kind !== values.kind || next.modelVersionId !== values.modelVersionId)
       next.codeVersionId = '';
+    if (next.codeVersionId !== values.codeVersionId) {
+      next.targetId = '';
+      next.gpuIds = [];
+    }
     if (next.targetId !== values.targetId) next.gpuIds = [];
     setValues(next);
     setValidationError(null);
@@ -74,6 +90,12 @@ export function LaunchDialog({
               );
               const target = computeTargets.find(
                 (item) => item.id === getFieldValue(values, 'targetId'),
+              );
+              const selectedCode = compatibleCodes.find(
+                (version) => version.id === getFieldValue(values, 'codeVersionId'),
+              );
+              const compatibleTargets = computeTargets.filter(
+                (item) => selectedCode && isTargetCompatible(item, selectedCode),
               );
               const setupFields: FormField[] = [
                 { name: 'name', label: text.runName, required: true },
@@ -125,9 +147,10 @@ export function LaunchDialog({
                   type: 'select',
                   required: true,
                   options: withEmptyOption(
-                    computeTargets
-                      .filter((item) => item.enabled)
-                      .map((item) => ({ value: item.id, label: `${item.name} · ${item.host}` })),
+                    compatibleTargets.map((item) => ({
+                      value: item.id,
+                      label: `${item.name} · ${item.host}`,
+                    })),
                   ),
                 },
                 {
@@ -141,7 +164,7 @@ export function LaunchDialog({
                   label: text.maxAttempts,
                   type: 'number',
                   min: 1,
-                  max: 100,
+                  max: MAX_JOB_ATTEMPTS,
                   required: true,
                 },
               ];
@@ -165,10 +188,10 @@ export function LaunchDialog({
                         setStage(1);
                         return;
                       }
-                      if (!target?.enabled) throw new Error(text.required);
-                      const maxAttempts = parsePositiveInteger(
-                        getFieldValue(values, 'maxAttempts'),
-                      );
+                      validateTargetRuntime(target, selectedCode);
+                      if (!target) throw new Error(text.runtimeTargetError);
+                      validateTargetGpuIds(target, getSelectedValues(values, 'gpuIds'));
+                      const maxAttempts = parseMaxAttempts(getFieldValue(values, 'maxAttempts'));
                       if (stage === 1) {
                         setStage(2);
                         return;
@@ -221,6 +244,9 @@ export function LaunchDialog({
                       <Link to={`/projects/${project.id}/codes`}>{text.newCode}</Link>
                     </p>
                   )}
+                  {stage === 1 && !compatibleTargets.length && (
+                    <p className="notice">{text.noCompatibleTargets}</p>
+                  )}
                   <fieldset disabled={launch.pending || (stage === 0 && !!launch.savedRun)}>
                     {stage < 2 ? (
                       <FormFields
@@ -263,6 +289,7 @@ export function LaunchDialog({
                         ]}
                       />
                     )}
+                    {stage === 2 && selectedCode && <CodeRuntimeDetails version={selectedCode} />}
                   </fieldset>
                   {launch.savedRun && !existingRun && launch.error && (
                     <div className="notice">
@@ -296,7 +323,11 @@ export function LaunchDialog({
                     )}
                     <button
                       className="button primary"
-                      disabled={launch.pending || (stage === 0 && !compatibleCodes.length)}
+                      disabled={
+                        launch.pending ||
+                        (stage === 0 && !compatibleCodes.length) ||
+                        (stage === 1 && !compatibleTargets.length)
+                      }
                     >
                       {stage === 2 ? text.launch : text.next}
                     </button>

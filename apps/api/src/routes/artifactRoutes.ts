@@ -1,7 +1,14 @@
 import { Readable } from 'node:stream';
 import { Hono } from 'hono';
+import { z } from 'zod';
 import type { ArtifactService } from '../services/artifactService.js';
-import { principal, uuidParam, type ApiEnvironment, type ApiContext } from '../http/request.js';
+import {
+  parse,
+  principal,
+  uuidParam,
+  type ApiEnvironment,
+  type ApiContext,
+} from '../http/request.js';
 
 const safeInlineMimeTypes = new Set([
   'text/plain',
@@ -17,6 +24,14 @@ const safeInlineMimeTypes = new Set([
   'video/mp4',
   'video/webm',
 ]);
+
+// Bound project catalogs while leaving room for uploaded SIF files and model weights.
+const DEFAULT_CATALOG_LIMIT = 100;
+const MAX_CATALOG_LIMIT = 500;
+const artifactCatalogQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(MAX_CATALOG_LIMIT).default(DEFAULT_CATALOG_LIMIT),
+  query: z.string().trim().max(200).optional(),
+});
 
 export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
@@ -45,7 +60,25 @@ export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment>
     }),
   );
   routes.put('/:p/runs/:r/artifacts', (context) => upload(context, uuidParam(context, 'r')));
+  routes.get('/:p/artifacts', async (context) =>
+    context.json({
+      items: await artifacts.listProject(
+        principal(context),
+        uuidParam(context, 'p'),
+        parse(artifactCatalogQuerySchema, context.req.query()),
+      ),
+    }),
+  );
   routes.put('/:p/artifacts', (context) => upload(context));
+  routes.get('/:p/artifacts/:a', async (context) =>
+    context.json(
+      await artifacts.getMetadata(
+        principal(context),
+        uuidParam(context, 'p'),
+        uuidParam(context, 'a'),
+      ),
+    ),
+  );
   routes.get('/:p/artifacts/:a/content', async (context) => {
     const { artifact, content } = await artifacts.content(
       principal(context),

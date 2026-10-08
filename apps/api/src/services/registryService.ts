@@ -30,9 +30,17 @@ import {
 } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
 import { enqueueRunEvent } from './outboxEvents.js';
+import type { ModelAutomationService } from './modelAutomationService.js';
+import {
+  findSavedArtifact,
+  validateCodeArtifacts,
+} from '../repositories/runtimeArtifactRepository.js';
 
 export class RegistryService {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly automation: ModelAutomationService,
+  ) {}
 
   async models(principal: Principal, projectId: string): Promise<Model[]> {
     await this.requireReadAccess(principal, projectId);
@@ -94,10 +102,9 @@ export class RegistryService {
       });
       if (input.sourceRunId) await findRun(connection, { projectId, id: input.sourceRunId });
       if (input.artifactId)
-        await assertProjectReference(connection, {
-          table: 'artifacts',
+        await findSavedArtifact(connection, {
           projectId,
-          id: input.artifactId,
+          artifactId: input.artifactId,
         });
       if (input.defaultCodeVersionId)
         validateCodeCompatibility(
@@ -123,6 +130,10 @@ export class RegistryService {
           JSON.stringify(input.metadata),
         ],
       ))!;
+      await this.automation.processRegistration(connection, {
+        projectId,
+        modelVersionId: version.id,
+      });
       return { ...version, family: model.family };
     });
   }
@@ -207,26 +218,26 @@ export class RegistryService {
         id: registration.codeId,
       });
       const input = registration.input;
-      if (input.source.kind === 'artifact')
-        await assertProjectReference(connection, {
-          table: 'artifacts',
-          projectId,
-          id: input.source.artifactId,
-        });
+      await validateCodeArtifacts(connection, {
+        projectId,
+        source: input.source,
+        runtime: input.runtime,
+      });
       return (await first<CodeVersion>(
         connection,
-        `INSERT INTO code_versions(code_id,project_id,version,source,entrypoint,requirements,environment,supported_model_families,task_types)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+        `INSERT INTO code_versions(code_id,project_id,version,source,entrypoint,requirements,environment,supported_model_families,task_types,runtime)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
         [
           registration.codeId,
           projectId,
           input.version,
-          JSON.stringify(input.source),
+          input.source === null ? null : JSON.stringify(input.source),
           input.entrypoint,
           input.requirements,
           JSON.stringify(input.environment),
           input.supportedModelFamilies,
           input.taskTypes,
+          JSON.stringify(input.runtime),
         ],
       ))!;
     });

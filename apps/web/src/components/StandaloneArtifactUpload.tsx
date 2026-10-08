@@ -29,6 +29,9 @@ export function StandaloneArtifactUpload({ projectId }: { projectId: string }) {
               <h3>{text.artifactId}</h3>
               <pre>{artifact.id}</pre>
               <CopyButton value={artifact.id} />
+              <h3>{text.sha256}</h3>
+              <pre>{artifact.sha256}</pre>
+              <CopyButton value={artifact.sha256} />
               <h3>{text.uri}</h3>
               <pre>artifact://{artifact.id}</pre>
             </div>

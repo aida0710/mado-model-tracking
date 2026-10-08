@@ -67,6 +67,33 @@ def is_process_group_present(pid: int) -> bool:
         return True
 
 
+def is_owned_process_group(pid: int, expected_identity: str | None) -> bool:
+    if expected_identity is None or pid <= 0:
+        return False
+    if is_same_process(pid, expected_identity):
+        return True
+    # A dead leader can leave children in its session. A reused live leader invalidates ownership.
+    if process_identity(pid) is not None:
+        return False
+    try:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        if not expected_identity.startswith(boot_id + ":"):
+            return False
+        for process_directory in Path("/proc").iterdir():
+            if not process_directory.name.isdigit():
+                continue
+            try:
+                process_stat = (process_directory / "stat").read_text()
+                fields = process_stat[process_stat.rfind(")") + 2 :].split()
+                if fields[0] not in {"Z", "X"} and int(fields[2]) == pid and int(fields[3]) == pid:
+                    return True
+            except (OSError, ValueError, IndexError):
+                continue
+    except OSError:
+        return False
+    return False
+
+
 def read_state(workspace: Path) -> dict[str, Any]:
     state_path = workspace / "state.json"
     if not state_path.exists():
@@ -79,12 +106,15 @@ def read_state(workspace: Path) -> dict[str, Any]:
         process_alive = is_same_process(int(state.get("processPid", 0)), state.get("processIdentity"))
         if not supervisor_alive:
             state["status"] = "unknown"
+            state["error"] = "Supervisor disappeared; the existing execution must not be restarted"
+        if state["status"] == "unknown":
             # A supervisor interrupted between intent and PID publication may have spawned a child.
             state["processAlive"] = (
-                process_alive
+                supervisor_alive
+                or process_alive
                 or is_process_group_present(int(state.get("processPid", 0)))
                 or state.get("processPending", False)
                 or not state.get("supervisorPid")
+                or bool(state.get("container") and state["container"].get("released") is not True)
             )
-            state["error"] = "Supervisor disappeared; the existing execution must not be restarted"
     return state

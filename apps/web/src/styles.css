@@ -791,6 +791,37 @@ tr.selected td {
 .version-detail {
   padding-top: 20px;
 }
+.field-action {
+  margin-bottom: 16px;
+}
+.automation-panel {
+  padding-top: 20px;
+}
+.automation-enabled {
+  color: var(--teal);
+}
+.automation-links {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+.automation-error {
+  display: block;
+  min-width: 160px;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.automation-rule-detail {
+  margin-top: 24px;
+}
+.automation-settings {
+  margin-top: 20px;
+}
+.automation-settings summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+}
 .details-list {
   margin: 0;
   font-size: 12px;

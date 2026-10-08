@@ -299,6 +299,7 @@ export async function seedDemo(
           knownHostsPath: '',
           workDirectory: options.environment?.MMT_LOCAL_WORK_DIRECTORY ?? '/tmp/mmt-local-worker',
           pythonExecutable: 'python3',
+          runtimeKinds: ['python'],
           gpuIds: [],
           maxConcurrentJobs: 2,
           enabled: true,

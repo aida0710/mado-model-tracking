@@ -30,6 +30,15 @@ export const trackingApi = {
     requestItems<LogEntry>(`${runPath(projectId, runId)}/logs`, signal),
   artifacts: (projectId: string, runId: string, signal?: AbortSignal) =>
     requestItems<Artifact>(`${runPath(projectId, runId)}/artifacts`, signal),
+  projectArtifacts: (
+    projectId: string,
+    query: { limit: number; query?: string },
+    signal?: AbortSignal,
+  ) =>
+    requestItems<Artifact>(
+      `${projectPath(projectId)}/artifacts?${new URLSearchParams({ limit: String(query.limit), ...(query.query ? { query: query.query } : {}) })}`,
+      signal,
+    ),
   uploadArtifact: (projectId: string, runId: string | null, path: string, file: File) =>
     request<Artifact>(
       `${runId ? runPath(projectId, runId) : projectPath(projectId)}/artifacts?${new URLSearchParams({ path })}`,

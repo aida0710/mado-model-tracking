@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
 
 export const uuidSchema = z.uuid();
 export const nameSchema = z.string().trim().min(1).max(200);
@@ -27,6 +28,13 @@ export const uniqueIdsSchema = z
   .array(uuidSchema)
   .max(1000)
   .refine((values) => new Set(values).size === values.length, 'IDs must be unique');
+// A rule or code version can explicitly name up to 100 compatible model families.
+const MAX_MODEL_FAMILIES = 100;
+export const modelFamiliesSchema = z
+  .array(nameSchema)
+  .min(1)
+  .max(MAX_MODEL_FAMILIES)
+  .refine((families) => new Set(families).size === families.length);
 
 export function isRelativeFilePath(path: string): boolean {
   return (
@@ -91,17 +99,46 @@ export const codeSourceSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('artifact'), artifactId: uuidSchema }),
 ]);
-export const codeVersionSchema = z.strictObject({
-  version: nameSchema,
-  source: codeSourceSchema,
-  entrypoint: z.array(z.string().min(1).max(4000)).min(1).max(100),
-  requirements: z.array(z.string().min(1).max(2000)).max(1000).default([]),
-  environment: z
-    .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(10000))
-    .default({}),
-  supportedModelFamilies: z.array(nameSchema).min(1).max(100),
-  taskTypes: z.array(runKindSchema).min(1).max(5),
-});
+export const codeVersionSchema = z
+  .strictObject({
+    version: nameSchema,
+    source: codeSourceSchema.nullable().default(null),
+    runtime: executionRuntimeSchema.default({ kind: 'python' }),
+    entrypoint: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(4000)
+          .refine((value) => !value.includes('\0')),
+      )
+      .min(1)
+      .max(100),
+    requirements: z.array(z.string().min(1).max(2000)).max(1000).default([]),
+    environment: z
+      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string().max(10000))
+      .default({}),
+    supportedModelFamilies: modelFamiliesSchema,
+    taskTypes: z
+      .array(runKindSchema)
+      .min(1)
+      .max(5)
+      .refine((values) => new Set(values).size === values.length),
+  })
+  .superRefine((code, context) => {
+    if (code.runtime.kind === 'python' && code.source === null)
+      context.addIssue({
+        code: 'custom',
+        path: ['source'],
+        message: 'Python requires a source',
+      });
+    if (code.runtime.kind !== 'python' && code.requirements.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['requirements'],
+        message: 'Container requirements must be empty',
+      });
+  });
 export const modelVersionSchema = z.strictObject({
   version: nameSchema,
   parentModelVersionIds: uniqueIdsSchema.default([]),
@@ -162,7 +199,22 @@ export const logSchema = z.strictObject({
 export const metricBatchSchema = z.strictObject({
   metrics: z.array(metricSchema).min(1).max(1000),
 });
-export const logBatchSchema = z.strictObject({ entries: z.array(logSchema).min(1).max(1000) });
+export const logBatchSchema = z.strictObject({
+  entries: z.array(logSchema).min(1).max(1000),
+});
+export const gpuIdsSchema = z
+  .array(z.string().min(1).max(100))
+  .max(128)
+  .refine((values) => new Set(values).size === values.length);
+// Explicit retries remain bounded, and the default matches the existing worker policy.
+const MAX_JOB_ATTEMPTS = 100;
+const DEFAULT_JOB_ATTEMPTS = 3;
+export const maxAttemptsSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(MAX_JOB_ATTEMPTS)
+  .default(DEFAULT_JOB_ATTEMPTS);
 export const targetSchema = z.strictObject({
   name: nameSchema,
   host: z
@@ -176,10 +228,13 @@ export const targetSchema = z.strictObject({
   knownHostsPath: z.string().max(4000),
   workDirectory: z.string().min(1).max(4000),
   pythonExecutable: z.string().min(1).max(4000),
-  gpuIds: z
-    .array(z.string().min(1).max(100))
-    .max(128)
-    .refine((values) => new Set(values).size === values.length),
+  runtimeKinds: z
+    .array(runtimeKindSchema)
+    .min(1)
+    .max(runtimeKindSchema.options.length)
+    .refine((values) => new Set(values).size === values.length)
+    .default(['python']),
+  gpuIds: gpuIdsSchema,
   maxConcurrentJobs: z.number().int().min(1).max(128),
   enabled: z.boolean(),
   executor: z.enum(['ssh', 'local']),
@@ -187,12 +242,8 @@ export const targetSchema = z.strictObject({
 export const jobCreateSchema = z.strictObject({
   runId: uuidSchema,
   targetId: uuidSchema,
-  gpuIds: z
-    .array(z.string().min(1).max(100))
-    .max(128)
-    .refine((values) => new Set(values).size === values.length)
-    .default([]),
-  maxAttempts: z.number().int().min(1).max(100).default(3),
+  gpuIds: gpuIdsSchema.default([]),
+  maxAttempts: maxAttemptsSchema,
 });
 export const tokenCreateSchema = z.strictObject({
   name: nameSchema,

@@ -18,6 +18,8 @@ from .contracts import TERMINAL_STATUSES, WorkerJob
 from .event_wait import wait_interval
 from .journal import JobJournal
 from .runtime import JobExecutor
+from .session_inputs import stage_container_inputs
+from .session_outputs import forward_container_outputs
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,10 +52,17 @@ class JobSession:
         self.offsets: dict[str, int] = record["offsets"]
         self.step: int = record.get("step", 0)
         self.saved_completion: dict[str, Any] | None = record.get("completion")
+        self.result_acknowledgments: dict[str, Any] = record.get("results", {})
         self.last_telemetry = 0.0
 
     def persist(self, *, completion: dict[str, Any] | None = None) -> None:
-        self.journal.save(self.job, offsets=self.offsets, step=self.step, completion=completion)
+        self.journal.save(
+            self.job,
+            offsets=self.offsets,
+            step=self.step,
+            completion=completion,
+            results=self.result_acknowledgments,
+        )
 
     async def heartbeat(self) -> None:
         while not self.finished.is_set():
@@ -97,7 +106,7 @@ class JobSession:
                 await self.complete({"status": "canceled", "exit_code": None, "error": None})
                 return
             source = self.job.code_version["source"]
-            if source["kind"] == "artifact":
+            if source is not None and source["kind"] == "artifact":
                 archive_path = self.journal.archive_path(self.job.id)
                 try:
                     await self.transfer_before_start(lambda: self.download_source(archive_path))
@@ -111,6 +120,9 @@ class JobSession:
                     return
                 finally:
                     archive_path.unlink(missing_ok=True)
+            if self.job.runtime["kind"] != "python":
+                if not await self.prepare_container_inputs():
+                    return
             # Bootstrap/download may be slow. Validate ownership immediately before launching.
             if self.lease_rejected.is_set():
                 raise LeaseRejected("Lease rejected before execution")
@@ -119,6 +131,28 @@ class JobSession:
                 return
             await self.retry_transport(self.executor.start)
         self.running = state["status"] in {"starting", "running"} or state["status"] == "missing"
+
+    async def prepare_container_inputs(self) -> bool:
+        try:
+            await self.transfer_before_start(
+                lambda: self.retry_transport(
+                    lambda: stage_container_inputs(
+                        self.job,
+                        api=self.api,
+                        executor=self.executor,
+                        transfer_path=lambda kind: self.journal.transfer_path(self.job.id, kind),
+                    )
+                )
+            )
+        except LeaseRejected:
+            raise
+        except PreparationCanceled:
+            await self.complete({"status": "canceled", "exit_code": None, "error": None})
+            return False
+        except (ApiError, ValueError) as error:
+            await self.complete({"status": "failed", "exit_code": None, "error": str(error)})
+            return False
+        return True
 
     async def transfer_before_start(self, operation: Callable[[], Any]) -> Any:
         transfer = asyncio.create_task(operation())
@@ -178,11 +212,20 @@ class JobSession:
                 state = response["state"]
                 status = state["status"]
                 if status in TERMINAL_STATUSES and self.logs_are_drained(response["logs"]):
+                    status = await self.collect_results(state)
                     await self.complete(
                         {"status": status, "exit_code": state.get("exitCode"), "error": state.get("error")}
                     )
                     return
-                if status == "unknown" and not state.get("processAlive", False):
+                container_unreleased = bool(
+                    state.get("container") and state["container"].get("released") is not True
+                )
+                if (
+                    status == "unknown"
+                    and state.get("processAlive") is False
+                    and not state.get("processPending")
+                    and not container_unreleased
+                ):
                     await self.complete(
                         {
                             "status": "failed",
@@ -232,6 +275,32 @@ class JobSession:
                 continue
             await wait_interval(self.finished, self.settings.poll_seconds)
 
+    async def collect_results(self, state: dict[str, Any]) -> str:
+        status = str(state["status"])
+        if status != "finished" or state.get("results") is None:
+            return status
+        try:
+            await forward_container_outputs(
+                self.job,
+                state["results"],
+                api=self.api,
+                executor=self.executor,
+                acknowledgments=self.result_acknowledgments,
+                persist=self.persist,
+                temporary_path=self.journal.transfer_path(self.job.id, "output"),
+            )
+        except LeaseRejected:
+            raise
+        except ConfigurationError as error:
+            state["error"] = str(error)
+            return "failed"
+        except ApiError as error:
+            if error.status_code is None or error.status_code >= 500 or error.status_code in {408, 429}:
+                raise
+            state["error"] = f"Container output API save failed: {error}"
+            return "failed"
+        return status
+
     async def forward_logs(self, streams: dict[str, Any]) -> None:
         for stream_name, level in (("stdout", "info"), ("stderr", "error")):
             stream = streams[stream_name]
@@ -254,6 +323,8 @@ class JobSession:
         return all(self.offsets[name] >= stream["size"] for name, stream in streams.items())
 
     async def complete(self, completion: dict[str, Any]) -> None:
+        if completion.get("error"):
+            completion = {**completion, "error": self.executor.masker.mask(completion["error"])}
         self.completing = True
         self.persist(completion=completion)
         attempts = 0

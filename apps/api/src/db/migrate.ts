@@ -7,8 +7,8 @@ export async function migrate(database: Database): Promise<void> {
   const directory = fileURLToPath(new URL('./migrations/', import.meta.url));
   const files = (await readdir(directory)).filter((file) => file.endsWith('.sql')).sort();
   await transaction(database, async (connection) => {
-    // The same lock is used by every API process applying this schema.
-    await connection.query('SELECT pg_advisory_xact_lock(4182, 1)');
+    // Processes applying one schema serialize; isolated test schemas can migrate independently.
+    await connection.query('SELECT pg_advisory_xact_lock(4182, hashtext(current_schema()))');
     await connection.query(
       'CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, sha256 text NOT NULL, applied_at timestamptz NOT NULL DEFAULT now())',
     );

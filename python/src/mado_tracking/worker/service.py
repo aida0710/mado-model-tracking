@@ -43,7 +43,11 @@ class Worker:
         if "snapshot" in record and record["snapshot"]["job"]["leaseId"] != job.lease_id:
             raise ConfigurationError("Saved job lease differs; refusing a replacement execution")
         self.journal.save(
-            job, offsets=record["offsets"], step=record.get("step", 0), completion=record.get("completion")
+            job,
+            offsets=record["offsets"],
+            step=record.get("step", 0),
+            completion=record.get("completion"),
+            results=record.get("results"),
         )
         try:
             executor = self.executor_factory(job, self.settings)

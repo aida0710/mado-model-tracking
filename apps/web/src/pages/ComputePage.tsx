@@ -9,6 +9,7 @@ import { DataTable } from '../components/DataTable';
 import { Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { text } from '../i18n/catalog';
+import { runtimeLabels } from '../i18n/runtime';
 
 export function ComputePage() {
   const { user } = useAuth();
@@ -50,6 +51,12 @@ export function ComputePage() {
                   target.host ? `${target.username}@${target.host}:${target.port}` : '—',
               },
               { key: 'executor', label: text.executor, render: (target) => target.executor },
+              {
+                key: 'runtime',
+                label: text.runtimeKinds,
+                render: (target) =>
+                  target.runtimeKinds.map((kind) => runtimeLabels[kind]).join(', '),
+              },
               {
                 key: 'gpu',
                 label: text.gpuIds,

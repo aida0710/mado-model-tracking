@@ -1,4 +1,5 @@
 // Isolated browser-test API. This module is never imported by production code.
+import { createHash } from 'node:crypto';
 export function createBrowserApi() {
   let sequence = 100;
   const id = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, '0')}`;
@@ -58,6 +59,7 @@ export function createBrowserApi() {
     projectId: project.id,
     version: 'v1',
     source: { kind: 'inline', files: { 'main.py': 'print("browser-test")' } },
+    runtime: { kind: 'python' },
     entrypoint: ['python3', 'main.py'],
     requirements: [],
     environment: {},
@@ -164,6 +166,7 @@ export function createBrowserApi() {
     knownHostsPath: '/test/known_hosts',
     workDirectory: '/test/work',
     pythonExecutable: 'python3',
+    runtimeKinds: ['python'],
     gpuIds: ['0', '1'],
     maxConcurrentJobs: 1,
     enabled: true,
@@ -195,7 +198,7 @@ export function createBrowserApi() {
     storageKey: 'test',
     mimeType: 'text/plain',
     size: 21,
-    sha256: 'browser-test-digest',
+    sha256: createHash('sha256').update('Browser test artifact').digest('hex'),
     createdAt: now,
   };
   const state = {
@@ -213,12 +216,17 @@ export function createBrowserApi() {
     runs,
     targets: [target],
     jobs: [],
+    automationRules: [],
+    automationExecutions: [],
     plugins: [plugin],
     tokens: [],
     artifacts: [artifact],
     calls: [],
     failRunList: false,
     failNextJob: false,
+    failNextAutomation: false,
+    failNextAutomationToggle: false,
+    failProjectArtifacts: false,
     failPluginMetrics: false,
     metricsGate: null,
     prometheus: `# HELP mado_storage_bucket_bytes Latest measured bucket size in bytes.
@@ -299,6 +307,38 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     }
     const parts = path.split('/').filter(Boolean).slice(2);
     const [resource, key, subresource] = parts;
+    if (resource === 'automation-rules') {
+      if (method === 'GET') return list(state.automationRules);
+      if (!user.isAdmin && project.role !== 'admin') return reply({ error: 'Admin required' }, 403);
+      if (method === 'POST') {
+        if (state.failNextAutomation) {
+          state.failNextAutomation = false;
+          return reply({ error: 'UI verification: automation storage unavailable' }, 503);
+        }
+        const rule = {
+          id: id(),
+          projectId: project.id,
+          createdBy: user.id,
+          createdAt: now,
+          ...body,
+        };
+        state.automationRules.unshift(rule);
+        return reply(rule, 201);
+      }
+      if (method === 'PATCH') {
+        if (Object.keys(body).length !== 1 || typeof body.enabled !== 'boolean')
+          return reply({ error: 'Only enabled can change' }, 400);
+        if (state.failNextAutomationToggle) {
+          state.failNextAutomationToggle = false;
+          return reply({ error: 'UI verification: toggle failed' }, 503);
+        }
+        const rule = item(state.automationRules, key);
+        rule.enabled = body.enabled;
+        return reply(rule);
+      }
+    }
+    if (resource === 'automation-executions' && method === 'GET')
+      return list(state.automationExecutions);
     if (resource === 'members') {
       if (method === 'GET') return list([{ user, role: project.role }]);
       return reply({ ...user, role: body.role });
@@ -371,12 +411,27 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
           storageKey: 'test',
           mimeType: request.headers()['content-type'],
           size: request.postDataBuffer()?.length ?? 0,
-          sha256: 'test-upload',
+          sha256: createHash('sha256')
+            .update(request.postDataBuffer() ?? Buffer.alloc(0))
+            .digest('hex'),
           createdAt: now,
         };
         state.artifacts.push(artifact);
         return reply(artifact);
       }
+    }
+    if (resource === 'artifacts' && !key && method === 'GET') {
+      if (state.failProjectArtifacts)
+        return reply({ error: 'UI verification: artifact catalog unavailable' }, 503);
+      return list(
+        state.artifacts
+          .filter(
+            (artifact) =>
+              !url.searchParams.get('query') ||
+              artifact.path.includes(url.searchParams.get('query')),
+          )
+          .slice(0, Number(url.searchParams.get('limit') ?? 100)),
+      );
     }
     if (resource === 'artifacts' && method === 'PUT') {
       const created = {
@@ -386,6 +441,9 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         path: url.searchParams.get('path'),
         mimeType: request.headers()['content-type'],
         size: request.postDataBuffer()?.length ?? 0,
+        sha256: createHash('sha256')
+          .update(request.postDataBuffer() ?? Buffer.alloc(0))
+          .digest('hex'),
       };
       state.artifacts.push(created);
       return reply(created);

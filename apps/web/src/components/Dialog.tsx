@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { text } from '../i18n/catalog';
 
@@ -15,6 +15,7 @@ export function Dialog({
   busy?: boolean;
   wide?: boolean;
 }) {
+  const titleId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -31,10 +32,10 @@ export function Dialog({
         event.preventDefault();
         if (!busy) onClose();
       }}
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
     >
       <header>
-        <h2 id="dialog-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button className="icon-button" onClick={onClose} disabled={busy} aria-label={text.close}>
           <X size={18} />
         </button>

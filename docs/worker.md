@@ -100,7 +100,39 @@ local executorは開発用で、API側のdevelopment設定とworker側の`MMT_AL
 
 compute targetからも`MMT_API_URL`に到達できる必要がある。SSH targetでworkerマシンの`127.0.0.1`を指定しても、そのAPIには接続できない。
 
-## CodeVersionのsourceとargvを固定する
+## CodeVersionのruntimeとargvを固定する
+
+SDK/workerとcompute targetのsupervisorにはLinuxとPython 3.11以上が必要。コンテナ内の言語やSDKの有無はimage側で決める。`ComputeTarget.runtimeKinds`に実行するruntimeを登録し、CLIとdaemonをそのtarget上へ用意する。既存の登録入力は`runtime`省略時にPython、targetの`runtimeKinds`省略時は`["python"]`になる。
+
+| runtime.kind | 固定する実体 | sourceと依存関係 |
+|---|---|---|
+| `python` | Git commit / inline / code Artifact | source必須。従来のjob専用venvとrequirementsを使う |
+| `docker` | `registry/repository@sha256:<64桁hex>` | sourceはnullまたは任意。requirementsは空。image内へ必要な依存を入れる |
+| `singularity`, `apptainer` | 保存済みArtifactの`artifactId`と`sha256` | SIFを取得してSHA256を照合する。sourceはnullまたは任意。requirementsは空 |
+
+コンテナの`entrypoint`は必須argvで、imageのENTRYPOINTやSIFのrunscriptを上書きする。`python`などの置換はPython runtimeだけに適用する。コンテナにはvenv作成やpip installを行わない。
+
+```python
+code = client.register_code(
+    project_id, name="container inference", version="v1",
+    source=None,
+    runtime={"kind": "docker", "image": "registry/model@sha256:<64桁hex>", "workingDirectory": "/app"},
+    entrypoint=["python", "/app/inference.py"],
+    supported_model_families=["linear"], task_types=["inference", "evaluation"],
+)
+```
+
+`workingDirectory`はコンテナ内の絶対パス。指定があればそれを使う。省略時はsource付きコンテナでは`/mmt/source`、sourceなしDockerではimageのWORKDIRを使う。sourceなしSIFではruntimeの既定cwdを使うため、再現性が必要なら明示する。
+
+Dockerはtargetと同じLinuxホスト上のUnix socket daemonを使う。targetの実行ユーザーがdaemonへアクセスでき、同じユーザーのUID:GIDでbind mountを読み書きできる構成が前提。read-only bindは再帰的に指定するため、対応CLIとLinux kernel 5.12以上が必要。Docker 29.1.3のlocal daemonで確認した。rootless/user namespace remappingは未検証。[Dockerのbind mount仕様](https://docs.docker.com/engine/storage/bind-mounts/)
+
+SDKからtarget側のAPIへ到達するため、Dockerは`--network host`で起動する。API URLの`127.0.0.1`はcompute target自身を指す。SSH先からworkerマシンのloopbackへは接続できない。Linuxのhost networkingではport mappingを使わない。[Dockerのhost network仕様](https://docs.docker.com/engine/network/drivers/host/)
+
+DockerのGPUは`--gpus device=...`でJobに予約されたIDだけを指定し、CUDAの番号はコンテナ内の`0..N-1`にする。CPU JobはGPUを渡さない。GPU実行にはtargetのNVIDIA driverとNVIDIA Container Toolkitが必要。SIFは`--nv`と`CUDA_VISIBLE_DEVICES`を使い、hostのGPU IDを保持する。SIFの`--nv`はdevice自体の分離ではなくCUDAの可視性を制限する方式。実GPUでの検証は未実施。[ApptainerのGPU選択](https://apptainer.org/docs/user/latest/gpu.html)
+
+SIF CLIには`exec`の`--cleanenv`, `--containall`, `--no-home`, `--no-mount`, `--no-eval`, `--pwd`が必要。起動前に対応を確認する。envは`APPTAINERENV_`または`SINGULARITYENV_`で渡し、shell評価とhostのhome/cwd/設定済みbindを無効にする。対応CLIが無い場合は`state.runtimeCapability.available=false`と理由を返し、Jobを失敗にする。[Apptainer exec](https://apptainer.org/docs/user/latest/cli/apptainer_exec.html)、[Singularity exec](https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html)
+
+## 任意sourceは保存した版から展開する
 
 sourceは次の3種類を実行できる。
 
@@ -128,7 +160,60 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_PROJECT_ID`, `MMT_EXPERIMENT_ID`, `MMT_RUN_ID`, `MMT_JOB_ID` | 実行対象のID |
 | `MMT_JOB_KIND` | 実行するRunのkind。CodeVersionの環境変数より優先する |
 
-対象モデルの重みやdatasetの実体は、コード側がArtifact APIや登録されたURIから読む。workerはmetadataと版参照を渡す。実行コードへ渡す環境変数はhostの基本設定とCodeVersionの設定、SDK設定に限り、workerの無関係なシークレットは継承しない。
+Python runtimeでは、モデル重みやdatasetの実体をコード側がArtifact APIや登録URIから読む。コンテナでは、workerが重みを実行前に取得する。DatasetVersionはどちらもmetadataとURIを渡す方式。実行コードへ渡す環境変数はCodeVersionの設定とSDK設定に限り、workerの無関係なシークレットは継承しない。
+
+## コンテナの入力と出力は標準pathを使う
+
+コンテナへ渡すmountは次のディレクトリに限定する。spec/state、API tokenのファイル、SSH設定、workerのhomeはmountしない。SDK接続用envは優先して供給し、Dockerはprivateなenv-file、SIFはprefix付きenvで渡す。secret値はargvへ含めない。
+
+| コンテナ内path | 内容 | mount |
+|---|---|---|
+| `/mmt/inputs/weights` | 入力ModelVersionのprimary weights file | read-only |
+| `/mmt/context` | context、parameters、model-version、dataset-versionsのJSON | read-only |
+| `/mmt/source` | 任意sourceの固定版。source=nullならmountしない | read-only |
+| `/mmt/outputs` | imageが生成する結果 | read/write |
+
+Artifact重みはworkerが認証済みAPIからstream取得し、targetへの転送後もSHA256とサイズを確認する。SIFも登録SHA256と実ファイルを照合する。途中でdownload/転送が失敗した入力からentrypointを起動しない。`file://`の重みはtarget側のregular fileからcopyする。HTTP(S)の重みはworker側の別clientで取得し、API tokenやCookieを転送せず、redirectを追わない。Datasetの外部URIにはworkerからアクセスしない。
+
+重みとArtifactのdownloadは、HTTPの`Content-Length`を圧縮された転送bodyのbytes数と照合する。保存ファイルのサイズとSHA256は展開後のbytesから計算する。`Content-Encoding`はidentity・gzip・deflateに対応し、gzip/deflateの末尾欠落やchecksum破損も拒否する。
+
+既存のcontext用envはコンテナ内のpathへ差し替える。追加envは`MMT_MODEL_FILE=/mmt/inputs/weights`、`MMT_INPUTS_DIR=/mmt/inputs`、`MMT_OUTPUTS_DIR=/mmt/outputs`、`MMT_RESULT_FILE=/mmt/outputs/result.json`。入力モデルが無い場合の`MMT_MODEL_FILE`は空。任意sourceのpathは`MMT_SOURCE_DIR`で渡す。
+
+SDKをimage内に入れた場合は従来のAPIを使える。SDKなしimageは、出力ファイルを閉じてchecksumを確定してから、最後に`result.json`をatomic renameで保存する。
+
+```json
+{
+  "version": 1,
+  "complete": true,
+  "artifacts": [
+    {"path": "predictions.json", "sha256": "<64桁hex>", "size": 18, "mimeType": "application/json"}
+  ],
+  "metrics": [{"name": "accuracy", "value": 0.9, "step": 0}]
+}
+```
+
+`path`はoutputs内の相対パス、`size`はbyte数。metricsは有限の数値で、`step`は非負の整数。省略したstepは0、timestampは回収時のUTC時刻になる。宣言した全fileのSHA256/size、未宣言file、symlink/hardlink/特殊file、絶対パスや`..`、`.partial`/`.tmp`を検査する。結果は128 files、1000 metrics、manifestは1MiBまで。出力ディレクトリが空ならmanifestは不要。
+
+entrypointが成功し、daemon/processが停止した後だけ結果を回収する。workerはfileを再びstream取得してSHA256を確認し、Run Artifactの`container/<path>`へ保存する。metricsはlease付きworker APIへ送り、全保存を確認してからJobをcompleteする。結果検証やAPIの永久失敗はJobをfailedにする。cancel/nonzero exitの出力を成功結果として登録しない。ModelVersion/DatasetVersionの登録はSDKまたはAPIで明示する。
+
+各fileとmetricsの保存成功はjournalへ残す。復帰時は未保存項目から再開する。APIが保存した後に応答が失われた場合は再送され得るため、Artifactを含めて少なくとも1回送る方式になる。
+
+## モデル登録後の自動推論・評価をSDKで設定する
+
+Project管理者は、固定CodeVersion、Experiment、Target、入力DatasetVersionsを指定してruleを作る。管理操作にはtokenの`admin` scopeも必要。設定の変更は新しいruleを作り、有効/無効だけを切り替える。
+
+```python
+rule = client.create_automation_rule(
+    project_id, name="evaluate linear models", model_families=["linear"], kind="evaluation",
+    experiment_id=experiment_id, code_version_id=code["id"], target_id=target_id,
+    input_dataset_version_ids=[dataset_version_id], parameters={"batch_size": 8},
+)
+client.set_automation_rule_enabled(project_id, rule["id"], enabled=False)
+rules = client.list_automation_rules(project_id)
+executions = client.list_automation_executions(project_id)
+```
+
+有効ruleは、その後に保存が確定したModelVersionから起動する。過去の版は対象外。同じruleとモデル版の組合せは一度だけqueueへ入る。`register_output_model()`もこの登録経路を使う。rule自体の受付状態と、作られたRun/Jobの実行状態は`automation-executions`で確認する。
 
 ## CPUの学習と推論を短時間で試す
 
@@ -177,6 +262,12 @@ entrypointが正常終了した場合も、そのprocess groupに残る子を停
 
 worker自身のSIGTERM/SIGINTは監視を止め、journalを残す。detachされたjobは実行を続け、同じworkerの再起動で回収する。ジョブの停止は前段のcancel APIで行う。
 
+DockerはJob IDに対応するcontainer名と、Job/CodeVersion/project/lease/workspaceのlabelを保存する。復帰時はlabel、固定image、container IDを照合して既存containerへattachし、`docker start`を再送しない。supervisorが消失しても、監視専用supervisorを復旧して同じcontainerを回収する。未起動containerを再実行することはない。[Docker create/startの仕様](https://docs.docker.com/reference/cli/docker/container/create/)
+
+取消やログclientの失敗では、daemon側をSIGTERM→grace期限で停止し、containerの削除と不在を確認する。entrypointの終了時も残るprocessをdaemon側で片付ける。`docker logs`などのclientをkillしただけでは完了しない。daemonへ接続できない、または所有を照合できない間はleaseとGPU予約を維持する。supervisor復旧時はDockerログが再送される場合がある。SIFは記録したboot ID・PID起動時刻・session/process groupを照合し、子の停止を確認する。
+
+Dockerのログthreadを作成・開始できない場合やjoinが失敗した場合も、所有containerの停止・削除と不在確認を行う。`unknown`状態は、supervisor・process group・起動途中のprocess・未解放containerのいずれかが残る可能性があれば完了しない。supervisor生存中の`unknown`や、生存情報が欠けた応答でもleaseとGPU予約を保持する。既存Python実行は、supervisorとprocess groupが消失し、起動途中でもないことを確認できた場合にfailed完了する。
+
 system metricsはCPU・memoryと、指定GPUの`nvidia-smi`値を採取する。`psutil`が無いtargetではLinuxのmemoryとCPU loadを使う。GPUなしのjobではnvidia-smiを呼ばない。取得できないGPU値を架空の数値で埋めない。
 
 ## テストと型検証を実行する
@@ -186,9 +277,19 @@ uv pip install --python python/.venv/bin/python -e 'python[test,telemetry]'
 python/.venv/bin/pytest python/tests
 python/.venv/bin/mypy --config-file python/pyproject.toml python/src/mado_tracking
 python/.venv/bin/ruff check python
+python/.venv/bin/ruff format --check python
+uv build --python python/.venv/bin/python --out-dir python/dist python
 ```
 
 Pythonのtestsはlocal subprocess、仮HTTP、SSHの仮transportを使う。並列2Job、claim応答喪失後の同一lease復帰、再起動後の二重起動防止、入力重みからのfine-tuningと不正入力の失敗を確認する。
+
+Dockerの挙動テストはcached digest imageを明示して実行する。SDKなしfixtureの`python/examples/container_fixture.py`はAlpine/BusyBoxで動き、read-only入力、結果file、metrics、token maskingを確認する。`MMT_EXAMPLE_DOCKER_IMAGE`を指定すれば、実API用のCodeVersionも登録できる。
+
+```bash
+MMT_TEST_DOCKER_IMAGE='alpine@sha256:<cached digest>' python/.venv/bin/pytest python/tests/test_docker_worker.py
+```
+
+Docker testsでは成功/失敗、出力検証/API保存失敗、daemon取消、worker/supervisorの復帰、失われた起動応答を確認する。SIFはCLI fixtureと実process groupでSHA、GPU選択env、取消、secret masking、出力回収を検証する。実SIF image、実SSH、GPU driver/Toolkitを含む結合は未確認。wheelから作ったremote zipappにも各runtime moduleを含める。
 
 親担当は`scripts/verify_worker.py`で、独立した実API/PostgreSQLとlocal durable workerの結合検証を完了している。対象はCPU training/inference、finetuningの種別と親モデル、cancel/retry/reconnect。結果は`artifacts/verification/2026-10-08/worker-integration.json`。Python testsでは、入力重みからのfine-tuningを別途確認している。実SSH・実GPUには接続していない。結合検証では開発用の独立DB/APIを使い、既存アプリへ接続しない。
 

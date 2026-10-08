@@ -8,11 +8,13 @@ import { StandaloneArtifactUpload } from '../components/StandaloneArtifactUpload
 import { DataTable } from '../components/DataTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { Empty, ErrorNotice, Resource } from '../components/Feedback';
-import { DetailsList, JsonDetails } from '../components/JsonDetails';
+import { JsonDetails } from '../components/JsonDetails';
+import { CodeRuntimeDetails } from '../components/CodeRuntimeDetails';
 import { FormDialog } from '../components/FormDialog';
 import { CodeVersionDialog } from '../dialogs/CodeVersionDialog';
 import { getFieldValue } from '../lib/formValues';
 import { text } from '../i18n/catalog';
+import { runtimeLabels } from '../i18n/runtime';
 
 export function CodesPage() {
   const { project, canEdit } = useProject();
@@ -110,9 +112,17 @@ export function CodesPage() {
                             ),
                           },
                           {
+                            key: 'runtime',
+                            label: text.runtime,
+                            render: (version) => runtimeLabels[version.runtime.kind],
+                          },
+                          {
                             key: 'source',
                             label: text.source,
-                            render: (version) => text[`${version.source.kind}Source`],
+                            render: (version) =>
+                              version.source
+                                ? text[`${version.source.kind}Source`]
+                                : text.imageSource,
                           },
                           {
                             key: 'families',
@@ -129,20 +139,13 @@ export function CodesPage() {
                       />
                       {registry.selectedVersion && (
                         <div className="version-detail">
-                          <DetailsList
-                            entries={[
-                              [
-                                text.entrypoint,
-                                <code>{JSON.stringify(registry.selectedVersion.entrypoint)}</code>,
-                              ],
-                              [
-                                text.requirements,
-                                <pre>{registry.selectedVersion.requirements.join('\n')}</pre>,
-                              ],
-                            ]}
-                          />
-                          <h3>{text.source}</h3>
-                          <JsonDetails value={registry.selectedVersion.source} />
+                          <CodeRuntimeDetails version={registry.selectedVersion} />
+                          {registry.selectedVersion.source && (
+                            <>
+                              <h3>{text.source}</h3>
+                              <JsonDetails value={registry.selectedVersion.source} />
+                            </>
+                          )}
                           <h3>{text.environment}</h3>
                           <JsonDetails value={registry.selectedVersion.environment} />
                         </div>

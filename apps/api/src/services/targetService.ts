@@ -46,8 +46,8 @@ export class TargetService {
       );
     return (await first<ComputeTarget>(
       this.database,
-      `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+      `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor,runtime_kinds)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [
         input.name,
         input.host,
@@ -61,6 +61,7 @@ export class TargetService {
         input.maxConcurrentJobs,
         input.enabled,
         input.executor,
+        input.runtimeKinds,
       ],
     ))!;
   }

@@ -20,6 +20,36 @@ export class ArtifactService {
     readonly stores: ArtifactStores,
   ) {}
 
+  async listProject(
+    principal: Principal,
+    projectId: string,
+    filter: { limit: number; query?: string },
+  ): Promise<Artifact[]> {
+    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
+    return rows(
+      this.database,
+      `SELECT * FROM artifacts WHERE project_id=$1
+       AND ($3::text IS NULL OR path ILIKE '%' || $3 || '%')
+       ORDER BY created_at DESC,id DESC LIMIT $2`,
+      [projectId, filter.limit, filter.query ?? null],
+    );
+  }
+
+  async getMetadata(
+    principal: Principal,
+    projectId: string,
+    artifactId: string,
+  ): Promise<Artifact> {
+    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
+    const artifact = await first<Artifact>(
+      this.database,
+      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2',
+      [artifactId, projectId],
+    );
+    if (!artifact) notFound('Artifact');
+    return artifact;
+  }
+
   async list(principal: Principal, projectId: string, runId: string): Promise<Artifact[]> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     await findRun(this.database, { projectId, id: runId });
@@ -102,13 +132,7 @@ export class ArtifactService {
     projectId: string,
     download: { artifactId: string; range?: string },
   ): Promise<{ artifact: Artifact; content: ArtifactContent }> {
-    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
-    const artifact = await first<Artifact>(
-      this.database,
-      'SELECT * FROM artifacts WHERE id=$1 AND project_id=$2',
-      [download.artifactId, projectId],
-    );
-    if (!artifact) notFound('Artifact');
+    const artifact = await this.getMetadata(principal, projectId, download.artifactId);
     try {
       return {
         artifact,

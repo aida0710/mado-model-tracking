@@ -10,6 +10,7 @@ from urllib.parse import quote
 import httpx
 
 from .errors import ConfigurationError
+from .execution_runtime import ExecutionRuntime, validate_entrypoint, validate_runtime
 from .http import REQUEST_TIMEOUT_SECONDS, request_sync
 from .security import SecretMasker, secret_values
 from .settings import ApiSettings
@@ -218,8 +219,9 @@ class Client:
         *,
         name: str,
         version: str,
-        source: Mapping[str, Any],
+        source: Mapping[str, Any] | None = None,
         entrypoint: Sequence[str],
+        runtime: ExecutionRuntime | None = None,
         requirements: Sequence[str] = (),
         environment: Mapping[str, str] | None = None,
         supported_model_families: Sequence[str] = (),
@@ -227,6 +229,11 @@ class Client:
         description: str = "",
         code_id: str | None = None,
     ) -> dict[str, Any]:
+        try:
+            validate_runtime(runtime, source=source, requirements=requirements)
+            validate_entrypoint(entrypoint)
+        except ValueError as error:
+            raise ConfigurationError(str(error)) from None
         if code_id is None:
             code = self.request(
                 "POST",
@@ -239,7 +246,8 @@ class Client:
             self.project_path(project_id, f"codes/{path_id(code_id)}/versions"),
             json={
                 "version": version,
-                "source": dict(source),
+                "source": dict(source) if source is not None else None,
+                **({"runtime": dict(runtime)} if runtime is not None else {}),
                 "entrypoint": list(entrypoint),
                 "requirements": list(requirements),
                 "environment": dict(environment or {}),
@@ -247,6 +255,65 @@ class Client:
                 "taskTypes": list(task_types),
             },
         )
+
+    def create_automation_rule(
+        self,
+        project_id: str,
+        *,
+        name: str,
+        model_families: Sequence[str],
+        kind: str,
+        experiment_id: str,
+        code_version_id: str,
+        target_id: str,
+        gpu_ids: Sequence[str] = (),
+        input_dataset_version_ids: Sequence[str] = (),
+        parameters: Mapping[str, Any] | None = None,
+        tags: Mapping[str, str] | None = None,
+        max_attempts: int = 1,
+        enabled: bool = True,
+    ) -> dict[str, Any]:
+        if kind not in {"inference", "evaluation"}:
+            raise ConfigurationError("Automation supports inference or evaluation")
+        return self.request(
+            "POST",
+            self.project_path(project_id, "automation-rules"),
+            json={
+                "name": name,
+                "enabled": enabled,
+                "modelFamilies": list(model_families),
+                "kind": kind,
+                "experimentId": experiment_id,
+                "codeVersionId": code_version_id,
+                "targetId": target_id,
+                "gpuIds": list(gpu_ids),
+                "inputDatasetVersionIds": list(input_dataset_version_ids),
+                "parameters": dict(parameters or {}),
+                "tags": dict(tags or {}),
+                "maxAttempts": max_attempts,
+            },
+        )
+
+    def list_automation_rules(self, project_id: str) -> list[dict[str, Any]]:
+        return self._list_items(project_id, "automation-rules")
+
+    def set_automation_rule_enabled(self, project_id: str, rule_id: str, *, enabled: bool) -> dict[str, Any]:
+        return self.request(
+            "PATCH",
+            self.project_path(project_id, f"automation-rules/{path_id(rule_id)}"),
+            json={"enabled": enabled},
+            retryable=True,
+        )
+
+    def list_automation_executions(self, project_id: str) -> list[dict[str, Any]]:
+        return self._list_items(project_id, "automation-executions")
+
+    def _list_items(self, project_id: str, resource: str) -> list[dict[str, Any]]:
+        payload = self.request("GET", self.project_path(project_id, resource), retryable=True)
+        items = payload.get("items")
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            raise ConfigurationError("API list response must contain items")
+        return items
 
     def create_job(
         self,

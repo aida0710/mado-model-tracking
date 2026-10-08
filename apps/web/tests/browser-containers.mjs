@@ -1,0 +1,360 @@
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { createBrowserApi } from './browserApi.mjs';
+
+const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
+if (!modulePath) throw new Error('Set MMT_PLAYWRIGHT_MODULE to an installed Playwright index.mjs');
+const { chromium } = await import(pathToFileURL(modulePath).href);
+const browser = await chromium.launch({
+  headless: true,
+  ...(process.env.MMT_CHROMIUM_PATH ? { executablePath: process.env.MMT_CHROMIUM_PATH } : {}),
+  args: ['--no-sandbox'],
+});
+const context = await browser.newContext({ viewport: { width: 1440, height: 960 } });
+const api = createBrowserApi();
+api.state.loggedIn = true;
+await context.route((url) => url.pathname.startsWith('/api/'), api.route);
+const page = await context.newPage();
+const pageErrors = [];
+page.on('pageerror', (error) => pageErrors.push(error.message));
+const base = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182';
+const projectBase = base + '/projects/' + api.state.project.id;
+const dialog = () => page.getByRole('dialog').last();
+const fill = (label, value) => dialog().getByLabel(label).fill(value);
+const select = (label, value) => dialog().getByLabel(label).selectOption(value);
+const clickSave = () => dialog().getByRole('button', { name: '保存', exact: true }).click();
+const waitClosed = () => page.getByRole('dialog').waitFor({ state: 'hidden' });
+const codePosts = () =>
+  api.state.calls.filter(
+    (call) =>
+      call.method === 'POST' && call.path.endsWith('/versions') && call.path.includes('/codes/'),
+  );
+const modelFamilies = '対応モデル系列（1行に1件）';
+const commandLabel = '実行コマンド（引数のJSON配列）';
+const image = 'registry.example.com/team/infer@sha256:' + 'a'.repeat(64);
+async function fillCodeCommand() {
+  await fill(commandLabel, '["python", "/app/infer.py"]');
+  await fill(modelFamilies, 'test-family');
+  await select('対応する実行種別', 'inference');
+}
+try {
+  console.log('Browser containers: Docker, command, optional source, digest validation');
+  await page.goto(projectBase + '/codes');
+  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await fill('Version', 'docker-v1');
+  await select('Runtime', 'docker');
+  assert.equal(await dialog().getByLabel('ソース形式').inputValue(), 'none');
+  assert.equal(await dialog().getByLabel('依存パッケージ（1行に1件）').count(), 0);
+  await fill('Docker image（digest固定）', 'image:latest');
+  await fillCodeCommand();
+  await select('対応する実行種別', ['inference', 'evaluation']);
+  await clickSave();
+  await dialog()
+    .getByRole('alert')
+    .filter({ hasText: 'Docker imageはreference@sha256:' })
+    .waitFor();
+  assert.equal(codePosts().length, 0);
+  await fill('Docker image（digest固定）', image);
+  await fill('コンテナ内の作業ディレクトリ（任意）', 'app');
+  await clickSave();
+  await dialog().getByRole('alert').filter({ hasText: '絶対パス' }).waitFor();
+  assert.equal(codePosts().length, 0);
+  await fill('コンテナ内の作業ディレクトリ（任意）', '/app');
+  await clickSave();
+  await waitClosed();
+  const dockerVersion = api.state.codeVersions.find((version) => version.version === 'docker-v1');
+  assert.deepEqual(dockerVersion.runtime, { kind: 'docker', image, workingDirectory: '/app' });
+  assert.equal(dockerVersion.source, null);
+  assert.deepEqual(dockerVersion.requirements, []);
+  await page.getByRole('button', { name: 'docker-v1', exact: true }).click();
+  await page.locator('.version-detail').getByText(image, { exact: true }).waitFor();
+  await page
+    .locator('.version-detail')
+    .getByText('["python","/app/infer.py"]', { exact: true })
+    .waitFor();
+  await page.reload();
+  await page.locator('.version-detail').getByText(image, { exact: true }).waitFor();
+
+  console.log('Browser containers: stored SIF and uploaded SIF SHA');
+  const storedSif = {
+    ...api.state.artifacts[0],
+    id: '00000000-0000-4000-8000-000000008001',
+    runId: null,
+    path: 'images/stored.sif',
+    sha256: 'b'.repeat(64),
+  };
+  api.state.artifacts.push(storedSif);
+  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await fill('Version', 'singularity-v1');
+  await select('Runtime', 'singularity');
+  api.state.failProjectArtifacts = true;
+  await fill('Artifactを検索', 'stored.sif');
+  await dialog().getByRole('alert').filter({ hasText: 'artifact catalog unavailable' }).waitFor();
+  api.state.failProjectArtifacts = false;
+  await dialog().getByRole('button', { name: '再試行', exact: true }).click();
+  await dialog()
+    .getByLabel('SIF Artifact')
+    .locator('option[value="' + storedSif.id + '"]')
+    .waitFor({ state: 'attached' });
+  await select('SIF Artifact', storedSif.id);
+  assert.equal(await dialog().getByLabel('SHA256').inputValue(), storedSif.sha256);
+  assert.equal(
+    await dialog()
+      .getByLabel('SHA256')
+      .evaluate((input) => input.readOnly),
+    true,
+  );
+  await fillCodeCommand();
+  await select('ソース形式', 'inline');
+  await fill('ファイル（パスと内容のJSON）', '{"main.py":"print(1)"}');
+  await clickSave();
+  await waitClosed();
+  const singularityVersion = api.state.codeVersions.find(
+    (version) => version.version === 'singularity-v1',
+  );
+  assert.deepEqual(singularityVersion.runtime, {
+    kind: 'singularity',
+    artifactId: storedSif.id,
+    sha256: storedSif.sha256,
+  });
+  assert.equal(singularityVersion.source.kind, 'inline');
+  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await fill('Version', 'apptainer-v1');
+  await select('Runtime', 'apptainer');
+  await dialog().getByRole('button', { name: 'Artifactをアップロード', exact: true }).click();
+  await dialog()
+    .getByLabel('ファイル')
+    .setInputFiles({
+      name: 'uploaded.sif',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from('SIF browser fixture'),
+    });
+  await dialog().getByRole('button', { name: 'アップロード', exact: true }).click();
+  await page
+    .getByRole('heading', { name: 'Artifactをアップロード', exact: true })
+    .waitFor({ state: 'hidden' });
+  const uploadedSif = api.state.artifacts.find((artifact) => artifact.path === 'uploaded.sif');
+  assert.ok(uploadedSif);
+  assert.equal(await dialog().getByLabel('SIF Artifact').inputValue(), uploadedSif.id);
+  assert.equal(await dialog().getByLabel('SHA256').inputValue(), uploadedSif.sha256);
+  await fillCodeCommand();
+  await clickSave();
+  await waitClosed();
+  assert.deepEqual(
+    api.state.codeVersions.find((version) => version.version === 'apptainer-v1').runtime,
+    {
+      kind: 'apptainer',
+      artifactId: uploadedSif.id,
+      sha256: uploadedSif.sha256,
+    },
+  );
+
+  console.log('Browser containers: target runtimes and launch compatibility');
+  await page.goto(projectBase + '/compute');
+  await page.getByRole('button', { name: 'Compute targetを登録', exact: true }).click();
+  await fill('名前', 'Container target');
+  await select('Executor', 'local');
+  await fill('Host', 'localhost');
+  await fill('SSHユーザー', 'test');
+  await fill('作業ディレクトリ', '/test/container-work');
+  await select('対応Runtime', ['python', 'docker', 'singularity', 'apptainer']);
+  await fill('GPU ID（1行に1件）', '0\n1');
+  await clickSave();
+  await waitClosed();
+  const containerTarget = api.state.targets.find((target) => target.name === 'Container target');
+  assert.deepEqual(containerTarget.runtimeKinds, ['python', 'docker', 'singularity', 'apptainer']);
+  await page
+    .locator('tr')
+    .filter({ hasText: 'Container target' })
+    .getByText('Python, Docker, Singularity, Apptainer', { exact: true })
+    .waitFor();
+  await page.goto(projectBase + '/jobs');
+  await page.getByRole('button', { name: 'ジョブを起動', exact: true }).click();
+  await fill('Run name', 'Container launch');
+  await select('Experiments', api.state.experiments[0].id);
+  await select('コード版', dockerVersion.id);
+  await dialog().getByRole('button', { name: '次へ', exact: true }).click();
+  const targetOptions = await dialog()
+    .getByLabel('Compute target')
+    .locator('option')
+    .evaluateAll((options) => options.map((option) => option.value));
+  assert.ok(
+    !targetOptions.includes(api.state.targets[0].id),
+    'Python-only target is selectable for Docker',
+  );
+  await select('Compute target', containerTarget.id);
+  await select('GPU ID · CPUのみ', '1');
+  await dialog().getByRole('button', { name: '戻る', exact: true }).click();
+  await select('コード版', singularityVersion.id);
+  await dialog().getByRole('button', { name: '次へ', exact: true }).click();
+  assert.equal(await dialog().getByLabel('Compute target').inputValue(), '');
+  assert.deepEqual(
+    await dialog()
+      .getByLabel('GPU ID · CPUのみ')
+      .evaluate((input) => Array.from(input.selectedOptions, (option) => option.value)),
+    [],
+  );
+  await select('Compute target', containerTarget.id);
+  await dialog().getByRole('button', { name: '次へ', exact: true }).click();
+  await dialog().getByText(storedSif.sha256, { exact: true }).waitFor();
+  await dialog().getByRole('button', { name: 'ジョブを起動', exact: true }).click();
+  await waitClosed();
+  assert.equal(api.state.jobs.at(-1).targetId, containerTarget.id);
+  assert.deepEqual(api.state.jobs.at(-1).gpuIds, []);
+  const manualRun = api.state.runs.find((run) => run.name === 'Container launch');
+  assert.equal(manualRun.codeVersionId, singularityVersion.id);
+
+  console.log('Browser automation: Project admin creates a fixed rule and retries failed save');
+  api.state.user.isAdmin = false;
+  await page.goto(projectBase + '/models');
+  await page.getByRole('tab', { name: '自動実行ルール', exact: true }).click();
+  await page.getByRole('button', { name: '自動実行ルールを作成', exact: true }).click();
+  await fill('名前', 'Evaluate uploaded models');
+  await select('対象モデル系列', 'test-family');
+  await select('実行種別', 'evaluation');
+  await select('Experiments', api.state.experiments[0].id);
+  await select('コード版', dockerVersion.id);
+  assert.equal(
+    await dialog()
+      .getByLabel('Compute target')
+      .locator('option[value="' + api.state.targets[0].id + '"]')
+      .count(),
+    0,
+  );
+  await select('Compute target', containerTarget.id);
+  await select('GPU ID · CPUのみ', '0');
+  await select('入力データセット版', api.state.datasetVersions[0].id);
+  await fill('Parameters（JSON）', '{"batch_size":4}');
+  await fill('Tags（JSON）', '{"suite":"regression"}');
+  api.state.failNextAutomation = true;
+  await dialog().getByRole('button', { name: '作成', exact: true }).click();
+  await dialog().getByRole('alert').filter({ hasText: 'automation storage unavailable' }).waitFor();
+  assert.equal(await dialog().getByLabel('名前').inputValue(), 'Evaluate uploaded models');
+  assert.equal(api.state.automationRules.length, 0);
+  await dialog().getByRole('button', { name: '作成', exact: true }).click();
+  await waitClosed();
+  assert.equal(api.state.automationRules.length, 1);
+  const rule = api.state.automationRules[0];
+  assert.deepEqual(rule.modelFamilies, ['test-family']);
+  assert.equal(rule.kind, 'evaluation');
+  assert.equal(rule.codeVersionId, dockerVersion.id);
+  assert.equal(rule.targetId, containerTarget.id);
+  assert.deepEqual(rule.inputDatasetVersionIds, [api.state.datasetVersions[0].id]);
+  assert.deepEqual(rule.parameters, { batch_size: 4 });
+  await page.getByRole('button', { name: rule.name, exact: true }).click();
+  await page.locator('.automation-rule-detail').getByText(image, { exact: true }).waitFor();
+  const immutableSettings = { ...rule };
+  api.state.failNextAutomationToggle = true;
+  await page.getByRole('button', { name: rule.name + ': 無効にする', exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'toggle failed' }).waitFor();
+  assert.equal(rule.enabled, true);
+  await page.getByRole('button', { name: rule.name + ': 無効にする', exact: true }).click();
+  await page.getByRole('button', { name: rule.name + ': 有効にする', exact: true }).waitFor();
+  assert.deepEqual(rule, { ...immutableSettings, enabled: false });
+  assert.deepEqual(
+    api.state.calls
+      .filter((call) => call.method === 'PATCH' && call.path.includes('/automation-rules/'))
+      .at(-1).body,
+    { enabled: false },
+  );
+  await page.getByRole('button', { name: rule.name + ': 有効にする', exact: true }).click();
+  await page.getByRole('button', { name: rule.name + ': 無効にする', exact: true }).waitFor();
+
+  console.log('Browser automation: enrollment outcome, current statuses and Run/Job links');
+  const job = api.state.jobs.at(-1);
+  const execution = {
+    id: 'execution-queued',
+    projectId: api.state.project.id,
+    ruleId: rule.id,
+    modelVersionId: api.state.modelVersions[0].id,
+    runId: manualRun.id,
+    jobId: job.id,
+    status: 'queued',
+    runStatus: 'finished',
+    jobStatus: 'finished',
+    error: null,
+    createdAt: '2026-10-08T00:01:00Z',
+  };
+  api.state.automationExecutions.push(
+    execution,
+    {
+      ...execution,
+      id: 'execution-failed',
+      runId: null,
+      jobId: null,
+      status: 'failed',
+      runStatus: null,
+      jobStatus: null,
+      error: 'Target disabled',
+    },
+    {
+      ...execution,
+      id: 'execution-skipped',
+      runId: null,
+      jobId: null,
+      status: 'skipped',
+      runStatus: null,
+      jobStatus: null,
+      error: 'No model weights',
+    },
+  );
+  await page.getByRole('tab', { name: '自動実行履歴', exact: true }).click();
+  await page.getByRole('button', { name: '再読み込み', exact: true }).last().click();
+  for (const label of [
+    '起動を登録',
+    '登録に失敗',
+    '起動せず',
+    'Target disabled',
+    'No model weights',
+  ])
+    await page.getByText(label, { exact: true }).waitFor();
+  for (const label of ['登録結果', 'Run status', 'Job status'])
+    assert.equal(await page.getByRole('columnheader', { name: label, exact: true }).count(), 1);
+  assert.equal(
+    await page.getByRole('link', { name: 'Runを開く', exact: true }).getAttribute('href'),
+    '/projects/' + api.state.project.id + '/runs/' + manualRun.id,
+  );
+  assert.equal(
+    await page.getByRole('link', { name: 'Jobを開く', exact: true }).getAttribute('href'),
+    '/projects/' + api.state.project.id + '/jobs?job=' + job.id,
+  );
+  await page.getByRole('link', { name: 'Runを開く', exact: true }).click();
+  await page.getByRole('heading', { name: manualRun.name, exact: true }).waitFor();
+  await page.goto(projectBase + '/models');
+  await page.getByRole('tab', { name: '自動実行履歴', exact: true }).click();
+  await page.getByRole('link', { name: 'Jobを開く', exact: true }).click();
+  await page.locator('.job-detail').getByRole('heading', { name: job.id, exact: true }).waitFor();
+
+  console.log('Browser automation: Viewer/Editor read-only and global admin');
+  for (const role of ['viewer', 'editor']) {
+    api.state.project.role = role;
+    api.state.user.isAdmin = false;
+    await page.goto(projectBase + '/models');
+    await page.getByRole('tab', { name: '自動実行ルール', exact: true }).click();
+    await page.getByRole('button', { name: rule.name, exact: true }).waitFor();
+    assert.equal(
+      await page.getByRole('button', { name: '自動実行ルールを作成', exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await page.getByRole('button', { name: rule.name + ': 無効にする', exact: true }).count(),
+      0,
+    );
+    await page.getByRole('tab', { name: '自動実行履歴', exact: true }).click();
+    await page.getByRole('link', { name: 'Jobを開く', exact: true }).waitFor();
+  }
+  api.state.user.isAdmin = true;
+  api.state.project.role = 'viewer';
+  await page.goto(projectBase + '/models');
+  await page.getByRole('tab', { name: '自動実行ルール', exact: true }).click();
+  await page.getByRole('button', { name: '自動実行ルールを作成', exact: true }).waitFor();
+  await page.getByRole('button', { name: rule.name + ': 無効にする', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'ダークテーマ', exact: true }).click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+  await page.getByRole('button', { name: rule.name, exact: true }).click();
+  await page.locator('.automation-rule-detail').getByText(image, { exact: true }).waitFor();
+  assert.deepEqual(pageErrors, []);
+  console.log('Container and automation browser checks passed.');
+} finally {
+  await browser.close();
+}

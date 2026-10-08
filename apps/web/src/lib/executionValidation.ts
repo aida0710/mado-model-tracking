@@ -1,5 +1,16 @@
 import type { CodeVersion, ModelVersion, RunKind } from '@mmt/contracts';
 import { text } from '../i18n/catalog';
+import { parsePositiveInteger } from './formValues';
+
+// Match the API retry bound for manual and automatic jobs.
+export const MAX_JOB_ATTEMPTS = 100;
+// Use the API default before the user chooses a different retry budget.
+export const DEFAULT_JOB_ATTEMPTS = 3;
+export function parseMaxAttempts(value: string): number {
+  const attempts = parsePositiveInteger(value);
+  if (attempts > MAX_JOB_ATTEMPTS) throw new Error(text.maxAttemptsError);
+  return attempts;
+}
 
 export const RUN_KINDS: RunKind[] = [
   'inference',

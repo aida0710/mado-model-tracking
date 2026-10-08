@@ -4,10 +4,12 @@ export function Tabs({
   tabs,
   selected,
   onSelect,
+  panelId = 'run-tab-panel',
 }: {
   tabs: Array<{ key: string; label: string }>;
   selected: string;
   onSelect: (key: string) => void;
+  panelId?: string;
 }) {
   const id = useId();
   const container = useRef<HTMLDivElement>(null);
@@ -45,7 +47,7 @@ export function Tabs({
           role="tab"
           tabIndex={tab.key === selected ? 0 : -1}
           aria-selected={tab.key === selected}
-          aria-controls="run-tab-panel"
+          aria-controls={panelId}
           onClick={() => onSelect(tab.key)}
         >
           {tab.label}

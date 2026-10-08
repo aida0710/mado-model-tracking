@@ -1,5 +1,6 @@
-import type { ExecutionCatalog } from '../hooks/useExecutionCatalog';
-import type { SelectOption } from '../components/FormFields';
+import type { ExecutionCatalog } from '../types/executionCatalog';
+import type { SelectOption } from '../types/form';
+import { runtimeLabels } from '../i18n/runtime';
 import { text } from '../i18n/catalog';
 
 export function buildCatalogOptions(catalog: ExecutionCatalog) {
@@ -11,7 +12,7 @@ export function buildCatalogOptions(catalog: ExecutionCatalog) {
     })),
     codes: catalog.codeVersions.map((item) => ({
       value: item.id,
-      label: `${catalog.codes.find((code) => code.id === item.codeId)?.name ?? item.codeId} / ${item.version}`,
+      label: `${catalog.codes.find((code) => code.id === item.codeId)?.name ?? item.codeId} / ${item.version} · ${runtimeLabels[item.runtime.kind]}`,
     })),
     datasets: catalog.datasetVersions.map((item) => ({
       value: item.id,

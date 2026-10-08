@@ -3,6 +3,7 @@ import type { CodeVersion, ModelVersion } from '@mmt/contracts';
 import { isCodeCompatible, validateCodeCompatibility } from './executionValidation';
 
 const code = {
+  runtime: { kind: 'python' },
   taskTypes: ['inference', 'training'],
   supportedModelFamilies: ['Qwen3'],
 } as CodeVersion;

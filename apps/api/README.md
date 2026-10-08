@@ -48,6 +48,10 @@ npm run typecheck -w @mmt/api
 ## 実行と配送の整合性
 
 - 版は更新不可。Runのモデル・コード・入力データセットは作成時に実際の版IDで保存する。
+- CodeVersionの`runtime`はPython/Docker/Singularity/Apptainer。省略時はPython。Dockerはdigest固定、SIFは同じProjectの保存済みArtifact/hashで照合する。コンテナはsourceなしでも登録できる。Runの`environment.runtime`は変更不可。
+- targetの`runtimeKinds`は省略時にPython。Job登録とworker claimは対応runtimeと固定runtimeを検証する。
+- モデル自動実行のruleはProject/global adminだけが作成し、設定変更は新しいruleで行う。有効化/無効化だけPATCHできる。モデル版の登録transaction内で有効ruleを実行し、Run/Job/executionを一度だけ作成する。単なるArtifact uploadや過去のモデル登録では起動しない。
+- ruleのcreator権限失効と重みなしはskipを記録する。ruleごとの失敗はsavepointでRun/Jobをrollbackし、failureを保存してモデル登録を維持する。履歴は最新100件で、登録結果と現在のRun/Job状態を別のフィールドで返す。
 - worker tokenには`worker:execute`、project、editor以上の現在のmembershipが必要。SDKからArtifactやRegistryを登録する場合は、用途に合わせ`read`、`runs:write`、`artifacts:write`、`registry:write`を追加する。
 - claimはJobの`SKIP LOCKED`とtargetのrow lockを使う。CPU Jobもtargetの同時実行数に含める。GPUは同一transactionで予約する。
 - leaseは同じtokenとworkerIdに結びつける。claim再送とresumeは同じleaseを返す。並行監視するworkerはclaimの`activeJobIds`に監視済みのJobを指定すると、次のJobを取得できる。heartbeatが途絶えても自動再queueしない。状態不明のremote processを二重起動しないため、cancel要求だけではGPUを解放しない。

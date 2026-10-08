@@ -11,11 +11,13 @@ export function ArtifactUploadDialog({
   runId,
   onClose,
   onSaved,
+  accept,
 }: {
   projectId: string;
   runId: string | null;
   onClose: () => void;
   onSaved: (artifact: Artifact) => void;
+  accept?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [path, setPath] = useState('');
@@ -37,6 +39,7 @@ export function ArtifactUploadDialog({
             <span>{text.chooseFile}</span>
             <input
               type="file"
+              accept={accept}
               required
               onChange={(event) => {
                 const selected = event.target.files?.[0] ?? null;

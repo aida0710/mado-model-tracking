@@ -11,6 +11,8 @@ import { first, rows, transaction, type Connection, type Database } from '../db/
 import { conflict } from '../domain/errors.js';
 import type { RunCreate, RunPatch } from '../domain/validation.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
+import { validatePinnedRuntime } from '../domain/runtimeCompatibility.js';
+import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { isTerminalStatus, validateRunTransition } from '../domain/runTransitions.js';
 import {
   assertProjectReference,
@@ -34,7 +36,12 @@ export class RunService {
   async list(
     principal: Principal,
     projectId: string,
-    filter: { experimentId?: string; status?: RunStatus; query?: string; limit: number },
+    filter: {
+      experimentId?: string;
+      status?: RunStatus;
+      query?: string;
+      limit: number;
+    },
   ): Promise<Run[]> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     if (filter.experimentId)
@@ -89,8 +96,17 @@ export class RunService {
     if (input.modelVersionId)
       model = await findModelVersion(connection, { projectId, id: input.modelVersionId });
     const codeVersionId = input.codeVersionId ?? model?.defaultCodeVersionId;
-    if (codeVersionId) code = await findCodeVersion(connection, { projectId, id: codeVersionId });
-    if (code) validateCodeCompatibility(code, { model, kind: input.kind });
+    if (codeVersionId)
+      code = await findCodeVersion(connection, {
+        projectId,
+        id: codeVersionId,
+      });
+    if (code) {
+      validateCodeCompatibility(code, { model, kind: input.kind });
+      await validateCodeArtifacts(connection, code);
+      if (input.environment.runtime !== undefined)
+        validatePinnedRuntime(code.runtime, input.environment.runtime);
+    }
     return (await first<Run>(
       connection,
       `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by)
@@ -106,7 +122,7 @@ export class RunService {
         code?.id ?? null,
         input.inputDatasetVersionIds,
         input.parentRunId ?? null,
-        JSON.stringify(input.environment),
+        JSON.stringify(code ? { ...input.environment, runtime: code.runtime } : input.environment),
         registration.createdBy,
       ],
     ))!;
@@ -130,6 +146,17 @@ export class RunService {
       });
       const run = await findRun(connection, { projectId, id: registration.runId, lock: true });
       const input = registration.input;
+      if (input.environment?.runtime !== undefined && run.codeVersionId) {
+        const code = await findCodeVersion(connection, {
+          projectId,
+          id: run.codeVersionId,
+        });
+        validatePinnedRuntime(code.runtime, input.environment.runtime);
+      }
+      const environment = input.environment && {
+        ...input.environment,
+        ...(run.codeVersionId ? { runtime: run.environment.runtime } : {}),
+      };
       const status = input.status ?? run.status;
       const job = await first<{ status: string }>(
         connection,
@@ -151,7 +178,7 @@ export class RunService {
           run.id,
           input.name,
           input.tags ? JSON.stringify(input.tags) : null,
-          input.environment ? JSON.stringify(input.environment) : null,
+          environment ? JSON.stringify(environment) : null,
           status,
           isTerminalStatus(status),
           input.parameters ? JSON.stringify(input.parameters) : null,

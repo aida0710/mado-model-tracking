@@ -57,13 +57,26 @@ def build_runtime_bundle() -> bytes:
         archive.writestr("runtime/__init__.py", "")
         archive.write(package_directory / "security.py", "runtime/security.py")
         archive.write(package_directory / "timestamps.py", "runtime/timestamps.py")
-        for name in ("host_runner", "host_state", "host_execution", "source", "telemetry"):
+        archive.write(package_directory / "execution_runtime.py", "runtime/execution_runtime.py")
+        for name in (
+            "host_runner",
+            "host_state",
+            "host_execution",
+            "source",
+            "telemetry",
+            "container_layout",
+            "container_outputs",
+            "runtime_capability",
+            "docker_container",
+            "sif_container",
+            "job_execution",
+        ):
             source = (package_directory / "worker" / f"{name}.py").read_text()
             archive.writestr(
                 f"runtime/{name}.py",
-                source.replace("from ..security", "from .security").replace(
-                    "from ..timestamps", "from .timestamps"
-                ),
+                source.replace("from ..security", "from .security")
+                .replace("from ..timestamps", "from .timestamps")
+                .replace("from ..execution_runtime", "from .execution_runtime"),
             )
         for path in package_directory.glob("*.py"):
             archive.write(path, f"sdk/mado_tracking/{path.name}")
@@ -74,7 +87,8 @@ def build_runtime_bundle() -> bytes:
 def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[str, Any]:
     return {
         "jobId": job.id,
-        "codeVersion": job.code_version,
+        "leaseId": job.lease_id,
+        "codeVersion": {**job.code_version, "runtime": job.runtime},
         "gpuIds": job.job["gpuIds"],
         "context": {
             "jobId": job.id,
@@ -111,6 +125,7 @@ class JobExecutor:
         self.workspace: str | None = None
         self.runtime: str | None = None
         self.bundle = build_runtime_bundle()
+        self.staged_inputs: dict[str, Any] = {}
 
     def _create_transport(self) -> CommandTransport:
         target = self.job.target
@@ -155,7 +170,9 @@ class JobExecutor:
         return await self.command("poll", payload={"offsets": offsets, "telemetry": telemetry, "step": step})
 
     async def start(self) -> dict[str, Any]:
-        return await self.command("start", payload=execution_specification(self.job, self.settings))
+        specification = execution_specification(self.job, self.settings)
+        specification["stagedInputs"] = self.staged_inputs
+        return await self.command("start", payload=specification)
 
     async def cancel(self) -> dict[str, Any]:
         return await self.command("cancel")

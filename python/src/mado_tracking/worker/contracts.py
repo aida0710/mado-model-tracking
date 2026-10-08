@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from ..errors import ConfigurationError
+from ..execution_runtime import RUNTIME_KINDS, validate_entrypoint, validate_runtime
 
 RUN_KINDS = {"inference", "evaluation", "training", "finetuning", "processing"}
 TERMINAL_STATUSES = {"finished", "failed", "canceled"}
@@ -57,6 +58,14 @@ class WorkerJob:
     def lease_id(self) -> str:
         return str(self.job["leaseId"])
 
+    @property
+    def runtime(self) -> dict[str, Any]:
+        return validate_runtime(
+            self.code_version.get("runtime"),
+            source=self.code_version["source"],
+            requirements=self.code_version["requirements"],
+        )
+
     def validate(self) -> None:
         for entity_name, entity in (
             ("job", self.job),
@@ -104,14 +113,19 @@ class WorkerJob:
         if not set(gpu_ids).issubset(self.target["gpuIds"]):
             raise ConfigurationError("Job requests GPUs outside the compute target")
         entrypoint = self.code_version["entrypoint"]
-        if (
-            not entrypoint
-            or not isinstance(entrypoint, list)
-            or not all(isinstance(value, str) and "\x00" not in value for value in entrypoint)
-        ):
+        if not isinstance(entrypoint, list):
             raise ConfigurationError("CodeVersion.entrypoint must be a nonempty argv")
+        validate_entrypoint(entrypoint)
         if self.target["executor"] not in {"local", "ssh"}:
             raise ConfigurationError("Unknown compute executor")
+        runtime_kinds = self.target.get("runtimeKinds", ["python"])
+        if (
+            not isinstance(runtime_kinds, list)
+            or not runtime_kinds
+            or not all(isinstance(kind, str) and kind in RUNTIME_KINDS for kind in runtime_kinds)
+            or self.runtime["kind"] not in runtime_kinds
+        ):
+            raise ConfigurationError("Compute target does not support the CodeVersion runtime")
         for name, value in self.code_version["environment"].items():
             if not ENVIRONMENT_NAME.fullmatch(name) or not isinstance(value, str) or "\x00" in value:
                 raise ConfigurationError("Invalid CodeVersion environment")

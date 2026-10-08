@@ -11,6 +11,9 @@ export type RunKind = 'inference' | 'evaluation' | 'training' | 'finetuning' | '
 export type RunStatus = 'queued' | 'running' | 'finished' | 'failed' | 'canceled';
 export type JobStatus = RunStatus | 'claimed';
 export type ArtifactBackend = 'filesystem' | 's3';
+export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
+export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
+import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 
 export interface User {
   id: string;
@@ -108,7 +111,8 @@ export interface CodeVersion {
   codeId: string;
   projectId: string;
   version: string;
-  source: CodeSource;
+  source: CodeSource | null;
+  runtime: ExecutionRuntime;
   entrypoint: string[];
   requirements: string[];
   environment: Record<string, string>;
@@ -170,6 +174,7 @@ export interface ComputeTarget {
   knownHostsPath: string;
   workDirectory: string;
   pythonExecutable: string;
+  runtimeKinds: ExecutionRuntimeKind[];
   gpuIds: string[];
   maxConcurrentJobs: number;
   enabled: boolean;

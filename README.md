@@ -33,9 +33,10 @@ CPUだけで実行を試す場合は`MMT_ALLOW_LOCAL_EXECUTOR=true`にし、loca
 
 - **Run**: パラメータ、タグ、時系列メトリクス、ログ、GPU使用率、実行環境。Run比較とメディアのArtifactプレビュー。
 - **ModelVersion**: 重み、親モデル、生成元Run、モデル系列、既定CodeVersion。aliasを解決して実際の版をRunへ保存。
-- **CodeVersion**: 固定Git commit、inlineのソース、または保存したzip/tar。依存関係、起動コマンド、対応モデル系列、実行種別。
+- **CodeVersion**: 固定Git commit、inlineのソース、保存したzip/tar、またはコンテナ内のコード。Python・Docker・Singularity・Apptainerの実行環境、起動コマンド、対応モデル系列、実行種別。
 - **DatasetVersion**: URI、digest、schema、加工元の版、生成元Run。外部DatasetVersionのIDも保持。
 - **Job**: SSH接続先、GPU予約、キュー、ログ、停止、再実行。再実行は新しいRunを作り、元の記録を保持。
+- **モデルの自動実行**: モデル版の登録完了後、系列に合うルールで推論・評価をキューへ登録。コード・データセット・コンテナの版を固定し、同じ登録イベントの重複を防止。
 - **認証**: Authentik OIDC、Projectのviewer/editor/admin、期限・scope・失効を持つ個人tokenとService Account token。
 - **Plugin**: 別サービスのHTTP契約。データセット検索・取り込み、Run lifecycleのlineage送信、Mado容量metricsの参照。
 
@@ -43,7 +44,7 @@ CPUだけで実行を試す場合は`MMT_ALLOW_LOCAL_EXECUTOR=true`にし、loca
 
 ## 設定と検証
 
-[運用・Authentik・保存先](docs/operations.md)、[API契約](docs/api-contract.md)、[plugin仕様](docs/plugins.md)、[検証手順](docs/verification.md)を参照してください。Python SDKの使用例は`python/examples/`にあります。
+[運用・Authentik・保存先](docs/operations.md)、[コンテナ・モデルの自動実行](docs/containers-automation.md)、[API契約](docs/api-contract.md)、[plugin仕様](docs/plugins.md)、[検証手順](docs/verification.md)を参照してください。Python SDKの使用例は`python/examples/`にあります。
 
 ```bash
 npm run typecheck

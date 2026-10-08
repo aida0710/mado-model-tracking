@@ -1,10 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import type { ComputeTarget, Job, Run, WorkerJob } from '@mmt/contracts';
+import type { ComputeTarget, ExecutionRuntime, Job, Run, WorkerJob } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
+import {
+  validatePinnedRuntime,
+  validateTargetCompatibility,
+} from '../domain/runtimeCompatibility.js';
+import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { isTerminalStatus } from '../domain/runTransitions.js';
 import type { JobCreate } from '../domain/validation.js';
 import {
@@ -62,20 +67,17 @@ export class JobService {
       ? await findModelVersion(connection, { projectId: run.projectId, id: run.modelVersionId })
       : null;
     validateCodeCompatibility(code, { model, kind: run.kind });
+    validatePinnedRuntime(code.runtime, run.environment.runtime);
+    await validateCodeArtifacts(connection, code);
     await findDatasetVersions(connection, {
       projectId: run.projectId,
       ids: run.inputDatasetVersionIds,
     });
-    const target = await first<ComputeTarget>(
-      connection,
-      'SELECT * FROM compute_targets WHERE id=$1 AND enabled=true',
-      [input.targetId],
-    );
-    if (!target) notFound('ComputeTarget');
-    if (target.executor === 'local' && !this.config.allowLocalExecutor)
-      throw new DomainError(422, 'Local executorは無効です', 'local_executor_disabled');
-    if (input.gpuIds.some((gpu) => !target.gpuIds.includes(gpu)))
-      throw new DomainError(422, 'Targetに存在しないGPUが指定されています', 'unknown_gpu');
+    await this.validateTarget(connection, {
+      targetId: input.targetId,
+      gpuIds: input.gpuIds,
+      runtime: code.runtime,
+    });
     const existing = await first(connection, 'SELECT id FROM jobs WHERE run_id=$1', [run.id]);
     if (existing) conflict('Runには既にJobがあります');
     return (await first<Job>(
@@ -83,6 +85,26 @@ export class JobService {
       `INSERT INTO jobs(project_id,run_id,target_id,gpu_ids,max_attempts,attempt) VALUES($1,$2,$3,$4,$5,$6) RETURNING ${jobColumns()}`,
       [run.projectId, run.id, input.targetId, input.gpuIds, input.maxAttempts, attempt],
     ))!;
+  }
+
+  async validateTarget(
+    connection: Connection,
+    execution: {
+      targetId: string;
+      gpuIds: string[];
+      runtime: ExecutionRuntime;
+    },
+  ): Promise<void> {
+    const target = await first<ComputeTarget>(
+      connection,
+      'SELECT * FROM compute_targets WHERE id=$1 AND enabled=true',
+      [execution.targetId],
+    );
+    if (!target) notFound('ComputeTarget');
+    validateTargetCompatibility(target, {
+      ...execution,
+      allowLocalExecutor: this.config.allowLocalExecutor,
+    });
   }
 
   async cancel(principal: Principal, projectId: string, jobId: string): Promise<Job> {
@@ -194,6 +216,17 @@ export class JobService {
     const modelVersion = run.modelVersionId
       ? await findModelVersion(connection, { projectId: job.projectId, id: run.modelVersionId })
       : null;
+    validateCodeCompatibility(codeVersion, {
+      model: modelVersion,
+      kind: run.kind,
+    });
+    validatePinnedRuntime(codeVersion.runtime, run.environment.runtime);
+    validateTargetCompatibility(target, {
+      runtime: codeVersion.runtime,
+      gpuIds: job.gpuIds,
+      allowLocalExecutor: this.config.allowLocalExecutor,
+    });
+    await validateCodeArtifacts(connection, codeVersion);
     const inputDatasets = await findDatasetVersions(connection, {
       projectId: job.projectId,
       ids: run.inputDatasetVersionIds,

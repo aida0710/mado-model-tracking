@@ -10,7 +10,7 @@ export function ErrorNotice({ message, retry }: { message: string | null; retry?
       <AlertCircle size={16} />
       <span>{message}</span>
       {retry && (
-        <button className="button small" onClick={retry}>
+        <button type="button" className="button small" onClick={retry}>
           <RefreshCw size={14} />
           {text.retry}
         </button>

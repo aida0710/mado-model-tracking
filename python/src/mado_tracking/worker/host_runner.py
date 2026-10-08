@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import fcntl
+import hashlib
 import json
 import os
 import signal
@@ -13,10 +14,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from ..execution_runtime import validate_runtime
 from ..security import SecretMasker, secret_values
-from .host_execution import CommandExecution, ExecutionCanceled
+from .container_layout import host_environment
+from .container_outputs import read_output_chunk, validate_results
+from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned_process_group
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
-from .source import materialize_source
+from .job_execution import execute_registered_code
+from .runtime_capability import ContainerStateUncertain, RuntimeUnavailable
 from .telemetry import collect_system_metrics
 
 # A single status request returns bounded log output, regardless of job duration.
@@ -24,7 +29,6 @@ STATUS_LOG_BYTES = 64 * 1024
 PROTOCOL_MAX_INPUT_BYTES = 32 * 1024**2
 # An orphan still uses the same cancellation grace as a supervised process.
 ORPHAN_CANCEL_GRACE_SECONDS = 10.0
-ORPHAN_CANCEL_POLL_SECONDS = 0.1
 
 
 def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -> dict[str, Any]:
@@ -36,6 +40,7 @@ def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -
             if (
                 previous.get("jobId") != specification["jobId"]
                 or previous.get("codeVersionId") != specification["codeVersion"]["id"]
+                or previous.get("leaseId") != specification.get("leaseId")
             ):
                 raise ValueError("Workspace belongs to a different pinned job")
             return read_state(workspace)
@@ -43,6 +48,7 @@ def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -
         state: dict[str, Any] = {
             "jobId": specification["jobId"],
             "codeVersionId": specification["codeVersion"]["id"],
+            "leaseId": specification.get("leaseId"),
             "status": "starting",
             "supervisorPid": 0,
             "processPid": 0,
@@ -70,6 +76,10 @@ def serve(workspace: Path) -> None:
         specification = read_json(workspace / "spec.json")
         if state.get("supervisorPid") not in {0, os.getpid()}:
             return
+        if specification.get("recoverOnly") and not terminate_owned_process_group(
+            state, grace_seconds=float(specification["cancelGraceSeconds"])
+        ):
+            return
         state.update(
             supervisorPid=os.getpid(), supervisorIdentity=process_identity(os.getpid()), status="running"
         )
@@ -81,12 +91,18 @@ def serve(workspace: Path) -> None:
 
     signal.signal(signal.SIGTERM, request_cancellation)
     signal.signal(signal.SIGINT, request_cancellation)
+    runtime = validate_runtime(
+        specification["codeVersion"].get("runtime"),
+        source=specification["codeVersion"]["source"],
+        requirements=specification["codeVersion"]["requirements"],
+    )
+    specification["codeVersion"]["runtime"] = runtime
     environment = _execution_environment(specification, workspace)
     masker = SecretMasker(secret_values(environment))
     execution = CommandExecution(
         workspace,
         state,
-        environment=environment,
+        environment=environment if runtime["kind"] == "python" else host_environment(),
         masker=masker,
         cancel_grace_seconds=float(specification["cancelGraceSeconds"]),
     )
@@ -94,37 +110,66 @@ def serve(workspace: Path) -> None:
     failure: str | None = None
     status = "failed"
     try:
-        source_directory = workspace / "source"
-        source_directory.mkdir(mode=0o700, exist_ok=True)
-        artifact_path = workspace / "source.archive"
-        materialize_source(
-            specification["codeVersion"]["source"],
-            source_directory,
-            artifact=artifact_path if artifact_path.exists() else None,
-            command_runner=execution.checked,
-        )
-        python = execution.create_environment(
-            sdk_directory=workspace / "sdk",
-            requirements=specification["codeVersion"]["requirements"],
-            install_dependencies=specification["installDependencies"],
-        )
-        entrypoint = list(specification["codeVersion"]["entrypoint"])
-        if entrypoint[0] in {"python", "python3", "${PYTHON}", "{python}"}:
-            entrypoint[0] = str(python)
-        exit_code, _captured = execution.run(entrypoint, cwd=source_directory)
+        exit_code = execute_registered_code(workspace, specification, execution)
         status = "finished" if exit_code == 0 else "failed"
         if exit_code:
             failure = f"Entrypoint exited with status {exit_code}"
+        elif runtime["kind"] != "python":
+            state["results"] = validate_results(workspace / "outputs")
     except ExecutionCanceled:
         status = "canceled"
+    except ContainerStateUncertain as error:
+        status = "unknown"
+        failure = masker.mask(str(error))
+    except RuntimeUnavailable as error:
+        state["runtimeCapability"] = {"kind": error.kind, "available": False}
+        failure = masker.mask(str(error))
+        if state.get("container") and not state["container"].get("released"):
+            status = "unknown"
     except Exception as error:
+        status = "unknown" if state.get("container") and not state["container"].get("released") else "failed"
         failure = masker.mask(str(error))
         with (workspace / "stderr.log").open("ab") as stderr_log:
             stderr_log.write((failure + "\n").encode())
-    state.update(status=status, exitCode=exit_code, error=failure, endedAt=time.time())
+    state.update(
+        status=status, exitCode=exit_code, error=failure, endedAt=time.time() if status != "unknown" else None
+    )
     write_json(workspace / "state.json", state)
     # Keep only nonsensitive execution metadata after terminal state has been persisted.
-    (workspace / "spec.json").unlink(missing_ok=True)
+    if status in {"finished", "failed", "canceled"}:
+        (workspace / "spec.json").unlink(missing_ok=True)
+        (workspace / "container.env").unlink(missing_ok=True)
+
+
+def resume_docker_supervisor(workspace: Path) -> None:
+    with (workspace / "start.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state = read_state(workspace)
+        if (
+            state.get("status") != "unknown"
+            or not state.get("container")
+            or is_same_process(int(state.get("supervisorPid", 0)), state.get("supervisorIdentity"))
+            or not (workspace / "spec.json").exists()
+        ):
+            return
+        specification = read_json(workspace / "spec.json")
+        specification["recoverOnly"] = True
+        write_json(workspace / "spec.json", specification)
+        with (workspace / "supervisor.log").open("ab") as diagnostic_output:
+            supervisor = subprocess.Popen(
+                [sys.executable, str(Path(sys.argv[0]).resolve()), "serve", str(workspace)],
+                stdin=subprocess.DEVNULL,
+                stdout=diagnostic_output,
+                stderr=diagnostic_output,
+                start_new_session=True,
+                close_fds=True,
+            )
+        state.update(
+            supervisorPid=supervisor.pid,
+            supervisorIdentity=process_identity(supervisor.pid),
+            status="starting",
+        )
+        write_json(workspace / "state.json", state)
 
 
 def _execution_environment(specification: dict[str, Any], workspace: Path) -> dict[str, str]:
@@ -159,6 +204,9 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
 
 def poll(workspace: Path, request: dict[str, Any]) -> dict[str, Any]:
     state = read_state(workspace)
+    if state.get("status") == "unknown" and state.get("container"):
+        resume_docker_supervisor(workspace)
+        state = read_state(workspace)
     logs = {}
     for stream_name in ("stdout", "stderr"):
         path = workspace / f"{stream_name}.log"
@@ -189,7 +237,7 @@ def poll(workspace: Path, request: dict[str, Any]) -> dict[str, Any]:
         context_path = workspace / "context.json"
         context = read_json(context_path) if context_path.exists() else {}
         metrics = collect_system_metrics(
-            pid=int(state.get("processPid", 0)),
+            pid=int(state.get("container", {}).get("pid", state.get("processPid", 0))),
             gpu_ids=context.get("gpuIds", []),
             step=int(request.get("step", 0)),
         )
@@ -199,40 +247,44 @@ def poll(workspace: Path, request: dict[str, Any]) -> dict[str, Any]:
 def cancel(workspace: Path) -> dict[str, Any]:
     (workspace / "cancel.request").touch(mode=0o600)
     state = read_state(workspace)
+    if state.get("container") and state.get("status") not in {"finished", "failed", "canceled"}:
+        resume_docker_supervisor(workspace)
+        state = read_state(workspace)
     supervisor_pid = int(state.get("supervisorPid", 0))
     if is_same_process(supervisor_pid, state.get("supervisorIdentity")):
         os.kill(supervisor_pid, signal.SIGTERM)
-    elif state.get("processAlive"):
-        process_pid = int(state.get("processPid", 0))
-        if is_same_process(process_pid, state.get("processIdentity")):
-            os.killpg(process_pid, signal.SIGTERM)
-            # Recovery cannot determine success; cancellation terminates the known group.
-            deadline = time.monotonic() + ORPHAN_CANCEL_GRACE_SECONDS
-            while is_same_process(process_pid, state.get("processIdentity")) and time.monotonic() < deadline:
-                time.sleep(ORPHAN_CANCEL_POLL_SECONDS)
-            try:
-                os.killpg(process_pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+    elif state.get("processAlive") and not state.get("container"):
+        if not state.get("processPending") and terminate_owned_process_group(
+            state, grace_seconds=ORPHAN_CANCEL_GRACE_SECONDS
+        ):
             state.update(status="canceled", exitCode=None, error=None, endedAt=time.time())
             write_json(workspace / "state.json", state)
     return state
 
 
-def receive_archive(workspace: Path) -> dict[str, Any]:
-    path = workspace / "source.archive"
+def receive_archive(workspace: Path, *, kind: str = "source") -> dict[str, Any]:
+    destinations = {
+        "source": workspace / "source.archive",
+        "sif": workspace / "runtime.sif",
+        "weights": workspace / "inputs/weights",
+    }
+    path = destinations[kind]
+    path.parent.mkdir(mode=0o700, exist_ok=True)
     with (workspace / "upload.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if (workspace / "state.json").exists():
             return {"uploaded": path.exists()}
-        temporary_path = workspace / "source.archive.partial"
+        temporary_path = path.with_name(path.name + ".partial")
+        checksum, size = hashlib.sha256(), 0
         with temporary_path.open("wb") as output:
             while chunk := sys.stdin.buffer.read(STATUS_LOG_BYTES):
                 output.write(chunk)
+                checksum.update(chunk)
+                size += len(chunk)
             output.flush()
             os.fsync(output.fileno())
         os.replace(temporary_path, path)
-    return {"uploaded": True}
+    return {"uploaded": True, "sha256": checksum.hexdigest(), "size": size}
 
 
 def main() -> None:
@@ -244,8 +296,10 @@ def main() -> None:
     if command == "serve":
         serve(workspace)
         return
-    if command == "upload":
-        response = receive_archive(workspace)
+    if command in {"upload", "upload-sif", "upload-weights"}:
+        response = receive_archive(
+            workspace, kind=command.removeprefix("upload-") if command != "upload" else "source"
+        )
     elif command == "cancel":
         response = cancel(workspace)
     else:
@@ -257,6 +311,11 @@ def main() -> None:
             response = launch(workspace, request, Path(sys.argv[0]).resolve())
         elif command == "poll":
             response = poll(workspace, request)
+        elif command == "output":
+            try:
+                response = read_output_chunk(workspace, request, read_state(workspace))
+            except (OSError, ValueError, KeyError):
+                response = {"error": "Container output failed validation"}
         else:
             raise ValueError("Unknown runner command")
     print(json.dumps(response, allow_nan=False))

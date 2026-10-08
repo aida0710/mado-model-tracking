@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Dialog } from './Dialog';
-import { FormFields, createInitialValues, type FormField } from './FormFields';
+import { FormFields } from './FormFields';
+import { createInitialValues } from '../lib/formValues';
+import type { FormField } from '../types/form';
 import { ErrorNotice } from './Feedback';
 import { useMutation } from '../hooks/useMutation';
 import { text } from '../i18n/catalog';

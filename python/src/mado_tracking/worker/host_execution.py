@@ -10,11 +10,12 @@ import subprocess
 import sys
 import time
 import venv
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
 from ..security import SecretMasker, StreamMasker
-from .host_state import process_identity, write_json
+from .host_state import is_owned_process_group, process_identity, write_json
 
 # Bounded reads and selector wakeups detect entrypoint exit/cancel independently of pipe EOF.
 READ_CHUNK_BYTES = 64 * 1024
@@ -44,8 +45,15 @@ class CommandExecution:
     def is_canceled(self) -> bool:
         return (self.workspace / "cancel.request").exists()
 
-    def run(self, argv: list[str], *, cwd: Path | None = None, capture: bool = False) -> tuple[int, str]:
-        if self.is_canceled():
+    def run(
+        self,
+        argv: list[str],
+        *,
+        cwd: Path | None = None,
+        capture: bool = False,
+        stop_requested: Callable[[], bool] | None = None,
+    ) -> tuple[int, str]:
+        if self.is_canceled() and stop_requested is None:
             raise ExecutionCanceled()
         with (
             (self.workspace / "stdout.log").open("ab", buffering=0) as stdout_log,
@@ -72,9 +80,11 @@ class CommandExecution:
                 processPid=process.pid, processIdentity=process_identity(process.pid), processPending=False
             )
             write_json(self.workspace / "state.json", self.state)
-            captured = self._drain(process, stdout_log, stderr_log, capture=capture)
+            captured = self._drain(
+                process, stdout_log, stderr_log, capture=capture, stop_requested=stop_requested
+            )
             exit_code = process.wait()
-        if self.is_canceled():
+        if self.is_canceled() and stop_requested is None:
             raise ExecutionCanceled()
         return exit_code, captured
 
@@ -99,7 +109,13 @@ class CommandExecution:
         return captured
 
     def _drain(
-        self, process: subprocess.Popen[bytes], stdout_log: Any, stderr_log: Any, *, capture: bool
+        self,
+        process: subprocess.Popen[bytes],
+        stdout_log: Any,
+        stderr_log: Any,
+        *,
+        capture: bool,
+        stop_requested: Callable[[], bool] | None = None,
     ) -> str:
         if process.stdout is None or process.stderr is None:
             raise RuntimeError("Process output was not connected")
@@ -114,7 +130,8 @@ class CommandExecution:
                 os.set_blocking(stream.fileno(), False)
                 selector.register(stream, selectors.EVENT_READ)
             while selector.get_map() or process.poll() is None:
-                if terminate_started is None and (self.is_canceled() or process.poll() is not None):
+                should_stop = stop_requested() if stop_requested is not None else self.is_canceled()
+                if terminate_started is None and (should_stop or process.poll() is not None):
                     # Children can keep output pipes open after the leader exits; do not wait for EOF.
                     terminate_started = time.monotonic()
                     _signal_process_group(process.pid, signal.SIGTERM)
@@ -191,6 +208,8 @@ def _has_live_process_group_members(process_group: int) -> bool:
         os.killpg(process_group, 0)
     except ProcessLookupError:
         return False
+    except PermissionError:
+        return True
     # Orphan zombies can keep killpg(0) true; they no longer execute or own GPU resources.
     for process_directory in Path("/proc").iterdir():
         if not process_directory.name.isdigit():
@@ -204,3 +223,16 @@ def _has_live_process_group_members(process_group: int) -> bool:
         except (OSError, IndexError, ValueError):
             continue
     return False
+
+
+def terminate_owned_process_group(state: dict[str, Any], *, grace_seconds: float) -> bool:
+    process_group = int(state.get("processPid", 0))
+    if not is_owned_process_group(process_group, state.get("processIdentity")):
+        return process_group <= 0 or not _has_live_process_group_members(process_group)
+    _signal_process_group(process_group, signal.SIGTERM)
+    deadline = time.monotonic() + grace_seconds
+    while _has_live_process_group_members(process_group):
+        if time.monotonic() >= deadline:
+            _signal_process_group(process_group, signal.SIGKILL)
+        time.sleep(CANCEL_POLL_SECONDS)
+    return True

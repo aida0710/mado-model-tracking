@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -11,6 +12,10 @@ from ..errors import ApiError, ConfigurationError, LeaseRejected
 from ..http import REQUEST_TIMEOUT_SECONDS, request_async
 from ..security import SecretMasker
 from .contracts import WorkerJob
+from .download_content import DOWNLOAD_ACCEPT_ENCODING, write_downloaded_content
+
+# Artifact uploads share the SDK's bounded one-MiB memory budget.
+ARTIFACT_CHUNK_BYTES = 1024 * 1024
 
 LEASE_REJECTED_STATUSES = {401, 403, 404, 409, 410}
 
@@ -98,17 +103,40 @@ class WorkerApi:
             payload["error"] = self.masker.mask(error)
         await self.request(f"worker/jobs/{job.id}/complete", payload, leased=True)
 
-    async def download_artifact(self, project_id: str, artifact_id: str, destination: Any) -> None:
+    async def download_artifact(self, project_id: str, artifact_id: str, destination: Any) -> dict[str, Any]:
         try:
             async with self.http.stream(
-                "GET", f"projects/{project_id}/artifacts/{artifact_id}/content"
+                "GET",
+                f"projects/{project_id}/artifacts/{artifact_id}/content",
+                headers={"Accept-Encoding": DOWNLOAD_ACCEPT_ENCODING},
             ) as response:
                 if not response.is_success:
                     from ..http import check_response
 
                     await response.aread()
                     check_response(response, self.masker)
-                async for chunk in response.aiter_bytes():
-                    destination.write(chunk)
-        except httpx.TransportError:
-            raise ApiError("Code artifact download interrupted; retry from the beginning") from None
+                return await write_downloaded_content(response, destination, label="Artifact")
+        except (httpx.TransportError, httpx.DecodingError, httpx.StreamError):
+            raise ApiError("Artifact download interrupted or invalid; retry from the beginning") from None
+
+    async def upload_output_artifact(self, job: WorkerJob, artifact: dict[str, Any], source: Path) -> None:
+        async def chunks() -> AsyncIterator[bytes]:
+            with source.open("rb") as content:
+                while chunk := content.read(ARTIFACT_CHUNK_BYTES):
+                    yield chunk
+
+        response = await request_async(
+            self.http,
+            "PUT",
+            f"projects/{job.job['projectId']}/runs/{job.run['id']}/artifacts",
+            params={"path": f"container/{artifact['path']}"},
+            headers={"Content-Type": artifact["mimeType"]},
+            content=chunks(),
+            masker=self.masker,
+        )
+        saved = response.json()
+        if not isinstance(saved, dict) or (saved.get("sha256"), saved.get("size")) != (
+            artifact["sha256"],
+            artifact["size"],
+        ):
+            raise ConfigurationError("Saved container Artifact checksum or size does not match")

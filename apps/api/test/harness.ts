@@ -13,7 +13,7 @@ import type { ApiEnvironment } from '../src/http/request.js';
 export const testDatabaseUrl =
   process.env.MMT_TEST_DATABASE_URL ?? process.env.MMT_DATABASE_URL_TEST;
 
-export async function createHarness() {
+export async function createHarness(options: { applyMigrations?: boolean } = {}) {
   if (!testDatabaseUrl) throw new Error('MMT_TEST_DATABASE_URL is required for integration tests');
   const url = new URL(testDatabaseUrl);
   if (
@@ -38,7 +38,7 @@ export async function createHarness() {
   });
   const stores = createArtifactStoresFromEnv({ ARTIFACT_FILESYSTEM_ROOT: artifactDirectory });
   try {
-    await migrate(database);
+    if (options.applyMigrations !== false) await migrate(database);
   } catch (error) {
     await database.end();
     await administrator.query(`DROP SCHEMA ${schema} CASCADE`);

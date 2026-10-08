@@ -90,7 +90,10 @@ export class WorkerService {
         const job = await first<Job>(
           connection,
           `SELECT ${jobColumns('j')} FROM jobs j JOIN compute_targets t ON t.id=j.target_id
+          JOIN runs r ON r.id=j.run_id AND r.project_id=j.project_id
+          JOIN code_versions c ON c.id=r.code_version_id AND c.project_id=r.project_id
           WHERE j.project_id=$1 AND j.status='queued' AND t.enabled AND ($2::uuid[] IS NULL OR j.target_id=ANY($2::uuid[]))
+          AND c.runtime->>'kind'=ANY(t.runtime_kinds)
           AND ($4 OR t.executor<>'local') AND NOT(j.id=ANY($3::uuid[]))
           AND (SELECT count(*) FROM jobs active WHERE active.target_id=t.id AND active.status IN ('claimed','running')) < t.max_concurrent_jobs
           AND NOT EXISTS(SELECT 1 FROM gpu_reservations g WHERE g.target_id=t.id AND g.gpu_id=ANY(j.gpu_ids))

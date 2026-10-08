@@ -1,15 +1,10 @@
-import type { Code, CodeSource, CodeVersion, RunKind } from '@mmt/contracts';
+import type { Code, CodeVersion } from '@mmt/contracts';
 import { useProject } from '../hooks/useProject';
-import { registryApi } from '../api/registry';
-import { FormDialog } from '../components/FormDialog';
-import {
-  getFieldValue,
-  splitLines,
-  getSelectedValues,
-  parseStringArray,
-  parseStringMap,
-} from '../lib/formValues';
-import { RUN_KINDS } from '../lib/executionValidation';
+import { useCodeVersionForm } from '../hooks/useCodeVersionForm';
+import { Dialog } from '../components/Dialog';
+import { CodeVersionFields } from '../components/CodeVersionFields';
+import { ErrorNotice } from '../components/Feedback';
+import { ArtifactUploadDialog } from './ArtifactUploadDialog';
 import { text } from '../i18n/catalog';
 
 export function CodeVersionDialog({
@@ -22,91 +17,55 @@ export function CodeVersionDialog({
   onSaved: (version: CodeVersion) => void;
 }) {
   const { project } = useProject();
+  const form = useCodeVersionForm({ projectId: project.id, codeId: code.id });
   return (
-    <FormDialog
-      title={`${code.name} · ${text.newVersion}`}
-      onClose={onClose}
-      onSaved={onSaved}
-      fields={[
-        { name: 'version', label: text.version, required: true },
-        {
-          name: 'sourceKind',
-          label: text.sourceKind,
-          type: 'select',
-          required: true,
-          defaultValue: 'git',
-          options: [
-            { value: 'git', label: text.gitSource },
-            { value: 'inline', label: text.inlineSource },
-            { value: 'artifact', label: text.artifactSource },
-          ],
-        },
-        {
-          name: 'url',
-          label: text.gitUrl,
-          required: true,
-          visible: (values) => getFieldValue(values, 'sourceKind') === 'git',
-        },
-        {
-          name: 'commit',
-          label: text.commit,
-          required: true,
-          visible: (values) => getFieldValue(values, 'sourceKind') === 'git',
-        },
-        {
-          name: 'files',
-          label: text.inlineFiles,
-          type: 'textarea',
-          defaultValue: '{}',
-          required: true,
-          visible: (values) => getFieldValue(values, 'sourceKind') === 'inline',
-        },
-        {
-          name: 'artifactId',
-          label: text.artifactId,
-          required: true,
-          visible: (values) => getFieldValue(values, 'sourceKind') === 'artifact',
-        },
-        {
-          name: 'entrypoint',
-          label: text.entrypoint,
-          type: 'textarea',
-          required: true,
-          placeholder: '["python", "main.py"]',
-        },
-        { name: 'requirements', label: text.requirements, type: 'textarea' },
-        { name: 'environment', label: text.codeEnvironment, type: 'textarea', defaultValue: '{}' },
-        { name: 'families', label: text.supportedFamilies, type: 'textarea', required: true },
-        {
-          name: 'taskTypes',
-          label: text.taskTypes,
-          type: 'multiselect',
-          required: true,
-          options: RUN_KINDS.map((kind) => ({ value: kind, label: text[kind] })),
-        },
-      ]}
-      onSubmit={(values) => {
-        const sourceKind = getFieldValue(values, 'sourceKind');
-        const source: CodeSource =
-          sourceKind === 'git'
-            ? {
-                kind: 'git',
-                url: getFieldValue(values, 'url'),
-                commit: getFieldValue(values, 'commit'),
-              }
-            : sourceKind === 'inline'
-              ? { kind: 'inline', files: parseStringMap(getFieldValue(values, 'files')) }
-              : { kind: 'artifact', artifactId: getFieldValue(values, 'artifactId') };
-        return registryApi.createCodeVersion(project.id, code.id, {
-          version: getFieldValue(values, 'version'),
-          source,
-          entrypoint: parseStringArray(getFieldValue(values, 'entrypoint')),
-          requirements: splitLines(getFieldValue(values, 'requirements')),
-          environment: parseStringMap(getFieldValue(values, 'environment')),
-          supportedModelFamilies: splitLines(getFieldValue(values, 'families')),
-          taskTypes: getSelectedValues(values, 'taskTypes') as RunKind[],
-        });
-      }}
-    />
+    <>
+      <Dialog title={`${code.name} · ${text.newVersion}`} onClose={onClose} busy={form.pending}>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void form.save().then((version) => {
+              if (version) onSaved(version);
+            });
+          }}
+        >
+          <fieldset disabled={form.pending}>
+            <CodeVersionFields
+              values={form.values}
+              artifacts={form.artifacts.items}
+              onChange={form.changeValues}
+              onUpload={form.openUpload}
+            />
+          </fieldset>
+          {form.needsArtifacts && form.artifacts.loading && (
+            <p className="muted" role="status">
+              {text.loading}
+            </p>
+          )}
+          <ErrorNotice
+            message={form.needsArtifacts ? form.artifacts.error : null}
+            retry={form.artifacts.reload}
+          />
+          <ErrorNotice message={form.error} />
+          <footer>
+            <button type="button" className="button" onClick={onClose} disabled={form.pending}>
+              {text.cancel}
+            </button>
+            <button className="button primary" disabled={form.pending}>
+              {form.pending ? text.loading : text.save}
+            </button>
+          </footer>
+        </form>
+      </Dialog>
+      {form.uploadPurpose && (
+        <ArtifactUploadDialog
+          projectId={project.id}
+          runId={null}
+          accept={form.uploadPurpose === 'sif' ? '.sif' : undefined}
+          onClose={form.closeUpload}
+          onSaved={form.selectUploadedArtifact}
+        />
+      )}
+    </>
   );
 }

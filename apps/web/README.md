@@ -13,7 +13,8 @@ npx --no-install vitest run apps/web/src/api apps/web/src/lib
 - `src/hooks/`: 認証、API読み込み、保存、版選択、ジョブ起動。ジョブのenqueue失敗時は作成済みRunを再利用する。
 - `src/pages/`、`src/dialogs/`、`src/components/`: 画面と登録・版作成・起動の操作。
 - `src/lib/`: 入力、互換性、フィルタ、表示、メトリクス、Lineageの純粋ロジック。
-- `src/i18n/catalog.ts`: UI文言。
+- `src/types/`: フォーム・選択肢・実行カタログの型。
+- `src/i18n/`: UI文言とRuntime・自動実行結果の表示名。
 - `public/fonts/`: 利用者提供HTMLから取り込んだIBM Plex。ライセンス同梱。
 
 ブラウザ検証は既存のPlaywrightを使える。root manifest/lockfileへ依存を追加する必要はない。
@@ -22,11 +23,18 @@ npx --no-install vitest run apps/web/src/api apps/web/src/lib
 export MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs
 export MMT_CHROMIUM_PATH=/path/to/chromium
 node apps/web/tests/browser-smoke.mjs
+node apps/web/tests/browser-containers.mjs
 node apps/web/tests/browser-integration.mjs
 node apps/web/tests/browser-followup-integration.mjs
 ```
 
 `browser-smoke.mjs`はブラウザ内で検証用APIを使い、API障害・enqueue失敗・全画面・Pluginの動線を確認する。fixtureは`tests/`のみで、production bundleに含めない。
+
+コード版はPython/Docker/Singularity/Apptainerを選べる。Docker imageはdigest固定、SIFはProjectの保存済みArtifactを検索・選択しSHA256を自動入力する。SIFの新規uploadも既存upload画面を使う。コンテナのsourceとcwdは任意、実行コマンドはargvのJSON配列。Compute targetの対応Runtimeを表示し、手動launchと自動実行ルールのTarget選択を制限する。
+
+Model Registryの自動実行ルールはProject admin/global adminが作成・有効無効を切り替え、viewer/editorは閲覧する。実行種別はInference/Evaluation、実験・コード版・入力データセット版・Targetを固定する。設定変更は新規ルール作成で行い、PATCHはenabledだけを送る。履歴には起動登録の結果と現在のRun/Job状態を別々に表示し、Run・Jobへのリンクを付ける。
+
+`browser-containers.mjs`はAPI mocksでRuntime登録、保存済みSIFの選択とupload、Target互換性、ルール作成の保存失敗と再試行、enabledだけのPATCH、Project admin/global adminとviewer/editorのUI、履歴のRun/Jobリンクを検証する。実APIの登録・外部コンテナ実行は行わない。
 
 `storage:metrics`対応Pluginの詳細には、Prometheusから読み取ったconnection/bucket/prefix別の容量・件数・計測時間・失敗回数を表示する。未計測値は補完せず、元の値はtooltipと折りたたみraw表示に残す。Parserは[Prometheus text exposition](https://prometheus.io/docs/instrumenting/exposition_formats/)のsample形式を扱う。Plugin登録は全体管理者、登録済みPluginの利用はProject adminに限る。
 
