@@ -37,6 +37,33 @@ services:
     depends_on: [api]
     ports: ['127.0.0.1:5182:80']
     restart: unless-stopped
+  # Optional: `docker compose --profile worker up -d worker`. The systemd unit (deploy/worker/) is the
+  # primary way to run a worker; see docs/operations.md.
+  worker:
+    profiles: [worker]
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        WORKER_UID: ${MMT_WORKER_UID:-10001}
+        WORKER_GID: ${MMT_WORKER_GID:-10001}
+    environment:
+      MMT_API_URL: ${MMT_WORKER_API_URL:-http://api:4182}
+      MMT_WORKER_ID: ${MMT_WORKER_ID:-compose-worker-1}
+      MMT_WORKER_TARGET_IDS: ${MMT_WORKER_TARGET_IDS:-}
+    secrets: [mmt_worker_token]
+    volumes:
+      # The journal of running Jobs; removing the volume abandons them.
+      - worker-state:/var/lib/mado-tracking-worker
+      # Targets name sshKeyPath / knownHostsPath under /home/worker/.ssh inside the container.
+      - ${MMT_WORKER_SSH_DIR:-./var/worker-ssh}:/home/worker/.ssh:ro
+    # The worker stops monitoring on SIGTERM and keeps its journal; give it time to flush.
+    stop_grace_period: 30s
+    restart: unless-stopped
+secrets:
+  mmt_worker_token:
+    file: ${MMT_WORKER_TOKEN_FILE:-./var/worker-token}
 volumes:
   postgres:
   artifacts:
+  worker-state:
