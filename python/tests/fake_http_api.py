@@ -16,6 +16,7 @@ class TrackingServer:
         self.models: dict[str, dict] = {}
         self.datasets: dict[str, dict] = {}
         self.artifacts: dict[str, bytes] = {}
+        self.artifact_entities: list[dict] = []
         self.metrics: list[dict] = []
         self.model_versions: list[dict] = []
         self.dataset_versions: list[dict] = []
@@ -72,14 +73,28 @@ class TrackingServer:
                     entity = {}
                 elif path.endswith("/logs"):
                     entity = {}
+                elif path.endswith("/artifacts") and self.command == "GET":
+                    run_id = path.split("/")[-2]
+                    prefix = parse_qs(parsed.query).get("prefix", [""])[0]
+                    # Newest first, like the API's versions=latest listing.
+                    entity = {
+                        "items": [
+                            artifact
+                            for artifact in reversed(fixture.artifact_entities)
+                            if artifact["runId"] == run_id and artifact["path"].startswith(prefix)
+                        ],
+                        "nextCursor": None,
+                    }
                 elif path.endswith("/artifacts"):
                     fixture.artifacts[identifier] = raw
                     entity = {
                         "id": identifier,
+                        "runId": path.split("/")[-2],
                         "size": len(raw),
                         "sha256": hashlib.sha256(raw).hexdigest(),
                         "path": parse_qs(parsed.query)["path"][0],
                     }
+                    fixture.artifact_entities.append(entity)
                 elif path.endswith("/content"):
                     content = fixture.artifacts[path.split("/")[-2]]
                     self.send_response(200)

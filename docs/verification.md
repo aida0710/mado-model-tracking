@@ -99,6 +99,38 @@ node scripts/verify_container_browser.mjs
 
 GPUは使用しません。Singularity/Apptainerの起動・停止・SIF照合はPythonのテストで確認し、実SIF runtimeでの実行確認とは区別します。
 
+## 学習から昇格判定までを薄く通す
+
+`scripts/verify_pipeline_smoke.py`は、学習→出力モデルの自動登録→推論→評価→昇格判定が1本の流れとしてつながっているかを、CPUの小さいfixtureで確かめます。APIはテスト専用DBに新しいschemaを作って起動します（`scripts/serve_mlflow_verification.ts`）。稼働中の開発API・Web・DBには接続しません。終了時にAPIを止め、schemaを削除します。
+
+```bash
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+PYTHONPATH=python/src python/.venv/bin/python scripts/verify_pipeline_smoke.py
+```
+
+APIはloopbackの47150で起動します。使用中なら`MMT_VERIFY_SMOKE_API_PORT`で変更します。workerはlocal executorで同じprocess内から`--once`と同じ処理（復帰または1件claim）を繰り返します。Jobごとにvenvを作り`httpx`をインストールするため、pipがパッケージを取得できる環境で実行します。Jobのworkspaceは`var/verification-pipeline-smoke/<時刻>/`に残ります。
+
+| 段階 | 確認すること |
+|---|---|
+| `setup` | Project、local target、コード版4件、正解セット（DatasetVersionのmetadataに各サンプルの長さ）、推論rule（`model_registered`）、評価rule（`upstream_run_finished`、上流＝推論rule）、昇格policy、出力モデル設定付きの学習Taskを登録する |
+| `training` | 学習TaskをlaunchしたRunが`finished`になり、`train.loss`40点と`model/weights.json`が残る |
+| `job_token_scope` | 学習Jobのコードが、自分のJob tokenで別のRunへmetricを送ると403 `job_token_forbidden`になり、そのRunに何も記録されない |
+| `output_registration` | Taskの出力モデル設定で版が登録され（`registered`）、版の`sourceRunId`が学習Run、重みArtifactが付く |
+| `inference` | 推論ruleがその版で1回だけ起動し、`python/examples/inference.py`がWAV（正弦波）3件と出力DatasetVersionを残す |
+| `evaluation` | 評価ruleが推論Runを上流に1回だけ起動する。親Runが推論Run、`upstreamDatasetVersionIds`が推論の出力、入力が正解セット＋推論の出力。`python/examples/evaluation.py`が`MMT_UPSTREAM_RUN_ID`から推論RunのWAVを取得し、長さの一致率などを記録して`eval/results.jsonl`を残す |
+| `promotion` | 昇格policyの判定が1件で、基準alias（`production`）が無い初回のため`passed`（`baseline_missing_first_promotion`） |
+| `failed_training_skips_downstream` | 別のTaskで、学習コードが実行中に版を登録してから失敗する。Runは`failed`、Task側の登録記録は無く（404）、保留していた推論は`skipped`（`source_run_unsuccessful`）になる |
+
+学習Taskは`python/examples/training.py`の学習処理をそのまま使い、SDKでの版の登録だけを止めて、Taskの出力モデル設定に登録させます。失敗系は`training.py`をそのまま実行した後に終了コード3で終わります。
+
+Job tokenはDatasetの新規作成（`POST /projects/:p/datasets`）を許可していません。推論ruleのparametersに出力先の`outputDatasetId`を渡し、`inference.py`は既存のDatasetへ版`run-<RunのID>`を追加します。
+
+結果は`artifacts/verification/<日付>/pipeline-smoke/pipeline-smoke.json`に、段階ごとの`status`（`passed`・`failed`・`not_run`）、所要秒数、確認したIDと値を保存します。APIのログは同じディレクトリの`api.log`です。成功系の途中で失敗すると、後の段階は`not_run`になります。失敗系は成功系と別のTaskと版を使うので、成功系の結果にかかわらず実行します。1件でも失敗すれば終了コードは1です。
+
+対象外: 実SSH、GPU、実SSO（Authentik）、実S3、コンテナruntime（Docker・Singularity/Apptainer）。最終の通し確認は`pipeline-e2e-verification`が行います。
+
+2026-10-08に全8段階が成功しました。各Jobは約5秒（venv作成と`httpx`のインストールを含む）でした。
+
 ## Madoとのplugin連携を確認する
 
 Mado拡張worktreeと別pluginリポジトリが隣にあれば、次で本体→plugin→Mado routesの接続を確認します。Mado Registryは隔離fixtureを使います。
