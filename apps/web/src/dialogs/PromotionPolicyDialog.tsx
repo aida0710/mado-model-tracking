@@ -105,7 +105,7 @@ export function PromotionPolicyDialog({
   const selectedRule = eligibleRules.find((rule) => rule.id === draft.evaluationRuleId);
   const codeOptions = buildCatalogOptions(catalog).codes;
   return (
-    <Dialog title={text.newPromotionPolicy} onClose={onClose} busy={form.pending} wide>
+    <Dialog fullScreenOnNarrow title={text.newPromotionPolicy} onClose={onClose} busy={form.pending} wide>
       <form
         onSubmit={(event) => {
           event.preventDefault();

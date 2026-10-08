@@ -123,7 +123,7 @@ export function PromotionDialog({
   }
 
   return (
-    <Dialog title={text.promotionDialogTitle} onClose={onClose} busy={mutation.pending}>
+    <Dialog fullScreenOnNarrow title={text.promotionDialogTitle} onClose={onClose} busy={mutation.pending}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

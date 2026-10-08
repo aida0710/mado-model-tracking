@@ -39,7 +39,7 @@ export function ModelsPage() {
     aliasHistory.reload();
   };
   return (
-    <section className="page">
+    <section className="page models-page">
       <PageHeader
         title={text.models}
         eyebrow={project.name}
@@ -94,7 +94,7 @@ export function ModelsPage() {
         )}
       </div>
       {dialog === 'model' && (
-        <FormDialog
+        <FormDialog fullScreenOnNarrow
           title={text.newModel}
           onClose={() => setDialog(null)}
           fields={[
@@ -140,7 +140,7 @@ export function ModelsPage() {
         />
       )}
       {aliasToRemove && registry.selected && (
-        <ConfirmDialog
+        <ConfirmDialog fullScreenOnNarrow
           title={text.removeAlias}
           message={modelsTextTemplates.removeAliasConfirm(
             aliasToRemove.alias,

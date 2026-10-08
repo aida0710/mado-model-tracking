@@ -5,7 +5,7 @@ import { useProject } from '../hooks/useProject';
 import { useRegistry } from '../hooks/useRegistry';
 import { PageHeader } from '../components/PageHeader';
 import { StandaloneArtifactUpload } from '../components/StandaloneArtifactUpload';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { Empty, ErrorNotice, Resource } from '../components/Feedback';
 import { JsonDetails } from '../components/JsonDetails';
@@ -25,7 +25,7 @@ export function CodesPage() {
     parentId: (version) => version.codeId,
   });
   return (
-    <section className="page">
+    <section className="page codes-page">
       <PageHeader
         title={text.codes}
         eyebrow={project.name}
@@ -48,14 +48,15 @@ export function CodesPage() {
         {(items) => (
           <RegistryLayout
             list={
-              <DataTable
-                items={items}
+              <ResponsiveTable
+                rows={items}
                 rowKey={(item) => item.id}
                 selectedKey={registry.selected?.id}
                 columns={[
                   {
                     key: 'name',
-                    label: text.name,
+                    priority: 'primary',
+                    header: text.name,
                     render: (item) => (
                       <button className="link-button" onClick={() => registry.selectItem(item.id)}>
                         {item.name}
@@ -64,13 +65,15 @@ export function CodesPage() {
                   },
                   {
                     key: 'version',
-                    label: text.latestVersion,
+                    priority: 'primary',
+                    header: text.latestVersion,
                     render: (item) => item.latestVersion ?? '—',
                     className: 'mono',
                   },
                   {
                     key: 'description',
-                    label: text.description,
+                    priority: 'secondary',
+                    header: text.description,
                     render: (item) => item.description,
                   },
                 ]}
@@ -94,14 +97,15 @@ export function CodesPage() {
                 <Resource query={registry.versions}>
                   {(versions) => (
                     <>
-                      <DataTable
-                        items={versions}
+                      <ResponsiveTable
+                        rows={versions}
                         rowKey={(version) => version.id}
                         selectedKey={registry.selectedVersion?.id}
                         columns={[
                           {
                             key: 'version',
-                            label: text.version,
+                            priority: 'primary',
+                            header: text.version,
                             render: (version) => (
                               <button
                                 className="link-button mono"
@@ -113,12 +117,14 @@ export function CodesPage() {
                           },
                           {
                             key: 'runtime',
-                            label: text.runtime,
+                            priority: 'primary',
+                            header: text.runtime,
                             render: (version) => runtimeLabels[version.runtime.kind],
                           },
                           {
                             key: 'source',
-                            label: text.source,
+                            priority: 'secondary',
+                            header: text.source,
                             render: (version) =>
                               version.source
                                 ? text[`${version.source.kind}Source`]
@@ -126,12 +132,14 @@ export function CodesPage() {
                           },
                           {
                             key: 'families',
-                            label: text.family,
+                            priority: 'secondary',
+                            header: text.family,
                             render: (version) => version.supportedModelFamilies.join(', '),
                           },
                           {
                             key: 'tasks',
-                            label: text.taskTypes,
+                            priority: 'secondary',
+                            header: text.taskTypes,
                             render: (version) =>
                               version.taskTypes.map((kind) => text[kind]).join(', '),
                           },
@@ -161,7 +169,7 @@ export function CodesPage() {
         )}
       </Resource>
       {dialog === 'code' && (
-        <FormDialog
+        <FormDialog fullScreenOnNarrow
           title={text.newCode}
           onClose={() => setDialog(null)}
           fields={[

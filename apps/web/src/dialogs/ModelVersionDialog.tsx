@@ -25,11 +25,11 @@ export function ModelVersionDialog({
   const { project } = useProject();
   const catalog = useExecutionCatalog(project.id);
   return (
-    <QueryDialog title={`${model.name} · ${text.newVersion}`} onClose={onClose} query={catalog}>
+    <QueryDialog fullScreenOnNarrow title={`${model.name} · ${text.newVersion}`} onClose={onClose} query={catalog}>
       {(choices) => {
         const options = buildCatalogOptions(choices);
         return (
-          <FormDialog
+          <FormDialog fullScreenOnNarrow
             title={`${model.name} · ${text.newVersion}`}
             onClose={onClose}
             onSaved={onSaved}

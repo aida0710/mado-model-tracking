@@ -75,7 +75,7 @@ export function LaunchDialog({
     setValidationError(null);
   }
   return (
-    <Dialog title={text.launchTitle} onClose={onClose} busy={launch.pending} wide>
+    <Dialog fullScreenOnNarrow title={text.launchTitle} onClose={onClose} busy={launch.pending} wide>
       <Resource query={catalog}>
         {(choices) => (
           <Resource query={targets}>

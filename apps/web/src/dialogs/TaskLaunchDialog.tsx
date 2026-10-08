@@ -18,7 +18,7 @@ export function TaskLaunchDialog({ task, initialMode, catalog, targets, onClose,
   const form = useTaskLaunchForm({ projectId: project.id, task, initialMode, catalog, targets });
   const { mode } = form;
   const code = catalog.codeVersions.find((version) => version.id === task.codeVersionId);
-  return <Dialog title={`${task.name} · ${text.taskLaunch}`} onClose={onClose} busy={form.pending} wide>
+  return <Dialog fullScreenOnNarrow title={`${task.name} · ${text.taskLaunch}`} onClose={onClose} busy={form.pending} wide>
     <form onSubmit={(event) => {
       event.preventDefault();
       void form.launch().then((execution) => { if (execution) onSaved(execution); });

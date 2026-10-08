@@ -21,7 +21,7 @@ export function AutomationRuleDialog({
   const { project } = useProject();
   const form = useAutomationRuleForm({ projectId: project.id, catalog, initialFamilies });
   return (
-    <Dialog title={text.newAutomationRule} onClose={onClose} busy={form.pending} wide>
+    <Dialog fullScreenOnNarrow title={text.newAutomationRule} onClose={onClose} busy={form.pending} wide>
       <form
         onSubmit={(event) => {
           event.preventDefault();

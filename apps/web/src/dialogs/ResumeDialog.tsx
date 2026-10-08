@@ -28,6 +28,7 @@ export function ResumeDialog({
     : { resumeFromLatestCheckpoint: true };
   return (
     <Dialog
+      fullScreenOnNarrow
       title={checkpoint ? text.checkpointResumeTitle : text.checkpointResumeLatest}
       onClose={onClose}
       busy={mutation.pending}

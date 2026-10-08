@@ -7,14 +7,18 @@ import { NavigationGuardProvider } from './components/NavigationGuardProvider';
 // Area stylesheets. Order matters for equal-specificity rules: keep base first and add new rules
 // to the file of the area they style instead of creating a catch-all stylesheet.
 import './styles/base.css';
+import './styles/breakpoints.css';
 import './styles/layout.css';
 import './styles/tables.css';
+import './styles/responsiveTable.css';
 import './styles/registry.css';
 import './styles/artifacts.css';
 import './styles/artifactBrowser.css';
 import './styles/audio.css';
 import './styles/forms.css';
+import './styles/dialogNarrow.css';
 import './styles/workbench.css';
+import './styles/narrowModelScreens.css';
 import './styles/admin.css';
 import './styles/projectAccess.css';
 import './styles/promotion.css';

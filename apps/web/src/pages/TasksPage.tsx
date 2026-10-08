@@ -10,7 +10,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useTaskRunHistory } from '../hooks/useTaskRunHistory';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { TaskDetails } from '../components/TaskDetails';
 import { TaskRunHistory } from '../components/TaskRunHistory';
@@ -48,12 +48,12 @@ export function TasksPage() {
           {entries.experiments.map((experiment) => <option key={experiment.id} value={experiment.id}>{experiment.name}</option>)}
         </select>
       </label>
-      <Resource query={tasks}>{(items) => <RegistryLayout list={<DataTable items={items} rowKey={(task) => task.id}
+      <Resource query={tasks}>{(items) => <RegistryLayout list={<ResponsiveTable rows={items} rowKey={(task) => task.id}
         selectedKey={selected?.id} empty={text.noTasks} columns={[
-          { key: 'name', label: text.name, render: (task) => <button className="link-button" onClick={() => selectTask(task)}>{task.name}</button> },
-          { key: 'experiment', label: text.experiments, render: (task) => entries.experiments.find((item) => item.id === task.experimentId)?.name ?? task.experimentId },
-          { key: 'kind', label: text.kind, render: (task) => text[task.kind] },
-          { key: 'revision', label: text.taskRevision, render: (task) => task.revision },
+          { key: 'name', priority: 'primary', header: text.name, render: (task) => <button className="link-button" onClick={() => selectTask(task)}>{task.name}</button> },
+          { key: 'experiment', priority: 'secondary', header: text.experiments, render: (task) => entries.experiments.find((item) => item.id === task.experimentId)?.name ?? task.experimentId },
+          { key: 'kind', priority: 'primary', header: text.kind, render: (task) => text[task.kind] },
+          { key: 'revision', priority: 'secondary', header: text.taskRevision, render: (task) => task.revision },
         ]} />}>
         {selected && <>
           <div className="section-heading"><h2>{selected.name}</h2>

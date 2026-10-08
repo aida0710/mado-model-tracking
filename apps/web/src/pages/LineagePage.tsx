@@ -13,7 +13,7 @@ export function LineagePage() {
     trackingApi.lineage(project.id, signal),
   );
   return (
-    <section className="page">
+    <section className="page lineage-page">
       <PageHeader
         title={text.lineage}
         eyebrow={project.name}

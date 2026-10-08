@@ -1,0 +1,10 @@
+/*
+ * Width breakpoints shared by every screen. CSS cannot read custom properties inside @media, so
+ * media queries write the same numbers: (max-width: 640px), (max-width: 900px), (max-width: 1200px).
+ * lib/breakpoints.ts holds the same values for components that switch markup by width.
+ */
+:root {
+  --bp-sm: 640px;
+  --bp-md: 900px;
+  --bp-lg: 1200px;
+}

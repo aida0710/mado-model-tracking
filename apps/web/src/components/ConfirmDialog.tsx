@@ -13,6 +13,7 @@ export function ConfirmDialog({
   onConfirm,
   onConfirmed,
   onClose,
+  fullScreenOnNarrow = false,
 }: {
   title: string;
   message: ReactNode;
@@ -21,10 +22,12 @@ export function ConfirmDialog({
   onConfirm: () => Promise<unknown>;
   onConfirmed: () => void;
   onClose: () => void;
+  /** Passed to Dialog: fill the window below --bp-sm. */
+  fullScreenOnNarrow?: boolean;
 }) {
   const mutation = useMutation();
   return (
-    <Dialog title={title} onClose={onClose} busy={mutation.pending}>
+    <Dialog fullScreenOnNarrow={fullScreenOnNarrow} title={title} onClose={onClose} busy={mutation.pending}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

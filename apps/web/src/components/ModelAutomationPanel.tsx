@@ -109,13 +109,13 @@ export function ModelAutomationPanel({
         </Resource>
       )}
       {canManage && automation.isCreating && (
-        <QueryDialog
+        <QueryDialog fullScreenOnNarrow
           title={text.newAutomationRule}
           onClose={automation.stopCreating}
           query={registry}
         >
           {(choices) => (
-            <QueryDialog
+            <QueryDialog fullScreenOnNarrow
               title={text.newAutomationRule}
               onClose={automation.stopCreating}
               query={targets}

@@ -8,6 +8,7 @@ export function Dialog({
   onClose,
   busy = false,
   wide = false,
+  fullScreenOnNarrow = false,
   className = '',
 }: {
   title: string;
@@ -15,6 +16,8 @@ export function Dialog({
   onClose: () => void;
   busy?: boolean;
   wide?: boolean;
+  /** Fill the window below --bp-sm instead of floating over the page. */
+  fullScreenOnNarrow?: boolean;
   className?: string;
 }) {
   const titleId = useId();
@@ -29,7 +32,14 @@ export function Dialog({
   return (
     <dialog
       ref={dialogRef}
-      className={`${wide ? 'dialog wide' : 'dialog'} ${className}`.trim()}
+      className={[
+        'dialog',
+        wide ? 'wide' : '',
+        fullScreenOnNarrow ? 'full-screen-on-narrow' : '',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onCancel={(event) => {
         event.preventDefault();
         if (!busy) onClose();

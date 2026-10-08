@@ -1,0 +1,37 @@
+/* ResponsiveTable: the row toggle and the folded secondary columns below --bp-md. */
+.row-toggle-cell {
+  width: 44px;
+  padding-left: 4px;
+  padding-right: 0;
+}
+.row-toggle {
+  width: 40px;
+  height: 40px;
+}
+.row-details > td {
+  background: var(--background);
+  padding-top: 4px;
+  padding-bottom: 12px;
+}
+.row-details-list {
+  margin: 0;
+  font-size: 12px;
+}
+.row-details-list > div {
+  display: grid;
+  grid-template-columns: minmax(88px, 34%) minmax(0, 1fr);
+  gap: 12px;
+  padding: 6px 0;
+}
+.row-details-list dt {
+  color: var(--muted);
+}
+.row-details-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.responsive-table.narrow td {
+  /* Long words break only when they overflow; columns are not squeezed to one character. */
+  overflow-wrap: break-word;
+}

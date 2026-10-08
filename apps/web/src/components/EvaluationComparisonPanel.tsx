@@ -20,7 +20,7 @@ import {
 } from '../lib/evaluationComparisonDisplay';
 import { text } from '../i18n/catalog';
 import { evaluationTextTemplates } from '../i18n/evaluation';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { Resource } from './Feedback';
 import { DetailsList } from './JsonDetails';
 
@@ -113,39 +113,43 @@ function describeSources(source: MetricComparison['source']): string {
 // promotion policies, not by this panel.
 function MetricComparisonTable({ metrics }: { metrics: MetricComparison[] }) {
   return (
-    <DataTable
-      items={metrics}
+    <ResponsiveTable
+      rows={metrics}
       rowKey={(metric) => metric.key}
       empty={text.noComparedMetrics}
       columns={[
-        { key: 'name', label: text.metricName, render: (metric) => metric.key },
+        { key: 'name', priority: 'primary', header: text.metricName, render: (metric) => metric.key },
         {
           key: 'candidate',
-          label: text.metricCandidate,
+          priority: 'primary',
+          header: text.metricCandidate,
           className: 'mono',
           render: (metric) =>
             formatMetricValue(metric.candidate, metric.candidateStatus, metricValueLabels),
         },
         {
           key: 'baseline',
-          label: text.metricBaseline,
+          priority: 'secondary',
+          header: text.metricBaseline,
           className: 'mono',
           render: (metric) =>
             formatMetricValue(metric.baseline, metric.baselineStatus, metricValueLabels),
         },
         {
           key: 'delta',
-          label: text.metricDelta,
+          priority: 'primary',
+          header: text.metricDelta,
           className: 'mono',
           render: (metric) => formatDelta(metric.delta),
         },
         {
           key: 'relative-delta',
-          label: text.metricRelativeDelta,
+          priority: 'secondary',
+          header: text.metricRelativeDelta,
           className: 'mono',
           render: (metric) => formatRelativeDelta(metric.relativeDelta),
         },
-        { key: 'source', label: text.metricSource, render: (metric) => describeSources(metric.source) },
+        { key: 'source', priority: 'secondary', header: text.metricSource, render: (metric) => describeSources(metric.source) },
       ]}
     />
   );

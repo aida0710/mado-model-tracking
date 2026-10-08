@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModelAutomationExecution, ModelAutomationRule } from '@mmt/contracts';
 import type { ExecutionCatalog } from '../types/executionCatalog';
-import { DataTable } from './DataTable';
+import { ResponsiveTable, type ResponsiveColumn } from './ResponsiveTable';
 import { StatusBadge } from './StatusBadge';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { formatDate, formatDuration } from '../lib/format';
@@ -98,12 +98,13 @@ export function AutomationExecutionsTable({
     (row: AutomationPipelineRow) => render(row.execution);
   const ruleOf = (execution: ModelAutomationExecution) =>
     rules.find((rule) => rule.id === execution.ruleId);
-  const versionColumns =
+  const versionColumns: ResponsiveColumn<AutomationPipelineRow>[] =
     variant === 'version'
       ? [
           {
             key: 'kind',
-            label: text.kind,
+            priority: 'secondary',
+            header: text.kind,
             render: column((execution) => {
               const rule = ruleOf(execution);
               return rule ? text[rule.kind] : '—';
@@ -113,7 +114,8 @@ export function AutomationExecutionsTable({
       : [
           {
             key: 'model',
-            label: text.modelVersion,
+            priority: 'secondary',
+            header: text.modelVersion,
             render: column((execution) => (
               <ModelVersionLink
                 projectId={projectId}
@@ -123,12 +125,13 @@ export function AutomationExecutionsTable({
             )),
           },
         ];
-  const durationColumns =
+  const durationColumns: ResponsiveColumn<AutomationPipelineRow>[] =
     variant === 'version'
       ? [
           {
             key: 'duration',
-            label: text.duration,
+            priority: 'secondary',
+            header: text.duration,
             className: 'nowrap',
             render: column((execution) =>
               formatDuration(execution.runStartedAt ?? null, execution.runEndedAt ?? null),
@@ -136,11 +139,12 @@ export function AutomationExecutionsTable({
           },
         ]
       : [];
-  const rerunColumns = onRerun
+  const rerunColumns: ResponsiveColumn<AutomationPipelineRow>[] = onRerun
     ? [
         {
           key: 'rerun',
-          label: automationText.rerun,
+          priority: 'secondary',
+          header: automationText.rerun,
           render: column((execution) => {
             const rule = ruleOf(execution);
             return rule && canRerunExecution(execution, rule) ? (
@@ -156,14 +160,15 @@ export function AutomationExecutionsTable({
       ]
     : [];
   return (
-    <DataTable
-      items={rows}
+    <ResponsiveTable
+      rows={rows}
       rowKey={(row) => row.execution.id}
       empty={text.automationNoExecutions}
       columns={[
         {
           key: 'stage',
-          label: automationText.stage,
+          priority: 'primary',
+          header: automationText.stage,
           className: 'nowrap',
           render: (row) =>
             row.isPipelineStart
@@ -172,12 +177,14 @@ export function AutomationExecutionsTable({
         },
         {
           key: 'created',
-          label: text.created,
+          priority: 'secondary',
+          header: text.created,
           render: column((execution) => formatDate(execution.createdAt)),
         },
         {
           key: 'rule',
-          label: text.automationRule,
+          priority: 'primary',
+          header: text.automationRule,
           render: column((execution) => (
             <RuleCell execution={execution} ruleName={ruleOf(execution)?.name ?? execution.ruleId} />
           )),
@@ -185,7 +192,8 @@ export function AutomationExecutionsTable({
         ...versionColumns,
         {
           key: 'outcome',
-          label: text.automationOutcome,
+          priority: 'primary',
+          header: text.automationOutcome,
           render: column((execution) =>
             execution.status === 'pending' ? (
               <span title={automationText.pendingHint}>{outcomeLabel(execution)}</span>
@@ -196,14 +204,16 @@ export function AutomationExecutionsTable({
         },
         {
           key: 'run-status',
-          label: text.automationRunStatus,
+          priority: 'secondary',
+          header: text.automationRunStatus,
           render: column((execution) =>
             execution.runStatus ? <StatusBadge status={execution.runStatus} /> : '—',
           ),
         },
         {
           key: 'job-status',
-          label: text.automationJobStatus,
+          priority: 'secondary',
+          header: text.automationJobStatus,
           render: column((execution) =>
             execution.jobStatus ? <StatusBadge status={execution.jobStatus} /> : '—',
           ),
@@ -211,7 +221,8 @@ export function AutomationExecutionsTable({
         ...durationColumns,
         {
           key: 'links',
-          label: text.details,
+          priority: 'secondary',
+          header: text.details,
           render: column((execution) => (
             <div className="automation-links">
               {execution.sourceRunId && (
@@ -238,7 +249,8 @@ export function AutomationExecutionsTable({
         },
         {
           key: 'error',
-          label: text.jobError,
+          priority: 'secondary',
+          header: text.jobError,
           render: column((execution) => (
             <span className="automation-error">{execution.error ?? '—'}</span>
           )),

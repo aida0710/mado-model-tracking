@@ -127,13 +127,13 @@ export function PromotionPolicyPanel({ initialModelId }: { initialModelId: strin
         />
       )}
       {canManage && promotion.isCreating && (
-        <QueryDialog
+        <QueryDialog fullScreenOnNarrow
           title={text.newPromotionPolicy}
           onClose={promotion.stopCreating}
           query={catalog}
         >
           {(choices) => (
-            <QueryDialog
+            <QueryDialog fullScreenOnNarrow
               title={text.newPromotionPolicy}
               onClose={promotion.stopCreating}
               query={rules}

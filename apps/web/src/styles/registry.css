@@ -209,7 +209,7 @@
     padding-left: 20px;
   }
 }
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .registry-layout,
   .details-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -221,7 +221,7 @@
     padding: 22px 0 0;
   }
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .details-list > div {
     grid-template-columns: 112px minmax(0, 1fr);
   }

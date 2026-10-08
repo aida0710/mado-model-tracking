@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { ModelAutomationRule } from '@mmt/contracts';
 import type { AutomationCatalog } from '../types/modelAutomation';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { text } from '../i18n/catalog';
 import { automationText, automationTriggerLabels } from '../i18n/automation';
@@ -27,15 +27,16 @@ export function AutomationRulesTable({
 }) {
   const codeOptions = catalog ? buildCatalogOptions(catalog.registry).codes : [];
   return (
-    <DataTable
-      items={rules}
+    <ResponsiveTable
+      rows={rules}
       rowKey={(rule) => rule.id}
       selectedKey={selectedRuleId}
       empty={text.automationNoRules}
       columns={[
         {
           key: 'name',
-          label: text.name,
+          priority: 'primary',
+          header: text.name,
           render: (rule) => (
             <button className="link-button" onClick={() => onSelect(rule.id)}>
               {rule.name}
@@ -44,7 +45,8 @@ export function AutomationRulesTable({
         },
         {
           key: 'enabled',
-          label: text.status,
+          priority: 'primary',
+          header: text.status,
           render: (rule) => (
             <span className={rule.enabled ? 'automation-enabled' : 'muted'}>
               {rule.enabled ? text.enabled : text.disabled}
@@ -53,14 +55,16 @@ export function AutomationRulesTable({
         },
         {
           key: 'families',
-          label: text.family,
+          priority: 'secondary',
+          header: text.family,
           className: 'mono',
           render: (rule) => rule.modelFamilies.join(', '),
         },
-        { key: 'kind', label: text.kind, render: (rule) => text[rule.kind] },
+        { key: 'kind', priority: 'secondary', header: text.kind, render: (rule) => text[rule.kind] },
         {
           key: 'trigger',
-          label: automationText.trigger,
+          priority: 'secondary',
+          header: automationText.trigger,
           render: (rule) => {
             if (rule.trigger !== 'upstream_run_finished')
               return automationTriggerLabels[rule.trigger];
@@ -80,7 +84,8 @@ export function AutomationRulesTable({
         },
         {
           key: 'code',
-          label: text.codeVersion,
+          priority: 'secondary',
+          header: text.codeVersion,
           render: (rule) => (
             <Link to={`/projects/${projectId}/codes?version=${rule.codeVersionId}`}>
               {codeOptions.find((option) => option.value === rule.codeVersionId)?.label ??
@@ -90,7 +95,8 @@ export function AutomationRulesTable({
         },
         {
           key: 'target',
-          label: text.target,
+          priority: 'secondary',
+          header: text.target,
           render: (rule) =>
             catalog?.targets.find((target) => target.id === rule.targetId)?.name ?? rule.targetId,
         },
@@ -98,7 +104,8 @@ export function AutomationRulesTable({
           ? [
               {
                 key: 'actions',
-                label: text.details,
+                priority: 'secondary' as const,
+                header: text.details,
                 render: (rule: ModelAutomationRule) => (
                   <button
                     className="button small"

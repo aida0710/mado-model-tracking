@@ -6,7 +6,7 @@ import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { Resource } from '../components/Feedback';
 import { StatusBadge } from '../components/StatusBadge';
 import { DetailsList } from '../components/JsonDetails';
@@ -54,7 +54,7 @@ export function JobsPage() {
     EXECUTION_POLL_MS,
   );
   return (
-    <section className="page">
+    <section className="page jobs-page">
       <PageHeader
         title={text.jobs}
         eyebrow={project.name}
@@ -97,14 +97,15 @@ export function JobsPage() {
       </label>
       <Resource query={jobs}>
         {(items) => (
-          <DataTable
-            items={items.filter((job) => !statusFilter || job.status === statusFilter)}
+          <ResponsiveTable
+            rows={items.filter((job) => !statusFilter || job.status === statusFilter)}
             rowKey={(job) => job.id}
             selectedKey={selectedId}
             columns={[
               {
                 key: 'id',
-                label: text.jobColumn,
+                priority: 'primary',
+                header: text.jobColumn,
                 render: (job) => (
                   <button
                     className="link-button mono"
@@ -123,7 +124,8 @@ export function JobsPage() {
               },
               {
                 key: 'status',
-                label: text.status,
+                priority: 'primary',
+                header: text.status,
                 render: (job) => (
                   <>
                     <StatusBadge status={job.status} earlyStopped={job.sweepEarlyStopped} />
@@ -141,7 +143,8 @@ export function JobsPage() {
               },
               {
                 key: 'run',
-                label: text.jobRunColumn,
+                priority: 'primary',
+                header: text.jobRunColumn,
                 className: 'job-run-cell',
                 render: (job) => (
                   <>
@@ -162,7 +165,8 @@ export function JobsPage() {
               },
               {
                 key: 'task',
-                label: text.task,
+                priority: 'secondary',
+                header: text.task,
                 render: (job) =>
                   job.taskId ? (
                     <Link to={`/projects/${project.id}/tasks?id=${job.taskId}`}>
@@ -174,26 +178,30 @@ export function JobsPage() {
               },
               {
                 key: 'target',
-                label: text.target,
+                priority: 'secondary',
+                header: text.target,
                 render: (job) =>
                   targets.value?.find((target) => target.id === job.targetId)?.name ?? job.targetId,
               },
               {
                 key: 'gpu',
-                label: text.gpuIds,
-                className: 'mono',
+                priority: 'secondary',
+                header: text.gpuIds,
+                className: 'mono nowrap',
                 render: (job) => job.gpuIds.join(', ') || text.cpuOnly,
               },
               {
                 key: 'attempt',
-                label: text.attempt,
-                className: 'mono',
+                priority: 'secondary',
+                header: text.attempt,
+                className: 'mono nowrap',
                 render: (job) => `${job.attempt} / ${job.maxAttempts}`,
               },
-              { key: 'created', label: text.created, render: (job) => formatDate(job.createdAt) },
+              { key: 'created', priority: 'secondary', header: text.created, render: (job) => formatDate(job.createdAt) },
               {
                 key: 'actions',
-                label: text.jobActions,
+                priority: 'secondary',
+                header: text.jobActions,
                 render: (job) =>
                   canEdit &&
                   (activeStatuses.includes(job.status) ? (
@@ -270,7 +278,7 @@ export function JobsPage() {
         />
       )}
       {(jobAction?.type === 'cancel' || jobAction?.type === 'retry') && (
-        <FormDialog
+        <FormDialog fullScreenOnNarrow
           title={jobAction.type === 'cancel' ? text.cancelJob : text.retryJob}
           onClose={() => setJobAction(null)}
           fields={[]}

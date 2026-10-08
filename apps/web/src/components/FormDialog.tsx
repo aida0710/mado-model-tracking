@@ -14,6 +14,7 @@ export function FormDialog<T>({
   onSubmit,
   onSaved,
   onClose,
+  fullScreenOnNarrow = false,
   submitLabel = text.save,
 }: {
   title: string;
@@ -22,11 +23,13 @@ export function FormDialog<T>({
   onSaved: (value: T) => void;
   onClose: () => void;
   submitLabel?: string;
+  /** Passed to Dialog: fill the window below --bp-sm. */
+  fullScreenOnNarrow?: boolean;
 }) {
   const [values, setValues] = useState(() => createInitialValues(fields));
   const mutation = useMutation();
   return (
-    <Dialog title={title} onClose={onClose} busy={mutation.pending}>
+    <Dialog fullScreenOnNarrow={fullScreenOnNarrow} title={title} onClose={onClose} busy={mutation.pending}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
