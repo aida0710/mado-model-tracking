@@ -169,7 +169,8 @@ class Run:
             self.client, Path(destination), project_id=self.project_id, model_version=pinned_version
         )
 
-    def register_output_model(self, *, version: str, **attributes: Any) -> dict[str, Any]:
+    def register_output_model(self, *, version: str | None = None, **attributes: Any) -> dict[str, Any]:
+        """Register this Run's output; pass model_name= to reuse one Model across Runs."""
         if self.entity.get("kind") not in {"training", "finetuning"}:
             raise ConfigurationError("Output models require a training or finetuning Run")
         attributes.setdefault(

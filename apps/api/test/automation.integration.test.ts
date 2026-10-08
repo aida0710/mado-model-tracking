@@ -401,7 +401,7 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
 
   it('モデル登録で設定を固定した推論と評価を作り、enqueue結果と実行状態を区別する', async () => {
     const fixture = await containerFixture(harness);
-    const sourceRun = await fixture.newRun('Training output source');
+    const sourceRun = await fixture.newRun('Training output source', 'training');
     const dataset = await entity<Dataset>(
       await request(harness.app, `${fixture.basePath}/datasets`, {
         method: 'POST',
@@ -543,7 +543,7 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
   it('SDKのproject scopedモデル出力登録も同じ経路を通り、sourceRunをparentRunへ保存する', async () => {
     const fixture = await containerFixture(harness);
     const rule = await registerRule(fixture);
-    const sourceRun = await fixture.newRun('SDK training run');
+    const sourceRun = await fixture.newRun('SDK training run', 'training');
     const artifact = await uploadFixtureArtifact(harness, fixture, {
       path: 'model/weights.bin',
       runId: sourceRun.id,

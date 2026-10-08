@@ -536,9 +536,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
   it('JavaScriptの安全整数を超える数字版を文字列のまま採番・検索する', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
-    await harness.database.query('UPDATE mlflow_registered_model_metadata SET next_version=$1', [
-      '9007199254740993',
-    ]);
+    await harness.database.query('UPDATE models SET next_version=$1', ['9007199254740993']);
     const first = await entity<VersionResponse>(
       await fixture.register(ready.model.info.model_id),
       200,

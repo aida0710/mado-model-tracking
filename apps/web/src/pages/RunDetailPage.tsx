@@ -12,6 +12,7 @@ import { Tabs } from '../components/Tabs';
 import { RunLogs } from '../components/RunLogs';
 import { RunArtifacts } from '../components/RunArtifacts';
 import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
+import { RunOutputModels } from '../components/RunOutputModels';
 import { DetailsList, KeyValues } from '../components/JsonDetails';
 import { FormDialog } from '../components/FormDialog';
 import { ArtifactUploadDialog } from '../dialogs/ArtifactUploadDialog';
@@ -207,6 +208,15 @@ export function RunDetailPage() {
                               {id}
                             </Link>
                           )),
+                        ],
+                        [
+                          text.outputModels,
+                          item.outputModelVersionIds.length ? (
+                            <RunOutputModels
+                              projectId={project.id}
+                              versionIds={item.outputModelVersionIds}
+                            />
+                          ) : null,
                         ],
                         [
                           text.outputDatasets,

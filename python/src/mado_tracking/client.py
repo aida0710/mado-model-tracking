@@ -10,7 +10,7 @@ from urllib.parse import quote
 import httpx
 
 from .code_version import build_code_version_payload
-from .errors import ConfigurationError
+from .errors import ApiError, ConfigurationError
 from .execution_runtime import ExecutionRuntime
 from .execution_snapshot import ExecutionMode, validate_execution_mode
 from .experiment_tasks import ExperimentTasksClient
@@ -146,8 +146,9 @@ class Client(ExperimentTasksClient):
         self,
         project_id: str,
         *,
-        version: str,
+        version: str | None = None,
         model_id: str | None = None,
+        model_name: str | None = None,
         name: str | None = None,
         family: str | None = None,
         description: str = "",
@@ -158,28 +159,66 @@ class Client(ExperimentTasksClient):
         default_code_version_id: str | None = None,
         metadata: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Register a ModelVersion; an omitted version is numbered by the API (1, 2, 3, ...).
+
+        ``model_name`` (or the older ``name``) reuses the Model with that name and creates it
+        only when it does not exist yet.
+        """
+        if name is not None and model_name is not None and name != model_name:
+            raise ConfigurationError("Specify either model_name or name, not both")
+        model_name = model_name if model_name is not None else name
         if model_id is None:
-            if not name or not family:
-                raise ConfigurationError("name and family are required to create a Model")
-            model = self.request(
-                "POST",
-                self.project_path(project_id, "models"),
-                json={"name": name, "family": family, "description": description},
-            )
+            if not model_name:
+                raise ConfigurationError("model_id or model_name is required")
+            model = self.ensure_model(project_id, name=model_name, family=family, description=description)
             model_id = model["id"]
+        payload: dict[str, Any] = {
+            "parentModelVersionIds": list(parent_model_version_ids),
+            "sourceRunId": source_run_id,
+            "weightsUri": weights_uri,
+            "artifactId": artifact_id,
+            "defaultCodeVersionId": default_code_version_id,
+            "metadata": dict(metadata or {}),
+        }
+        if version is not None:
+            payload["version"] = version
         return self.request(
             "POST",
             self.project_path(project_id, f"models/{path_id(model_id)}/versions"),
-            json={
-                "version": version,
-                "parentModelVersionIds": list(parent_model_version_ids),
-                "sourceRunId": source_run_id,
-                "weightsUri": weights_uri,
-                "artifactId": artifact_id,
-                "defaultCodeVersionId": default_code_version_id,
-                "metadata": dict(metadata or {}),
-            },
+            json=payload,
         )
+
+    def find_model(self, project_id: str, *, name: str) -> dict[str, Any] | None:
+        models = self._list_items(project_id, "models", params={"name": name})
+        return models[0] if models else None
+
+    def ensure_model(
+        self, project_id: str, *, name: str, family: str | None = None, description: str = ""
+    ) -> dict[str, Any]:
+        """Return the Model named ``name``, creating it when absent.
+
+        A concurrent creator can win between the lookup and the POST; the 409 is then
+        resolved by reading the Model it created.
+        """
+        model = self.find_model(project_id, name=name)
+        if model is None:
+            if not family:
+                raise ConfigurationError("family is required to create a Model")
+            try:
+                return self.request(
+                    "POST",
+                    self.project_path(project_id, "models"),
+                    json={"name": name, "family": family, "description": description},
+                )
+            except ApiError as error:
+                if error.status_code != 409:
+                    raise
+            model = self.find_model(project_id, name=name)
+            if model is None:
+                raise ConfigurationError(f"Model {name!r} conflicted but could not be read")
+        if family and model["family"] != family:
+            raise ConfigurationError(f"Model {name!r} has family {model['family']!r}, not {family!r}")
+        return model
 
     def register_dataset(
         self,
@@ -352,8 +391,10 @@ class Client(ExperimentTasksClient):
     def list_automation_executions(self, project_id: str) -> list[dict[str, Any]]:
         return self._list_items(project_id, "automation-executions")
 
-    def _list_items(self, project_id: str, resource: str) -> list[dict[str, Any]]:
-        payload = self.request("GET", self.project_path(project_id, resource), retryable=True)
+    def _list_items(
+        self, project_id: str, resource: str, *, params: Mapping[str, str] | None = None
+    ) -> list[dict[str, Any]]:
+        payload = self.request("GET", self.project_path(project_id, resource), retryable=True, params=params)
         items = payload.get("items")
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
             raise ConfigurationError("API list response must contain items")

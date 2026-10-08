@@ -14,7 +14,7 @@ import { modelVersionProtocol, latestVersions } from './protocol.js';
 import { invalidParameter, keyValueMap, type CreateModelVersion } from './validation.js';
 import type { ModelReference, ModelVersionRecord } from './types.js';
 
-import { MAX_NUMERIC_MODEL_VERSION, MAX_MODEL_NAME_LENGTH } from './limits.js';
+import { MAX_MODEL_NAME_LENGTH } from './limits.js';
 
 export class ModelVersionService {
   constructor(
@@ -64,42 +64,27 @@ export class ModelVersionService {
             ...(sourceRun?.modelVersionId ? [sourceRun.modelVersionId] : []),
           ]),
         ];
-        await connection.query(
-          'INSERT INTO mlflow_registered_model_metadata(model_id,project_id) VALUES($1,$2) ON CONFLICT(model_id) DO NOTHING',
-          [model.id, projectId],
-        );
-        const counter = (await first<{ nextVersion: string }>(
-          connection,
-          `SELECT GREATEST(mm.next_version::numeric,COALESCE((SELECT MAX(v.version::numeric)+1 FROM model_versions v WHERE v.model_id=mm.model_id AND v.version ~ '^[0-9]+$'),1))::text AS next_version
-          FROM mlflow_registered_model_metadata mm WHERE mm.model_id=$1`,
-          [model.id],
-        ))!;
-        if (BigInt(counter.nextVersion) > MAX_NUMERIC_MODEL_VERSION)
-          conflict('モデル版の採番上限に達しました');
-        const version = await this.registry.insertModelVersion(connection, {
-          principal,
+        const version = await this.registry.registerModelVersion(connection, {
           projectId,
           modelId: model.id,
-          input: {
-            version: counter.nextVersion,
-            sourceRunId: source.sourceRunId,
-            parentModelVersionIds: parents,
-            weightsUri: `/api/projects/${projectId}/artifacts/${primary.artifact.artifactId}/content`,
-            artifactId: primary.artifact.artifactId,
-            defaultCodeVersionId: codeVersionId,
-            metadata: {
-              mlflow: {
-                loggedModelId: source.loggedModelId,
-                artifactUri: source.artifactUri,
-                primaryArtifactPath: primary.artifact.path,
-                ...(primary.modelFormat === 'mlflow'
-                  ? { modelFormat: 'mlflow' }
-                  : { weightsPath: primary.artifact.path }),
-                artifactManifest: source.manifest.map((entry) => ({ ...entry })),
-                loggedModelMetadata: source.metadata,
-              },
+          sourceRunId: source.sourceRunId,
+          parentVersionIds: parents,
+          weightsUri: `/api/projects/${projectId}/artifacts/${primary.artifact.artifactId}/content`,
+          artifactId: primary.artifact.artifactId,
+          defaultCodeVersionId: codeVersionId,
+          metadata: {
+            mlflow: {
+              loggedModelId: source.loggedModelId,
+              artifactUri: source.artifactUri,
+              primaryArtifactPath: primary.artifact.path,
+              ...(primary.modelFormat === 'mlflow'
+                ? { modelFormat: 'mlflow' }
+                : { weightsPath: primary.artifact.path }),
+              artifactManifest: source.manifest.map((entry) => ({ ...entry })),
+              loggedModelMetadata: source.metadata,
             },
           },
+          actor: { type: 'principal', principal },
         });
         await connection.query(
           `INSERT INTO mlflow_model_version_metadata(version_id,project_id,logged_model_id,artifact_uri,tags,description,run_link)
@@ -113,10 +98,6 @@ export class ModelVersionService {
             input.description,
             input.run_link,
           ],
-        );
-        await connection.query(
-          'UPDATE mlflow_registered_model_metadata SET next_version=$2::bigint+1,updated_at=now() WHERE model_id=$1',
-          [model.id, counter.nextVersion],
         );
         return modelVersionProtocol(
           await findModelVersion(connection, {

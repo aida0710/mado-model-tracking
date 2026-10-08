@@ -94,6 +94,9 @@ class TrackingServer:
                             entity.setdefault(name, {}).update(value)
                         else:
                             entity[name] = value
+                elif path.endswith("/models") and self.command == "GET":
+                    name = parse_qs(parsed.query).get("name", [None])[0]
+                    entity = {"items": [model for model in fixture.models.values() if model["name"] == name]}
                 elif path.endswith("/models"):
                     entity = {"id": identifier, **body}
                     fixture.models[identifier] = entity

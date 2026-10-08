@@ -184,7 +184,7 @@ async def verify_jobs(
             b"".join(client.download_artifact(project_id, artifact["id"]))
         )
         assert abs(weights["weight"] - 2) < 0.1 and abs(weights["bias"] - 1) < 0.1
-        model_version_id = completed_training["tags"]["outputModelVersionId"]
+        (model_version_id,) = completed_training["outputModelVersionIds"]
         summary.update(trainingRunId=training_run.id, modelVersionId=model_version_id)
         summary["checks"].append(
             "training: real loss, weights Artifact and output ModelVersion"

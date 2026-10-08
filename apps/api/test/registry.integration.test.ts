@@ -1,15 +1,25 @@
+import { createHash } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type {
   Code,
   Dataset,
   DatasetVersion,
+  LineageGraph,
   Model,
   ModelVersion,
+  PluginConnection,
+  PluginEvent,
   Project,
   Run,
+  RunKind,
 } from '@mmt/contracts';
+import { transaction } from '../src/db/database.js';
+import { migrate } from '../src/db/migrate.js';
+import { reserveModelVersion } from '../src/repositories/modelVersionNumbering.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import { executionFixture, projectFixture } from './fixtures.js';
+import { modelFixture, type VersionResponse } from './mlflow-models-fixtures.js';
 
 describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立PostgreSQL）', () => {
   let harness: Harness;
@@ -703,5 +713,312 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
     expect(
       (await request(harness.app, `${fixture.basePath}/runs`, { token: another.token })).status,
     ).toBe(401);
+  });
+});
+
+describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（独立PostgreSQL）', () => {
+  let harness: Harness;
+  beforeAll(async () => {
+    harness = await createHarness();
+  });
+  beforeEach(async () => {
+    await harness.reset();
+  });
+  afterAll(async () => {
+    await harness?.close();
+  });
+
+  type Fixture = Awaited<ReturnType<typeof projectFixture>>;
+  async function createRun(fixture: Fixture, kind: RunKind = 'training') {
+    return entity<Run>(
+      await request(harness.app, `${fixture.basePath}/runs`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { experimentId: fixture.experiment.id, name: `${kind} output`, kind },
+      }),
+    );
+  }
+  function registerVersion(fixture: Fixture, modelId: string, body: Record<string, unknown> = {}) {
+    return request(harness.app, `${fixture.basePath}/models/${modelId}/versions`, {
+      method: 'POST',
+      cookie: fixture.editor.cookie,
+      body,
+    });
+  }
+  async function readRun(fixture: Fixture, runId: string) {
+    return entity<Run>(
+      await request(harness.app, `${fixture.basePath}/runs/${runId}`, {
+        cookie: fixture.viewer.cookie,
+      }),
+      200,
+    );
+  }
+
+  it('versionを省略した連続登録は1,2,3になり、明示した整数版の後から続き、整数でない版は採番に含めない', async () => {
+    const fixture = await executionFixture(harness);
+    const numbered: string[] = [];
+    for (let index = 0; index < 3; index += 1)
+      numbered.push(
+        (await entity<ModelVersion>(await registerVersion(fixture, fixture.model.id))).version,
+      );
+    expect(numbered).toEqual(['1', '2', '3']);
+    await entity(await registerVersion(fixture, fixture.model.id, { version: '10' }));
+    await entity(await registerVersion(fixture, fixture.model.id, { version: 'v99' }));
+    const next = await entity<ModelVersion>(await registerVersion(fixture, fixture.model.id));
+    expect(next.version).toBe('11');
+    const duplicate = await registerVersion(fixture, fixture.model.id, { version: '2' });
+    expect(duplicate.status).toBe(409);
+    const afterConflict = await entity<ModelVersion>(
+      await registerVersion(fixture, fixture.model.id),
+    );
+    expect(afterConflict.version).toBe('12');
+  });
+
+  it('同時の登録でもUNIQUE違反なく別々の版を払い出す', async () => {
+    const fixture = await executionFixture(harness);
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () => registerVersion(fixture, fixture.model.id)),
+    );
+    expect(responses.map((response) => response.status)).toEqual(Array(5).fill(201));
+    const versions = await Promise.all(responses.map((response) => entity<ModelVersion>(response)));
+    expect(versions.map((version) => Number(version.version)).sort()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('nameの完全一致でModelを1件だけ返す', async () => {
+    const fixture = await executionFixture(harness);
+    const byName = async (name: string) =>
+      entity<{ items: Model[] }>(
+        await request(harness.app, `${fixture.basePath}/models?${new URLSearchParams({ name })}`, {
+          cookie: fixture.viewer.cookie,
+        }),
+        200,
+      );
+    expect((await byName('Qwen2 Test')).items.map((model) => model.id)).toEqual([fixture.model.id]);
+    expect((await byName('Qwen2')).items).toEqual([]);
+    expect((await byName('qwen2 test')).items).toEqual([]);
+  });
+
+  it('ネイティブとMLflowの登録を交互にしても重複せず、削除した版を再利用せずRunの出力から外す', async () => {
+    const fixture = await modelFixture(harness);
+    await entity(await fixture.createRegistered('Classifier'), 200);
+    const ready = await fixture.readyModel();
+    const [model] = (
+      await entity<{ items: Model[] }>(
+        await request(harness.app, `${fixture.basePath}/models?name=Classifier`, {
+          cookie: fixture.viewer.cookie,
+        }),
+        200,
+      )
+    ).items;
+    const registerMlflow = async () =>
+      (await entity<VersionResponse>(await fixture.register(ready.model.info.model_id), 200))
+        .model_version.version;
+    const registerNative = async () =>
+      (
+        await entity<ModelVersion>(
+          await registerVersion(fixture, model!.id, { sourceRunId: fixture.run.id }),
+        )
+      ).version;
+    expect([
+      await registerMlflow(),
+      await registerNative(),
+      await registerMlflow(),
+      await registerNative(),
+    ]).toEqual(['1', '2', '3', '4']);
+    expect(
+      (
+        await request(fixture.app, `${fixture.versionEndpoint}/delete`, {
+          method: 'DELETE',
+          cookie: fixture.editor.cookie,
+          body: { name: 'Classifier', version: '4' },
+        })
+      ).status,
+    ).toBe(200);
+    expect([await registerNative(), await registerMlflow()]).toEqual(['5', '6']);
+    const versions = await entity<{ items: ModelVersion[] }>(
+      await request(harness.app, `${fixture.basePath}/models/${model!.id}/versions`, {
+        cookie: fixture.viewer.cookie,
+      }),
+      200,
+    );
+    const idsByVersion = new Map(versions.items.map((version) => [version.version, version.id]));
+    const activeIds = ['1', '2', '3', '5', '6'].map((version) => idsByVersion.get(version));
+    expect((await readRun(fixture, fixture.run.id)).outputModelVersionIds).toEqual(activeIds);
+    const listed = await entity<{ items: Run[] }>(
+      await request(harness.app, `${fixture.basePath}/runs`, { cookie: fixture.viewer.cookie }),
+      200,
+    );
+    expect(listed.items.find((run) => run.id === fixture.run.id)?.outputModelVersionIds).toEqual(
+      activeIds,
+    );
+    const graph = await entity<LineageGraph>(
+      await request(harness.app, `${fixture.basePath}/lineage`, { cookie: fixture.viewer.cookie }),
+      200,
+    );
+    const outputs = graph.edges
+      .filter((edge) => edge.relation === 'outputModel' && edge.source === fixture.run.id)
+      .map((edge) => edge.target);
+    expect(outputs).toEqual(expect.arrayContaining(activeIds));
+    expect(outputs).not.toContain(idsByVersion.get('4'));
+  });
+
+  it('inference Runと削除済みRunをsourceRunIdにすると422になり、版もcounterも残さない', async () => {
+    const fixture = await executionFixture(harness);
+    const inference = await fixture.newRun();
+    const rejectedKind = await registerVersion(fixture, fixture.model.id, {
+      sourceRunId: inference.id,
+    });
+    expect(rejectedKind.status).toBe(422);
+    expect(((await rejectedKind.json()) as { code: string }).code).toBe('output_model_kind');
+    const training = await createRun(fixture);
+    expect(
+      (
+        await request(
+          harness.app,
+          `/api/mlflow/projects/${fixture.project.id}/api/2.0/mlflow/runs/delete`,
+          { method: 'POST', cookie: fixture.editor.cookie, body: { run_id: training.id } },
+        )
+      ).status,
+    ).toBe(200);
+    const rejectedDeleted = await registerVersion(fixture, fixture.model.id, {
+      sourceRunId: training.id,
+    });
+    expect(rejectedDeleted.status).toBe(422);
+    expect(((await rejectedDeleted.json()) as { code: string }).code).toBe('source_run_deleted');
+    const next = await entity<ModelVersion>(await registerVersion(fixture, fixture.model.id));
+    expect(next.version).toBe('1');
+  });
+
+  it('終端Runへの遅れた登録はoutboxへRun eventを再送し、outputModelVersionIdsを含める', async () => {
+    const fixture = await executionFixture(harness);
+    await entity<PluginConnection>(
+      await request(harness.app, `${fixture.basePath}/plugins`, {
+        method: 'POST',
+        cookie: fixture.administrator.cookie,
+        body: {
+          name: 'Lineage',
+          baseUrl: 'http://127.0.0.1:4999',
+          tokenEnv: 'MMT_TEST_PLUGIN_TOKEN',
+        },
+      }),
+    );
+    const run = await createRun(fixture, 'finetuning');
+    for (const status of ['running', 'finished'])
+      await entity(
+        await request(harness.app, `${fixture.basePath}/runs/${run.id}`, {
+          method: 'PATCH',
+          cookie: fixture.editor.cookie,
+          body: { status },
+        }),
+        200,
+      );
+    const version = await entity<ModelVersion>(
+      await registerVersion(fixture, fixture.model.id, { sourceRunId: run.id }),
+    );
+    const refreshed = await harness.database.query<{ event: PluginEvent }>(
+      "SELECT event FROM plugin_outbox WHERE event->'run'->'outputModelVersionIds' @> $1::jsonb",
+      [JSON.stringify([version.id])],
+    );
+    expect(refreshed.rows).toHaveLength(1);
+    expect(refreshed.rows[0]!.event.type).toBe('run.finished');
+    expect((await readRun(fixture, run.id)).outputModelVersionIds).toEqual([version.id]);
+  });
+
+  it('Runの作成者として動くsystem actorは作成者の編集権限で登録し、権限を失うと403', async () => {
+    const fixture = await executionFixture(harness);
+    const run = await createRun(fixture);
+    const registerAsRunCreator = (sourceRunId: string | null) =>
+      transaction(harness.database, (connection) =>
+        harness.services.registry.registerModelVersion(connection, {
+          projectId: fixture.project.id,
+          modelId: fixture.model.id,
+          sourceRunId,
+          parentVersionIds: [],
+          metadata: {},
+          actor: { type: 'runCreator' },
+        }),
+      );
+    expect((await registerAsRunCreator(run.id)).version).toBe('1');
+    await expect(registerAsRunCreator(null)).rejects.toMatchObject({
+      status: 422,
+      code: 'source_run_required',
+    });
+    await harness.database.query(
+      "UPDATE project_members SET role='viewer' WHERE project_id=$1 AND user_id=$2",
+      [fixture.project.id, fixture.editor.userId],
+    );
+    await expect(registerAsRunCreator(run.id)).rejects.toMatchObject({ status: 403 });
+    expect((await readRun(fixture, run.id)).outputModelVersionIds).toHaveLength(1);
+  });
+});
+
+describe.skipIf(!testDatabaseUrl)('版counterの移行（独立PostgreSQL）', () => {
+  let harness: Harness;
+  beforeAll(async () => {
+    harness = await createHarness({ applyMigrations: false });
+  });
+  afterAll(async () => {
+    await harness?.close();
+  });
+
+  it('011は整数の版の最大+1とMLflow側counterの大きい方から始め、以後のMLflow登録と重複しない', async () => {
+    const directory = new URL('../src/db/migrations/', import.meta.url);
+    await harness.database.query(
+      'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
+    );
+    const earlier = (await readdir(directory))
+      .filter((name) => name.endsWith('.sql') && name < '011_run_output_models.sql')
+      .sort();
+    for (const name of earlier) {
+      const sql = await readFile(new URL(name, directory), 'utf8');
+      await harness.database.query(sql);
+      await harness.database.query('INSERT INTO schema_migrations(name,sha256) VALUES($1,$2)', [
+        name,
+        createHash('sha256').update(sql).digest('hex'),
+      ]);
+    }
+    const project = (
+      await harness.database.query<{ id: string }>(
+        "INSERT INTO projects(name) VALUES('Legacy') RETURNING id",
+      )
+    ).rows[0]!;
+    const createModel = async (name: string, versions: string[], mlflowNextVersion?: number) => {
+      const model = (
+        await harness.database.query<{ id: string }>(
+          "INSERT INTO models(project_id,name,family) VALUES($1,$2,'legacy') RETURNING id",
+          [project.id, name],
+        )
+      ).rows[0]!;
+      for (const version of versions)
+        await harness.database.query(
+          'INSERT INTO model_versions(model_id,project_id,version) VALUES($1,$2,$3)',
+          [model.id, project.id, version],
+        );
+      if (mlflowNextVersion)
+        await harness.database.query(
+          'INSERT INTO mlflow_registered_model_metadata(model_id,project_id,next_version) VALUES($1,$2,$3)',
+          [model.id, project.id, mlflowNextVersion],
+        );
+      return model.id;
+    };
+    // MLflow already numbered 1..9 for this Model and some versions were deleted afterwards.
+    const mlflowAhead = await createModel('MLflow ahead', ['3', 'v9', '12345678901234567890'], 10);
+    const nativeAhead = await createModel('Native ahead', ['5', '01'], 2);
+    const empty = await createModel('Empty', []);
+    await migrate(harness.database);
+    const counters = await harness.database.query<{ id: string; next_version: string }>(
+      'SELECT id,next_version::text FROM models',
+    );
+    const counterById = new Map(counters.rows.map((row) => [row.id, row.next_version]));
+    expect([mlflowAhead, nativeAhead, empty].map((id) => counterById.get(id))).toEqual([
+      '10',
+      '6',
+      '1',
+    ]);
+    const reserved = await transaction(harness.database, async (connection) => [
+      await reserveModelVersion(connection, { projectId: project.id, modelId: mlflowAhead }),
+      await reserveModelVersion(connection, { projectId: project.id, modelId: mlflowAhead }),
+    ]);
+    expect(reserved).toEqual(['10', '11']);
   });
 });

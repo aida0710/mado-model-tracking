@@ -11,6 +11,7 @@ import type { Principal } from '../auth/principal.js';
 import { rows, type Database } from '../db/database.js';
 import { datasetVersionSelect } from '../repositories/registryRepository.js';
 import { getMlflowLineage } from '../repositories/mlflowLineageRepository.js';
+import { outputModelVersionIdsColumn } from '../repositories/runListProjection.js';
 import { requireProject } from './accessService.js';
 
 export class LineageService {
@@ -19,7 +20,11 @@ export class LineageService {
   async graph(principal: Principal, projectId: string): Promise<LineageGraph> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     const [runs, models, datasets, codes, mlflow] = await Promise.all([
-      rows<Run>(this.database, 'SELECT * FROM runs WHERE project_id=$1', [projectId]),
+      rows<Run>(
+        this.database,
+        `SELECT *,${outputModelVersionIdsColumn} FROM runs WHERE project_id=$1`,
+        [projectId],
+      ),
       rows<ModelVersion & { name: string }>(
         this.database,
         'SELECT v.*,m.family,m.name FROM model_versions v JOIN models m ON m.id=v.model_id WHERE v.project_id=$1',
@@ -47,11 +52,12 @@ export class LineageService {
         edges.push({ source: run.parentRunId, target: run.id, relation: 'parentRun' });
       for (const id of run.inputDatasetVersionIds)
         edges.push({ source: id, target: run.id, relation: 'input' });
+      // Same derivation as Run.outputModelVersionIds, so deleted versions lose the edge too.
+      for (const id of run.outputModelVersionIds)
+        edges.push({ source: run.id, target: id, relation: 'outputModel' });
     }
     for (const model of models) {
       nodes.push({ id: model.id, kind: 'modelVersion', label: `${model.name} ${model.version}` });
-      if (model.sourceRunId)
-        edges.push({ source: model.sourceRunId, target: model.id, relation: 'outputModel' });
       for (const id of model.parentModelVersionIds)
         edges.push({ source: id, target: model.id, relation: 'parentModel' });
     }

@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from mado_tracking import ApiError, Client
+from mado_tracking import ApiError, Client, ConfigurationError
 from mado_tracking.run import ARTIFACT_CHUNK_BYTES
 
 
@@ -121,3 +121,87 @@ def test_http_permission_failure_is_sanitized_and_not_retried():
         client.request("GET", "projects", retryable=True)
     assert count == 1 and captured.value.status_code == 403
     assert "sdk-test-secret" not in str(captured.value)
+
+
+def registry_server(*, existing_models=(), lose_create_race=False):
+    """Serve the native Model registry with name lookup and automatic version numbering."""
+    models = {model["name"]: dict(model) for model in existing_models}
+    versions: list[dict] = []
+    calls = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        calls.append((request.method, request.url.path, dict(request.url.params), body))
+        if request.url.path == "/api/projects/p/models" and request.method == "GET":
+            name = request.url.params.get("name")
+            return httpx.Response(200, json={"items": [models[name]] if name in models else []})
+        if request.url.path == "/api/projects/p/models" and request.method == "POST":
+            if lose_create_race:
+                # Another worker created the same Model between our lookup and POST.
+                models[body["name"]] = {"id": "model-race", "name": body["name"], "family": body["family"]}
+            if body["name"] in models:
+                return httpx.Response(409, json={"error": "exists", "code": "already_exists"})
+            models[body["name"]] = {"id": f"model-{len(models) + 1}", **body}
+            return httpx.Response(201, json=models[body["name"]])
+        if request.url.path.endswith("/versions"):
+            model_id = request.url.path.split("/")[-2]
+            number = sum(version["modelId"] == model_id for version in versions) + 1
+            version = {
+                "id": f"version-{len(versions) + 1}",
+                "modelId": model_id,
+                "version": str(number),
+                **body,
+            }
+            versions.append(version)
+            return httpx.Response(201, json=version)
+        return httpx.Response(404, json={"error": "unexpected"})
+
+    client = Client(
+        api_url="http://localhost", api_token="sdk-test-secret", transport=httpx.MockTransport(serve)
+    )
+    return client, calls
+
+
+def test_model_name_reuses_one_model_and_lets_the_api_number_versions():
+    client, calls = registry_server()
+    with client:
+        first = client.register_model("p", model_name="cpu-linear", family="linear", artifact_id="a1")
+        second = client.register_model("p", model_name="cpu-linear", family="linear", artifact_id="a2")
+    assert first["modelId"] == second["modelId"]
+    assert [first["version"], second["version"]] == ["1", "2"]
+    assert [method for method, path, *_ in calls if path == "/api/projects/p/models"] == [
+        "GET",
+        "POST",
+        "GET",
+    ]
+    assert all("version" not in body for _, path, _, body in calls if path.endswith("/versions"))
+
+
+def test_model_creation_conflict_is_resolved_by_reading_the_winner():
+    client, calls = registry_server(lose_create_race=True)
+    with client:
+        version = client.register_model("p", model_name="shared", family="linear")
+    assert version["modelId"] == "model-race"
+    assert [method for method, path, *_ in calls if path == "/api/projects/p/models"] == [
+        "GET",
+        "POST",
+        "GET",
+    ]
+
+
+def test_existing_model_with_another_family_is_not_reused():
+    client, calls = registry_server(existing_models=[{"id": "m1", "name": "qwen", "family": "qwen3"}])
+    with client, pytest.raises(ConfigurationError, match="family"):
+        client.register_model("p", model_name="qwen", family="linear")
+    assert not any(path.endswith("/versions") for _, path, *_ in calls)
+
+
+def test_output_model_with_model_name_keeps_source_run_and_explicit_version():
+    client, calls = sdk_server()
+    with client:
+        run = client.get_run("p", "run-one")
+        run.register_output_model(model_id="m", artifact_id="a")
+        run.register_output_model(model_id="m", version="7", artifact_id="a")
+    versions = [body for _, path, body, _ in calls if path.endswith("/versions")]
+    assert "version" not in versions[0] and versions[1]["version"] == "7"
+    assert all(version["sourceRunId"] == "run-one" for version in versions)
