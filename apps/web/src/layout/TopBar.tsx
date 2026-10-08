@@ -14,6 +14,7 @@ import { text } from '../i18n/catalog';
 const screens = [
   'experiments',
   'sweeps',
+  'reports',
   'tasks',
   'models',
   'codes',

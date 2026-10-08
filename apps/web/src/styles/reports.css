@@ -1,0 +1,259 @@
+/* Shared reports: the report page, its embeds, the editor and the revision history. */
+.report-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+/* The history sits beside the report on a wide screen and under it on a narrow one. */
+.report-layout.with-history {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+@media (max-width: 1100px) {
+  .report-layout.with-history {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.report-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-width: 1100px;
+}
+.report-markdown {
+  font-size: 14px;
+}
+.report-embed {
+  margin: 0;
+  border: 1px solid var(--border);
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+.report-embed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.report-embed-type {
+  color: var(--muted);
+  font-weight: 600;
+}
+.report-mode-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.report-mode-mark.live {
+  color: var(--teal-strong);
+  background: var(--teal-tint);
+}
+.report-mode-mark.snapshot {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+.report-chart h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.report-embed-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.report-past-notice,
+.report-archived-notice {
+  justify-content: space-between;
+}
+.report-conflict {
+  flex-direction: column;
+  align-items: flex-start;
+  border-left-color: var(--error);
+}
+.report-conflict p {
+  margin: 0;
+}
+.report-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  color: var(--teal-strong);
+  background: var(--teal-tint);
+}
+
+/* Editor */
+.report-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.report-editor-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.report-block-editor {
+  border: 1px solid var(--border);
+  background: var(--background);
+  padding: 10px 12px 12px;
+}
+.report-block-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.report-block-actions,
+.report-add-block,
+.report-editor-footer,
+.report-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.report-editor-footer {
+  justify-content: flex-end;
+}
+.report-block-problem {
+  color: var(--error);
+  font-size: 12px;
+  margin: 4px 0;
+}
+.report-refresh-field {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+/* Embed picker */
+.report-embed-picker-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.report-run-set,
+.report-checklist,
+.report-mode-field {
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  margin: 0;
+  min-width: 0;
+}
+.report-checklist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  max-height: 180px;
+  overflow: auto;
+}
+.report-checklist > small {
+  flex-basis: 100%;
+}
+.report-segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--input-border);
+  margin-bottom: 8px;
+}
+.report-segmented label {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.report-segmented label.active {
+  background: var(--teal-tint);
+  color: var(--teal-strong);
+}
+.report-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.report-segmented label:has(input:focus-visible) {
+  outline: 2px solid var(--teal);
+  outline-offset: -2px;
+}
+.report-run-checklist ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow: auto;
+}
+.report-run-checklist li label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.report-run-checklist-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.report-run-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* Revision history */
+.report-history h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+}
+.report-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.report-history-list li {
+  border-left: 3px solid var(--border);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.report-history-list li.active {
+  border-left-color: var(--teal);
+  background: var(--surface);
+}
+.report-history-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.report-history-message {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.report-history-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.report-page .comment-thread {
+  margin-top: 32px;
+  max-width: 1100px;
+}
