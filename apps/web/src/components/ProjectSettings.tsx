@@ -2,9 +2,10 @@ import { useState } from 'react';
 import type { ArtifactBackend } from '@mmt/contracts';
 import { administrationApi } from '../api/administration';
 import { useProject } from '../hooks/useProject';
-import { useQuery } from '../hooks/useQuery';
+import { useStorageBackendChoices } from '../hooks/useStorageBackends';
 import { useMutation } from '../hooks/useMutation';
 import { ErrorNotice, Resource } from './Feedback';
+import { StorageBackendPicker } from './StorageBackendPicker';
 import { text } from '../i18n/catalog';
 
 export function ProjectSettings() {
@@ -12,13 +13,13 @@ export function ProjectSettings() {
   const [description, setDescription] = useState(project.description);
   const [backend, setBackend] = useState<ArtifactBackend>(project.artifactBackend);
   const [saved, setSaved] = useState(false);
-  const backends = useQuery('settings-backends', administrationApi.backends);
+  const backends = useStorageBackendChoices();
   const mutation = useMutation();
   return (
     <section className="settings-section">
       <h2>{text.project}</h2>
       <Resource query={backends}>
-        {(items) => (
+        {(choices) => (
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -26,7 +27,8 @@ export function ProjectSettings() {
               void mutation.run(async () => {
                 await administrationApi.updateProject(project.id, {
                   description,
-                  artifactBackend: backend,
+                  // Sent only when changed: a disabled backend stays valid for existing Projects.
+                  ...(backend !== project.artifactBackend ? { artifactBackend: backend } : {}),
                 });
                 setSaved(true);
                 reloadProjects();
@@ -57,6 +59,13 @@ export function ProjectSettings() {
                   ))}
                 </select>
               </div>
+              <StorageBackendPicker
+                name="project-artifact-backend"
+                choices={choices.items}
+                defaultBackend={choices.defaultBackend}
+                value={backend}
+                onChange={setBackend}
+              />
             </fieldset>
             <ErrorNotice message={mutation.error} />
             {saved && (

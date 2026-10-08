@@ -1,7 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { TopBar } from './TopBar';
 
-/** Layout for screens about the signed-in user, which belong to no Project. */
+/** Layout for screens that belong to no Project: the signed-in user's account and /admin. */
 export function AccountShell() {
   return (
     <div className="app-shell">

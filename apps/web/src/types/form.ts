@@ -12,6 +12,7 @@ export interface FormField {
     | 'text'
     | 'email'
     | 'url'
+    | 'password'
     | 'number'
     | 'textarea'
     | 'select'

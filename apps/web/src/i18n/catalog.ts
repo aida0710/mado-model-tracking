@@ -8,6 +8,8 @@ import { evaluationText } from './evaluation';
 import { projectAccessText } from './projectAccess';
 import { promotionText } from './promotion';
 import { uploadsText, uploadsTextTemplates } from './uploads';
+import { storageText, storageTextTemplates } from './storage';
+import { adminText } from './admin';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -33,6 +35,7 @@ export const lineageRelationLabels: Record<string, string> = {
 export const textTemplates = {
   ...runsTextTemplates,
   ...uploadsTextTemplates,
+  ...storageTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -49,6 +52,8 @@ export const text = {
   ...runsText,
   ...projectAccessText,
   ...uploadsText,
+  ...storageText,
+  ...adminText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
