@@ -84,7 +84,7 @@ AWS SDKはSignature Version 4しか扱えないため、Mado Model TrackingはSi
 - Regionは署名に使いません
 - 接続テストとmultipart uploadは、v4と同じように使えます
 
-### multipartが動かないストレージ
+### multipartが動かないストレージ {#storage-without-multipart-support}
 
 multipart uploadのAPIに対応していないS3互換ストレージでは、［Multipart uploadを使う］をオフにします。この場合は次の制限があります。
 

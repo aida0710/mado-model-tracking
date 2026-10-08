@@ -51,16 +51,11 @@
   max-height: 40vh;
 }
 
-/* Touch-sized controls: at least 40px tall on the screens and dialogs of this group. */
+/* Buttons, inputs and selects already reach --tap-target in base.css; these screens add the rest. */
 @media (width < 900px) {
   :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .lineage-page, .codes-page, .dialog.fullscreen-on-narrow)
-    :is(.button, .button.small, select, input:not([type='checkbox']):not([type='radio']), summary, .checkbox-field) {
-    min-height: 40px;
-  }
-  :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .lineage-page, .codes-page, .dialog.fullscreen-on-narrow)
-    .icon-button {
-    min-width: 40px;
-    min-height: 40px;
+    :is(summary, .checkbox-field) {
+    min-height: var(--tap-target);
   }
   :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .codes-page)
     :is(td, dd, .version-detail, .snapshot-artifacts) :is(a, .link-button) {

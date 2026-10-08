@@ -18,7 +18,7 @@ export const accessText = {
   weakPassword: '新しいパスワードが条件を満たしていません',
   localAccountRequired: 'ローカルアカウントのパスワードだけを変更できます',
   changePassword: 'パスワードを変更',
-  passwordChanged: 'パスワードを変更しました。ほかの端末のログインは終了しました。',
+  passwordChanged: 'パスワードを変更しました。ほかのブラウザやマシンのログインは終了しました。',
   auditEvents: '監査ログ',
   auditOccurredAt: '日時',
   auditActor: '操作者',

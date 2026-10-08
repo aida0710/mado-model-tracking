@@ -9,11 +9,12 @@ import { getFieldValue } from './formValues';
 import { text, textTemplates } from '../i18n/catalog';
 
 const MIB = 1024 * 1024;
-// S3 rejects parts below 5 MiB (except the last) and above 5 GiB; the API checks the same range.
+// S3 rejects parts below 5 MiB (except the last). The API caps parts at 512 MiB because it keeps
+// two of them in memory per upload (MAX_MULTIPART_PART_SIZE_BYTES in storageBackendConfig.ts).
 export const MIN_MULTIPART_PART_SIZE_MIB = 5;
-export const MAX_MULTIPART_PART_SIZE_MIB = 5 * 1024;
-// Same as the API's DEFAULT_UPLOAD_PART_BYTES, so a new backend uploads as before.
-export const DEFAULT_MULTIPART_PART_SIZE_MIB = 16;
+export const MAX_MULTIPART_PART_SIZE_MIB = 512;
+// Same as the API's DEFAULT_MULTIPART_PART_SIZE_BYTES, so a backend saved without a size matches.
+export const DEFAULT_MULTIPART_PART_SIZE_MIB = 8;
 // The S3 default region; most S3-compatible servers accept it too.
 export const DEFAULT_S3_REGION = 'us-east-1';
 

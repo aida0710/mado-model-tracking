@@ -469,7 +469,7 @@ API serverは30秒ごとに次を確かめ、見つけたらProjectの「運用�
 ### 学習の途中再開（checkpoint）
 
 - 再開は手動だけです（Run詳細のCheckpointタブ、Jobsの「最新checkpointから再開」、retry APIの`checkpointId`／`resumeFromLatestCheckpoint`）。学習コード側の書き方は[worker手順](worker.md)の「学習を途中から再開する（checkpoint）」にあります。
-- checkpointのArtifactは`checkpoints/step-<N>.tar`（SDK）または`checkpoints/step-<N>/...`（MLflow）です。容量の掃除はArtifactのlifecycle GC（第6波 artifact-lifecycle-gc の予定）の削除APIで行います。再開Runが参照中のcheckpoint（`runs.resume_checkpoint_id`）のArtifactは消さないでください。
+- checkpointのArtifactは`checkpoints/step-<N>.tar`（SDK）または`checkpoints/step-<N>/...`（MLflow）です。容量の掃除は「Artifactの削除と回収」のArtifact削除で行います。再開Runが参照中のcheckpoint（`runs.resume_checkpoint_id`）のArtifactは消さないでください。
 - worker側の照合失敗（sha256・manifest不一致）はJobのerrorに「Checkpoint ... mismatch」などで残り、entrypointは起動していません。
 
 ## Gitのファイルをエディタへ読み込む

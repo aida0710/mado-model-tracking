@@ -56,7 +56,7 @@ NaNは保存・読み出し時に保持します。数値検索では`!=`以外�
 
 SDKが表示するRunリンクはMLflow標準UIの形式です。画面での確認には本アプリのRunsを使うか、`/projects/PROJECT_ID/runs/RUN_ID`を開いてください。
 
-Runの説明文はMLflowと同じ`mlflow.note.content` tagに保存します。MLflowの`set_tag("mlflow.note.content", ...)`・標準UIのDescriptionと、nativeの`PUT /api/projects/:p/runs/:r/note`は同じ値を読み書きし、別の保存場所はありません。上限はMLflowのtag値と同じ8000文字で、nativeで空文字を保存するとtagを削除します。JobのRunが終わった後は、MLflowのset-tag・delete-tagが`INVALID_STATE`で拒否されます。nativeの説明文APIは説明文を実験結果として扱わないため、終了後もeditorが編集できます。終了後に説明文を直す場合はnative APIを使ってください。Job限定token（`mmtj_`）ではnativeの説明文APIは403 `job_token_forbidden`です。Webの説明文の画面はまだありません。
+Runの説明文はMLflowと同じ`mlflow.note.content` tagに保存します。MLflowの`set_tag("mlflow.note.content", ...)`・標準UIのDescriptionと、nativeの`PUT /api/projects/:p/runs/:r/note`は同じ値を読み書きし、別の保存場所はありません。上限はMLflowのtag値と同じ8000文字で、nativeで空文字を保存するとtagを削除します。JobのRunが終わった後は、MLflowのset-tag・delete-tagが`INVALID_STATE`で拒否されます。nativeの説明文APIは説明文を実験結果として扱わないため、終了後もeditorが編集できます。終了後に説明文を直す場合はnative APIを使ってください。Job限定token（`mmtj_`）ではnativeの説明文APIは403 `job_token_forbidden`です。WebではRun詳細の［詳細］タブの「説明」で同じ値を編集できます（`RunDescriptionEditor`）。
 
 ### 終わったRunに続きを記録する
 

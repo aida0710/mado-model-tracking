@@ -84,7 +84,7 @@ try {
 
   await dialog.getByLabel('名前').fill('mlflow-sdk');
   await dialog.getByRole('button', { name: '保存' }).click();
-  await dialog.getByText('トークンは一度だけ表示されます', { exact: false }).waitFor();
+  await dialog.getByText('API tokenは一度だけ表示されます', { exact: false }).waitFor();
   const created = api.state.tokens.at(-1);
   assert.deepEqual([...created.scopes].sort(), [
     'artifacts:write',

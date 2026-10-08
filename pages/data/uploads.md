@@ -33,7 +33,7 @@ partの数は1ファイルにつき10,000までです。ブラウザとPython SD
 途中のアップロードは、開始から7日で期限が切れます。期限が切れたアップロードと、受信済みのpartは自動で削除されます。
 
 ::: warning
-保存先の設定で［Multipart uploadを使う］をオフにしている場合、分割したアップロードは使えません。[保存先の設定](/data/storage#multipartが動かないストレージ)を参照してください。
+保存先の設定で［Multipart uploadを使う］をオフにしている場合、分割したアップロードは使えません。[保存先の設定](/data/storage#storage-without-multipart-support)を参照してください。
 :::
 
 ## ブラウザからアップロードする

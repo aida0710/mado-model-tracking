@@ -328,7 +328,7 @@ export const text = {
   queuedEvents: 'イベントをキューに追加しました',
   pluginVersion: 'Plugin version',
   pluginsAdminOnly:
-    'Pluginの接続はProject adminと全体管理者が管理します。変更が必要な場合はProject adminに依頼してください。',
+    'Pluginの画面はProject adminと全体管理者が使えます。Pluginの登録と変更は全体管理者だけが行えます。必要な場合はProject adminか全体管理者に依頼してください。',
   capabilities: 'Capabilities',
   storageMetrics: 'Storage metrics',
   refreshMetrics: 'メトリクスを更新',

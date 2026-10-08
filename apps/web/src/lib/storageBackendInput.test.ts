@@ -51,7 +51,7 @@ describe('保存先の作成', () => {
       tlsVerify: true,
       checksumMode: 'when_required',
       multipartEnabled: true,
-      multipartPartSizeBytes: 16 * 1024 * 1024,
+      multipartPartSizeBytes: 8 * 1024 * 1024,
       accessKeyId: 'AKIAEXAMPLE',
       secretAccessKey: 'example-secret',
       enabled: true,
@@ -68,10 +68,12 @@ describe('保存先の作成', () => {
       expect(() => create({ bucket }), bucket).toThrow('Bucket名');
     expect(create({ bucket: 'logs.2026-10' }).bucket).toBe('logs.2026-10');
   });
-  it('partサイズは5MiB未満と整数以外を拒否する', () => {
+  it('partサイズはAPIと同じ5〜512MiBの整数だけを受け付ける', () => {
     expect(() => create({ multipartPartSizeMib: '4' })).toThrow('partサイズ');
     expect(() => create({ multipartPartSizeMib: '5.5' })).toThrow('partサイズ');
+    expect(() => create({ multipartPartSizeMib: '513' })).toThrow('partサイズ');
     expect(create({ multipartPartSizeMib: '5' }).multipartPartSizeBytes).toBe(5 * 1024 * 1024);
+    expect(create({ multipartPartSizeMib: '512' }).multipartPartSizeBytes).toBe(512 * 1024 * 1024);
   });
   it('Access key IDだけでsecretが無い作成を拒否する', () => {
     expect(() => create({ secretAccessKey: '' })).toThrow('Secret access key');
