@@ -8,6 +8,7 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from ..errors import ApiError, ConfigurationError, LeaseRejected, TransportError
@@ -16,6 +17,7 @@ from ..timestamps import utc_timestamp
 from .api import WorkerApi
 from .config import WorkerSettings
 from .contracts import TERMINAL_STATUSES, WorkerJob
+from .dataset_staging import stage_input_datasets
 from .event_wait import wait_interval
 from .journal import JobJournal
 from .runtime import JobExecutor
@@ -135,9 +137,8 @@ class JobSession:
                     return
                 finally:
                     archive_path.unlink(missing_ok=True)
-            if self.job.runtime["kind"] != "python" or self.job.resume_checkpoint is not None:
-                if not await self.prepare_job_inputs():
-                    return
+            if not await self.prepare_job_inputs():
+                return
             # Bootstrap/download may be slow. Validate ownership immediately before launching.
             if self.lease_rejected.is_set():
                 raise LeaseRejected("Lease rejected before execution")
@@ -172,6 +173,7 @@ class JobSession:
             )
 
     async def prepare_job_inputs(self) -> bool:
+        """Stage every input before launch; a failure fails the Job without starting its code."""
         try:
             await self.transfer_before_start(
                 lambda: self.retry_transport(
@@ -179,19 +181,66 @@ class JobSession:
                         self.job,
                         api=self.api,
                         executor=self.executor,
-                        transfer_path=lambda kind: self.journal.transfer_path(self.job.id, kind),
+                        transfer_path=self.transfer_path,
+                    )
+                )
+            )
+            staged = await self.transfer_before_start(
+                lambda: self.retry_transport(
+                    lambda: stage_input_datasets(
+                        self.job,
+                        api=self.api,
+                        executor=self.executor,
+                        transfer_path=self.transfer_path,
+                        api_url=self.settings.api.url,
                     )
                 )
             )
         except LeaseRejected:
             raise
         except PreparationCanceled:
+            await self.release_input_datasets()
             await self.complete({"status": "canceled", "exit_code": None, "error": None})
             return False
         except (ApiError, ValueError) as error:
+            await self.release_input_datasets()
+            await self.log_preparation("error", f"Job inputs could not be prepared: {error}")
             await self.complete({"status": "failed", "exit_code": None, "error": str(error)})
             return False
+        self.executor.staged_inputs["datasets"] = staged.paths
+        for notice in staged.notices:
+            await self.log_preparation("info", notice)
         return True
+
+    def transfer_path(self, kind: str) -> Path:
+        return self.journal.transfer_path(self.job.id, kind)
+
+    async def release_input_datasets(self) -> None:
+        # Best effort: a pin left behind expires once the unstarted workspace is old enough.
+        try:
+            await self.executor.command("dataset-release")
+        except (TransportError, OSError, TimeoutError, ConfigurationError) as error:
+            LOGGER.warning(
+                "Job %s dataset cache release failed: %s", self.job.id, self.executor.masker.mask(str(error))
+            )
+
+    async def log_preparation(self, level: str, message: str) -> None:
+        # The Run's log is where its owner looks; Job.error alone is easy to miss.
+        try:
+            await self.api.logs(
+                self.job,
+                [
+                    {
+                        "timestamp": utc_timestamp(),
+                        "level": level,
+                        "message": self.executor.masker.mask(message),
+                    }
+                ],
+            )
+        except LeaseRejected:
+            raise
+        except ApiError as error:
+            LOGGER.warning("Job %s log failed: %s", self.job.id, self.executor.masker.mask(str(error)))
 
     async def transfer_before_start(self, operation: Callable[[], Any]) -> Any:
         transfer = asyncio.create_task(operation())

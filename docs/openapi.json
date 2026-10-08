@@ -21370,6 +21370,20 @@
                       "ssh",
                       "local"
                     ]
+                  },
+                  "datasetCacheMaxBytes": {
+                    "default": 107374182400,
+                    "type": "integer",
+                    "minimum": 1048576,
+                    "maximum": 9007199254740991
+                  },
+                  "datasetTransfer": {
+                    "default": "relay",
+                    "type": "string",
+                    "enum": [
+                      "relay",
+                      "direct"
+                    ]
                   }
                 },
                 "required": [
@@ -21618,6 +21632,18 @@
                     "enum": [
                       "ssh",
                       "local"
+                    ]
+                  },
+                  "datasetCacheMaxBytes": {
+                    "type": "integer",
+                    "minimum": 1048576,
+                    "maximum": 9007199254740991
+                  },
+                  "datasetTransfer": {
+                    "type": "string",
+                    "enum": [
+                      "relay",
+                      "direct"
                     ]
                   }
                 },
@@ -35952,6 +35978,18 @@
               "ssh",
               "local"
             ]
+          },
+          "datasetCacheMaxBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "datasetTransfer": {
+            "type": "string",
+            "enum": [
+              "relay",
+              "direct"
+            ]
           }
         },
         "required": [
@@ -35968,7 +36006,9 @@
           "gpuIds",
           "maxConcurrentJobs",
           "enabled",
-          "executor"
+          "executor",
+          "datasetCacheMaxBytes",
+          "datasetTransfer"
         ],
         "additionalProperties": false
       },

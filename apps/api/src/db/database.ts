@@ -47,7 +47,8 @@ function mapColumns<T>(row: QueryResultRow): T {
     entity[property] =
       value instanceof Date
         ? value.toISOString()
-        : ['size', 'run_count', 'total_size'].includes(column) && value !== null
+        : ['size', 'run_count', 'total_size', 'dataset_cache_max_bytes'].includes(column) &&
+            value !== null
           ? Number(value)
           : value;
   }

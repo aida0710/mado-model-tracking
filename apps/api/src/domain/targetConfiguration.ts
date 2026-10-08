@@ -20,7 +20,8 @@ export function validateTargetConfiguration(
     );
 }
 
-// These fields affect queued launches and reattachment of existing remote processes.
+// These fields affect queued launches and reattachment of existing remote processes. The dataset
+// settings decide where a claimed Job's inputs come from and which cache entries may be deleted.
 const executionFields = [
   'host',
   'port',
@@ -32,6 +33,8 @@ const executionFields = [
   'runtimeKinds',
   'gpuIds',
   'executor',
+  'datasetCacheMaxBytes',
+  'datasetTransfer',
 ] as const;
 
 export function hasTargetExecutionChanges(previous: ComputeTarget, next: ComputeTarget): boolean {

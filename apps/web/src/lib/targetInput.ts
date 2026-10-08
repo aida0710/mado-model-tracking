@@ -3,6 +3,9 @@ import type { FormValues } from '../types/form';
 import { getFieldValue, getSelectedValues, parsePositiveInteger, splitLines } from './formValues';
 import { parseRuntimeKinds } from './runtimeValidation';
 
+// The dialog edits the dataset cache bound in GiB; the API stores bytes.
+export const BYTES_PER_GIB = 1024 ** 3;
+
 export function buildTargetInput(values: FormValues): CreateTarget {
   return {
     name: getFieldValue(values, 'name'), executor: getFieldValue(values, 'executor') as CreateTarget['executor'],
@@ -14,5 +17,7 @@ export function buildTargetInput(values: FormValues): CreateTarget {
     gpuIds: splitLines(getFieldValue(values, 'gpuIds')),
     maxConcurrentJobs: parsePositiveInteger(getFieldValue(values, 'maxConcurrentJobs')),
     enabled: getFieldValue(values, 'enabled') === 'true',
+    datasetCacheMaxBytes: parsePositiveInteger(getFieldValue(values, 'datasetCacheMaxGiB')) * BYTES_PER_GIB,
+    datasetTransfer: getFieldValue(values, 'datasetTransfer') as CreateTarget['datasetTransfer'],
   };
 }

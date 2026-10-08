@@ -189,6 +189,7 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_PARAMETERS_FILE`, `MMT_PARAMETERS_JSON` | parametersのJSON |
 | `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデル版ID |
 | `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONと版ID配列のJSON |
+| `MMT_INPUT_DATASET_DIRS` | 入力DatasetVersionの本体を置いたディレクトリ`{versionId: path}`のJSON（read-only）。記述子だけの版（`urn:`・`mmt-artifact:`）は入らない（「入力Datasetの本体はworkerが実行前に用意する」節） |
 | `MMT_UPSTREAM_RUN_ID`, `MMT_UPSTREAM_RUN_FILE` | 上流Run（`run.parentRunId`）のIDと`upstream-run.json`のpath。上流が無いJobには付かない |
 | `MMT_RESUME_CHECKPOINT_DIR`, `MMT_RESUME_STEP`, `MMT_RESUME_CHECKPOINT_FILE` | 再開元checkpointの展開先（read-only）、保存時のstep、`resume-checkpoint.json`のpath。checkpointから再開しないJobには付かない（「学習を途中から再開する」節） |
 | `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報。tokenはJob限定token |
@@ -198,7 +199,7 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 
 Python runtimeでも、SDKを使わずに`MMT_OUTPUTS_DIR`へファイルと`result.json`を書けば、コンテナと同じ検証で回収してRun Artifactの`container/<path>`へ保存する（形式と上限は次節）。何も書かなければ従来どおり回収しない。ファイルがあるのに`result.json`が無い、または宣言と合わない場合はJobをfailedにする。
 
-Python runtimeでは、モデル重みやdatasetの実体をコード側がArtifact APIや登録URIから読む。コンテナでは、workerが重みを実行前に取得する。DatasetVersionはどちらもmetadataとURIを渡す方式。実行コードへ渡す環境変数はCodeVersionの設定とSDK設定に限り、workerの無関係なシークレットは継承しない。
+Python runtimeでは、モデル重みの実体をコード側がArtifact APIや登録URIから読む。コンテナでは、workerが重みを実行前に取得する。入力DatasetVersionの本体は、どのruntimeでもworkerが実行前にtargetへ用意し、`MMT_INPUT_DATASET_DIRS`で場所を渡す。実行コードへ渡す環境変数はCodeVersionの設定とSDK設定に限り、workerの無関係なシークレットは継承しない。
 
 ### 上流RunのArtifactsを取得する
 
@@ -215,6 +216,51 @@ if upstream_run_id() is not None:
 
 上流が無いJobでは`upstream_run_id()`はNone、2つの関数は空の配列を返し、APIを呼ばない。同じpathに複数の版があれば最新の版を取る。`..`や絶対パスを含むArtifact pathがあれば、何も書かずに`ConfigurationError`にする。保存は一時ファイルからのrenameなので、途中で失敗しても壊れたファイルは残らない。Rangeでの再開は未対応（全体を取り直す）。
 
+## 入力Datasetの本体はworkerが実行前に用意する
+
+workerは実行コードを起動する前に、入力DatasetVersionごとに本体をtargetへ用意して照合する。用意できなければentrypointを起動せずJobを`failed`で完了する（APIがGPU予約を解放する）。理由はRunのログにerrorで残り、`Job.error`にも入る。
+
+| 版 | 取得元 | 照合 |
+|---|---|---|
+| `contentKind=artifacts` | files API（`GET /projects/:p/datasets/:d/versions/:v/files`）の一覧のArtifact | 一覧からmanifest digestを計算し直して版の`digest`と一致させ、各ファイルのsha256・sizeを照合する |
+| `reference`の`file://` | target上の既存path。copyしない | 存在と読み取り権限だけ確かめる |
+| `reference`の`https://` | 認証無しのGET。redirectは追わない。保存名はURLの最後のpath区間 | `digest`が`sha256:<hex>`か64桁hexならsha256を照合する。それ以外の形のdigestは照合できない |
+| `reference`の`s3://bucket/key` | target上の`AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`・`AWS_SESSION_TOKEN`・`AWS_REGION`（無ければ`us-east-1`）・`AWS_ENDPOINT_URL_S3`/`AWS_ENDPOINT_URL`・`AWS_CA_BUNDLE`で署名v4。keyがobjectそのものならその1つ、それ以外は`key/`配下の全object | sizeを照合する（S3のETagはsha256ではない） |
+| `reference`の`urn:`・`mmt-artifact:` | 取得しない（記述子だけ。上流RunのArtifactはSDKで読む） | Runのログにinfoで残す |
+| それ以外のscheme（`gs:`、`hf:`、schemeなしのpathなど） | 取得できないのでJobを開始前に失敗させる | — |
+
+`contentKind`を持たない記述子（第4波より前のAPI）は従来どおり取得しない。
+
+### 転送方式（targetの`datasetTransfer`）
+
+- `relay`（既定）: workerがworker tokenでAPIからArtifactを取得し（Range再開・sha256照合）、HTTPSも取得して、1本のtarでtargetへ送る。GPU計算機がAPIへ届かなくてよい。worker側の一時ファイルはstate directory配下のjournalに置き、送信後に消す（worker側にも一時的に版1つ分の空きが要る）。
+- `direct`: targetがJob token（`mmtj_`）で`GET /projects/:p/artifacts/:a/content`を呼ぶ。HTTPSもtargetが取得する。worker tokenはtargetへ渡さない。Job tokenはrunnerのstdinで渡し（worker側では権限600の一時ファイルを経由して送信後に消す）、argvやtarget上のファイルに残さない。targetから`MMT_API_URL`（workerのAPI URL）へ届く必要がある。
+- `s3://`と`file://`は方式によらずtarget側で扱う。S3の認証情報はtargetのSSH非対話シェル（local executorならworker process）の環境変数に置く。APIやworkerには置かない。
+
+target側の取得がネットワークやサーバー側の理由で失敗したら、2秒・4秒あけて最大3回まで試す。404・照合の不一致・上限超過はすぐ失敗にする。
+
+### dataset cache
+
+本体は`<workDirectory>/.mmt-cache/datasets/<key>/data`に置く。`<key>`は`artifacts`の版ではmanifest digestのhex、`reference`の版では`r-`＋`sha256(uri + "\n" + digest)`。
+
+- 同じkeyは`<key>.lock`（flock）で排他する。完了マーカー`complete.json`があればそのまま使い、取得し直さない。同じworkerの並列Jobはworker内でも待ち合わせるので、`relay`でも取得は1回。別のworkerのJobとはtargetのlockで待ち合わせる（`relay`ではそれぞれのworkerが一度取得し、後に着いた方のtarは使わずに捨てる）。
+- 完了マーカーの無いentry（取得中に中断したもの）は信用せず、消して作り直す。
+- 完了したファイルはread-only（ファイル0400、ディレクトリ0500）。host pythonはworkspaceの`inputs/datasets/<versionId>`（cacheへのsymlink）、Docker・Singularity・Apptainerは`/mmt/datasets/<versionId>`（read-only bind）で読む。起動直前にもう一度完了マーカーを確かめる。
+- 上限はtargetの`datasetCacheMaxBytes`（既定100GiB、Compute画面のtarget編集で変えられる）。新しいentryを入れる前に、最終使用（`last-used`のmtime）の古い順に消す。未終了のJobが使うentry（`users/<jobId>`のworkspaceが終端でない）は消さない。使用中のentryだけで上限を超えるときは、そのまま取得してRunのログに残す。1つの版が上限より大きければJobを失敗させる。
+- 起動前に失敗・取消したJobは自分の使用印を外す。外せずに残った使用印は、workspaceが24時間起動しなければ無効になる。
+
+`MMT_DATASET_VERSIONS_FILE`・`MMT_INPUT_DATASET_VERSION_IDS`と、上流Runの`MMT_UPSTREAM_RUN_ID`・`upstream-run.json`は従来どおり渡すので、記述子やSDKで読むコードはそのまま動く。
+
+```python
+import json, os, pathlib
+
+for version_id, directory in json.loads(os.environ.get("MMT_INPUT_DATASET_DIRS", "{}")).items():
+    for wav in sorted(pathlib.Path(directory).rglob("*.wav")):
+        ...
+```
+
+worker tokenには`read` scopeが要る（files APIを読むため）。
+
 ## コンテナの入力と出力は標準pathを使う
 
 コンテナへ渡すmountは次のディレクトリに限定する。spec/state、API tokenのファイル、SSH設定、workerのhomeはmountしない。SDK接続用envは優先して供給し、Dockerはprivateなenv-file、SIFはprefix付きenvで渡す。secret値はargvへ含めない。
@@ -223,11 +269,12 @@ if upstream_run_id() is not None:
 |---|---|---|
 | `/mmt/inputs/weights` | 入力ModelVersionのprimary weights file | read-only |
 | `/mmt/inputs/checkpoint` | 再開元checkpointのファイル（再開するJobだけ） | read-only |
+| `/mmt/datasets/<versionId>` | 入力DatasetVersionの本体（targetのdataset cacheか`file://`のpath） | read-only |
 | `/mmt/context` | context、parameters、model-version、dataset-versionsのJSON | read-only |
 | `/mmt/source` | 任意sourceの固定版。source=nullならmountしない | read-only |
 | `/mmt/outputs` | imageが生成する結果 | read/write |
 
-Artifact重みはworkerが認証済みAPIからstream取得し、targetへの転送後もSHA256とサイズを確認する。SIFも登録SHA256と実ファイルを照合する。途中でdownload/転送が失敗した入力からentrypointを起動しない。`file://`の重みはtarget側のregular fileからcopyする。HTTP(S)の重みはworker側の別clientで取得し、API tokenやCookieを転送せず、redirectを追わない。Datasetの外部URIにはworkerからアクセスしない。
+Artifact重みはworkerが認証済みAPIからstream取得し、targetへの転送後もSHA256とサイズを確認する。SIFも登録SHA256と実ファイルを照合する。途中でdownload/転送が失敗した入力からentrypointを起動しない。`file://`の重みはtarget側のregular fileからcopyする。HTTP(S)の重みはworker側の別clientで取得し、API tokenやCookieを転送せず、redirectを追わない。DatasetのURIは次節の規則でだけ取得する。
 
 APIのArtifact（SIF、重み、source archive）は、SDKと同じRange再開で取得する。SIFや重みのstaging中に接続が切れても受信済みの位置から続け、全体のSHA-256をETagと照合してからtargetへ転送する。成果物と`.mmt/source.zip`などのRun Artifactは、64MiB以上ならupload sessionで送る。worker processが再起動しても、同じファイルなら続きから送る。
 

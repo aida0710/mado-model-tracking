@@ -1,6 +1,7 @@
 """Prepare only the container's input, context, optional source, and output mounts.
 
-Also places the resume checkpoint, which sits under inputs for every runtime.
+Also places the resume checkpoint, which sits under inputs for every runtime, and exposes the
+staged input datasets (MMT_INPUT_DATASET_DIRS) to every runtime.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from urllib.parse import unquote, urlsplit
 
 from ..checkpoint_archive import extract_checkpoint_archive
 from .container_outputs import HASH_CHUNK_BYTES, file_checksum
+from .dataset_cache import DatasetCache
 from .host_state import write_json
 
 INPUTS_PATH = "/mmt/inputs"
@@ -29,6 +31,11 @@ UPSTREAM_RUN_FILENAME = "upstream-run.json"
 RESUME_CHECKPOINT_DIRECTORY = "checkpoint"
 RESUME_CHECKPOINT_FILENAME = "resume-checkpoint.json"
 RESUME_CHECKPOINT_ARCHIVE = "checkpoint.tar"
+# Containers get each dataset as its own read-only bind. It is not nested below the read-only
+# /mmt/inputs bind, whose host directory could not hold the mount points.
+INPUT_DATASETS_PATH = "/mmt/datasets"
+# Host python reads <workspace>/inputs/datasets/<versionId>, a symlink into the dataset cache.
+INPUT_DATASETS_DIRECTORY = "datasets"
 
 
 @dataclass(frozen=True)
@@ -106,6 +113,46 @@ def resume_checkpoint_environment(
     }
 
 
+def staged_dataset_paths(workspace: Path, specification: dict[str, Any]) -> dict[str, Path] | None:
+    """Target paths of the staged input datasets, checked again right before launch.
+
+    None for a specification saved before datasets were staged; such a Job gets no
+    MMT_INPUT_DATASET_DIRS rather than an empty mapping that would claim nothing is staged.
+    """
+    staged = specification.get("stagedInputs", {}).get("datasets")
+    if staged is None:
+        return None
+    # Descriptor-only versions (urn:, mmt-artifact:) have nothing staged and are left out.
+    if not set(staged) <= {dataset["id"] for dataset in specification["context"]["inputDatasets"]}:
+        raise ValueError("Staged datasets are not the Job's inputs")
+    cache = DatasetCache.for_workspace(workspace)
+    paths = {}
+    for version_id, entry in staged.items():
+        path = Path(entry["path"])
+        key = entry.get("key")
+        if key is not None and (path != cache.data_path(key) or not cache.is_complete(key)):
+            raise ValueError(f"Input dataset cache entry is incomplete: {version_id}")
+        if not path.exists():
+            raise ValueError(f"Input dataset path is missing on the target: {version_id}")
+        paths[version_id] = path
+    return paths
+
+
+def link_input_datasets(workspace: Path, paths: dict[str, Path]) -> dict[str, str]:
+    """Symlink each dataset under inputs/datasets for host python; returns MMT_INPUT_DATASET_DIRS."""
+    directory = workspace / "inputs" / INPUT_DATASETS_DIRECTORY
+    if directory.parent.is_symlink() or directory.is_symlink():
+        raise ValueError("Input dataset directory must not be a symlink")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    links = {}
+    for version_id, path in paths.items():
+        link = directory / version_id
+        link.unlink(missing_ok=True)
+        link.symlink_to(path, target_is_directory=path.is_dir())
+        links[version_id] = str(link)
+    return links
+
+
 def install_resume_checkpoint(workspace: Path, specification: dict[str, Any]) -> None:
     """Extract the staged checkpoint tar, verifying it again on the target, as read-only files."""
     document = specification["context"].get("resumeCheckpoint")
@@ -152,6 +199,8 @@ def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> 
         write_json(workspace / "context" / name, document)
     if specification["codeVersion"]["source"] is not None:
         mounts.append(ContainerMount(workspace / "source", SOURCE_PATH, True))
+    for version_id, path in (staged_dataset_paths(workspace, specification) or {}).items():
+        mounts.append(ContainerMount(path, f"{INPUT_DATASETS_PATH}/{version_id}", True))
     return mounts
 
 
@@ -228,6 +277,11 @@ def container_environment(specification: dict[str, Any]) -> dict[str, str]:
         PYTHONUNBUFFERED="1",
     )
     environment.update(upstream_environment(context, f"{CONTEXT_PATH}/{UPSTREAM_RUN_FILENAME}"))
+    staged_datasets = specification.get("stagedInputs", {}).get("datasets")
+    if staged_datasets is not None:
+        environment["MMT_INPUT_DATASET_DIRS"] = json.dumps(
+            {version_id: f"{INPUT_DATASETS_PATH}/{version_id}" for version_id in staged_datasets}
+        )
     environment.update(
         resume_checkpoint_environment(
             context,

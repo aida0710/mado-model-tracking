@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { isValidStorageBackendName } from '@mmt/platform';
+import {
+  DATASET_TRANSFER_MODES,
+  DEFAULT_DATASET_CACHE_MAX_BYTES,
+  MIN_DATASET_CACHE_MAX_BYTES,
+} from '@mmt/contracts';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
 import { codeSourceSchema } from './codeSourceValidation.js';
 export { codeSourceSchema } from './codeSourceValidation.js';
@@ -217,6 +222,13 @@ export const targetSchema = z.strictObject({
   maxConcurrentJobs: z.number().int().min(1).max(128),
   enabled: z.boolean(),
   executor: z.enum(['ssh', 'local']),
+  datasetCacheMaxBytes: z
+    .number()
+    .int()
+    .min(MIN_DATASET_CACHE_MAX_BYTES)
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(DEFAULT_DATASET_CACHE_MAX_BYTES),
+  datasetTransfer: z.enum(DATASET_TRANSFER_MODES).default('relay'),
 });
 export const jobCreateSchema = z.strictObject({
   runId: uuidSchema,
@@ -226,6 +238,8 @@ export const jobCreateSchema = z.strictObject({
 });
 export const targetPatchSchema = targetSchema.partial().extend({
   runtimeKinds: targetSchema.shape.runtimeKinds.removeDefault().optional(),
+  datasetCacheMaxBytes: targetSchema.shape.datasetCacheMaxBytes.removeDefault().optional(),
+  datasetTransfer: targetSchema.shape.datasetTransfer.removeDefault().optional(),
 });
 export const tokenCreateSchema = z.strictObject({
   name: nameSchema,

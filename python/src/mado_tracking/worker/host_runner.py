@@ -23,10 +23,13 @@ from .container_layout import (
     RESUME_CHECKPOINT_FILENAME,
     UPSTREAM_RUN_FILENAME,
     host_environment,
+    link_input_datasets,
     resume_checkpoint_environment,
+    staged_dataset_paths,
     upstream_environment,
 )
 from .container_outputs import RESULT_FILENAME, read_output_chunk, validate_results
+from .dataset_runner import run_dataset_command
 from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned_process_group
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
 from .job_execution import execute_registered_code
@@ -40,6 +43,8 @@ STATUS_LOG_BYTES = 64 * 1024
 PROTOCOL_MAX_INPUT_BYTES = 32 * 1024**2
 # An orphan still uses the same cancellation grace as a supervised process.
 ORPHAN_CANCEL_GRACE_SECONDS = 10.0
+# These read their own stdin framing (a JSON line, then the relayed tar).
+DATASET_COMMANDS = {"dataset-materialize", "dataset-release"}
 
 
 def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -> dict[str, Any]:
@@ -226,6 +231,11 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
             [dataset["id"] for dataset in specification["context"]["inputDatasets"]]
         ),
     )
+    # Containers bind the datasets themselves (container_layout); symlinks would dangle there.
+    is_host_python = specification["codeVersion"]["runtime"]["kind"] == "python"
+    dataset_paths = staged_dataset_paths(workspace, specification) if is_host_python else None
+    if dataset_paths is not None:
+        environment["MMT_INPUT_DATASET_DIRS"] = json.dumps(link_input_datasets(workspace, dataset_paths))
     upstream_run_file = workspace / UPSTREAM_RUN_FILENAME
     environment.update(upstream_environment(specification["context"], str(upstream_run_file)))
     resume_checkpoint_file = workspace / RESUME_CHECKPOINT_FILENAME
@@ -356,6 +366,8 @@ def main() -> None:
         )
     elif command == "cancel":
         response = cancel(workspace)
+    elif command in DATASET_COMMANDS:
+        response = run_dataset_command(command, workspace, sys.stdin.buffer)
     else:
         raw = sys.stdin.buffer.read(PROTOCOL_MAX_INPUT_BYTES + 1)
         if len(raw) > PROTOCOL_MAX_INPUT_BYTES:
