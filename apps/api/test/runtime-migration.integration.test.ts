@@ -14,7 +14,7 @@ describe.skipIf(!testDatabaseUrl)('既存Registryとtargetのruntime移行（独
     await harness?.close();
   });
 
-  it('既存コード・target・RunをPythonへ移行し、過去モデルは処理済みにする', async () => {
+  it('既存コード・target・RunをPythonへ移行し、過去モデルは処理済みにし、SSOユーザーの識別子を引き継ぐ', async () => {
     await harness.database.query(
       'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
     );
@@ -49,11 +49,51 @@ describe.skipIf(!testDatabaseUrl)('既存Registryとtargetのruntime移行（独
       ), legacy_target AS (
         INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,max_concurrent_jobs,executor)
         VALUES('Legacy target','127.0.0.1',22,'fixture','','','/tmp/fixture','python3',1,'local') RETURNING id
-      ) SELECT p.id AS project_id,c.id AS code_version_id,m.id AS model_version_id,r.id AS run_id,t.id AS target_id
-      FROM legacy_project p,legacy_code_version c,legacy_model_version m,legacy_run r,legacy_target t`);
+      ), development_user AS (
+        INSERT INTO users(issuer,subject,email,display_name) VALUES('development','dev@localhost','dev@localhost','Dev') RETURNING id
+      ) SELECT p.id AS project_id,c.id AS code_version_id,m.id AS model_version_id,r.id AS run_id,t.id AS target_id,
+        u.id AS user_id,d.id AS development_user_id
+      FROM legacy_project p,legacy_code_version c,legacy_model_version m,legacy_run r,legacy_target t,legacy_user u,development_user d`);
+    await harness.database.query(
+      "INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('legacy-session',$1,now()+interval '1 hour'),('development-session',$2,now()+interval '1 hour')",
+      [registered.rows[0].user_id, registered.rows[0].development_user_id],
+    );
     const legacy = registered.rows[0];
     await migrate(harness.database);
     await migrate(harness.database);
+    // SSO users keep their user.id through user_oidc_identities; development users are not SSO identities.
+    expect(
+      (
+        await harness.database.query(
+          'SELECT issuer,subject,user_id,email_at_login,email_verified FROM user_oidc_identities',
+        )
+      ).rows,
+    ).toEqual([
+      {
+        issuer: 'fixture',
+        subject: 'legacy',
+        user_id: legacy.user_id,
+        email_at_login: 'legacy@localhost',
+        email_verified: true,
+      },
+    ]);
+    expect(
+      (
+        await harness.database.query('SELECT status,username FROM users WHERE id=$1', [
+          legacy.user_id,
+        ])
+      ).rows,
+    ).toEqual([{ status: 'active', username: null }]);
+    expect(
+      (
+        await harness.database.query(
+          'SELECT token_hash,auth_method FROM sessions ORDER BY token_hash',
+        )
+      ).rows,
+    ).toEqual([
+      { token_hash: 'development-session', auth_method: 'development' },
+      { token_hash: 'legacy-session', auth_method: 'oidc' },
+    ]);
     const code = (
       await harness.database.query('SELECT source,runtime FROM code_versions WHERE id=$1', [
         legacy.code_version_id,

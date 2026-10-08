@@ -1,22 +1,52 @@
 import * as oidc from 'openid-client';
 import type { User } from '@mmt/contracts';
 import type { ApiConfig } from '../config.js';
-import { first, type Database } from '../db/database.js';
+import { first, transaction, type Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { hashSecret, randomSecret } from '../auth/secrets.js';
-import { sessionUser, tokenIdentity, upsertIdentity } from '../repositories/identityRepository.js';
+import {
+  tokenIdentity,
+  upsertIdentity,
+  upsertOidcUser,
+  type OidcLoginIdentity,
+} from '../repositories/identityRepository.js';
+import {
+  createSession,
+  findActiveSession,
+  revokeSession,
+} from '../repositories/sessionRepository.js';
+import { writeAuditEvent } from '../repositories/auditRepository.js';
+import type { RequestMetadata } from '../http/requestMetadata.js';
 import type { Principal } from '../auth/principal.js';
+import { AuthRateLimiter, OIDC_START_IP_LIMIT } from '../auth/authRateLimiter.js';
+import { argon2idPasswordHasher } from '../auth/passwordHasher.js';
+import { loginAudit } from '../auth/authAuditEvents.js';
+import { LocalAuthService } from './localAuthService.js';
 
-// Short login lifetime bounds replay exposure; sessions expire without sliding renewal.
+// Short login lifetime bounds replay exposure of an unfinished OIDC login.
 export const LOGIN_LIFETIME_SECONDS = 10 * 60;
-export const SESSION_LIFETIME_SECONDS = 12 * 60 * 60;
+
+export interface SessionLogin {
+  user: User;
+  session: string;
+}
 
 export class AuthService {
   private provider: Promise<oidc.Configuration> | undefined;
+  // One limiter per process: local login, OIDC start, and password checks share its buckets.
+  private readonly rateLimiter = new AuthRateLimiter();
+  readonly local: LocalAuthService;
   constructor(
     private readonly database: Database,
     readonly config: ApiConfig,
-  ) {}
+  ) {
+    this.local = new LocalAuthService({
+      database,
+      config,
+      rateLimiter: this.rateLimiter,
+      passwordHasher: argon2idPasswordHasher,
+    });
+  }
 
   async authenticate(credentials: {
     bearer?: string;
@@ -29,30 +59,53 @@ export class AuthService {
       return { ...identity, method: 'token' };
     }
     if (!credentials.session) return null;
-    const user = await sessionUser(this.database, hashSecret(credentials.session));
-    return user ? { user, method: 'session', token: null } : null;
+    const session = await findActiveSession(
+      this.database,
+      credentials.session,
+      this.config.session.idleSeconds,
+    );
+    if (!session) return null;
+    const { user, ...context } = session;
+    return { user, method: 'session', token: null, session: context };
   }
 
-  async developmentLogin(identity: {
-    email: string;
-    displayName?: string;
-  }): Promise<{ user: User; session: string }> {
+  async developmentLogin(
+    identity: { email: string; displayName?: string },
+    metadata: RequestMetadata,
+  ): Promise<SessionLogin> {
     if (this.config.authMode !== 'development')
       throw new DomainError(404, 'Development loginは無効です', 'development_login_disabled');
     const email = identity.email.toLowerCase();
-    const user = await upsertIdentity(this.database, {
-      issuer: 'development',
-      subject: email,
-      email,
-      displayName: identity.displayName ?? email,
-      isAdmin: email === this.config.developmentAdminEmail,
+    return transaction(this.database, async (connection) => {
+      const user = await upsertIdentity(connection, {
+        issuer: 'development',
+        subject: email,
+        email,
+        displayName: identity.displayName ?? email,
+        isAdmin: email === this.config.developmentAdminEmail,
+      });
+      const session = await createSession(connection, {
+        userId: user.id,
+        authMethod: 'development',
+        absoluteSeconds: this.config.session.absoluteSeconds,
+      });
+      await writeAuditEvent(connection, {
+        ...loginAudit('development', metadata),
+        actorType: 'user',
+        actorUserId: user.id,
+        outcome: 'success',
+        resourceId: user.id,
+      });
+      return { user, session };
     });
-    return { user, session: await this.createSession(user.id) };
   }
 
-  async beginLogin(): Promise<{ url: string; binding: string }> {
-    if (this.config.authMode !== 'oidc')
-      throw new DomainError(404, 'OIDC loginは無効です', 'oidc_disabled');
+  async beginLogin(metadata: RequestMetadata): Promise<{ url: string; binding: string }> {
+    if (!this.config.oidc) throw new DomainError(404, 'OIDC loginは無効です', 'oidc_disabled');
+    this.rateLimiter.consumeOrThrow(
+      `oidc-start:ip:${metadata.ip ?? 'unknown'}`,
+      OIDC_START_IP_LIMIT,
+    );
     const provider = await this.oidcProvider();
     const state = oidc.randomState();
     const nonce = oidc.randomNonce();
@@ -78,9 +131,28 @@ export class AuthService {
   async finishLogin(
     callbackUrl: URL,
     binding: string | undefined,
-  ): Promise<{ user: User; session: string }> {
-    if (this.config.authMode !== 'oidc')
-      throw new DomainError(404, 'OIDC loginは無効です', 'oidc_disabled');
+    metadata: RequestMetadata,
+  ): Promise<SessionLogin> {
+    if (!this.config.oidc) throw new DomainError(404, 'OIDC loginは無効です', 'oidc_disabled');
+    try {
+      return await this.completeOidcLogin(callbackUrl, binding, metadata);
+    } catch (error) {
+      if (error instanceof DomainError && error.status === 401)
+        await writeAuditEvent(this.database, {
+          ...loginAudit('oidc', metadata),
+          actorType: 'system',
+          outcome: 'failed',
+          details: { method: 'oidc', reason: error.code },
+        });
+      throw error;
+    }
+  }
+
+  private async completeOidcLogin(
+    callbackUrl: URL,
+    binding: string | undefined,
+    metadata: RequestMetadata,
+  ): Promise<SessionLogin> {
     const state = callbackUrl.searchParams.get('state');
     if (!binding || !state || callbackUrl.searchParams.getAll('state').length !== 1)
       throw new DomainError(
@@ -97,7 +169,7 @@ export class AuthService {
     if (!login)
       throw new DomainError(401, 'Loginが失効したか、ブラウザが一致しません', 'invalid_oidc_state');
     const provider = await this.oidcProvider();
-    let identity: Parameters<typeof upsertIdentity>[1];
+    let identity: OidcLoginIdentity;
     try {
       const tokens = await oidc.authorizationCodeGrant(provider, callbackUrl, {
         pkceCodeVerifier: login.verifier,
@@ -108,11 +180,15 @@ export class AuthService {
       const claims = tokens.claims();
       if (!claims?.sub || typeof claims.email !== 'string' || claims.email_verified !== true)
         throw new Error('Verified email is required');
-      const groups = Array.isArray(claims.groups) ? claims.groups : [];
+      const groups = Array.isArray(claims.groups)
+        ? claims.groups.filter((group): group is string => typeof group === 'string')
+        : [];
       identity = {
         issuer: this.config.oidc!.issuer,
         subject: claims.sub,
         email: claims.email,
+        emailVerified: true,
+        groups,
         displayName: typeof claims.name === 'string' ? claims.name : claims.email,
         isAdmin: groups.includes(this.config.oidc!.adminGroup),
       };
@@ -127,23 +203,47 @@ export class AuthService {
       );
       throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
     }
-    const user = await upsertIdentity(this.database, identity);
-    return { user, session: await this.createSession(user.id) };
+    return transaction(this.database, async (connection) => {
+      const user = await upsertOidcUser(connection, identity);
+      // Disabling is local to this app, so it overrides a still-valid SSO account.
+      if (user.status !== 'active')
+        throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
+      const session = await createSession(connection, {
+        userId: user.id,
+        authMethod: 'oidc',
+        absoluteSeconds: this.config.session.absoluteSeconds,
+      });
+      await writeAuditEvent(connection, {
+        ...loginAudit('oidc', metadata),
+        actorType: 'user',
+        actorUserId: user.id,
+        outcome: 'success',
+        resourceId: user.id,
+      });
+      return { user, session };
+    });
   }
 
-  async logout(session: string | undefined): Promise<void> {
-    if (session)
-      await this.database.query('DELETE FROM sessions WHERE token_hash=$1', [hashSecret(session)]);
-  }
-
-  private async createSession(userId: string): Promise<string> {
-    const session = randomSecret();
-    await this.database.query('DELETE FROM sessions WHERE expires_at<=now()');
-    await this.database.query(
-      'INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+make_interval(secs=>$3))',
-      [hashSecret(session), userId, SESSION_LIFETIME_SECONDS],
-    );
-    return session;
+  async logout(
+    principal: Principal | null,
+    session: string | undefined,
+    metadata: RequestMetadata,
+  ): Promise<void> {
+    if (!session) return;
+    await transaction(this.database, async (connection) => {
+      await revokeSession(connection, session);
+      if (principal?.session)
+        await writeAuditEvent(connection, {
+          actorType: 'user',
+          actorUserId: principal.user.id,
+          action: 'auth.logout',
+          outcome: 'success',
+          resourceType: 'user',
+          resourceId: principal.user.id,
+          details: { method: principal.session.authMethod },
+          ...metadata,
+        });
+    });
   }
 
   private async oidcProvider(): Promise<oidc.Configuration> {
