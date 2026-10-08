@@ -1,6 +1,7 @@
 import { ANALYSIS_MAX_METRICS, type ParameterImportanceResult, type RunAnalysisTableResponse } from '@mmt/contracts';
 import type { RunAnalysisMetricOptions } from '../api/runAnalysis';
 import type { AxisDefinition, ChartRunRow } from './parallelCoordinates';
+import { isSystemMetricKey } from './systemMetricKeys';
 
 // Turns the analysis table into the rows and fields the charts draw. Field keys carry the
 // namespace (params./metrics.) like MLflow search, so a param and a metric may share a name.
@@ -43,20 +44,32 @@ export function metricFields(table: RunAnalysisTableResponse, objectiveLabel: st
 }
 
 /**
- * The params shown first: the most important ones when importance is known, otherwise the best
- * covered (ties by name). Params the table did not return are skipped.
+ * The params shown first: the most important ones when importance is known, then the best covered
+ * (ties by name). Importance may rank none (no Run has the target), which must not leave the
+ * chart without param axes. Params the table did not return are skipped.
  */
 export function defaultParamAxisKeys(
   table: RunAnalysisTableResponse,
   importance: ParameterImportanceResult | undefined,
 ): string[] {
   const available = new Set(table.params.map((param) => param.key));
-  const ranked = importance
-    ? importance.entries.map((entry) => entry.param).filter((key) => available.has(key))
-    : [...table.params]
-        .sort((left, right) => right.coverage - left.coverage || left.key.localeCompare(right.key))
-        .map((param) => param.key);
+  const important = (importance?.entries ?? [])
+    .map((entry) => entry.param)
+    .filter((key) => available.has(key));
+  const covered = [...table.params]
+    .sort((left, right) => right.coverage - left.coverage || left.key.localeCompare(right.key))
+    .map((param) => param.key);
+  const ranked = [...new Set([...important, ...covered])];
   return ranked.slice(0, DEFAULT_PARAM_AXIS_COUNT).map(paramFieldKey);
+}
+
+/**
+ * Metric names in the order they are offered: result metrics by name, then system metrics
+ * (CPU, memory, ...), which describe the machine rather than the result and so never come first.
+ */
+export function orderAnalysisMetricKeys(keys: readonly string[]): string[] {
+  const unique = [...new Set(keys)].sort();
+  return [...unique.filter((key) => !isSystemMetricKey(key)), ...unique.filter(isSystemMetricKey)];
 }
 
 /** What the importance table explains: a metric's latest value, or a sweep's aggregated objective. */
@@ -71,7 +84,8 @@ export function tableMetricKeys(metricKeys: string[], target: AnalysisTarget | n
 
 /**
  * The chosen target while the Run set still offers it, otherwise the default: the sweep objective
- * when there is one, then the first metric by name.
+ * when there is one, then the preferred metric, then the first offered metric (system metrics
+ * come last in the order).
  */
 export function resolveAnalysisTarget(
   chosen: AnalysisTarget | null,
@@ -86,6 +100,9 @@ export function resolveAnalysisTarget(
 
 function defaultAnalysisTarget(options: RunAnalysisMetricOptions): AnalysisTarget | null {
   if (options.objectiveMetric) return { source: 'sweep_objective' };
+  const preferred = options.preferredMetric;
+  if (preferred && options.metricKeys.includes(preferred))
+    return { source: 'latest_metric', metric: preferred };
   const firstMetric = options.metricKeys[0];
   return firstMetric ? { source: 'latest_metric', metric: firstMetric } : null;
 }

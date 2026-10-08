@@ -4,6 +4,8 @@
 // same categories and units, so both kinds of Run open with the same panels. The name mapping is
 // the table in docs/worker.md「MLflowの`system/`名との対応」.
 
+import type { ChartValueUnit } from './chartTicks';
+
 export type SystemMetricCategory = 'cpu' | 'memory' | 'disk' | 'network' | 'gpu' | 'other';
 /**
  * `bytes_total` is MLflow's network counter: megabytes since monitoring started, not a rate, so it
@@ -98,6 +100,23 @@ export function classifySystemMetricKey(key: string): SystemMetricKey | null {
 
 /** Multiplier that converts a recorded value to the unit of its panel (1 for other metrics). */
 export const systemMetricValueScale = (key: string) => classifySystemMetricKey(key)?.scale ?? 1;
+
+const valueUnitOfSystemUnit: Partial<Record<SystemMetricUnit, ChartValueUnit>> = {
+  bytes: 'bytes',
+  bytes_total: 'bytes',
+  bytes_per_second: 'bytes_per_second',
+};
+
+/** The unit the value axis of a panel shows: a byte unit only when every key measures bytes. */
+export function chartValueUnit(keys: readonly string[]): ChartValueUnit {
+  const units = new Set(
+    keys.map((key) => {
+      const unit = classifySystemMetricKey(key)?.unit;
+      return (unit && valueUnitOfSystemUnit[unit]) ?? 'number';
+    }),
+  );
+  return units.size === 1 ? [...units][0]! : 'number';
+}
 
 export interface SystemMetricPanelGroup {
   /** Stable across Runs with either naming, e.g. `gpu.0.percent`. */

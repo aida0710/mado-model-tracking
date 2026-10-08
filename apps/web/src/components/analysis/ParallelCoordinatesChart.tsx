@@ -38,6 +38,12 @@ const PLOT_TOP = 76;
 const PLOT_BOTTOM_GAP = 60;
 const MISSING_BAND_GAP = 28;
 const AXIS_HIT_WIDTH = 28;
+// Tick labels are 10px monospace (styles/analysis.css): about 0.6em per character. The plate
+// behind a label hides the Run lines that cross it, which a text halo alone did not.
+const TICK_CHARACTER_WIDTH = 6;
+const TICK_LABEL_OFFSET = 5;
+const TICK_PLATE_HEIGHT = 12;
+const TICK_PLATE_PADDING = 2;
 // A press without this much travel (as a share of the axis) is a click that clears the brush.
 const CLICK_TRAVEL = 0.01;
 const UNSELECTED_LINE_COLOR = 'rgba(128, 128, 128, 0.14)';
@@ -364,7 +370,14 @@ function AxisGraphic({
       {scale.ticks.map((tick) => (
         <g key={`${tick.position}:${tick.label}`}>
           <line x1={x - 3} x2={x} y1={yOf(layout, tick.position)} y2={yOf(layout, tick.position)} className="parallel-axis-line" />
-          <text x={x + 5} y={yOf(layout, tick.position) + 3} className="parallel-axis-tick">
+          <rect
+            x={x + TICK_LABEL_OFFSET - TICK_PLATE_PADDING}
+            y={yOf(layout, tick.position) - TICK_PLATE_HEIGHT / 2}
+            width={tick.label.length * TICK_CHARACTER_WIDTH + TICK_PLATE_PADDING * 2}
+            height={TICK_PLATE_HEIGHT}
+            className="parallel-axis-tick-plate"
+          />
+          <text x={x + TICK_LABEL_OFFSET} y={yOf(layout, tick.position) + 3} className="parallel-axis-tick">
             {tick.label}
           </text>
         </g>

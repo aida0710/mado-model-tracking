@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chartValueUnit,
   classifySystemMetricKey,
   groupSystemMetricKeys,
   isSystemMetricKey,
@@ -90,5 +91,18 @@ describe('groupSystemMetricKeys', () => {
       ['cpu.percent', 'cpu'],
       ['other.system/custom_counter', 'other'],
     ]);
+  });
+});
+
+describe('chartValueUnit', () => {
+  it('bytesの系統だけの図はbytes、bytes/秒だけの図はbytes_per_secondの目盛りにする', () => {
+    expect(chartValueUnit(['system.memory.used_bytes', 'system.process.rss_bytes'])).toBe('bytes');
+    expect(chartValueUnit(['system/system_memory_usage_megabytes'])).toBe('bytes');
+    expect(chartValueUnit(['system.disk.read_bytes_per_second'])).toBe('bytes_per_second');
+  });
+
+  it('単位の違うmetricや学習のmetricが混ざれば数値のまま出す', () => {
+    expect(chartValueUnit(['system.memory.used_bytes', 'system.disk.read_bytes_per_second'])).toBe('number');
+    expect(chartValueUnit(['train.loss'])).toBe('number');
   });
 });

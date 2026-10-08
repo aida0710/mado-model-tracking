@@ -39,7 +39,8 @@ export function keepPlottablePoints(
 }
 
 /**
- * The [min, max] the y axis shows for the given values, padded so lines do not touch the frame.
+ * The [min, max] the y axis shows for the given values, padded so lines do not touch the frame
+ * except at 0, which the padding never crosses.
  * Non-finite values (and values at or below 0 on a log axis) are ignored; null when none remain.
  */
 export function paddedDomain(values: Iterable<number>, scale: ChartScale): [number, number] | null {
@@ -52,7 +53,10 @@ export function paddedDomain(values: Iterable<number>, scale: ChartScale): [numb
     max === min
       ? Math.abs(min) * LINEAR_DOMAIN_PADDING_RATIO || 1
       : (max - min) * LINEAR_DOMAIN_PADDING_RATIO;
-  return [min - padding, max + padding];
+  // The padding must not cross 0: an axis below 0 for a loss or a byte count reads as a value.
+  const lower = min >= 0 ? Math.max(0, min - padding) : min - padding;
+  const upper = max <= 0 ? Math.min(0, max + padding) : max + padding;
+  return lower === upper ? [lower - padding, upper + padding] : [lower, upper];
 }
 
 /** The [min, max] of the x values, unpadded so the lines start and end at the frame. */

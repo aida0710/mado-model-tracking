@@ -1,13 +1,19 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Play, RefreshCw, Upload } from 'lucide-react';
-import type { ChartPanelLayout, ChartXAxis, Run, RunResumeEventPage } from '@mmt/contracts';
+import {
+  RUN_NOTE_TAG,
+  type ChartPanelLayout,
+  type ChartXAxis,
+  type Run,
+  type RunResumeEventPage,
+} from '@mmt/contracts';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
-import { StatusBadge } from '../components/StatusBadge';
+import { RunStatusBadge } from '../components/runs/RunStatusBadge';
 import { ChartPanelGrid } from '../components/charts/ChartPanelGrid';
 import { RunResumeTimeline } from '../components/RunResumeTimeline';
 import { RunDescriptionEditor } from '../components/RunDescriptionEditor';
@@ -43,6 +49,7 @@ import { getRunChartKeys } from '../lib/runChartKeys';
 import { useChartPanelLayout } from '../hooks/useChartPanelLayout';
 import { useRunResumeEvents } from '../hooks/useRunResumeEvents';
 import { getRunParameters } from '../lib/runParameters';
+import { runCreatorName } from '../lib/runCreator';
 import { getResumeCheckpointRecord } from '../lib/checkpointResume';
 import { text, textTemplates } from '../i18n/catalog';
 import { systemMetricCategoryLabels, systemMetricUnitLabels } from '../i18n/runs';
@@ -120,7 +127,7 @@ export function RunDetailPage() {
               }
               description={
                 <>
-                  <StatusBadge status={item.status} />
+                  <RunStatusBadge run={item} />
                   <span className="mono">{item.id}</span>
                   <span>{text[item.kind]}</span>
                   <span>{item.executionMode === 'test' ? text.testMode : text.runMode}</span>
@@ -202,7 +209,7 @@ export function RunDetailPage() {
                     <DetailsList
                       entries={[
                         [text.created, formatDate(item.createdAt)],
-                        [text.user, item.createdBy],
+                        [text.user, <span title={item.createdBy}>{runCreatorName(item)}</span>],
                         [
                           text.modelVersion,
                           item.modelVersionId ? (
@@ -266,7 +273,7 @@ export function RunDetailPage() {
                   </section>
                   <section>
                     <h2>{text.tags}</h2>
-                    <KeyValues values={item.tags} />
+                    <KeyValues values={tagsWithoutDescription(item.tags)} />
                   </section>
                   <section>
                     <h2>{text.environment}</h2>
@@ -347,6 +354,18 @@ function ResumedFromCheckpoint({ run }: { run: Run }) {
 
 const runLabelsOf = (run: Run) => ({ [run.id]: run.name });
 
+// The description is shown above as Markdown; as a tag it would repeat it as one raw line.
+function tagsWithoutDescription(tags: Record<string, string>): Record<string, string> {
+  const { [RUN_NOTE_TAG]: _description, ...rest } = tags;
+  return rest;
+}
+
+/**
+ * System metrics are sampled by the worker on a timer, so their step is a sample number, not the
+ * training step; elapsed time lines them up with the Run instead.
+ */
+const SYSTEM_METRIC_X_AXIS: ChartXAxis = { kind: 'relative_time' };
+
 /** Metric panels of one Run, arranged per Project; resumed segments are marked on the x axis. */
 function RunMetricCharts({
   run,
@@ -417,7 +436,10 @@ function createSystemMetricLayout(metricKeys: string[]): ChartPanelLayout {
       systemMetricUnitLabels[group.unit],
       group.gpuIndex,
     );
-    const panel = createPanelConfig(group.metricKeys.slice(0, MAX_PANEL_METRIC_KEYS), title);
+    const panel = {
+      ...createPanelConfig(group.metricKeys.slice(0, MAX_PANEL_METRIC_KEYS), title),
+      xAxis: SYSTEM_METRIC_X_AXIS,
+    };
     return addPanel(layout, panel, { id: `system-${group.id}`, width: 'half' });
   }, emptyChartPanelLayout());
 }

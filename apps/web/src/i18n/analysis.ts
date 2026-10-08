@@ -8,7 +8,7 @@ export const analysisText = {
   analysisImportance: 'パラメータ重要度',
   analysisScatter: '散布図',
   analysisTarget: '目的metric',
-  analysisSweepObjective: 'Sweepのobjective',
+  analysisSweepObjective: '目的値',
   analysisNoMetrics: 'このRunの集合にはmetricが記録されていません',
   analysisTooFewRuns: '分析には2件以上のRunが必要です',
   analysisNoRuns: '対象のRunがありません',
@@ -23,13 +23,13 @@ export const analysisText = {
   analysisColorHigh: '大',
   analysisColorMissing: '値なし',
   analysisSelectedRuns: '絞り込んだRun',
-  analysisParam: 'Param',
+  analysisParam: 'パラメータ',
   analysisImportanceColumn: '重要度',
   analysisCorrelation: '相関',
-  analysisCoverage: 'Coverage',
+  analysisCoverage: '値のある割合',
   analysisKind: '種類',
   analysisImportanceImpurity: '不純度の減少',
-  analysisImportancePermutation: 'Permutation',
+  analysisImportancePermutation: '並べ替え（permutation）',
   analysisImportanceMethod: '重要度の計算',
   analysisExcluded: '計算から除いたparam',
   analysisNoParams: '値のあるparamがありません',
@@ -65,7 +65,7 @@ export const parameterExclusionReasonLabels: Record<ParameterExclusionReason, st
 
 export const importanceTargetSourceLabels: Record<ParameterImportanceResult['targetSource'], string> = {
   latest_metric: 'metricの最新値',
-  sweep_objective: 'Sweep試行の集約済みobjective',
+  sweep_objective: 'Sweep試行の集約済みの目的値',
 };
 
 export const analysisParamKindLabels = {

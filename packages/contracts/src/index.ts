@@ -255,6 +255,8 @@ export interface Run {
   resumeCheckpointId?: string | null;
   environment: JsonObject;
   createdBy: string;
+  /** Display name of createdBy, for screens; null if the user record is gone. */
+  createdByName?: string | null;
   createdAt: string;
   startedAt: string | null;
   endedAt: string | null;

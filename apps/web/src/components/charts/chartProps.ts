@@ -7,6 +7,7 @@ import type {
   Run,
   RunSet,
 } from '@mmt/contracts';
+import type { ChartValueUnit } from '../../lib/chartTicks';
 
 /**
  * Props that connect the chart, analysis, media and comment components of the same release to the
@@ -25,7 +26,10 @@ export interface MetricsChartPoint {
 export interface MetricsChartSeries {
   id: string;
   label: string;
-  /** Omitted: lib/seriesColors.ts picks the color from `id`, so a Run keeps its color everywhere. */
+  /**
+   * Omitted: lib/seriesColors.ts picks the color from `id`, so a Run keeps its color across charts
+   * unless another line of the same chart has a too similar one.
+   */
   color?: string;
   points: MetricsChartPoint[];
   kind: 'run' | 'group';
@@ -43,6 +47,8 @@ export interface MetricsChartProps {
   /** Log x is offered for the step axis; values at or below 0 are left out and counted. */
   xScale?: 'linear' | 'log';
   yScale: 'linear' | 'log';
+  /** How the value axis labels its ticks; omitted reads as plain numbers. */
+  valueUnit?: ChartValueUnit;
   smoothing: ChartSmoothing;
   showRange: boolean;
   /** Draws the unsmoothed line faintly behind the smoothed one. */

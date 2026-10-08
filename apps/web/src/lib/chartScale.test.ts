@@ -44,10 +44,19 @@ describe('図の軸の範囲', () => {
   });
 
   it('y軸の範囲は非有限の値を無視して上下に余白を足す', () => {
-    expect(paddedDomain([0, 10, Number.NaN, Number.POSITIVE_INFINITY], 'linear')).toEqual([
-      -0.5, 10.5,
+    expect(paddedDomain([2, 12, Number.NaN, Number.POSITIVE_INFINITY], 'linear')).toEqual([
+      1.5, 12.5,
     ]);
     expect(paddedDomain([Number.NaN], 'linear')).toBeNull();
+  });
+
+  it('値がすべて0以上なら余白で0未満へ広げず、すべて0以下なら0より上へ広げない', () => {
+    // accuracy 0〜1、loss、メモリのbytesのような値。
+    expect(paddedDomain([0, 1], 'linear')).toEqual([0, 1.05]);
+    expect(paddedDomain([0.01, 10], 'linear')![0]).toBe(0);
+    expect(paddedDomain([-10, 0], 'linear')).toEqual([-10.5, 0]);
+    expect(paddedDomain([-1, 1], 'linear')).toEqual([-1.1, 1.1]);
+    expect(paddedDomain([0, 0], 'linear')).toEqual([-1, 1]);
   });
 
   it('対数のy軸の範囲は0以下を無視して倍率で余白を足す', () => {

@@ -39,6 +39,7 @@ const display: RunListDisplay = {
   experimentId: 'exp-1',
   searchText: "metrics.loss < 0.5 AND params.optimizer = 'adam'",
   status: 'finished',
+  kinds: ['training'],
   sort: metricRunSort('eval/wer', 'asc'),
   columns: [{ key: 'metrics.eval/wer', width: 140 }, { key: 'status' }, { key: 'description' }],
   chartPanels: layout,
@@ -53,7 +54,7 @@ describe('保存ビューの状態の変換', () => {
       filter: "metrics.loss < 0.5 AND params.optimizer = 'adam'",
       orderBy: ['metrics.`eval/wer` ASC'],
       statuses: ['finished'],
-      kinds: [],
+      kinds: ['training'],
     });
     expect(toRunListDisplay(state)).toEqual(display);
   });
@@ -127,6 +128,7 @@ describe('未保存の変更の判定', () => {
   it('保存した直後は変更なし、条件・列・図を変えると変更あり', () => {
     expect(hasUnsavedChanges(saved, toSavedViewState(display))).toBe(false);
     expect(hasUnsavedChanges(saved, toSavedViewState({ ...display, status: 'failed' }))).toBe(true);
+    expect(hasUnsavedChanges(saved, toSavedViewState({ ...display, kinds: [] }))).toBe(true);
     expect(
       hasUnsavedChanges(
         saved,
@@ -148,8 +150,15 @@ describe('未保存の変更の判定', () => {
     expect(hasUnsavedChanges(saved, reordered)).toBe(false);
   });
 
-  it('一覧に出せない条件（2件目以降のExperiment、実行種別）は開いた表示と比べる', () => {
-    const fromApi: SavedViewState = { ...saved, experimentIds: ['exp-1', 'exp-2'], kinds: ['training'] };
+  it('一覧に出せない条件（2件目以降のExperiment）は開いた表示と比べる', () => {
+    const fromApi: SavedViewState = { ...saved, experimentIds: ['exp-1', 'exp-2'] };
     expect(hasUnsavedChanges(fromApi, toSavedViewState(toRunListDisplay(fromApi)))).toBe(false);
+  });
+
+  it('実行種別は開いて上書き保存しても消えず、APIで保存した複数の種別も残る', () => {
+    const fromApi: SavedViewState = { ...saved, kinds: ['inference', 'evaluation'] };
+    const resaved = toSavedViewState(toRunListDisplay(fromApi));
+    expect(resaved.kinds).toEqual(['inference', 'evaluation']);
+    expect(hasUnsavedChanges(fromApi, resaved)).toBe(false);
   });
 });

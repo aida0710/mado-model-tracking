@@ -1,6 +1,7 @@
 import type {
   ChartPanelLayout,
   RunGroupBy,
+  RunKind,
   RunStatus,
   SavedViewColumn,
   SavedViewState,
@@ -19,6 +20,8 @@ export interface RunListDisplay {
   /** The search box text: a Run name substring or a filter expression. */
   searchText: string;
   status: string;
+  /** Empty shows every kind. */
+  kinds: RunKind[];
   sort: string;
   /** Visible columns after the fixed selection and name columns, in order. */
   columns: SavedViewColumn[];
@@ -74,7 +77,7 @@ export function toSavedViewState(display: RunListDisplay): SavedViewState {
     filter: searchTextToFilter(display.searchText),
     orderBy: runSortOrderBy(display.sort),
     statuses: display.status ? [display.status as RunStatus] : [],
-    kinds: [],
+    kinds: [...display.kinds],
     columns: display.columns.map(({ key, width }) => (width === undefined ? { key } : { key, width })),
     ...(groupBy ? { groupBy } : {}),
     chartPanels,
@@ -91,6 +94,7 @@ export function toRunListDisplay(state: SavedViewState): RunListDisplay {
     experimentId: state.experimentIds[0] ?? '',
     searchText: filterToSearchText(state.filter),
     status: state.statuses[0] ?? '',
+    kinds: [...state.kinds],
     sort: runSortFromOrderBy(state.orderBy) ?? 'newest',
     columns: state.columns.map(({ key, width }) => (width === undefined ? { key } : { key, width })),
     // An empty layout is how a view keeps "the default charts" rather than a fixed set.

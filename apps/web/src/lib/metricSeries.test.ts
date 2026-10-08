@@ -8,6 +8,7 @@ import {
   prepareChartLines,
   resumeMarkers,
   runChartSeries,
+  seriesForMetricKeys,
   valuesAtX,
 } from './metricSeries';
 
@@ -21,14 +22,14 @@ describe('APIの系列から図の系列への変換', () => {
       [
         sampled('a', 'loss', [{ x: 1, step: 1, value: 0.5, min: 0.5, max: 0.5, count: 1 }]),
         sampled('a', 'acc', [{ x: 1, step: 1, value: 0.9, min: 0.9, max: 0.9, count: 1 }]),
-        sampled('b', 'loss', []),
+        sampled('b', 'loss', [{ x: 2, step: 2, value: 0.4, min: 0.4, max: 0.4, count: 1 }]),
       ],
       'loss',
       { a: 'run A' },
     );
     expect(series).toEqual([
       { id: 'a', label: 'run A', kind: 'run', points: [{ x: 1, value: 0.5 }] },
-      { id: 'b', label: 'b', kind: 'run', points: [] },
+      { id: 'b', label: 'b', kind: 'run', points: [{ x: 2, value: 0.4 }] },
     ]);
   });
 
@@ -186,5 +187,58 @@ describe('tooltipの値', () => {
     expect(valuesAtX([smoothed!], 1, { highlightedId: null, maxRows: 5 }).rows).toEqual([
       { id: 'a', label: 'a', color: smoothed!.color, value: 5, rawValue: 10 },
     ]);
+  });
+});
+
+describe('値の無いRunの系列', () => {
+  it('そのmetricを一度も記録していないRunは線も凡例も作らない', () => {
+    const lines = runChartSeries(
+      [sampled('train', 'train.accuracy', [{ x: 0, step: 0, value: 0.5, min: 0.5, max: 0.5, count: 1 }]), sampled('eval', 'train.accuracy', [])],
+      'train.accuracy',
+    );
+    expect(lines.map((line) => line.id)).toEqual(['train']);
+  });
+});
+
+describe('複数のmetricを重ねた図の系列名', () => {
+  const lineOf = (runId: string, label: string) => ({ id: runId, label, kind: 'run' as const, points: [] });
+
+  it('Runが1つならmetric名だけを凡例に出し、Run名をくり返さない', () => {
+    const lines = seriesForMetricKeys(['train.loss', 'val.loss'], () => [lineOf('r1', 'Run 2')]);
+    expect(lines.map((line) => [line.id, line.label])).toEqual([
+      ['r1/train.loss', 'train.loss'],
+      ['r1/val.loss', 'val.loss'],
+    ]);
+  });
+
+  it('Runが複数ならmetric名を先にしてRun名を添える', () => {
+    const lines = seriesForMetricKeys(['loss', 'acc'], () => [lineOf('r1', 'grid-0'), lineOf('r2', 'grid-1')]);
+    expect(lines.map((line) => line.label)).toEqual(['loss · grid-0', 'loss · grid-1', 'acc · grid-0', 'acc · grid-1']);
+  });
+
+  it('metricが1つならRunのidと名前をそのまま使う', () => {
+    expect(seriesForMetricKeys(['loss'], () => [lineOf('r1', 'grid-0')])).toEqual([lineOf('r1', 'grid-0')]);
+  });
+});
+
+describe('同じ図の系列の色', () => {
+  const hueOf = (color: string) => Number(/^hsl\((\d+)/.exec(color)![1]);
+  const hueGap = (left: number, right: number) => {
+    const gap = Math.abs(left - right) % 360;
+    return Math.min(gap, 360 - gap);
+  };
+
+  it('数本の線は色相を45度以上離し、並び順を変えても同じ色になる', () => {
+    const ids = Array.from({ length: 6 }, (_, index) => `run-${index}`);
+    const series = ids.map((id) => ({ id, label: id, kind: 'run' as const, points: [{ x: 0, value: 1 }] }));
+    const options = { xScale: 'linear', yScale: 'linear', smoothing: { kind: 'none', weight: 0 } } as const;
+    const lines = prepareChartLines(series, options);
+    const hues = lines.map((line) => hueOf(line.color));
+    for (const [index, hue] of hues.entries())
+      for (const other of hues.slice(index + 1)) expect(hueGap(hue, other)).toBeGreaterThanOrEqual(45);
+    const reversed = prepareChartLines([...series].reverse(), options);
+    expect(Object.fromEntries(reversed.map((line) => [line.id, line.color]))).toEqual(
+      Object.fromEntries(lines.map((line) => [line.id, line.color])),
+    );
   });
 });

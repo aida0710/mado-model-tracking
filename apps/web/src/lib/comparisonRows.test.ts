@@ -4,6 +4,7 @@ import {
   buildComparisonTableRows,
   chooseBaselineRunId,
   filterComparisonRows,
+  formatComparisonValue,
   isComparableRunCount,
   parseComparedRunIds,
 } from './comparisonRows';
@@ -107,6 +108,16 @@ describe('比較表の行', () => {
       'tags.team',
     ]);
     expect(filterComparisonRows(rows, false)).toHaveLength(rows.length);
+  });
+});
+
+describe('比較表のセルの表記', () => {
+  it('metricの数値は差の列と同じ6桁に丸め、paramとtagは記録どおりに出す', () => {
+    expect(formatComparisonValue('metrics', 0.9209516501760575)).toBe('0.920952');
+    expect(formatComparisonValue('metrics', 24503275520)).toBe('24,503,300,000');
+    expect(formatComparisonValue('params', 0.9209516501760575)).toBe('0.9209516501760575');
+    expect(formatComparisonValue('metrics', null)).toBe('—');
+    expect(formatComparisonValue('metrics', 'NaN')).toBe('NaN');
   });
 });
 

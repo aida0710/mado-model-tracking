@@ -177,8 +177,8 @@ describe('固定データ', () => {
       ['loss', 'acc'],
     );
     expect(series.map((line) => [line.id, line.label])).toEqual([
-      ['r1/loss', 'run-1 · loss'],
-      ['r1/acc', 'run-1 · acc'],
+      ['r1/loss', 'loss'],
+      ['r1/acc', 'acc'],
     ]);
   });
 });

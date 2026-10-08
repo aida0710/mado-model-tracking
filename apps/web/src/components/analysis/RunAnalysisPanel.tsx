@@ -100,11 +100,14 @@ export function RunAnalysisPanel({ projectId, runSet, onSelectionChange }: RunAn
                 {`${text.analysisSweepObjective} (${options.objectiveMetric})`}
               </option>
             )}
-            {options.metricKeys.map((key) => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
+            {/* A sweep's objective metric is offered once, as the objective above. */}
+            {options.metricKeys
+              .filter((key) => key !== options.objectiveMetric)
+              .map((key) => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
           </select>
         </label>
         {params.length > 0 && (

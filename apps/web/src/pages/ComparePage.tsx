@@ -20,13 +20,14 @@ import { createDefaultLayout } from '../lib/chartPanelLayout';
 import { getRunChartKeys } from '../lib/runChartKeys';
 import { ArtifactCompare } from '../components/ArtifactCompare';
 import { Tabs } from '../components/Tabs';
-import { StatusBadge } from '../components/StatusBadge';
+import { RunStatusBadge } from '../components/runs/RunStatusBadge';
 import { formatValue } from '../lib/format';
 import { formatDelta, formatRelativeDelta } from '../lib/evaluationComparisonDisplay';
 import {
   buildComparisonTableRows,
   chooseBaselineRunId,
   filterComparisonRows,
+  formatComparisonValue,
   isComparableRunCount,
   parseComparedRunIds,
   type ComparisonTableRow,
@@ -203,8 +204,8 @@ function ComparisonDetails({
                   {row.key}
                 </th>
                 {row.values.map((value, index) => (
-                  <td key={runs[index]!.id} className="mono">
-                    {formatValue(value)}
+                  <td key={runs[index]!.id} className="mono" title={formatValue(value)}>
+                    {formatComparisonValue(row.group, value)}
                     {row.deltas && runs[index]!.id !== baselineRunId && (
                       <small>
                         {formatDelta(row.deltas[index]!.delta)} (
@@ -229,7 +230,7 @@ function StatusRow({ runs }: { runs: Run[] }) {
       <th>{text.status}</th>
       {runs.map((run) => (
         <td key={run.id}>
-          <StatusBadge status={run.status} />
+          <RunStatusBadge run={run} />
         </td>
       ))}
     </tr>

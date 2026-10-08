@@ -54,6 +54,28 @@ const runAttributes: Record<string, { expression: string; kind: 'string' | 'numb
   },
   lifecycle_stage: { expression: 'r.lifecycle_stage', kind: 'string' },
 };
+// attributes.status compares MLflow names. The native screens show this API's own names, so those
+// (and either case) are accepted too; an unknown name is an error rather than a silent 0 hits.
+const MLFLOW_RUN_STATUSES = ['SCHEDULED', 'RUNNING', 'FINISHED', 'FAILED', 'KILLED'] as const;
+const nativeStatusToMlflow: Record<string, (typeof MLFLOW_RUN_STATUSES)[number]> = {
+  queued: 'SCHEDULED',
+  claimed: 'SCHEDULED',
+  running: 'RUNNING',
+  finished: 'FINISHED',
+  failed: 'FAILED',
+  canceled: 'KILLED',
+};
+
+function mlflowRunStatus(value: string): string {
+  const upper = value.toUpperCase();
+  if ((MLFLOW_RUN_STATUSES as readonly string[]).includes(upper)) return upper;
+  const mapped = nativeStatusToMlflow[value.toLowerCase()];
+  if (mapped) return mapped;
+  invalidParameter(
+    `未対応のstatusです: ${value}（使える値: ${[...MLFLOW_RUN_STATUSES, ...Object.keys(nativeStatusToMlflow)].join(', ')}）`,
+  );
+}
+
 const experimentAttributes: Record<string, { expression: string; kind: 'string' | 'number' }> = {
   name: { expression: 'e.name', kind: 'string' },
   experiment_id: { expression: 'e.id::text', kind: 'string' },
@@ -229,7 +251,15 @@ class SearchCompiler {
       const allowed =
         field.kind === 'number' ? ['=', '!=', '>', '>=', '<', '<='] : ['=', '!=', 'LIKE', 'ILIKE'];
       if (!allowed.includes(operator)) invalidParameter(`未対応の比較演算子です: ${operator}`);
-      comparison = `(${field.expression}) ${operator} ${this.bind(this.literal(field))}`;
+      const value = this.literal(field);
+      const isStatusEquality =
+        this.entity === 'run' &&
+        field.group === 'attributes' &&
+        field.key === 'status' &&
+        (operator === '=' || operator === '!=');
+      comparison = `(${field.expression}) ${operator} ${this.bind(
+        isStatusEquality ? mlflowRunStatus(String(value)) : value,
+      )}`;
     }
     if (field.group === 'datasets') {
       return `EXISTS (SELECT 1 FROM mlflow_run_dataset_inputs i JOIN mlflow_datasets d ON d.project_id=i.project_id AND d.dataset_version_id=i.dataset_version_id WHERE i.project_id=r.project_id AND i.run_id=r.id AND ${comparison})`;

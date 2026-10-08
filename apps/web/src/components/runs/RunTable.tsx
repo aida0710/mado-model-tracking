@@ -1,7 +1,8 @@
 import { useState, type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { RUN_NOTE_TAG, type Run, type SavedViewColumn } from '@mmt/contracts';
-import { StatusBadge } from '../StatusBadge';
+import { RunStatusBadge } from './RunStatusBadge';
+import { runCreatorName } from '../../lib/runCreator';
 import { CompactValue } from '../CompactValue';
 import { Empty } from '../Feedback';
 import { MarkdownView } from '../markdown/MarkdownView';
@@ -60,7 +61,7 @@ function runColumn(key: string): RunColumn | null {
     };
   switch (key) {
     case 'status':
-      return { label: text.status, render: (run) => <StatusBadge status={run.status} /> };
+      return { label: text.status, render: (run) => <RunStatusBadge run={run} /> };
     case 'created':
       return { label: text.created, render: (run) => formatDate(run.createdAt), className: 'nowrap' };
     case 'duration':
@@ -74,7 +75,7 @@ function runColumn(key: string): RunColumn | null {
         label: text.user,
         render: (run) => (
           <span className="run-user" title={run.createdBy}>
-            {run.createdBy}
+            {runCreatorName(run)}
           </span>
         ),
       };

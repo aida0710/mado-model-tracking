@@ -89,6 +89,11 @@
   stroke-width: 3px;
   stroke-linejoin: round;
 }
+.parallel-axis-tick-plate {
+  fill: var(--background);
+  fill-opacity: 0.9;
+  pointer-events: none;
+}
 .parallel-missing-divider {
   stroke: var(--border);
   stroke-dasharray: 3 3;

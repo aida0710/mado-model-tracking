@@ -267,6 +267,50 @@ describe.skipIf(!testDatabaseUrl)('全履歴のRun検索（独立PostgreSQL）',
     expect(await names({ filter: "attributes.run_id IN ('" + child.id + "')" })).toEqual(['child']);
   });
 
+  it('statusは画面の名前でもMLflowの名前でも同じRunを返し、知らない名前は400にする', async () => {
+    const stopped = await createRun({ name: 'stopped' });
+    await createRun({ name: 'waiting' });
+    await harness.database.query("UPDATE runs SET status='canceled' WHERE id=$1", [stopped.id]);
+    const names = async (filter: string) =>
+      (await searchPage({ filter })).items.map((run) => run.name).sort();
+    expect(await names("attributes.status = 'KILLED'")).toEqual(['stopped']);
+    expect(await names("attributes.status = 'canceled'")).toEqual(['stopped']);
+    expect(await names("attributes.status = 'Canceled'")).toEqual(['stopped']);
+    expect(await names("attributes.status != 'canceled'")).toEqual(['waiting']);
+    expect(await names("attributes.status = 'queued'")).toEqual(['waiting']);
+    const unknown = await searchRuns({ filter: "attributes.status = 'stopped'" });
+    expect(unknown.status).toBe(400);
+    expect(((await unknown.json()) as { code: string }).code).toBe('invalid_parameter_value');
+  });
+
+  it('検索・単体取得・比較のRunに作成者の表示名が付く', async () => {
+    const run = await createRun({ name: 'named' });
+    const other = await createRun({ name: 'other' });
+    const editorRow = await harness.database.query<{ display_name: string }>(
+      'SELECT display_name FROM users WHERE id=$1',
+      [fixture.editor.userId],
+    );
+    const editorName = editorRow.rows[0]!.display_name;
+    expect((await searchPage({})).items.map((item) => item.createdByName)).toEqual([
+      editorName,
+      editorName,
+    ]);
+    const fetched = await entity<Run>(
+      await request(harness.app, `${fixture.basePath}/runs/${run.id}`, { cookie: fixture.viewer.cookie }),
+      200,
+    );
+    expect(fetched.createdByName).toBe(editorName);
+    const comparison = await entity<{ runs: Run[] }>(
+      await request(harness.app, `${fixture.basePath}/runs/compare`, {
+        method: 'POST',
+        cookie: fixture.viewer.cookie,
+        body: { runIds: [run.id, other.id] },
+      }),
+      200,
+    );
+    expect(comparison.runs.map((item) => item.createdByName)).toEqual([editorName, editorName]);
+  });
+
   it('構文エラー・上限超過は400/422、他Projectのexperimentは404を返す', async () => {
     const syntax = await searchRuns({ filter: "tags.a = 'b' OR tags.a = 'c'" });
     expect(syntax.status).toBe(400);
