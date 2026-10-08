@@ -1,21 +1,34 @@
 import { useState } from 'react';
-import type { ProjectRole } from '@mmt/contracts';
-import type { ProjectMember } from '../api/inputs';
-import { administrationApi } from '../api/administration';
+import type { ProjectMember } from '@mmt/contracts';
+import type { useProjectMembers } from '../hooks/useProjectMembers';
 import { useProject } from '../hooks/useProject';
-import { useQuery } from '../hooks/useQuery';
 import { DataTable } from './DataTable';
 import { Resource } from './Feedback';
-import { FormDialog } from './FormDialog';
-import { getFieldValue } from '../lib/formValues';
+import { ConfirmDialog } from './ConfirmDialog';
+import { MemberDialog } from '../dialogs/MemberDialog';
+import {
+  hasDirectGrant,
+  listProjectMemberSources,
+  type ProjectMemberSource,
+} from '../lib/projectMemberSources';
 import { text } from '../i18n/catalog';
+import { projectAccessTextTemplates } from '../i18n/projectAccess';
 
-export function ProjectMembers() {
-  const { project, isProjectAdmin, reloadProjects } = useProject();
-  const members = useQuery(`${project.id}:members`, (signal) =>
-    administrationApi.members(project.id, signal),
-  );
+/** Everyone with a Project role, where that role comes from, and direct grants for admins. */
+export function ProjectMembers({
+  projectMembers,
+}: {
+  projectMembers: ReturnType<typeof useProjectMembers>;
+}) {
+  const { isProjectAdmin, reloadProjects } = useProject();
+  const { members, saveMember, removeMember } = projectMembers;
   const [editing, setEditing] = useState<ProjectMember | 'new' | null>(null);
+  const [removing, setRemoving] = useState<ProjectMember | null>(null);
+  // The signed-in user's own role may have changed, which decides what the shell shows.
+  const reloadAfterChange = () => {
+    members.reload();
+    reloadProjects();
+  };
   return (
     <section className="settings-section">
       <div className="section-heading">
@@ -34,58 +47,84 @@ export function ProjectMembers() {
             columns={[
               { key: 'name', label: text.name, render: (member) => member.user.displayName },
               { key: 'email', label: text.email, render: (member) => member.user.email },
-              { key: 'role', label: text.role, render: (member) => text[member.role] },
+              { key: 'role', label: text.effectiveRole, render: (member) => text[member.role] },
               {
-                key: 'actions',
-                label: text.details,
-                render: (member) =>
-                  isProjectAdmin && (
-                    <button className="button small" onClick={() => setEditing(member)}>
-                      {text.edit}
-                    </button>
-                  ),
+                key: 'sources',
+                label: text.memberSources,
+                render: (member) => (
+                  <ul className="member-sources">
+                    {listProjectMemberSources(member).map((source) => (
+                      <li key={source.kind === 'direct' ? 'direct' : `group:${source.group}`}>
+                        {describeSource(source)}
+                      </li>
+                    ))}
+                  </ul>
+                ),
               },
+              ...(isProjectAdmin
+                ? [
+                    {
+                      key: 'actions',
+                      label: text.details,
+                      render: (member: ProjectMember) =>
+                        hasDirectGrant(member) ? (
+                          <div className="access-actions">
+                            <button className="button small" onClick={() => setEditing(member)}>
+                              {text.edit}
+                            </button>
+                            <button
+                              className="button small danger"
+                              onClick={() => setRemoving(member)}
+                            >
+                              {text.remove}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted">{text.memberGrantedByGroup}</span>
+                        ),
+                    },
+                  ]
+                : []),
             ]}
           />
         )}
       </Resource>
       {editing && (
-        <FormDialog
-          title={text.addMember}
+        <MemberDialog
+          member={editing === 'new' ? undefined : editing}
+          onSave={saveMember}
           onClose={() => setEditing(null)}
-          fields={[
-            {
-              name: 'userId',
-              label: text.userId,
-              required: true,
-              defaultValue: editing === 'new' ? '' : editing.user.id,
-              readOnly: editing !== 'new',
-            },
-            {
-              name: 'role',
-              label: text.role,
-              type: 'select',
-              defaultValue: editing === 'new' ? 'viewer' : editing.role,
-              options: (['viewer', 'editor', 'admin'] as const).map((role) => ({
-                value: role,
-                label: text[role],
-              })),
-            },
-          ]}
-          onSubmit={(values) =>
-            administrationApi.saveMember(
-              project.id,
-              getFieldValue(values, 'userId'),
-              getFieldValue(values, 'role') as ProjectRole,
-            )
-          }
           onSaved={() => {
             setEditing(null);
-            members.reload();
-            reloadProjects();
+            reloadAfterChange();
+          }}
+        />
+      )}
+      {removing && (
+        <ConfirmDialog
+          title={text.removeMember}
+          message={projectAccessTextTemplates.removeMemberConfirm(
+            removing.user.displayName,
+            removing.groups.length > 0,
+          )}
+          confirmLabel={text.remove}
+          destructive
+          onClose={() => setRemoving(null)}
+          onConfirm={() => removeMember(removing.user.id)}
+          onConfirmed={() => {
+            setRemoving(null);
+            reloadAfterChange();
           }}
         />
       )}
     </section>
   );
+}
+
+function describeSource(source: ProjectMemberSource): string {
+  const origin =
+    source.kind === 'direct'
+      ? text.memberSourceDirect
+      : projectAccessTextTemplates.memberSourceGroup(source.group);
+  return `${origin}: ${text[source.role]}`;
 }

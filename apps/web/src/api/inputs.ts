@@ -8,10 +8,8 @@ import type {
   JsonObject,
   ModelAutomationRule,
   PluginDataset,
-  ProjectRole,
   RunKind,
   RunStatus,
-  User,
 } from '@mmt/contracts';
 
 export interface CreateProject {
@@ -64,10 +62,6 @@ export interface CreateDatasetVersion {
   metadata?: JsonObject;
   sourceRunId?: string;
   parentDatasetVersionIds?: string[];
-}
-export interface ProjectMember {
-  user: User;
-  role: ProjectRole;
 }
 export interface CreateToken {
   name: string;

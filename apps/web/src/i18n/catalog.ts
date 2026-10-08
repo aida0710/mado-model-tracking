@@ -5,6 +5,7 @@ import { computeText } from './compute';
 import { runsText, runsTextTemplates } from './runs';
 import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
+import { projectAccessText } from './projectAccess';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -42,6 +43,7 @@ export const text = {
   ...evaluationText,
   ...computeText,
   ...runsText,
+  ...projectAccessText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
@@ -288,8 +290,6 @@ export const text = {
   viewer: 'Viewer',
   editor: 'Editor',
   admin: 'Admin',
-  userId: 'ユーザーID',
-  addMember: 'メンバーを追加・変更',
   tokens: 'API tokens',
   newToken: 'トークンを作成',
   tokenKind: 'トークン種別',

@@ -5,10 +5,9 @@ import type {
   PluginDataset,
   PluginManifest,
   Project,
-  ProjectRole,
   TokenSummary,
 } from '@mmt/contracts';
-import type { CreateProject, CreateToken, ProjectMember } from './inputs';
+import type { CreateProject, CreateToken } from './inputs';
 import {
   encodeId,
   invalidResponseError,
@@ -26,13 +25,6 @@ export const administrationApi = {
   updateProject: (id: string, body: { description?: string; artifactBackend?: ArtifactBackend }) =>
     request<Project>(projectPath(id), jsonRequest('PATCH', body)),
   backends: (signal?: AbortSignal) => requestItems<ArtifactBackend>('/storage/backends', signal),
-  members: (id: string, signal?: AbortSignal) =>
-    requestItems<ProjectMember>(`${projectPath(id)}/members`, signal),
-  saveMember: (projectId: string, userId: string, role: ProjectRole) =>
-    request<unknown>(
-      `${projectPath(projectId)}/members/${encodeId(userId)}`,
-      jsonRequest('PUT', { role }),
-    ),
   tokens: (signal?: AbortSignal) => requestItems<TokenSummary>('/tokens', signal),
   createToken: (body: CreateToken) =>
     request<{ token: string; item: TokenSummary }>('/tokens', jsonRequest('POST', body)),
