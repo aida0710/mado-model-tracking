@@ -42,4 +42,6 @@ Model Registryの自動実行ルールはProject admin/global adminが作成・�
 
 `browser-integration.mjs`はlocalhostの実APIに検証用プロジェクトを作り、登録・Artifacts・trainingジョブのenqueue/cancel/retry・token失効・設定の保存を確認する。root担当が用意したdevelopment API、明示投入したデモ、Local CPU targetを前提にする。実行後も検証記録をDBに残す。SSH接続や外部のモデル取得は行わない。
 
+`browser-pipeline.mjs`は学習→自動登録→推論→評価→判定・昇格を実際の画面で通す。`tests/fixtures/pipeline/serve.ts`がテスト専用DBの新しいschemaで`AUTH_MODE=local`のAPIとビルド済みWeb（`npm run build -w @mmt/web`が先に要る）を47002で配信し、CPU workerも自分で起動・停止する。ローカルログインと初回のパスワード変更、保存先の接続テスト、Project作成、コード版、評価rule、昇格policy、出力モデル付きTask、モデル版画面の推論・評価・metrics・基準比較、理由付きの昇格、alias履歴、group bindingでviewerにしたユーザーが操作できないことを確かめる。`MMT_TEST_DATABASE_URL`が要る。手順と段階は[docs/verification.md](../../docs/verification.md)の「学習から判定・昇格までを通す」。
+
 `MMT_SCREENSHOT_DIR`を指定すると閲覧用画像を保存する。Authentikの実provider、SSH GPU、S3、実Mado serviceの接続は各環境で別途確認する。

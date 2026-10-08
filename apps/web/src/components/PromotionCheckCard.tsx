@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ModelVersionDetail, PromotionEvaluation, PromotionPolicy } from '@mmt/contracts';
-import { usePromotionChoices } from '../hooks/usePromotionChoices';
+import type { usePromotionChoices } from '../hooks/usePromotionChoices';
 import { currentDecisionsForAlias } from '../lib/promotionEvidence';
 import { PromotionDialog } from '../dialogs/PromotionDialog';
 import { CriterionResults, DecisionBadge } from './PromotionEvaluationTable';
@@ -30,18 +30,20 @@ function latestDecision(
  * Where the version stands against each promotion policy of its Model: passed, failed or still
  * waiting for an evaluation, the criteria behind it, and a button to promote by hand with that
  * decision as evidence. Shown to editors and admins only; the API decides what is allowed.
+ * The page owns `choices` so that its reload also refreshes the decisions shown here.
  */
 export function PromotionCheckCard({
   projectId,
   detail,
+  choices,
   onPromoted,
 }: {
   projectId: string;
   detail: ModelVersionDetail;
+  choices: ReturnType<typeof usePromotionChoices>;
   onPromoted: () => void;
 }) {
   const versionId = detail.version.id;
-  const choices = usePromotionChoices(projectId, detail.model.id, versionId);
   const [promoting, setPromoting] = useState<{ alias: string; evaluationId?: string } | null>(null);
   return (
     <section className="model-version-section" aria-label={text.promotionCheck}>

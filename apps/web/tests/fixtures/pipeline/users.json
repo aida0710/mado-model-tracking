@@ -1,0 +1,5 @@
+{
+  "admin": { "username": "pipeline-admin", "email": "pipeline-admin@example.test" },
+  "viewer": { "username": "pipeline-viewer", "email": "pipeline-viewer@example.test" },
+  "viewerGroup": "mmt-pipeline-viewers"
+}

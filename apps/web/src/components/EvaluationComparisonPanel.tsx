@@ -6,7 +6,7 @@ import type {
   MetricValueSource,
   Model,
 } from '@mmt/contracts';
-import { useEvaluationComparison } from '../hooks/useEvaluationComparison';
+import type { useEvaluationComparison } from '../hooks/useEvaluationComparison';
 import {
   formatDelta,
   formatMetricValue,
@@ -149,18 +149,14 @@ function MetricComparisonTable({ metrics }: { metrics: MetricComparison[] }) {
 export function EvaluationComparisonPanel({
   projectId,
   model,
-  candidateVersionId,
+  evaluationComparison,
 }: {
   projectId: string;
-  model: Pick<Model, 'id' | 'aliases'>;
-  candidateVersionId: string;
+  model: Pick<Model, 'aliases'>;
+  // From useEvaluationComparison on the page, so that the page's reload refreshes it.
+  evaluationComparison: ReturnType<typeof useEvaluationComparison>;
 }) {
-  const { baselineAlias, selectBaselineAlias, comparison } = useEvaluationComparison({
-    projectId,
-    modelId: model.id,
-    candidateVersionId,
-    aliases: model.aliases,
-  });
+  const { baselineAlias, selectBaselineAlias, comparison } = evaluationComparison;
   const aliasNames = Object.keys(model.aliases).sort();
   return (
     <section className="automation-panel" aria-label={text.evaluationComparison}>

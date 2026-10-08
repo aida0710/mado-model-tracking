@@ -283,6 +283,20 @@ describe.skipIf(!testDatabaseUrl)('Job限定token（独立PostgreSQL）', () => 
     expect((await request(harness.app, '/api/auth/me', { token: jobToken })).status).toBe(403);
   });
 
+  it('GET /auth/tokenはJob token自身をjob=trueで返す', async () => {
+    const fixture = await executionFixture(harness);
+    const { jobToken } = await startedJob(fixture);
+    const current = await entity<{ projectId: string; job: boolean; scopes: string[] }>(
+      await request(harness.app, '/api/auth/token', { token: jobToken }),
+      200,
+    );
+    expect(current).toMatchObject({ projectId: fixture.project.id, job: true });
+    expect(current.scopes).toEqual(['read', 'runs:write', 'artifacts:write', 'registry:write']);
+    // Other routes outside a Project stay closed.
+    expect((await request(harness.app, '/api/auth/me', { token: jobToken })).status).toBe(403);
+    expect((await request(harness.app, '/api/projects', { token: jobToken })).status).toBe(403);
+  });
+
   it('書き込みrouteは許可表にないものを全て拒否する', async () => {
     const fixture = await executionFixture(harness);
     const { jobToken } = await startedJob(fixture);

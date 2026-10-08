@@ -99,37 +99,75 @@ node scripts/verify_container_browser.mjs
 
 GPUは使用しません。Singularity/Apptainerの起動・停止・SIF照合はPythonのテストで確認し、実SIF runtimeでの実行確認とは区別します。
 
-## 学習から昇格判定までを薄く通す
+## 学習から判定・昇格までを通す
 
-`scripts/verify_pipeline_smoke.py`は、学習→出力モデルの自動登録→推論→評価→昇格判定が1本の流れとしてつながっているかを、CPUの小さいfixtureで確かめます。APIはテスト専用DBに新しいschemaを作って起動します（`scripts/serve_mlflow_verification.ts`）。稼働中の開発API・Web・DBには接続しません。終了時にAPIを止め、schemaを削除します。
+学習→学習結果の自動登録→推論→評価→判定・昇格を、CPUの小さいfixtureで1本の流れとして確かめます。スクリプト（API・SDK・worker）とブラウザ（実際の画面）の2本があります。どちらもテスト専用DB（`MMT_TEST_DATABASE_URL`）に新しいschemaを作ってAPIを起動し、終了時に止めてschemaを削除します。稼働中の開発API・Web・DB（4182・5182・55483）には接続しません。portは47000〜47009を使います。
+
+対象外: 実SSO（Authentik）、GPU、実S3、本番Mado、実SSH。workerはlocal executorで動かします。
+
+### スクリプト（`scripts/verify_pipeline.py`）
 
 ```bash
 MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
-PYTHONPATH=python/src python/.venv/bin/python scripts/verify_pipeline_smoke.py
+PYTHONPATH=python/src python/.venv/bin/python scripts/verify_pipeline.py
 ```
 
-APIはloopbackの47150で起動します。使用中なら`MMT_VERIFY_SMOKE_API_PORT`で変更します。workerはlocal executorで同じprocess内から`--once`と同じ処理（復帰または1件claim）を繰り返します。Jobごとにvenvを作り`httpx`をインストールするため、pipがパッケージを取得できる環境で実行します。Jobのworkspaceは`var/verification-pipeline-smoke/<時刻>/`に残ります。
+APIは`scripts/serve_mlflow_verification.ts`でloopbackの47001に起動します（`MMT_VERIFY_PIPELINE_API_PORT`で変更）。workerは同じprocess内で`--once`と同じ処理（復帰または1件claim）を繰り返し、Service Accountのworker token（`read`・`worker:execute`・`artifacts:write`・`registry:write`）を使います。Jobごとにvenvを作り`httpx`をインストールするので、pipがパッケージを取得できる環境で実行します。Jobのworkspaceは`var/verification-pipeline/<時刻>/`に残ります。
+
+各コード版は`python/examples/`の`training.py`・`inference.py`・`evaluation.py`をそのまま入れ、`pipeline_entry.py`から起動します。`pipeline_entry.py`は、実行コードに渡ったtokenの種類（`GET /auth/token`の`job`）をログに出し、parametersに`jobTokenProbeRunId`があれば、そのRunへのmetricの書き込みを試してから例を実行します。
 
 | 段階 | 確認すること |
 |---|---|
-| `setup` | Project、local target、コード版4件、正解セット（DatasetVersionのmetadataに各サンプルの長さ）、推論rule（`model_registered`）、評価rule（`upstream_run_finished`、上流＝推論rule）、昇格policy、出力モデル設定付きの学習Taskを登録する |
-| `training` | 学習TaskをlaunchしたRunが`finished`になり、`train.loss`40点と`model/weights.json`が残る |
-| `job_token_scope` | 学習Jobのコードが、自分のJob tokenで別のRunへmetricを送ると403 `job_token_forbidden`になり、そのRunに何も記録されない |
-| `output_registration` | Taskの出力モデル設定で版が登録され（`registered`）、版の`sourceRunId`が学習Run、重みArtifactが付く |
-| `inference` | 推論ruleがその版で1回だけ起動し、`python/examples/inference.py`がWAV（正弦波）3件と出力DatasetVersionを残す |
-| `evaluation` | 評価ruleが推論Runを上流に1回だけ起動する。親Runが推論Run、`upstreamDatasetVersionIds`が推論の出力、入力が正解セット＋推論の出力。`python/examples/evaluation.py`が`MMT_UPSTREAM_RUN_ID`から推論RunのWAVを取得し、長さの一致率などを記録して`eval/results.jsonl`を残す |
-| `promotion` | 昇格policyの判定が1件で、基準alias（`production`）が無い初回のため`passed`（`baseline_missing_first_promotion`） |
-| `failed_training_skips_downstream` | 別のTaskで、学習コードが実行中に版を登録してから失敗する。Runは`failed`、Task側の登録記録は無く（404）、保留していた推論は`skipped`（`source_run_unsuccessful`）になる |
+| `setup` | Project、local target（python・docker）、Service Account 2件（worker用・自動実行の所有者用、どちらもadmin）、コード版（学習・失敗する学習・推論・評価v1と評価v2-strict）、正解セット2版（metadataにサンプルを書いた版と、`reference.json`をuploadした`artifacts`の版）、Model 2件（系列`linear`と`linear-declared`）、出力モデル設定付きの学習Taskを登録する。ruleと昇格policy（`autoPromote=true`、対象・基準alias＝`production`）は、global adminでないProject adminのユーザーが作る |
+| `owner_transfer` | 4件のruleとpolicyの所有者をService Accountへ移し、作成者をProjectから外す。作成者は403になり、ruleの`runAsKind`は`service` |
+| `training` | 学習TaskのRunが`finished`、`train.loss`40点が下がり、`model/weights.json`が残る。`training.py`はTaskの出力モデル設定を読んで自分では登録しない |
+| `job_token_scope` | 実行コードのtokenはJob token（`job=true`）で、別Runへの書き込みは403 `job_token_forbidden`。別Runには何も記録されない |
+| `output_registration` | Task側の登録が`registered`、版の`sourceRunId`が学習Run、Runの出力はその1版だけ |
+| `inference` | 推論ruleがその版で1回起動し、Runの作成者はService Account。WAV 3件と出力DatasetVersionが残る |
+| `evaluation` | 評価ruleが推論Runを上流に1回起動し、`upstreamDatasetVersionIds`が推論の出力。metricsが残り、コードは`MMT_UPSTREAM_RUN_ID`を読む |
+| `auto_promotion` | 判定が`passed`（`baseline_missing_first_promotion`）、`promoted=true`。`production`がその版を指し、alias履歴の最新は`source=promotion_policy`・判定ID付き・操作者はService Account。`model-versions/:id/evaluations`に推論と評価がfinishedで並ぶ |
+| `second_round_against_baseline` | 評価v2-strictのruleを足してから2回目の学習を流す。2版目の判定は基準版＝1版目で`passed`、`production`が2版目へ切り替わり、alias履歴は2件 |
+| `manual_apply_and_comparison` | v2-strictのruleを1版目の推論Runへ手動適用（`source=manual`）し、`evaluation-comparison`（候補＝2版目、`baselineVersionId`＝1版目、同じruleと評価コード版）が`ok` |
+| `declared_outputs_and_staged_reference` | 系列`linear-declared`の流れ。推論は`result.json` version 2で出力Datasetを宣言し（WAVは`container/inference/audio/`）、評価はworkerが用意した正解セット（`MMT_INPUT_DATASET_DIRS`の`reference.json`）で採点して、metricsを`result.json`で返す |
+| `failed_training_skips_downstream` | 実行中に版を登録してから失敗する学習。Runは`failed`、保留していた推論は`skipped`（`source_run_unsuccessful`） |
+| `container_bulk_outputs` | Dockerがあるときだけ。`alpine`（digest固定、`MMT_VERIFY_CONTAINER_IMAGE`で変更）の推論ruleを1版目へ手動適用し、1000ファイルを`artifactsManifest`で出す。1000件がArtifactになり、出力Datasetが登録され、targetへの`output-archive`は1回、ファイル単位の`output`は0回 |
 
-学習Taskは`python/examples/training.py`の学習処理をそのまま使い、SDKでの版の登録だけを止めて、Taskの出力モデル設定に登録させます。失敗系は`training.py`をそのまま実行した後に終了コード3で終わります。
+結果は`artifacts/verification/<日付>/pipeline/pipeline-integration.json`に、段階ごとの`status`（`passed`・`failed`・`not_run`）、所要秒数、確認したIDと値を保存します。APIのログは同じディレクトリの`api.log`です。成功系（`owner_transfer`〜`manual_apply_and_comparison`）の途中で失敗すると、後の段階は`not_run`になります。最後の3段階は成功系と別の版を使うので、成功系の結果にかかわらず実行します。Dockerやimageが無いときの`container_bulk_outputs`は`not_run`で、失敗に数えません。1件でも失敗すれば終了コードは1です。
 
-Job tokenはDatasetの新規作成（`POST /projects/:p/datasets`）を許可していません。推論ruleのparametersに出力先の`outputDatasetId`を渡し、`inference.py`は既存のDatasetへ版`run-<RunのID>`を追加します。
+`scripts/verify_pipeline_smoke.py`は同じスクリプトの短い版で、2回目・手動適用・`result.json`・コンテナを除いた9段階を流します（port 47001、`MMT_VERIFY_SMOKE_API_PORT`で変更。結果は`pipeline-smoke/pipeline-smoke.json`）。
 
-結果は`artifacts/verification/<日付>/pipeline-smoke/pipeline-smoke.json`に、段階ごとの`status`（`passed`・`failed`・`not_run`）、所要秒数、確認したIDと値を保存します。APIのログは同じディレクトリの`api.log`です。成功系の途中で失敗すると、後の段階は`not_run`になります。失敗系は成功系と別のTaskと版を使うので、成功系の結果にかかわらず実行します。1件でも失敗すれば終了コードは1です。
+2026-10-08に全13段階（smokeは9段階）が成功しました。CPUのJobは1件あたり約5秒（venv作成と`httpx`のインストールを含む）、コンテナの1000ファイルは約30秒でした。
 
-対象外: 実SSH、GPU、実SSO（Authentik）、実S3、コンテナruntime（Docker・Singularity/Apptainer）。最終の通し確認は`pipeline-e2e-verification`が行います。
+### ブラウザ（`apps/web/tests/browser-pipeline.mjs`）
 
-2026-10-08に全8段階が成功しました。各Jobは約5秒（venv作成と`httpx`のインストールを含む）でした。
+```bash
+npm run build -w @mmt/web
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chrome \
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/pipeline/screenshots \
+node apps/web/tests/browser-pipeline.mjs
+```
+
+`apps/web/tests/fixtures/pipeline/serve.ts`が、`AUTH_MODE=local`のAPIとビルド済みのWebを同じport（47002、`MMT_PIPELINE_PORT`）で配信します。この検証サーバーだけはlocal executorを許可します（通常のAPIはdevelopment modeでしか許可しない）。全体管理者（初回にパスワード変更が必要）と、group `mmt-pipeline-viewers`に入ったユーザーを作ります。groupの所属はAuthentikの同期の代わりにDBへ直接入れます。パスワードは実行ごとに生成し、表示しません。workerは`mado-tracking-worker run`を別processで起動し、終了時に止めます。待ち合わせは画面の状態（`Finished`、`合格`など）を条件にし、自動で更新しない画面では再読み込みボタンを押して見直します。固定のsleepは使いません。
+
+| 段階 | 画面で行うこと |
+|---|---|
+| `login_and_password_change` | ローカルアカウントでログインし、初回のパスワード変更を済ませる |
+| `storage_connection_test` | 全体管理 → ストレージで、filesystemの保存先の接続テストが「すべての段階が成功しました」 |
+| `project_creation` | 設定画面の「プロジェクトを作成」 |
+| `api_setup` | 画面の無い準備をAPIで行う: local executorのtarget（画面ではdevelopment modeでしか選べない）、Experiment、正解セット、出力Dataset、Model |
+| `service_account_worker` | 設定 → Service Accountを作成し、tokenを発行してworkerを起動する |
+| `code_versions` | Code画面で学習・推論・評価のコード版をinlineのファイルで作る（ファイルは貼り付けで入れ、保存内容が元のファイルと一致する） |
+| `automation_rules_and_policy` | 推論rule（モデル登録）、評価rule（上流ruleの成功）、昇格policy（自動昇格なし）を作る |
+| `training_task_with_output_model` | 出力モデル（既存のModel、`model/weights.json`）付きの学習Taskを作る |
+| `first_run_to_evaluation` | Taskを通常実行し、Finished → 版1の自動登録 → モデル版画面で推論・評価がFinished、metricsが表示される |
+| `first_promotion_with_reason` | 昇格の判定（合格）から、理由を入れて`production`へ昇格する |
+| `second_run_baseline_comparison` | 2回目の版で「基準版との評価比較」に基準（`production`）の値が並び、理由を入れて昇格する |
+| `alias_history` | Models画面のAliasの履歴に2回の昇格と理由が残る |
+| `viewer_through_group_binding` | 設定 → Authentik groupでgroupにViewerを付け、そのユーザーでログインする。モデル版画面は見られるが、操作は再読み込みだけで、rule・policyの作成ボタンが無い。aliasの変更はAPIでも403 |
+
+結果は`artifacts/verification/<日付>/pipeline/browser-pipeline.json`（段階ごとの結果と所要秒数）と、同じディレクトリの`browser-pipeline-server.log`・`browser-pipeline-worker.log`です。2026-10-08に全13段階が成功しました（約1分）。
 
 ## Madoとのplugin連携を確認する
 

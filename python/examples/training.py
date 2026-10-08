@@ -4,6 +4,10 @@ The optimizer is SGD with momentum. With --checkpoint-every N (or the checkpoint
 the weights, the momentum buffers and the step are saved as a checkpoint every N steps, and a Job
 that resumes from one continues with exactly the saved state, so its result equals an
 uninterrupted run.
+
+When the Run belongs to a Task with an output model setting, the Task registers the version once
+the Run has finished; the script then only saves the weights at the Task's ``artifactPath`` instead
+of registering them itself (registering both would make the Task skip its registration).
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from pathlib import Path
 # Every Run adds the next numbered version (1, 2, 3, ...) to this one Model; the Run lists it
 # in outputModelVersionIds.
 OUTPUT_MODEL_NAME = "cpu-linear"
+WEIGHTS_ARTIFACT_PATH = "model/weights.json"
 EXAMPLES = [(-1.0, -1.0), (0.0, 1.0), (1.0, 3.0), (2.0, 5.0)]
 # 0.5 converges in the default 40 steps; momentum close to 1 would still oscillate there.
 DEFAULT_MOMENTUM = 0.5
@@ -118,6 +123,7 @@ def train(
     checkpoint_every: int,
     fail_at_step: int | None = None,
     run=None,
+    task_output_model: dict | None = None,
 ) -> dict:
     initial_weight, initial_bias = state.weight, state.bias
     print(f"start_step={state.step} weight={state.weight:.6f} bias={state.bias:.6f}", flush=True)
@@ -145,8 +151,11 @@ def train(
     output.write_text(json.dumps(model), encoding="utf-8")
     # Kept next to the weights so a continuation (or a comparison) has the full training state.
     write_optimizer_state(state, output.parent / OPTIMIZER_STATE_FILE)
-    if run is not None:
-        artifact = run.log_artifact(output, path="model/weights.json", mime_type="application/json")
+    if run is not None and task_output_model is not None:
+        run.log_artifact(output, path=task_output_model["artifactPath"], mime_type="application/json")
+        print(f"output model: the Task registers {task_output_model['artifactPath']}", flush=True)
+    elif run is not None:
+        artifact = run.log_artifact(output, path=WEIGHTS_ARTIFACT_PATH, mime_type="application/json")
         run.register_output_model(
             model_name=OUTPUT_MODEL_NAME,
             family="linear",
@@ -159,6 +168,14 @@ def train(
             },
         )
     return model
+
+
+def output_model_of_task(run) -> dict | None:
+    """The output model setting of the Run's Task, or None when the script registers the weights."""
+    task_id = run.entity.get("taskId")
+    if not task_id:
+        return None
+    return run.client.get_task(run.project_id, task_id).get("outputModel")
 
 
 def write_checkpoint(state: TrainingState, *, output: Path, run=None) -> None:
@@ -229,6 +246,7 @@ def main() -> None:
             checkpoint_every=checkpoint_every,
             fail_at_step=None if fail_at_step is None else int(fail_at_step),
             run=run,
+            task_output_model=output_model_of_task(run) if run is not None else None,
         )
     print(f"weight={model['weight']:.6f} bias={model['bias']:.6f}", flush=True)
 

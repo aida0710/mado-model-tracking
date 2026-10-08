@@ -9,6 +9,7 @@ from pathlib import Path
 from fake_http_api import TrackingServer
 
 from mado_tracking import Client
+from mado_tracking.worker.container_outputs import validate_results
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
@@ -206,9 +207,14 @@ def test_evaluation_job_reads_the_upstream_runs_wavs_and_records_metrics_over_ht
         }
         descriptors = tmp_path / "dataset-versions.json"
         descriptors.write_text(json.dumps({"inputDatasets": [reference_set, inference_output]}))
+        upstream_run = tmp_path / "upstream-run.json"
+        upstream_run.write_text(
+            json.dumps({"runId": inference_run_id, "outputDatasetVersionIds": [inference_output["id"]]})
+        )
         environment.update(
             MMT_RUN_ID=evaluation_run_id,
             MMT_UPSTREAM_RUN_ID=inference_run_id,
+            MMT_UPSTREAM_RUN_FILE=str(upstream_run),
             MMT_DATASET_VERSIONS_FILE=str(descriptors),
         )
         subprocess.run(
@@ -230,3 +236,163 @@ def test_evaluation_job_reads_the_upstream_runs_wavs_and_records_metrics_over_ht
         assert rows[0]["audio"] == f"mmt-artifact://runs/{inference_run_id}/inference/audio/sample-000.wav"
         # The worker, not the Job's code, completes a worker-managed Run.
         assert server.runs[evaluation_run_id]["status"] == "running"
+
+
+def test_inference_result_json_declares_the_output_dataset_the_worker_accepts(tmp_path):
+    weights = tmp_path / "weights.json"
+    weights.write_text(json.dumps({"family": "linear", "weight": 2.0, "bias": 1.0}))
+    outputs = tmp_path / "workspace" / "outputs"
+    outputs.mkdir(parents=True)
+    parameters = tmp_path / "parameters.json"
+    parameters.write_text(json.dumps({"outputMode": "result-json", "outputDatasetId": "ds-1"}))
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("MMT_")}
+    environment.update(MMT_OUTPUTS_DIR=str(outputs), MMT_PARAMETERS_FILE=str(parameters))
+    subprocess.run(
+        [sys.executable, str(EXAMPLES / "inference.py"), "--weights", str(weights)],
+        check=True,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=tmp_path,
+    )
+    # The worker's own validation: every file declared with its checksum, nothing extra.
+    summary = validate_results(outputs)
+    assert summary is not None and summary["version"] == 2
+    assert summary["artifactCount"] == 4
+    assert [(metric["name"], metric["value"]) for metric in summary["metrics"]] == [
+        ("inference.predictions", 3.0)
+    ]
+    (declaration,) = summary["declarations"]
+    assert declaration["kind"] == "dataset" and declaration["datasetId"] == "ds-1"
+    assert declaration["path"] == "inference/predictions.json"
+    assert declaration["metadata"]["audioPrefix"] == "container/inference/audio/"
+    assert [sample["audio"] for sample in declaration["metadata"]["samples"]] == [
+        "sample-000.wav",
+        "sample-001.wav",
+        "sample-002.wav",
+    ]
+
+
+def test_inference_result_json_without_an_output_dataset_fails_before_writing_a_manifest(tmp_path):
+    weights = tmp_path / "weights.json"
+    weights.write_text(json.dumps({"family": "linear", "weight": 2.0, "bias": 1.0}))
+    outputs = tmp_path / "outputs"
+    outputs.mkdir()
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("MMT_")}
+    environment["MMT_OUTPUTS_DIR"] = str(outputs)
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(EXAMPLES / "inference.py"),
+            "--weights",
+            str(weights),
+            "--output-mode",
+            "result-json",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=tmp_path,
+    )
+    assert completed.returncode != 0 and "outputDatasetId" in completed.stderr
+    assert not (outputs / "result.json").exists()
+
+
+def test_evaluation_reads_a_staged_reference_and_result_json_wavs_and_writes_result_json(tmp_path):
+    """The second path: a reference staged by the worker and inference outputs under container/."""
+    weights = tmp_path / "weights.json"
+    weights.write_text(json.dumps({"family": "linear", "weight": 2.0, "bias": 1.0}))
+    inference_outputs = tmp_path / "inference" / "outputs"
+    inference_outputs.mkdir(parents=True)
+    environment = {name: value for name, value in os.environ.items() if not name.startswith("MMT_")}
+    environment["MMT_OUTPUTS_DIR"] = str(inference_outputs)
+    subprocess.run(
+        [
+            sys.executable,
+            str(EXAMPLES / "inference.py"),
+            "--weights",
+            str(weights),
+            "--output-mode",
+            "result-json",
+            "--output-dataset-id",
+            "inference-outputs",
+        ],
+        check=True,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        cwd=tmp_path,
+    )
+    declared = json.loads((inference_outputs / "result.json").read_text())
+    with TrackingServer() as server:
+        inference_run_id = "inference-run"
+        # What the worker uploaded from the inference outputs: Run Artifacts under container/.
+        for artifact in declared["artifacts"]:
+            artifact_id = f"artifact-{len(server.artifact_entities)}"
+            server.artifacts[artifact_id] = (inference_outputs / artifact["path"]).read_bytes()
+            server.artifact_entities.append(
+                {"id": artifact_id, "runId": inference_run_id, "path": "container/" + artifact["path"]}
+            )
+        (dataset_declaration,) = declared["datasets"]
+        inference_output = {"id": "inference-output-version", "metadata": dataset_declaration["metadata"]}
+        # A reference version uploaded as files, staged read-only by the worker. Its metadata has
+        # no samples, so scoring proves the staged file was read.
+        staged_reference = tmp_path / "inputs" / "datasets" / "reference-set"
+        staged_reference.mkdir(parents=True)
+        write_reference(staged_reference / "reference.json", [0.1, 0.3, 0.5])
+        reference_set = {"id": "reference-set", "metadata": {}}
+        descriptors = tmp_path / "dataset-versions.json"
+        descriptors.write_text(json.dumps({"inputDatasets": [reference_set, inference_output]}))
+        upstream_run = tmp_path / "upstream-run.json"
+        upstream_run.write_text(
+            json.dumps({"runId": inference_run_id, "outputDatasetVersionIds": [inference_output["id"]]})
+        )
+        evaluation_outputs = tmp_path / "evaluation" / "outputs"
+        evaluation_outputs.mkdir(parents=True)
+        environment = {name: value for name, value in os.environ.items() if not name.startswith("MMT_")}
+        environment.update(
+            MMT_API_URL=server.url,
+            MMT_API_TOKEN="example-only-test-token",
+            MMT_PROJECT_ID="project-example",
+            MMT_RUN_ID="evaluation-run",
+            MMT_UPSTREAM_RUN_ID=inference_run_id,
+            MMT_UPSTREAM_RUN_FILE=str(upstream_run),
+            MMT_DATASET_VERSIONS_FILE=str(descriptors),
+            MMT_INPUT_DATASET_DIRS=json.dumps({"reference-set": str(staged_reference)}),
+            MMT_OUTPUTS_DIR=str(evaluation_outputs),
+        )
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(EXAMPLES / "evaluation.py"),
+                "--output-mode",
+                "result-json",
+                "--output",
+                str(tmp_path / "evaluation" / "work" / "r.jsonl"),
+            ],
+            check=True,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        # The code only read: the metrics travel in result.json, not through the SDK.
+        assert not server.metrics
+        assert {method for method, _path in server.operations} == {"GET"}
+    summary = json.loads(completed.stdout)
+    assert summary["audioPrefix"] == "container/inference/audio/"
+    assert summary["referenceSources"] == ["reference-set:staged"]
+    result = validate_results(evaluation_outputs)
+    assert result is not None and result["artifactCount"] == 1
+    metrics = {metric["name"]: metric["value"] for metric in result["metrics"]}
+    # y = 2x + 1 for x = 0, 1, 2 lasts 0.1, 0.3 and 0.5 seconds: every staged reference matches.
+    assert metrics["evaluation.samples"] == 3
+    assert metrics["evaluation.duration_match_rate"] == 1.0
+    results = (evaluation_outputs / "eval" / "results.jsonl").read_text().splitlines()
+    first = json.loads(results[0])
+    assert (
+        first["audio"] == f"mmt-artifact://runs/{inference_run_id}/container/inference/audio/sample-000.wav"
+    )
