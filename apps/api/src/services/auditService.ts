@@ -17,7 +17,7 @@ import { requireGlobalAdmin, requireProject } from './accessService.js';
 export const NO_REQUEST_METADATA: RequestMetadata = { ip: null, userAgent: null };
 
 // Only authorization refusals are recorded as denied; validation and missing resources are not.
-const DENIED_STATUSES: ReadonlySet<number> = new Set([403, 409]);
+export const DENIED_STATUSES: ReadonlySet<number> = new Set([403, 409]);
 
 export type AuditEventDraft = Omit<AuditEventInput, 'outcome'>;
 

@@ -101,6 +101,8 @@ import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
 import { sweepRoutes } from './routes/sweepRoutes.js';
+import { SavedViewService } from './services/savedViewService.js';
+import { savedViewRoutes } from './routes/savedViewRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -207,6 +209,7 @@ export function createApplication(options: ApplicationOptions) {
   // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
   const commentTargets = createCommentTargetRegistry();
   const comments = new CommentService(database, commentTargets);
+  const savedViews = new SavedViewService(database);
   const app = new Hono<ApiEnvironment>();
   app.onError((error, context) => {
     if (isMlflowRequest(context.req.path)) {
@@ -318,6 +321,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', runResumeRoutes(runResumes));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/projects', sweepRoutes(sweeps));
+  app.route('/api/projects', savedViewRoutes(savedViews));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', workerPresenceRoutes(worker));
@@ -377,6 +381,7 @@ export function createApplication(options: ApplicationOptions) {
       runResumes,
       commentTargets,
       comments,
+      savedViews,
       storageBackends,
       artifactStores: stores,
       sweeps,
