@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Literal, cast
 
 import httpx
 
@@ -22,8 +23,14 @@ from .pagination import iterate_cursor_pages
 from .run_search_request import build_run_search_body
 from .security import SecretMasker, secret_values
 from .settings import ApiSettings
+from .timestamps import utc_timestamp
 
-__all__ = ["Client", "path_id"]
+__all__ = ["Client", "ResumeMode", "path_id", "start_run_offline"]
+
+ResumeMode = Literal["never", "allow", "must"]
+RESUME_MODES: tuple[ResumeMode, ...] = ("never", "allow", "must")
+# Values of MMT_SYSTEM_METRICS that turn off system metrics requested in code.
+SYSTEM_METRICS_DISABLED_VALUES = frozenset({"0", "false", "no", "off"})
 
 # Mirrors POST /projects/:p/runs/search: limit defaults to 100 and is capped at 500.
 RUN_SEARCH_DEFAULT_PAGE_SIZE = 100
@@ -185,20 +192,193 @@ class Client(ExperimentTasksClient):
         experiment_id: str | None = None,
         name: str | None = None,
         kind: str = "training",
+        run_id: str | None = None,
+        resume: ResumeMode = "never",
+        mode: RunMode | None = None,
+        system_metrics: bool = False,
+        system_metrics_interval: float | None = None,
         **attributes: Any,
     ) -> Run:
-        project_id = project_id or os.environ.get("MMT_PROJECT_ID")
-        if not project_id:
-            raise ConfigurationError("project_id or MMT_PROJECT_ID is required")
-        existing_run_id = os.environ.get("MMT_RUN_ID")
-        if existing_run_id and name is None:
-            return self.get_run(project_id, existing_run_id, managed_by_worker=True)
+        """Create and start a Run, resume one by run_id, or use the worker's Run (MMT_RUN_ID).
+
+        resume: 'never' creates a new Run, 'must' reopens run_id and fails when it does not exist,
+        'allow' reopens run_id or creates a Run with that ID. mode (else MMT_MODE): 'online' writes
+        to the API, 'offline' to the local spool, 'auto' to the API until it becomes unreachable.
+        system_metrics=True records `system.*` metrics every system_metrics_interval seconds.
+        """
+        run_mode = resolve_mode(mode, os.environ)
+        if run_mode == "offline":
+            return start_run_offline(
+                project_id=project_id,
+                experiment_id=experiment_id,
+                name=name,
+                kind=kind,
+                run_id=run_id,
+                resume=resume,
+                system_metrics=system_metrics,
+                system_metrics_interval=system_metrics_interval,
+                api_url=self.settings.url,
+                masker=self.masker,
+                **attributes,
+            )
+        project_id = require_project_id(project_id)
+        validate_resume(resume, run_id)
+        worker_run_id = os.environ.get("MMT_RUN_ID")
+        if resume != "never":
+            run = self._resume_run(
+                project_id,
+                run_id=cast(str, run_id),
+                resume=resume,
+                run_mode=run_mode,
+                experiment_id=experiment_id,
+                name=name,
+                kind=kind,
+                attributes=attributes,
+            )
+        elif worker_run_id and name is None:
+            return self.get_run(project_id, worker_run_id, managed_by_worker=True)
+        else:
+            run = self._create_started_run(
+                project_id,
+                experiment_id=experiment_id,
+                name=name,
+                kind=kind,
+                run_mode=run_mode,
+                attributes=attributes,
+            )
+        if system_metrics and system_metrics_enabled(os.environ):
+            run.start_system_metrics(interval_seconds=system_metrics_interval)
+        return run
+
+    def _create_started_run(
+        self,
+        project_id: str,
+        *,
+        experiment_id: str | None,
+        name: str | None,
+        kind: str,
+        run_mode: RunMode,
+        attributes: Mapping[str, Any],
+    ) -> Run:
         experiment_id = experiment_id or os.environ.get("MMT_EXPERIMENT_ID")
         if not experiment_id or not name:
             raise ConfigurationError("experiment_id and name are required to create a Run")
-        run = self.create_run(project_id, experiment_id=experiment_id, name=name, kind=kind, **attributes)
+        try:
+            run = self.create_run(project_id, experiment_id=experiment_id, name=name, kind=kind, **attributes)
+        except ApiError as error:
+            if run_mode != "auto" or not is_api_unreachable(error):
+                raise
+            print(
+                "mado-tracking: the API is unreachable; recording the Run offline instead.",
+                file=sys.stderr,
+            )
+            return start_offline_run(
+                project_id=project_id,
+                experiment_id=experiment_id,
+                name=name,
+                kind=kind,
+                attributes=attributes,
+                api_url=self.settings.url,
+                masker=self.masker,
+            )
+        run.transport = self._run_transport(project_id, run.entity, run_mode)
         run.start()
         return run
+
+    def _resume_run(
+        self,
+        project_id: str,
+        *,
+        run_id: str,
+        resume: ResumeMode,
+        run_mode: RunMode,
+        experiment_id: str | None,
+        name: str | None,
+        kind: str,
+        attributes: Mapping[str, Any],
+    ) -> Run:
+        """POST /runs/:r/resume; with resume='allow' a missing Run is created under run_id."""
+        if os.environ.get("MMT_RUN_ID") or os.environ.get("MMT_JOB_ID"):
+            raise ConfigurationError(
+                "A worker-managed Run cannot be resumed; retry its Job from a checkpoint "
+                "and continue with run.resume_checkpoint()"
+            )
+        try:
+            # Resuming a running Run changes nothing, so a lost response can be retried.
+            result = self.request(
+                "POST",
+                self.project_path(project_id, f"runs/{path_id(run_id)}/resume"),
+                json={},
+                retryable=True,
+            )
+        except ApiError as error:
+            if error.code == "run_finalized":
+                raise ConfigurationError(
+                    f"Run {run_id} belongs to a Job and cannot be resumed; retry the Job from a checkpoint"
+                ) from None
+            if error.status_code != 404:
+                raise
+            if resume == "must":
+                raise ConfigurationError(
+                    f"Run {run_id} does not exist; resume='must' needs an existing Run"
+                ) from None
+            entity = self._create_run_with_id(
+                project_id, run_id, experiment_id=experiment_id, name=name, kind=kind, attributes=attributes
+            )
+            last_steps: dict[str, int] = {}
+        else:
+            entity = result["run"]
+            last_steps = {str(key): int(step) for key, step in result.get("lastSteps", {}).items()}
+        return Run(
+            self,
+            project_id,
+            entity,
+            transport=self._run_transport(project_id, entity, run_mode),
+            last_steps=last_steps,
+        )
+
+    def _create_run_with_id(
+        self,
+        project_id: str,
+        run_id: str,
+        *,
+        experiment_id: str | None,
+        name: str | None,
+        kind: str,
+        attributes: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """PUT /sync/runs/:runId is the only way to create a Run under a client-chosen ID."""
+        experiment_id = experiment_id or os.environ.get("MMT_EXPERIMENT_ID")
+        if not experiment_id or not name:
+            raise ConfigurationError(
+                "experiment_id and name are required when resume='allow' creates the Run"
+            )
+        if unsupported := sorted(set(attributes) - OFFLINE_RUN_ATTRIBUTES):
+            raise ConfigurationError(f"resume='allow' cannot create a Run with {', '.join(unsupported)}")
+        return self.request(
+            "PUT",
+            self.project_path(project_id, f"sync/runs/{path_id(run_id)}"),
+            json={
+                "experimentId": experiment_id,
+                "name": name,
+                "kind": kind,
+                "parameters": dict(attributes.get("parameters") or {}),
+                "tags": dict(attributes.get("tags") or {}),
+                "parentRunId": attributes.get("parent_run_id"),
+                "startedAt": utc_timestamp(),
+            },
+            # The PUT returns the existing Run unchanged, so a lost response can be retried.
+            retryable=True,
+        )
+
+    def _run_transport(self, project_id: str, entity: Mapping[str, Any], run_mode: RunMode) -> RunTransport:
+        online = HttpRunTransport(self, project_id, str(entity["id"]))
+        if run_mode != "auto":
+            return online
+        record = spool_record_from_entity(entity, project_id=project_id, api_url=self.settings.url)
+        return AutoRunTransport(
+            online, lambda: RunSpool.create(default_offline_directory(), record, run_created=True)
+        )
 
     def register_model(
         self,
@@ -488,4 +668,77 @@ class Client(ExperimentTasksClient):
             yield from response.iter_bytes()
 
 
+def require_project_id(project_id: str | None) -> str:
+    project_id = project_id or os.environ.get("MMT_PROJECT_ID")
+    if not project_id:
+        raise ConfigurationError("project_id or MMT_PROJECT_ID is required")
+    return project_id
+
+
+def validate_resume(resume: str, run_id: str | None) -> None:
+    if resume not in RESUME_MODES:
+        raise ConfigurationError(f"resume must be one of {', '.join(RESUME_MODES)}, not {resume!r}")
+    if resume != "never" and not run_id:
+        raise ConfigurationError(f"resume={resume!r} needs run_id")
+    if resume == "never" and run_id:
+        raise ConfigurationError("run_id needs resume='allow' or resume='must'")
+
+
+def system_metrics_enabled(environment: Mapping[str, str]) -> bool:
+    """False inside a worker Job (the worker records the same metrics) or with MMT_SYSTEM_METRICS=false."""
+    if environment.get("MMT_JOB_ID"):
+        return False
+    return environment.get("MMT_SYSTEM_METRICS", "").strip().lower() not in SYSTEM_METRICS_DISABLED_VALUES
+
+
+def start_run_offline(
+    *,
+    project_id: str | None = None,
+    experiment_id: str | None = None,
+    name: str | None = None,
+    kind: str = "training",
+    run_id: str | None = None,
+    resume: ResumeMode = "never",
+    system_metrics: bool = False,
+    system_metrics_interval: float | None = None,
+    api_url: str | None = None,
+    masker: SecretMasker | None = None,
+    **attributes: Any,
+) -> Run:
+    """Client.start_run(mode='offline') without an API URL or token; nothing contacts the API."""
+    if os.environ.get("MMT_JOB_ID"):
+        # Job tokens cannot use /sync, and the worker records the Job's Run online.
+        raise ConfigurationError("A worker Job records online; do not set MMT_MODE=offline for a Job")
+    project_id = require_project_id(project_id)
+    validate_resume(resume, run_id)
+    if resume != "never":
+        raise ConfigurationError("An offline Run cannot be resumed; resume it online, then log offline")
+    experiment_id = experiment_id or os.environ.get("MMT_EXPERIMENT_ID")
+    if not experiment_id or not name:
+        raise ConfigurationError("experiment_id and name are required to create a Run")
+    run = start_offline_run(
+        project_id=project_id,
+        experiment_id=experiment_id,
+        name=name,
+        kind=kind,
+        attributes=attributes,
+        api_url=api_url,
+        masker=masker,
+    )
+    if system_metrics and system_metrics_enabled(os.environ):
+        run.start_system_metrics(interval_seconds=system_metrics_interval)
+    return run
+
+
+from .offline import OFFLINE_RUN_ATTRIBUTES, start_offline_run  # noqa: E402
+from .offline.spool import RunSpool, default_offline_directory  # noqa: E402
+from .offline.transport import (  # noqa: E402
+    AutoRunTransport,
+    HttpRunTransport,
+    RunMode,
+    RunTransport,
+    is_api_unreachable,
+    resolve_mode,
+    spool_record_from_entity,
+)
 from .run import Run  # noqa: E402

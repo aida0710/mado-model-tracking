@@ -116,6 +116,8 @@ def build_runtime_bundle() -> bytes:
             )
         for path in package_directory.glob("*.py"):
             archive.write(path, f"sdk/mado_tracking/{path.name}")
+        for path in (package_directory / "offline").glob("*.py"):
+            archive.write(path, f"sdk/mado_tracking/offline/{path.name}")
         archive.write(package_directory / "py.typed", "sdk/mado_tracking/py.typed")
     return archive_buffer.getvalue()
 
