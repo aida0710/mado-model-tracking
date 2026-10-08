@@ -1,0 +1,192 @@
+/* Chart panels on the Run detail, Compare and Run list pages, and the resumed-segment timeline. */
+.chart-panel-area {
+  margin-bottom: 20px;
+}
+.chart-grid-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+.chart-grid-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+/* Rows are set from CHART_ROW_HEIGHT_PX in ChartPanel.tsx through --chart-row-height. */
+.chart-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  /* A long legend may wrap; the row then grows instead of clipping the chart. */
+  grid-auto-rows: minmax(var(--chart-row-height), auto);
+  gap: 12px;
+}
+.chart-panel-cell {
+  min-width: 0;
+}
+.chart-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+.chart-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+}
+.chart-panel-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chart-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.chart-panel-placement {
+  position: relative;
+}
+.chart-panel-placement > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.chart-panel-placement > summary::-webkit-details-marker {
+  display: none;
+}
+.chart-placement-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  width: max-content;
+}
+.chart-move-buttons,
+.chart-size-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chart-size-buttons .button.active {
+  background: var(--teal-tint);
+  border-color: var(--teal);
+}
+.chart-panel > .notice,
+.chart-panel > .state-message {
+  flex: 1;
+}
+
+/* Editor dialog */
+.chart-panel-editor form {
+  display: grid;
+  gap: 14px;
+}
+.chart-metric-picker {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+.chart-metric-picker legend small {
+  color: var(--muted);
+  font-weight: normal;
+}
+.chart-metric-options {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 12px;
+}
+.chart-picker-error {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+}
+.run-grouping-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.run-grouping-control input {
+  font-size: 12px;
+  padding: 4px 6px;
+  max-width: 180px;
+}
+
+/* Run list: charts with the analysis beside them; the analysis column closes when empty. */
+.run-chart-toggle {
+  margin-bottom: 8px;
+}
+.run-list-visuals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+.run-list-visuals > .chart-panel-area {
+  flex: 2 1 640px;
+  min-width: 0;
+}
+.run-list-analysis {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+.run-list-analysis:empty {
+  display: none;
+}
+
+/* Resumed segments */
+.run-resume-timeline {
+  margin: 4px 0 16px;
+}
+.run-resume-timeline h2 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+.resume-track {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+.resume-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 7px;
+}
+
+/* One panel per row on narrow screens; the stored placement is kept for wider ones. */
+@media (max-width: 900px) {
+  .chart-panel-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+  }
+  .chart-panel-cell {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    height: calc(var(--chart-row-height) * 2);
+  }
+}
