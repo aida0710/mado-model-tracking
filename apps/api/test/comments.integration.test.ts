@@ -289,14 +289,13 @@ describe.skipIf(!testDatabaseUrl)('Run・モデル版のスレッド形式コメ
     ).toBe(201);
   });
 
-  it('reportはreports-apiが登録するまで422になる', async () => {
+  it('存在しないreportへの投稿は404になる（reportの対象はreports-apiが登録する）', async () => {
     const response = await postComment({
       targetType: 'report',
       targetId: '00000000-0000-4000-8000-000000000000',
       body: 'x',
     });
-    expect(response.status).toBe(422);
-    expect(((await response.json()) as { code: string }).code).toBe('comment_target_unsupported');
+    expect(response.status).toBe(404);
   });
 
   it('同一時刻のコメントでもcursorで重複・欠落なく全件を辿れる', async () => {

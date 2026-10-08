@@ -28,7 +28,10 @@ export interface RunSearchQuery {
   limit: number;
   cursor: string | null;
 }
-type RunSearchConditions = Omit<RunSearchQuery, 'limit' | 'cursor'>;
+export type RunSearchConditions = Omit<RunSearchQuery, 'limit' | 'cursor'>;
+
+// The largest page the search serves, so collecting every match needs the fewest pages.
+const COLLECT_PAGE_SIZE = 500;
 
 // Matches the partial index of migration 020, so the newest-first keyset reads it directly.
 const CREATION_ORDER = 'r.created_at DESC,r.id DESC';
@@ -90,6 +93,35 @@ export class RunSearchService {
         nextCursor: nextCursor && encodeRunSearchCursor(nextCursor, fingerprint),
       };
     });
+  }
+
+  /**
+   * Every Run ID the conditions match, in search order, for endpoints that read a whole Run set
+   * (metric groups, analysis, report snapshots). More than maxRuns is 422 too_many_runs.
+   */
+  async collectRunIds(
+    principal: Principal,
+    projectId: string,
+    request: { conditions: RunSearchConditions; maxRuns: number },
+  ): Promise<string[]> {
+    const runIds: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = await this.search(principal, projectId, {
+        ...request.conditions,
+        limit: COLLECT_PAGE_SIZE,
+        cursor,
+      });
+      runIds.push(...page.items.map((run) => run.id));
+      if (runIds.length > request.maxRuns)
+        throw new DomainError(
+          422,
+          `検索に一致するRunが${request.maxRuns}件を超えています。条件を絞ってください`,
+          'too_many_runs',
+        );
+      cursor = page.nextCursor;
+    } while (cursor);
+    return runIds;
   }
 
   private async findPageRunIds(

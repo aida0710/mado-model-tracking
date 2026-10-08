@@ -81,6 +81,9 @@ import { MediaTableService } from './services/mediaTableService.js';
 import { RunMediaService } from './services/runMediaService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
+import { ReportService } from './services/reportService.js';
+import { ReportSnapshotService } from './services/reportSnapshotService.js';
+import { reportCommentTarget } from './services/reportCommentTarget.js';
 import { SweepController } from './services/sweepController.js';
 import { SweepScheduler } from './services/sweepScheduler.js';
 import { SweepService } from './services/sweepService.js';
@@ -124,6 +127,7 @@ import { runSyncRoutes } from './routes/runSyncRoutes.js';
 import { checkpointRoutes } from './routes/checkpointRoutes.js';
 import { runMediaRoutes } from './routes/runMediaRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
+import { reportRoutes } from './routes/reportRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
 import { UserDirectoryService } from './services/userDirectoryService.js';
@@ -290,7 +294,13 @@ export function createApplication(options: ApplicationOptions) {
   const runSync = new RunSyncService(database, { runs, runCompletion });
   // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
   const commentTargets = createCommentTargetRegistry();
+  commentTargets.registerCommentTarget('report', reportCommentTarget);
   const comments = new CommentService(database, commentTargets);
+  const reports = new ReportService(database, {
+    snapshots: new ReportSnapshotService(database, { runSearch, metricSeries, runAnalysis, runMedia }),
+    runMedia,
+    snapshotMaxBytes: config.reportSnapshotMaxBytes,
+  });
   const savedViews = new SavedViewService(database);
   const operationsMonitor = new OperationsMonitor(database, { webOrigin: config.webOrigin });
   const operationsAlerts = new OperationsAlertService(database);
@@ -428,6 +438,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', checkpointRoutes(checkpoints));
   app.route('/api/projects', runMediaRoutes(runMedia));
   app.route('/api/projects', commentRoutes(comments));
+  app.route('/api/projects', reportRoutes(reports));
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/projects', savedViewRoutes(savedViews));
   app.route('/api/projects', operationsRoutes(operationsAlerts));
@@ -509,6 +520,7 @@ export function createApplication(options: ApplicationOptions) {
       runMedia,
       commentTargets,
       comments,
+      reports,
       savedViews,
       storageBackends,
       artifactStores: stores,

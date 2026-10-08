@@ -34,8 +34,6 @@ import {
 import { requireProject } from './accessService.js';
 import type { RunSearchService } from './runSearchService.js';
 
-// The largest page run search serves; ANALYSIS_MAX_RUNS needs at most eleven pages.
-const SEARCH_PAGE_SIZE = 500;
 // A fixed forest seed: the same Runs and params always give the same importance.
 const IMPORTANCE_SEED = DEFAULT_IMPORTANCE_SEED;
 
@@ -188,31 +186,14 @@ export class RunAnalysisService {
       if (sources.length !== runSet.runIds.length) notFound('Run');
       return { sources, sweepObjective: null };
     }
-    const runIds = await this.searchRunIds(principal, projectId, runSet.search);
+    const runIds = await this.runSearch.collectRunIds(principal, projectId, {
+      conditions: runSet.search,
+      maxRuns: ANALYSIS_MAX_RUNS,
+    });
     // A Run deleted after the search simply drops out; the search itself was already authorized.
     const sources = runIds.length
       ? await readRunAnalysisSources(this.database, { projectId, runIds, metricKeys })
       : [];
     return { sources, sweepObjective: null };
-  }
-
-  private async searchRunIds(
-    principal: Principal,
-    projectId: string,
-    search: Extract<RunSetQuery, { search: unknown }>['search'],
-  ): Promise<string[]> {
-    const runIds: string[] = [];
-    let cursor: string | null = null;
-    do {
-      const page = await this.runSearch.search(principal, projectId, {
-        ...search,
-        limit: SEARCH_PAGE_SIZE,
-        cursor,
-      });
-      runIds.push(...page.items.map((run) => run.id));
-      if (runIds.length > ANALYSIS_MAX_RUNS) tooManyRuns();
-      cursor = page.nextCursor;
-    } while (cursor);
-    return runIds;
   }
 }

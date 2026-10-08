@@ -25,6 +25,7 @@ export * from './primitives.js';
 export * from './projectAccess.js';
 export * from './promotion.js';
 export * from './registry.js';
+export * from './reports.js';
 export * from './runAnalysis.js';
 export * from './runComparison.js';
 export * from './runMedia.js';
