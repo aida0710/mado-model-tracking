@@ -46,6 +46,8 @@ import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
 import { TokenService } from './services/tokenService.js';
 import { EvaluationService } from './services/evaluationService.js';
+import { PromotionService } from './services/promotionService.js';
+import { PromotionRunHandler } from './services/promotionRunHandler.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
 import { AutomationSourceRunHandler } from './services/automationSourceRunHandler.js';
@@ -74,6 +76,7 @@ import {
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
+import { promotionRoutes } from './routes/promotionRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
 
@@ -130,6 +133,9 @@ export function createApplication(options: ApplicationOptions) {
   // Output registration must run before the source-run handler releases pending automation.
   terminalHandlers.push(new OutputRegistrationHandler(registry));
   terminalHandlers.push(new AutomationSourceRunHandler(automation));
+  // Promotion follows automation chaining (wave-wide order: outputs, pending, chain, promotion).
+  const promotion = new PromotionService(database);
+  terminalHandlers.push(new PromotionRunHandler(promotion));
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
   const evaluation = new EvaluationService(database);
@@ -246,6 +252,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/projects', evaluationRoutes(evaluation));
+  app.route('/api/projects', promotionRoutes(promotion));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/targets', targetRoutes(targets));
@@ -287,6 +294,7 @@ export function createApplication(options: ApplicationOptions) {
       jobTokens,
       plugins,
       evaluation,
+      promotion,
       runNotes,
       commentTargets,
       comments,

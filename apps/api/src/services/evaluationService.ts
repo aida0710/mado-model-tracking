@@ -26,6 +26,8 @@ export interface EvaluationComparisonRequest {
   codeVersionId?: string | null;
   evaluationRuleId?: string;
   metrics?: readonly string[];
+  // Internal callers only (not an HTTP parameter): judge this candidate Run instead of the latest.
+  candidateRunId?: string;
 }
 
 export class EvaluationService {
@@ -157,6 +159,7 @@ export async function compareToBaselineInternal(
     referenceDatasetVersionIds: request.referenceDatasetVersionIds,
     codeVersionId: request.codeVersionId,
     producedByRuleId: evaluationRuleId,
+    runId: request.candidateRunId,
   });
   const references = request.referenceDatasetVersionIds
     ? [...new Set(request.referenceDatasetVersionIds)].sort()

@@ -1,6 +1,7 @@
 import type { Run } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
 import type { EvaluatedMetrics } from '../domain/evaluationComparison.js';
+import { MAX_RETRY_CHAIN_LENGTH } from './automationExecutionLookup.js';
 
 export type EvaluationRunRecord = Pick<
   Run,
@@ -16,11 +17,27 @@ export type EvaluationRunRecord = Pick<
 const referenceSetExpression = `ARRAY(
   SELECT unnest(r.input_dataset_version_ids) EXCEPT SELECT unnest(r.upstream_dataset_version_ids))`;
 
+// A Run counts as produced by a rule when the rule's execution points at it or at the Run of the
+// original Job it retried (the same rule as findExecutionForRun in automationExecutionLookup.ts).
+const producedByRuleExpression = `EXISTS (
+  WITH RECURSIVE chain(run_id, retry_of_job_id, depth) AS (
+    SELECT j.run_id, j.retry_of_job_id, 0 FROM jobs j WHERE j.project_id=r.project_id AND j.run_id=r.id
+    UNION ALL
+    SELECT previous.run_id, previous.retry_of_job_id, chain.depth + 1
+    FROM jobs previous JOIN chain ON previous.id=chain.retry_of_job_id
+    WHERE previous.project_id=r.project_id AND chain.depth < $8
+  )
+  SELECT 1 FROM model_automation_executions e
+  WHERE e.project_id=r.project_id AND e.rule_id=$6::uuid
+    AND (e.run_id=r.id OR e.run_id IN (SELECT run_id FROM chain)))`;
+
 /**
  * The latest comparable evaluation of a model version: same Project, kind=evaluation, finished,
  * active, and — when given — the same reference set (as a set), the same evaluation CodeVersion
- * (null matches Runs without code), and created by the given automation rule. The rule filter lets
- * promotion policies ignore manually created evaluation Runs. Newest ended_at wins; id breaks ties.
+ * (null matches Runs without code), and created by the given automation rule (manual retries of
+ * its Jobs included). The rule filter lets promotion policies ignore manually created evaluation
+ * Runs. runId narrows the search to that one Run, so a decision judges exactly the Run it names.
+ * Newest ended_at wins; id breaks ties.
  */
 export async function findLatestEvaluationRun(
   connection: Connection,
@@ -30,6 +47,7 @@ export async function findLatestEvaluationRun(
     referenceDatasetVersionIds?: readonly string[];
     codeVersionId?: string | null;
     producedByRuleId?: string | null;
+    runId?: string;
   },
 ): Promise<EvaluationRunRecord | undefined> {
   return first<EvaluationRunRecord>(
@@ -41,9 +59,8 @@ export async function findLatestEvaluationRun(
       AND r.kind='evaluation' AND r.status='finished' AND r.lifecycle_stage='active'
       AND ($3::uuid[] IS NULL OR (${referenceSetExpression} @> $3::uuid[] AND ${referenceSetExpression} <@ $3::uuid[]))
       AND (NOT $4::boolean OR r.code_version_id IS NOT DISTINCT FROM $5::uuid)
-      AND ($6::uuid IS NULL OR EXISTS (
-        SELECT 1 FROM model_automation_executions e
-        WHERE e.project_id=r.project_id AND e.run_id=r.id AND e.rule_id=$6::uuid))
+      AND ($6::uuid IS NULL OR ${producedByRuleExpression})
+      AND ($7::uuid IS NULL OR r.id=$7::uuid)
     ORDER BY r.ended_at DESC NULLS LAST, r.id DESC
     LIMIT 1`,
     [
@@ -53,6 +70,8 @@ export async function findLatestEvaluationRun(
       filter.codeVersionId !== undefined,
       filter.codeVersionId ?? null,
       filter.producedByRuleId ?? null,
+      filter.runId ?? null,
+      MAX_RETRY_CHAIN_LENGTH,
     ],
   );
 }
