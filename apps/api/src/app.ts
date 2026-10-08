@@ -71,6 +71,8 @@ import { RunNoteService } from './services/runNoteService.js';
 import { RunResumeService } from './services/runResumeService.js';
 import { RunSyncService } from './services/runSyncService.js';
 import { CheckpointService } from './services/checkpointService.js';
+import { MediaTableService } from './services/mediaTableService.js';
+import { RunMediaService } from './services/runMediaService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { SweepController } from './services/sweepController.js';
@@ -112,6 +114,7 @@ import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { runResumeRoutes } from './routes/runResumeRoutes.js';
 import { runSyncRoutes } from './routes/runSyncRoutes.js';
 import { checkpointRoutes } from './routes/checkpointRoutes.js';
+import { runMediaRoutes } from './routes/runMediaRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
@@ -200,6 +203,7 @@ export function createApplication(options: ApplicationOptions) {
     maxBytes: config.artifactMaxBytes,
   });
   const checkpoints = new CheckpointService(database, { keepCount: config.checkpointKeepCount });
+  const runMedia = new RunMediaService(database, new MediaTableService(artifacts));
   const mlflowMultipartUploads = new MlflowMultipartUploadService({
     database,
     stores,
@@ -404,6 +408,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', runResumeRoutes(runResumes));
   app.route('/api/projects', runSyncRoutes(runSync));
   app.route('/api/projects', checkpointRoutes(checkpoints));
+  app.route('/api/projects', runMediaRoutes(runMedia));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/projects', savedViewRoutes(savedViews));
@@ -480,6 +485,7 @@ export function createApplication(options: ApplicationOptions) {
       runResumes,
       runSync,
       checkpoints,
+      runMedia,
       commentTargets,
       comments,
       savedViews,

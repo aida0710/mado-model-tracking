@@ -124,6 +124,7 @@ export const JOB_TOKEN_WRITE_RULES: readonly JobTokenRule[] = [
   { methods: ['POST'], route: `${NATIVE}/runs/:r/logs`, allows: ownRunInPath },
   { methods: ['PUT'], route: `${NATIVE}/runs/:r/artifacts`, allows: ownRunInPath },
   { methods: ['POST'], route: `${NATIVE}/runs/:r/checkpoints`, allows: ownRunInPath },
+  { methods: ['POST'], route: `${NATIVE}/runs/:r/media`, allows: ownRunInPath },
   { methods: ['POST'], route: `${NATIVE}/artifact-uploads`, allows: ownRunInBody('runId') },
   {
     methods: ['PUT'],
@@ -198,6 +199,7 @@ export const JOB_TOKEN_READ_RULES: readonly JobTokenRule[] = [
   { methods: ['GET', 'HEAD'], route: `${NATIVE}/*`, allows: allowWithinProject },
   { methods: ['GET', 'HEAD'], route: '/api/mlflow/projects/:p/*', allows: allowWithinProject },
   { methods: ['POST'], route: `${NATIVE}/runs/search`, allows: allowWithinProject },
+  { methods: ['POST'], route: `${NATIVE}/media/compare`, allows: allowWithinProject },
   { methods: ['POST'], route: `${MLFLOW}/runs/search`, allows: allowWithinProject },
   { methods: ['POST'], route: `${MLFLOW}/experiments/search`, allows: allowWithinProject },
   { methods: ['POST'], route: `${MLFLOW}/logged-models/search`, allows: allowWithinProject },

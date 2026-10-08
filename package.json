@@ -13,7 +13,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "db:migrate": "npm run db:migrate -w @mmt/api",
-    "db:seed": "npm run db:seed -w @mmt/api"
+    "db:seed": "npm run db:seed -w @mmt/api",
+    "backfill-run-media": "npm run backfill-run-media -w @mmt/api"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

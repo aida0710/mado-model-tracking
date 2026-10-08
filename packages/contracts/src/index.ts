@@ -536,3 +536,33 @@ export {
   SAVED_VIEW_NAME_MAX_LENGTH,
   SAVED_VIEW_STATE_MAX_BYTES,
 } from './savedViews.js';
+export type {
+  MediaCompareGrid,
+  MediaCompareRequest,
+  MediaCompareRow,
+  MediaTableCell,
+  MediaTableColumn,
+  MediaTableColumnType,
+  MediaTableMediaCell,
+  MediaTablePage,
+  MediaTableReferenceError,
+  RunMedia,
+  RunMediaCreate,
+  RunMediaCreateItem,
+  RunMediaKeySummary,
+  RunMediaKind,
+  RunMediaList,
+  RunMediaPage,
+  RunMediaSource,
+} from './runMedia.js';
+export {
+  MEDIA_COMPARE_MAX_RUNS,
+  MEDIA_COMPARE_MAX_STEPS,
+  MEDIA_TABLE_MAX_BYTES,
+  MEDIA_TABLE_PAGE_MAX_ROWS,
+  MLFLOW_LOGGED_ARTIFACTS_TAG,
+  RUN_MEDIA_CAPTION_MAX_LENGTH,
+  RUN_MEDIA_CREATE_MAX_ITEMS,
+  RUN_MEDIA_KEY_MAX_LENGTH,
+  RUN_MEDIA_METADATA_MAX_BYTES,
+} from './runMedia.js';
