@@ -66,6 +66,7 @@ import { AutomationChainHandler } from './services/automationChainHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { RunNoteService } from './services/runNoteService.js';
 import { RunResumeService } from './services/runResumeService.js';
+import { RunSyncService } from './services/runSyncService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { SweepController } from './services/sweepController.js';
@@ -103,6 +104,7 @@ import { modelEvaluationRoutes } from './routes/modelEvaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { runResumeRoutes } from './routes/runResumeRoutes.js';
+import { runSyncRoutes } from './routes/runSyncRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
@@ -126,6 +128,9 @@ export interface ApplicationOptions {
 const MAX_JSON_BODY_BYTES = 4 * 1024 * 1024;
 // Upload session parts are raw bytes up to the part size, not JSON.
 const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
+// An offline sync batch carries up to 10000 metrics and 10000 log lines in one JSON body.
+const SYNC_BATCH_MAX_BYTES = 32 * 1024 * 1024;
+const SYNC_BATCH_PATH = /^\/api\/projects\/[^/]+\/sync\/runs\/[^/]+\/batches$/;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
@@ -218,6 +223,7 @@ export function createApplication(options: ApplicationOptions) {
   const outbox = new OutboxDispatcher(database, plugins);
   const runNotes = new RunNoteService(database);
   const runResumes = new RunResumeService(database, runCompletion);
+  const runSync = new RunSyncService(database, { runs, runCompletion });
   // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
   const commentTargets = createCommentTargetRegistry();
   const comments = new CommentService(database, commentTargets);
@@ -284,8 +290,9 @@ export function createApplication(options: ApplicationOptions) {
       context.req.method === 'PUT' &&
       (context.req.path.endsWith('/artifacts') || ARTIFACT_UPLOAD_PART_PATH.test(context.req.path));
     if (!isNativeArtifactUpload && !isMlflowArtifactUpload(context.req)) {
+      const isSyncBatch = context.req.method === 'POST' && SYNC_BATCH_PATH.test(context.req.path);
       return bodyLimit({
-        maxSize: MAX_JSON_BODY_BYTES,
+        maxSize: isSyncBatch ? SYNC_BATCH_MAX_BYTES : MAX_JSON_BODY_BYTES,
         onError: () => {
           throw new DomainError(413, 'JSONの上限サイズを超えています', 'body_too_large');
         },
@@ -342,6 +349,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', promotionRoutes(promotion));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', runResumeRoutes(runResumes));
+  app.route('/api/projects', runSyncRoutes(runSync));
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/targets', targetRoutes(targets));
@@ -405,6 +413,7 @@ export function createApplication(options: ApplicationOptions) {
       promotion,
       runNotes,
       runResumes,
+      runSync,
       commentTargets,
       comments,
       storageBackends,

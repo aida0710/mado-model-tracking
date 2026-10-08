@@ -239,6 +239,15 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - MLflow: Jobの無い終端Runへの`runs/update` `status=RUNNING`（`start_run(run_id=)`。SDK 3.0.0と3.17.0はどちらも前回の`end_time`を付けて送る）は同じ再開として扱い、`source='mlflow'`のイベントを入れ、`end_time`を消し`error`もNULLにする。Job付きRunは従来どおり状態を変えず、イベントも入れない。runningへのRUNNINGもイベントを入れない。
 - `run_resume_events`は追記専用（UPDATE/DELETEはtriggerで拒否）。再開したRunが再び終端になると、終端handler（出力登録、保留自動実行など）は新しい終端遷移として再び呼ばれる。
 
+## オフライン記録の後送り（sync）
+
+APIに届かない計算機で記録したRunを後から送る。Run IDとbatch IDはクライアントが決める（UUID）ので、途中で失敗しても最初から送り直してよく、重複しない。3つともeditor以上。Job限定tokenは403（オフラインは手動Runだけ。JobのRunはworkerがオンラインで扱う）。所属していないProjectは403、別ProjectのRunを指すURLは404。
+
+- `PUT /projects/:p/sync/runs/:runId` (SyncRunCreate `{experimentId,name,kind,parameters?,tags?,parentRunId?,startedAt,origin?}`) → Run。`runs:write`。Runが無ければそのIDでstatus `running`・`startedAt`はクライアントの値で作り201。`origin`（計算機のlabel、200文字まで）は`Run.syncOrigin`に入る（オンラインで作ったRunはnull）。既に同じProjectで同じ利用者がJob無しで作ったRunがあれば、何も変えずに200で返す（2回目以降のnameやparametersは無視）。他人のRun、Job付きRun、削除済みRun、別ProjectのRunと同じIDは409 `sync_run_conflict`。`startedAt`が現在より300秒（`SYNC_CLOCK_SKEW_SECONDS`）を超えて先なら422 `sync_timestamp_in_future`。予約tagは422 `reserved_tag`。監査`run.sync.create`（作成時だけ。detailsは`experimentId`・`origin`）。403/409は`denied`で残る。
+- `POST /projects/:p/sync/runs/:runId/batches` (SyncBatch `{batchId,sequence,metrics?,params?,tags?,logs?,status?:{status:'finished'|'failed'|'canceled',endedAt,error?}}`) → SyncBatchResult `{applied,duplicate,counts:{metrics,params,tags,logs}}`、常に200。`runs:write`。bodyの上限は32MiB（他のJSONは4MiB）、metricsとlogsはそれぞれ10000件まで。1 transactionで`run_sync_batches`に`(runId,batchId)`を入れてから中身を書く。同じbatchIdが既にあれば何も書かず`{applied:false,duplicate:true}`と最初の件数を返す（主キーの衝突で判定するので、同時に2本来ても片方だけ入る）。metricsはクライアントの`timestamp`と`step`のまま入る。paramsはMLflowと同じく不変で、記録済みのkeyに別の値は409 `sync_param_conflict`（そのbatchは何も残らない）。tagsは上書き。`status`はRunを終端にし、`endedAt`はクライアントの値（開始より前は422 `sync_ended_before_start`、300秒を超えて先は422）。同じ終端をもう一度送っても変わらず、別の終端は409 `sync_status_conflict`。終端後に届いた古いsequenceのbatchも受け付ける（Jobの無いRunは終端後も書ける）。sequenceの欠けは拒否も補完もしない。対象は同じ利用者がJob無しで作ったRunだけで、それ以外は409 `sync_run_conflict`。
+- `POST /projects/:p/sync/runs/:runId/artifacts/check` (`{items:[{path,sha256,size}]}`、1000件まで) → `{present:string[]}`。`artifacts:write`。Runのそのpathの現在のArtifact（同じpathの最新のupload）がsha256とsizeの両方で一致するpathだけを返す。SDKは残りだけを再開可能なupload sessionで送る（途中まで送ったsessionの再開はSDK側）。
+- mediaの後送りは、run-media-api（第5波）の`POST /runs/:r/media`（クライアントのidで冪等）をそのまま使う。
+
 ## Sweeps
 
 - 型は`packages/contracts/src/sweeps.ts`（Sweep、SweepTrial、SweepCreate、SweepPatch、SweepCancel）。探索空間・aggregation・hyperbandの意味は[Sweep](sweeps.md)。
