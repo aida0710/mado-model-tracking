@@ -483,6 +483,12 @@ describe.skipIf(!testDatabaseUrl)(
         runAsKind: 'service',
         runAsName: 'automation-bot',
       });
+      // The creator is named for the rule detail, not only by id.
+      const creator = await harness.database.query<{ display_name: string }>(
+        'SELECT display_name FROM users WHERE id=$1',
+        [owner.userId],
+      );
+      expect(transferred.createdByName).toBe(creator.rows[0]!.display_name);
       // Setting the same owner again is a no-op and is not audited twice.
       await entity(
         await transferOwner(fixture, { ruleId: rule.id, serviceAccountId: account.id }),

@@ -88,7 +88,7 @@ export function AutomationRuleDetails({
             automationText.owner,
             <span title={automationText.ownerHint}>{automationOwnerLabel(rule)}</span>,
           ],
-          [text.user, rule.createdBy],
+          [text.user, <span title={rule.createdBy}>{rule.createdByName || rule.createdBy}</span>],
           [text.created, formatDate(rule.createdAt)],
         ]}
       />

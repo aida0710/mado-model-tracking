@@ -8,14 +8,17 @@ import { text } from '../i18n/catalog';
 // These reserved paths are the worker's immutable source capture, before the command runs.
 const SOURCE_SNAPSHOT_PATHS = ['.mmt/source.zip', '.mmt/source-manifest.json'];
 
-export function RunExecutionSnapshot({ run, artifacts }: { run: Run; artifacts?: Artifact[] }) {
+// taskName is shown in place of the Task id when the caller already knows it.
+export function RunExecutionSnapshot({ run, artifacts, taskName }: {
+  run: Run; artifacts?: Artifact[]; taskName?: string | null;
+}) {
   const base = `/projects/${run.projectId}`;
   const snapshot = run.executionSnapshot;
   const snapshotArtifacts = artifacts?.filter((artifact) => SOURCE_SNAPSHOT_PATHS.includes(artifact.path));
   return <section className="execution-snapshot" data-testid="run-execution-snapshot">
     <h2>{text.executionSnapshot}</h2>
     <DetailsList entries={[
-      [text.task, run.taskId ? <Link to={`${base}/tasks?id=${run.taskId}`}>{run.taskId}</Link> : null],
+      [text.task, run.taskId ? <Link to={`${base}/tasks?id=${run.taskId}`}>{taskName ?? run.taskId}</Link> : null],
       [text.taskRevision, run.taskRevision],
       [text.executionMode, (snapshot?.mode ?? run.executionMode) === 'test' ? text.testMode : text.runMode],
       [text.codeVersion, snapshot ? <Link to={`${base}/codes?version=${snapshot.codeVersionId}`}>{snapshot.version} · {snapshot.codeVersionId}</Link> : null],

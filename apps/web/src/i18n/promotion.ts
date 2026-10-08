@@ -2,6 +2,7 @@ import type {
   ModelAliasProtectionRole,
   PromotionCriterionDirection,
   PromotionCriterionMode,
+  PromotionCriterionReason,
   PromotionDecision,
   PromotionMissingBaseline,
 } from '@mmt/contracts';
@@ -110,6 +111,9 @@ export const promotionText = {
   aliasProtectionRequired: '必須',
   aliasProtectionNotRequired: '不要',
   aliasProtectionUpdatedAt: '更新日時',
+  promotionCriterionNotCompared: '比較なし',
+  promotionCheckBaselineMoved:
+    'この判定のあと、基準aliasが別の版へ移りました。今の基準版とは比べていないため、根拠には選んでいません。',
 } as const;
 
 export const promotionDecisionLabels: Record<PromotionDecision, string> = {
@@ -117,6 +121,17 @@ export const promotionDecisionLabels: Record<PromotionDecision, string> = {
   failed: '不合格',
   insufficient: '判定不能',
   skipped: '判定せず',
+};
+
+// Why a criterion could not compare its values (PromotionCriterionResult.reason).
+export const promotionCriterionReasonLabels: Record<PromotionCriterionReason, string> = {
+  candidate_metric_missing: '候補に値がありません',
+  candidate_metric_not_finite: '候補の値がNaN/∞です',
+  baseline_metric_missing: '基準に値がありません',
+  baseline_metric_not_finite: '基準の値がNaN/∞です',
+  baseline_zero: '基準が0のため相対差を計算できません',
+  baseline_missing: '基準版がないため比べていません',
+  baseline_not_evaluated: '基準版に評価がありません',
 };
 
 export const promotionDirectionLabels: Record<PromotionCriterionDirection, string> = {
@@ -164,4 +179,6 @@ export const promotionTextTemplates = {
     mode === 'absolute' ? metric : `${metric}の${promotionModeLabels[mode]}`,
   ruleOption: (ruleName: string, codeVersion: string) => `${ruleName}（${codeVersion}）`,
   reevaluationSequence: (sequence: number) => `再判定 ${sequence - 1}回目`,
+  baselineMovedDetail: (judgedAgainst: string | null, current: string | null) =>
+    `判定時の基準版: ${judgedAgainst ?? 'なし'} / 今の基準版: ${current ?? 'なし'}`,
 };

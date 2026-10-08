@@ -33,11 +33,11 @@ try {
   console.log('Browser check: compact default columns');
   const runTable = page.locator('.runs-page table');
   assert.equal(await runTable.locator('th').filter({ hasText: 'Metrics' }).count(), 2);
-  assert.equal(await runTable.locator('th').filter({ hasText: 'Parameters' }).count(), 2);
+  assert.equal(await runTable.locator('th').filter({ hasText: 'パラメータ' }).count(), 2);
   const headerNames = await runTable.locator('th').allTextContents();
   assert.ok(
     headerNames.findIndex((name) => name.includes('Metrics')) <
-      headerNames.findIndex((name) => name.includes('Parameters')),
+      headerNames.findIndex((name) => name.includes('パラメータ')),
   );
   const metricBounds = await runTable
     .locator('th')
@@ -51,7 +51,7 @@ try {
   await page.getByLabel('metrics.val/loss', { exact: true }).check();
   await page.getByLabel('params.spk_emb', { exact: true }).check();
   assert.equal(await runTable.locator('th').filter({ hasText: 'Metrics' }).count(), 3);
-  assert.equal(await runTable.locator('th').filter({ hasText: 'Parameters' }).count(), 3);
+  assert.equal(await runTable.locator('th').filter({ hasText: 'パラメータ' }).count(), 3);
   await page.getByLabel('metrics.val/loss', { exact: true }).uncheck();
   await page.getByLabel('params.spk_emb', { exact: true }).uncheck();
   await page.locator('.column-menu summary').click();
@@ -92,7 +92,7 @@ try {
   await page.getByRole('button', { name: 'test-upload.txt', exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Logs', exact: true }).click();
   await page.getByText('Browser test log', { exact: true }).waitFor();
-  await page.getByRole('tab', { name: 'Details', exact: true }).click();
+  await page.getByRole('tab', { name: '詳細', exact: true }).click();
   await page.getByRole('button', { name: 'Runを編集' }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('edited-training-test');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
@@ -133,7 +133,7 @@ try {
     .click();
   await page.goto(`${projectBase}/models`);
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await page.getByRole('dialog').getByLabel('Version').fill('v2');
+  await page.getByRole('dialog').getByLabel('版').fill('v2');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: 'v2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Aliasを設定' }).click();
@@ -306,7 +306,7 @@ try {
   await page.goto(`${projectBase}/jobs`);
   await page.getByRole('button', { name: 'ジョブを起動', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Run name').fill('browser-training-launch');
+  await dialog.getByLabel('Run名').fill('browser-training-launch');
   await dialog.getByLabel('Experiments').selectOption(api.state.experiments[0].id);
   await dialog.getByLabel('実行種別').selectOption('training');
   await dialog.getByLabel('モデル版', { exact: true }).selectOption(api.state.modelVersions[0].id);
@@ -365,7 +365,7 @@ try {
   );
   await page.getByRole('link', { name: 'Authentik', exact: true }).click();
   await page.waitForURL(base + returnPath);
-  await page.getByRole('tab', { name: 'Details', exact: true }).waitFor();
+  await page.getByRole('tab', { name: '詳細', exact: true }).waitFor();
   assert.deepEqual(pageErrors, []);
   assert.equal(
     api.state.calls.some((call) => call.path.includes('/worker/')),

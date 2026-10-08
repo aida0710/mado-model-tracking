@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ModelAliasProtection, PromotionEvaluation, PromotionPolicy } from '@mmt/contracts';
 import {
+  hasBaselineMoved,
   currentDecisionsForAlias,
   effectiveAliasProtection,
   meetsProtectionRole,
@@ -113,5 +114,18 @@ describe('保護aliasと昇格の根拠', () => {
     expect(
       promotionEvidenceRequirement({ protection: null, decisions: [], evaluationId: '' }),
     ).toEqual({ evaluationRequired: false, reasonRequired: false });
+  });
+});
+
+describe('判定のあとに基準が変わったか', () => {
+  const policy = { baselineAlias: 'production' };
+
+  it('基準なしの初回合格は、productionが別の版を指した後は今の基準と比べていない', () => {
+    expect(hasBaselineMoved({ baselineVersionId: null }, { policy, aliases: { production: 'v2' } })).toBe(true);
+  });
+
+  it('判定時と同じ版が基準のままなら、根拠に使える', () => {
+    expect(hasBaselineMoved({ baselineVersionId: 'v1' }, { policy, aliases: { production: 'v1' } })).toBe(false);
+    expect(hasBaselineMoved({ baselineVersionId: null }, { policy, aliases: {} })).toBe(false);
   });
 });

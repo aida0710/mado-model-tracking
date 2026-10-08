@@ -2,18 +2,19 @@ import type { ModelVersionDetail } from '@mmt/contracts';
 import { promotionApi } from '../api/promotion';
 import { registryApi } from '../api/registry';
 import { hasActiveRun } from '../lib/automationActivity';
-import { defaultBaselineAlias } from '../lib/evaluationComparisonDisplay';
 import { useCursorPages } from './useCursorPages';
 import { useQuery } from './useQuery';
 import { useQueryPolledWhileActive } from './useQueryPolledWhileActive';
 
 /**
  * The Runs that used a version, the baseline version's evaluations to compare them with, and the
- * promotion decisions made for the version. Pass detail undefined until the version is loaded.
+ * promotion decisions made for the version. Pass detail undefined until the version is loaded;
+ * baselineVersionId is the page's chosen baseline (useEvaluationBaseline).
  */
 export function useModelVersionEvaluations(
   projectId: string,
   detail: ModelVersionDetail | undefined,
+  baselineVersionId: string | null,
 ) {
   const versionId = detail?.version.id ?? null;
   const results = useQueryPolledWhileActive(
@@ -21,8 +22,6 @@ export function useModelVersionEvaluations(
     (signal) => registryApi.modelVersionEvaluations(projectId, versionId!, { signal }),
     (page) => hasActiveRun(page.items),
   );
-  const baselineAlias = detail ? defaultBaselineAlias(detail.model.aliases) : null;
-  const baselineVersionId = baselineAlias ? (detail?.model.aliases[baselineAlias] ?? null) : null;
   // The version compared with itself has no difference to show.
   const comparedVersionId = baselineVersionId !== versionId ? baselineVersionId : null;
   const baselineResults = useQuery(
@@ -40,7 +39,7 @@ export function useModelVersionEvaluations(
   );
   return {
     results,
-    baseline: { alias: baselineAlias, versionId: comparedVersionId, results: baselineResults },
+    baseline: { versionId: comparedVersionId, results: baselineResults },
     promotionEvaluations,
   };
 }

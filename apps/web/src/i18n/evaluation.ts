@@ -24,4 +24,15 @@ export const evaluationText = {
   metricSourceRunLatest: 'Runの最新値',
   metricNotFinite: 'NaN/∞',
   noComparedMetrics: '比較できるメトリクスがありません',
+  baselineChoice: '基準にする版',
+  baselineChoiceAliasGroup: 'aliasで選ぶ',
+  baselineChoiceVersionGroup: '版を直接選ぶ',
+  baselineIsCandidate: '基準がこの版自身なので、差はすべて0になります。別の版を選んでください。',
 } as const;
+
+export const evaluationTextTemplates = {
+  versionLabel: (version: string) => `版 ${version}`,
+  baselineAliasOption: (alias: string, versionLabel: string) => `${alias}（${versionLabel}）`,
+  baselineFallbackHint: (alias: string) =>
+    `${alias} はこの版を指しているため、直前に登録された版を基準にしています。`,
+};

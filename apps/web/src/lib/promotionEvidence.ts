@@ -82,3 +82,16 @@ export function promotionEvidenceRequirement(state: {
     reasonRequired: !state.evaluationId && (state.protection !== null || failedCheck),
   };
 }
+
+/**
+ * Whether the policy's baseline alias now points to another version than the one the decision was
+ * judged against, e.g. a first-release pass (no baseline) after a later version became production.
+ * Such a pass says nothing about the current baseline, so it is not offered as evidence. The API
+ * still accepts it (aliasProtectionService.requirePassedEvidence checks the decision only).
+ */
+export function hasBaselineMoved(
+  decision: Pick<PromotionEvaluation, 'baselineVersionId'>,
+  context: { policy: Pick<PromotionPolicy, 'baselineAlias'>; aliases: Record<string, string> },
+): boolean {
+  return decision.baselineVersionId !== (context.aliases[context.policy.baselineAlias] ?? null);
+}

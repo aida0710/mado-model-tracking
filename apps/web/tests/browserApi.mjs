@@ -542,7 +542,21 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       }
     }
     if (resource === 'jobs') {
-      if (!key && method === 'GET') return list(state.jobs);
+      // GET returns JobListItem: the Job with its Run and Task names (see api-contract.md).
+      if (!key && method === 'GET')
+        return list(
+          state.jobs.map((job) => {
+            const run = state.runs.find((candidate) => candidate.id === job.runId);
+            return {
+              ...job,
+              runName: run?.name ?? job.runId,
+              runKind: run?.kind ?? 'training',
+              taskId: run?.taskId ?? null,
+              taskName: null,
+              sweepEarlyStopped: false,
+            };
+          }),
+        );
       if (!key && method === 'POST') {
         if (state.failNextJob) {
           state.failNextJob = false;

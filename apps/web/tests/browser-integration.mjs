@@ -111,7 +111,7 @@ try {
   await fill('名前', 'UI linear training');
   await submit();
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('Version', 'v1');
+  await fill('版', 'v1');
   await select('ソース形式', 'inline');
   await fill('ファイルのパス', 'main.py');
   await page.getByRole('dialog').getByRole('button', { name: 'ファイルを追加', exact: true }).click();
@@ -131,7 +131,7 @@ try {
   await fill('Family', 'ui-linear');
   await submit();
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('Version', 'v1');
+  await fill('版', 'v1');
   await fill('Artifact ID', weightsArtifact.id);
   await submit();
   await page.getByRole('button', { name: 'v1', exact: true }).waitFor();
@@ -148,7 +148,7 @@ try {
   await fill('Namespace', 'verification');
   await submit();
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('Version', 'v1');
+  await fill('版', 'v1');
   await fill('URI', `artifact://${pointsArtifact.id}`);
   await fill('Digest', `sha256:${pointsArtifact.sha256}`);
   await select('生成元Run', preparationRun.id);
@@ -164,7 +164,7 @@ try {
   const localTarget = targets.find((target) => target.executor === 'local' && target.enabled);
   assert.ok(localTarget, 'The root-managed local executor is required for this verification');
   await page.getByRole('button', { name: 'ジョブを起動', exact: true }).click();
-  await fill('Run name', 'UI training enqueue');
+  await fill('Run名', 'UI training enqueue');
   await select('Experiments', experimentId);
   await select('実行種別', 'training');
   await select('モデル版', modelVersion.id);

@@ -1,6 +1,7 @@
 import type {
   ComputeTarget,
   Job,
+  JobListItem,
   JobRetryRequest,
   Run,
   RunCheckpointPage,
@@ -46,7 +47,7 @@ export const executionApi = {
     request<ComputeTarget>('/targets', jsonRequest('POST', body)),
   updateTarget: (id: string, body: Partial<CreateTarget>) =>
     request<ComputeTarget>(`/targets/${encodeId(id)}`, jsonRequest('PATCH', body)),
-  jobs: (projectId: string, signal?: AbortSignal) => requestItems<Job>(jobPath(projectId), signal),
+  jobs: (projectId: string, signal?: AbortSignal) => requestItems<JobListItem>(jobPath(projectId), signal),
   createJob: (
     projectId: string,
     body: { runId: string; targetId: string; gpuIds: string[]; maxAttempts: number },

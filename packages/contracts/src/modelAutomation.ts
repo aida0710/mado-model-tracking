@@ -28,6 +28,8 @@ export interface ModelAutomationRule {
   // Who runAsUserId is, for display; API responses include them, internal reads may not.
   runAsKind?: UserKind;
   runAsName?: string;
+  // Display name of createdBy, included in API responses like runAsName.
+  createdByName?: string;
   createdAt: string;
 }
 

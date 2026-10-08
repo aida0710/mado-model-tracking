@@ -1,29 +1,25 @@
-import { useState } from 'react';
 import { evaluationApi } from '../api/evaluation';
-import { defaultBaselineAlias } from '../lib/evaluationComparisonDisplay';
+import { encodeBaselineChoice, type BaselineChoice } from '../lib/evaluationBaseline';
 import { useQuery } from './useQuery';
 
+/** The comparison of a version with the chosen baseline. A null choice lets the API use production. */
 export function useEvaluationComparison(target: {
   projectId: string;
   modelId: string;
   candidateVersionId: string;
-  aliases: Record<string, string>;
+  baseline: BaselineChoice | null;
 }) {
-  const { projectId, modelId, candidateVersionId } = target;
-  const [chosenAlias, setChosenAlias] = useState<string | null>(null);
-  // A chosen alias that was removed from the model falls back to the default again.
-  const baselineAlias =
-    chosenAlias !== null && Object.hasOwn(target.aliases, chosenAlias)
-      ? chosenAlias
-      : defaultBaselineAlias(target.aliases);
+  const { projectId, modelId, candidateVersionId, baseline } = target;
   const comparison = useQuery(
-    `${projectId}:${modelId}:${candidateVersionId}:evaluation-comparison:${baselineAlias ?? ''}`,
+    `${projectId}:${modelId}:${candidateVersionId}:evaluation-comparison:${encodeBaselineChoice(baseline)}`,
     (signal) =>
       evaluationApi.comparison(
         { projectId, modelId, candidateVersionId },
-        { baselineAlias: baselineAlias ?? undefined },
+        baseline?.kind === 'version'
+          ? { baselineVersionId: baseline.versionId }
+          : { baselineAlias: baseline?.alias },
         signal,
       ),
   );
-  return { baselineAlias, selectBaselineAlias: setChosenAlias, comparison };
+  return { comparison };
 }

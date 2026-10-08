@@ -40,6 +40,7 @@ export const modelAutomationRuleSchema = namedContractSchema(
     runAsUserId: idSchema,
     runAsKind: z.enum(['human', 'service']).optional(),
     runAsName: z.string().optional(),
+    createdByName: z.string().optional(),
     createdAt: timestampSchema,
   }),
 );

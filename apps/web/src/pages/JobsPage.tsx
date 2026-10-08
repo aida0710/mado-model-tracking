@@ -22,6 +22,9 @@ import { isJobUnresponsive } from '../lib/jobLiveness';
 import { text } from '../i18n/catalog';
 
 const activeStatuses = ['queued', 'claimed', 'running'];
+// The full id stays in the title; eight characters tell Jobs apart in one Project.
+const SHORT_ID_LENGTH = 8;
+const shortId = (id: string) => id.slice(0, SHORT_ID_LENGTH);
 export function JobsPage() {
   const { project, canEdit } = useProject();
   const navigate = useNavigate();
@@ -101,10 +104,11 @@ export function JobsPage() {
             columns={[
               {
                 key: 'id',
-                label: text.jobs,
+                label: text.jobColumn,
                 render: (job) => (
                   <button
                     className="link-button mono"
+                    title={job.id}
                     onClick={() =>
                       setParams((previous) => {
                         const next = new URLSearchParams(previous);
@@ -113,7 +117,7 @@ export function JobsPage() {
                       })
                     }
                   >
-                    {job.id}
+                    {shortId(job.id)}
                   </button>
                 ),
               },
@@ -122,25 +126,29 @@ export function JobsPage() {
                 label: text.status,
                 render: (job) => (
                   <>
-                    <StatusBadge status={job.status} />
+                    <StatusBadge status={job.status} earlyStopped={job.sweepEarlyStopped} />
                     {isJobUnresponsive(job) && (
                       // The red Job status color marks a silent worker; the Job status itself is unchanged.
                       <span className="status-badge status-failed" title={text.jobUnresponsiveHint}>
                         {text.jobUnresponsive}
                       </span>
                     )}
-                    {job.cancelRequested && <small>{text.cancelRequested}</small>}
+                    {job.cancelRequested && !job.sweepEarlyStopped && (
+                      <small>{text.cancelRequested}</small>
+                    )}
                   </>
                 ),
               },
               {
                 key: 'run',
-                label: text.runs,
+                label: text.jobRunColumn,
+                className: 'job-run-cell',
                 render: (job) => (
                   <>
-                    <Link className="mono" to={`/projects/${project.id}/runs/${job.runId}`}>
-                      {job.runId}
+                    <Link to={`/projects/${project.id}/runs/${job.runId}`} title={job.runId}>
+                      {job.runName}
                     </Link>
+                    <small className="muted"> {text[job.runKind]}</small>
                     {resumedRunIds.value?.has(job.runId) && (
                       <span
                         className="status-badge status-running resumed-run-badge"
@@ -151,6 +159,18 @@ export function JobsPage() {
                     )}
                   </>
                 ),
+              },
+              {
+                key: 'task',
+                label: text.task,
+                render: (job) =>
+                  job.taskId ? (
+                    <Link to={`/projects/${project.id}/tasks?id=${job.taskId}`}>
+                      {job.taskName ?? shortId(job.taskId)}
+                    </Link>
+                  ) : (
+                    '—'
+                  ),
               },
               {
                 key: 'target',
@@ -173,7 +193,7 @@ export function JobsPage() {
               { key: 'created', label: text.created, render: (job) => formatDate(job.createdAt) },
               {
                 key: 'actions',
-                label: text.details,
+                label: text.jobActions,
                 render: (job) =>
                   canEdit &&
                   (activeStatuses.includes(job.status) ? (
@@ -192,7 +212,7 @@ export function JobsPage() {
                       >
                         {text.retryJob}
                       </button>
-                      {isResumableStatus(job.status) && (
+                      {isResumableStatus(job.status) && !job.sweepEarlyStopped && (
                         <button
                           className="button small"
                           onClick={() => setJobAction({ id: job.id, type: 'resumeLatest' })}
@@ -209,9 +229,11 @@ export function JobsPage() {
       </Resource>
       {selected && (
         <section className="job-detail">
-          <h2 className="mono">{selected.id}</h2>
+          <h2>{selected.runName}</h2>
           <DetailsList
             entries={[
+              [text.jobColumn, <span className="mono">{selected.id}</span>],
+              [text.status, <StatusBadge status={selected.status} earlyStopped={selected.sweepEarlyStopped} />],
               [text.heartbeat, formatDate(selected.heartbeatAt)],
               [text.exitCode, selected.exitCode],
               [text.jobError, selected.error],
@@ -220,7 +242,9 @@ export function JobsPage() {
           <Resource query={selectedRun}>
             {(run) => (
               <Resource query={sourceArtifacts}>
-                {(artifacts) => <RunExecutionSnapshot run={run} artifacts={artifacts} />}
+                {(artifacts) => (
+                  <RunExecutionSnapshot run={run} artifacts={artifacts} taskName={selected.taskName} />
+                )}
               </Resource>
             )}
           </Resource>

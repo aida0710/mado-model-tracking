@@ -21924,7 +21924,7 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/Job"
+                        "$ref": "#/components/schemas/JobListItem"
                       }
                     }
                   },
@@ -41368,6 +41368,191 @@
         ],
         "additionalProperties": false
       },
+      "JobListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "finished",
+              "failed",
+              "canceled",
+              "claimed"
+            ]
+          },
+          "gpuIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "leaseId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "heartbeatAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "exitCode": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "heartbeatStale": {
+            "type": "boolean"
+          },
+          "runName": {
+            "type": "string"
+          },
+          "runKind": {
+            "type": "string",
+            "enum": [
+              "inference",
+              "evaluation",
+              "training",
+              "finetuning",
+              "processing"
+            ]
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "taskName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sweepEarlyStopped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "runId",
+          "targetId",
+          "status",
+          "gpuIds",
+          "workerId",
+          "leaseId",
+          "cancelRequested",
+          "attempt",
+          "maxAttempts",
+          "createdAt",
+          "startedAt",
+          "endedAt",
+          "heartbeatAt",
+          "exitCode",
+          "error",
+          "heartbeatStale",
+          "runName",
+          "runKind",
+          "taskId",
+          "taskName",
+          "sweepEarlyStopped"
+        ],
+        "additionalProperties": false
+      },
       "JsonObject": {
         "type": "object",
         "propertyNames": {
@@ -42640,6 +42825,9 @@
             ]
           },
           "runAsName": {
+            "type": "string"
+          },
+          "createdByName": {
             "type": "string"
           },
           "createdAt": {

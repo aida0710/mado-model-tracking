@@ -146,6 +146,9 @@
 .job-detail > .details-list {
   max-width: 640px;
 }
+.job-run-cell {
+  min-width: 180px;
+}
 .lineage-legend {
   color: var(--muted);
   margin: 0 0 16px;

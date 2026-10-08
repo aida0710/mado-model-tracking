@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { AutomatedRunSummary, ModelVersionDetail, Run } from '@mmt/contracts';
 import { DetailsList } from './JsonDetails';
 import { LineageGraph } from './LineageGraph';
+import { ModelVersionArtifactLink } from './ModelVersionArtifactLink';
 import { StatusBadge } from './StatusBadge';
 import { formatDate } from '../lib/format';
 import { buildModelVersionLineage, LINEAGE_RESULT_RUN_LIMIT } from '../lib/modelVersionLineage';
@@ -76,9 +77,9 @@ export function ModelVersionSummary({
             ],
             [
               text.weightsUri,
-              <span className="mono break-word">{version.weightsUri ?? '—'}</span>,
+              version.weightsUri ? <span className="mono break-word">{version.weightsUri}</span> : '—',
             ],
-            [text.artifactId, <span className="mono">{version.artifactId ?? '—'}</span>],
+            [text.modelVersionWeightsArtifact, <ModelVersionArtifactLink projectId={projectId} version={version} />],
             [
               text.defaultCode,
               version.defaultCodeVersionId ? (

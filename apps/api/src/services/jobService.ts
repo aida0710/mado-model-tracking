@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import type { ComputeTarget, ExecutionRuntime, Job, Run, WorkerJob } from '@mmt/contracts';
+import type {
+  ComputeTarget,
+  ExecutionRuntime,
+  Job,
+  JobListItem,
+  Run,
+  WorkerJob,
+} from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
@@ -26,6 +33,7 @@ import { JobTokenService } from './jobTokenService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 import { runColumns } from '../repositories/runListProjection.js';
+import { SWEEP_EARLY_STOPPED_TAG } from './sweepController.js';
 import type { JobRetryInput } from '../domain/checkpointValidation.js';
 import {
   findWorkerResumeCheckpoint,
@@ -71,12 +79,17 @@ export class JobService {
     this.jobTokens = options.jobTokens ?? new JobTokenService(options.database);
   }
 
-  async list(principal: Principal, projectId: string): Promise<Job[]> {
+  async list(principal: Principal, projectId: string): Promise<JobListItem[]> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
+    // Every Job has a Run of the same Project; the Task is optional.
     return rows(
       this.database,
-      `SELECT ${jobColumns()} FROM jobs WHERE project_id=$1 ORDER BY created_at DESC`,
-      [projectId],
+      `SELECT ${jobColumns('j')},r.name AS run_name,r.kind AS run_kind,r.task_id,t.name AS task_name,
+        COALESCE(r.tags->>$2='true',false) AS sweep_early_stopped
+      FROM jobs j JOIN runs r ON r.id=j.run_id
+      LEFT JOIN experiment_tasks t ON t.id=r.task_id
+      WHERE j.project_id=$1 ORDER BY j.created_at DESC`,
+      [projectId, SWEEP_EARLY_STOPPED_TAG],
     );
   }
 

@@ -1,20 +1,21 @@
 import { Link } from 'react-router-dom';
 import type { ComputeTarget, ExperimentTask, TaskOutputModel } from '@mmt/contracts';
 import type { ExecutionCatalog } from '../types/executionCatalog';
+import type { SelectOption } from '../types/form';
 import { DetailsList, KeyValues } from './JsonDetails';
 import { CodeRuntimeDetails } from './CodeRuntimeDetails';
-import { hasOutputModel } from '../lib/taskInput';
+import { hasOutputModel, outputModelLabel } from '../lib/taskInput';
+import { buildCatalogOptions } from '../lib/catalogOptions';
 import { text } from '../i18n/catalog';
 
 function OutputModelDetails({ outputModel, catalog, base }: {
   outputModel: TaskOutputModel; catalog: ExecutionCatalog; base: string;
 }) {
-  const model = catalog.models.find((item) => item.id === outputModel.modelId);
   const defaultCode = catalog.codeVersions.find((item) => item.id === outputModel.defaultCodeVersionId);
   return <DetailsList entries={[
     [text.outputModelTarget, outputModel.createModel
-      ? `${text.outputModelCreate}: ${outputModel.createModel.name} · ${outputModel.createModel.family}`
-      : <Link to={`${base}/models?id=${outputModel.modelId}`}>{model ? `${model.name} · ${model.family}` : outputModel.modelId}</Link>],
+      ? `${text.outputModelCreate}: ${outputModelLabel(outputModel, catalog)}`
+      : <Link to={`${base}/models?id=${outputModel.modelId}`}>{outputModelLabel(outputModel, catalog)}</Link>],
     [text.outputModelArtifactPath, <span className="mono">{outputModel.artifactPath}</span>],
     [text.outputModelDefaultCode, outputModel.defaultCodeVersionId
       ? <Link to={`${base}/codes?version=${outputModel.defaultCodeVersionId}`}>{defaultCode?.version ?? outputModel.defaultCodeVersionId}</Link>
@@ -22,11 +23,16 @@ function OutputModelDetails({ outputModel, catalog, base }: {
   ]} />;
 }
 
+// Versions not in the catalog (e.g. from another page of results) keep their id.
+const optionLabel = (options: SelectOption[], id: string) =>
+  options.find((option) => option.value === id)?.label ?? id;
+
 export function TaskDetails({ task, catalog, targets }: {
   task: ExperimentTask; catalog: ExecutionCatalog; targets: ComputeTarget[];
 }) {
   const base = `/projects/${task.projectId}`;
   const code = catalog.codeVersions.find((item) => item.id === task.codeVersionId);
+  const options = buildCatalogOptions(catalog);
   return <div className="task-details" data-testid="task-details">
     {task.description && <p>{task.description}</p>}
     <DetailsList entries={[
@@ -34,8 +40,10 @@ export function TaskDetails({ task, catalog, targets }: {
       [text.experiments, <Link to={`${base}/experiments?experiment=${task.experimentId}`}>{catalog.experiments.find((item) => item.id === task.experimentId)?.name ?? task.experimentId}</Link>],
       [text.kind, text[task.kind]],
       [text.codeVersion, <Link to={`${base}/codes?version=${task.codeVersionId}`}>{code?.version ?? task.codeVersionId}</Link>],
-      [text.modelVersion, task.modelVersionId ? <Link to={`${base}/models?version=${task.modelVersionId}`}>{task.modelVersionId}</Link> : null],
-      [text.inputDatasets, task.inputDatasetVersionIds.map((id) => <Link key={id} className="version-link mono" to={`${base}/datasets?version=${id}`}>{id}</Link>)],
+      [text.modelVersion, task.modelVersionId ? <Link to={`${base}/models?version=${task.modelVersionId}`}>{optionLabel(options.models, task.modelVersionId)}</Link> : null],
+      [text.inputDatasets, task.inputDatasetVersionIds.length
+        ? task.inputDatasetVersionIds.map((id) => <Link key={id} className="version-link" to={`${base}/datasets?version=${id}`}>{optionLabel(options.datasets, id)}</Link>)
+        : null],
       [text.target, targets.find((target) => target.id === task.targetId)?.name ?? task.targetId],
       [text.gpuIds, task.gpuIds.join(', ') || text.cpuOnly],
     ]} />

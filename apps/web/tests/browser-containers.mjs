@@ -49,7 +49,7 @@ try {
   console.log('Browser containers: Docker, command, optional source, digest validation');
   await page.goto(projectBase + '/codes');
   await openNewVersion();
-  await fill('Version', 'docker-v1');
+  await fill('版', 'docker-v1');
   await select('Runtime', 'docker');
   assert.equal(await dialog().getByLabel('ソース形式').inputValue(), 'none');
   assert.equal(await dialog().getByLabel('依存パッケージ（1行に1件）').count(), 0);
@@ -93,7 +93,7 @@ try {
   };
   api.state.artifacts.push(storedSif);
   await openNewVersion();
-  await fill('Version', 'singularity-v1');
+  await fill('版', 'singularity-v1');
   await select('Runtime', 'singularity');
   api.state.failProjectArtifacts = true;
   await fill('Artifactを検索', 'stored.sif');
@@ -130,7 +130,7 @@ try {
   });
   assert.equal(singularityVersion.source.kind, 'inline');
   await openNewVersion();
-  await fill('Version', 'apptainer-v1');
+  await fill('版', 'apptainer-v1');
   await select('Runtime', 'apptainer');
   await dialog().getByRole('button', { name: 'Artifactをアップロード', exact: true }).click();
   await dialog()
@@ -181,7 +181,7 @@ try {
     .waitFor();
   await page.goto(projectBase + '/jobs');
   await page.getByRole('button', { name: 'ジョブを起動', exact: true }).click();
-  await fill('Run name', 'Container launch');
+  await fill('Run名', 'Container launch');
   await select('Experiments', api.state.experiments[0].id);
   await select('コード版', dockerVersion.id);
   await dialog().getByRole('button', { name: '次へ', exact: true }).click();
@@ -235,7 +235,7 @@ try {
   await select('Compute target', containerTarget.id);
   await select('GPU ID · CPUのみ', '0');
   await select('入力データセット版', api.state.datasetVersions[0].id);
-  await fill('Parameters（JSON）', '{"batch_size":4}');
+  await fill('パラメータ（JSON）', '{"batch_size":4}');
   await fill('Tags（JSON）', '{"suite":"regression"}');
   api.state.failNextAutomation = true;
   await dialog().getByRole('button', { name: '作成', exact: true }).click();

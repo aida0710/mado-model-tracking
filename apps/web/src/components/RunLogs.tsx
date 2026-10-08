@@ -3,6 +3,7 @@ import type { LogEntry } from '@mmt/contracts';
 import { Empty } from './Feedback';
 import { formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
+import { logLevelLabels } from '../i18n/jobs';
 
 export function RunLogs({ entries }: { entries: LogEntry[] }) {
   const [level, setLevel] = useState('');
@@ -15,9 +16,11 @@ export function RunLogs({ entries }: { entries: LogEntry[] }) {
           value={level}
           onChange={(event) => setLevel(event.target.value)}
         >
-          <option value="">{text.allStatus}</option>
-          {['info', 'warning', 'error'].map((value) => (
-            <option key={value}>{value}</option>
+          <option value="">{text.logLevelAll}</option>
+          {(['info', 'warning', 'error'] as const).map((value) => (
+            <option key={value} value={value}>
+              {logLevelLabels[value]}
+            </option>
           ))}
         </select>
       </label>
@@ -28,7 +31,7 @@ export function RunLogs({ entries }: { entries: LogEntry[] }) {
             .map((entry, index) => (
               <div className={`log-entry log-${entry.level}`} key={`${entry.timestamp}-${index}`}>
                 <time>{formatDate(entry.timestamp)}</time>
-                <span className="log-level">{entry.level}</span>
+                <span className="log-level">{logLevelLabels[entry.level] ?? entry.level}</span>
                 <span>{entry.message}</span>
               </div>
             ))}

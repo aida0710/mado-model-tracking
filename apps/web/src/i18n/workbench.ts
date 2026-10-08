@@ -6,7 +6,7 @@ export const workbenchText = {
   newTask: 'Taskを作成',
   editTask: 'Taskを編集',
   noTasks: 'Taskはまだありません',
-  taskRevision: 'Task revision',
+  taskRevision: 'Taskの改訂番号',
   taskHistory: '実行履歴',
   noTaskRuns: 'このTaskの実行履歴はまだありません',
   launchRun: '通常実行',
@@ -17,7 +17,7 @@ export const workbenchText = {
   taskLaunch: 'Taskからジョブを起動',
   taskCodeError: 'このプロジェクトの実行種別とモデル系列に対応するコード版を選択してください。',
   taskReferenceError: 'このプロジェクトの実験、モデル版、データセット版を選択してください。',
-  taskParameterOverrides: 'Parametersの上書き（JSON）',
+  taskParameterOverrides: 'パラメータの上書き（JSON）',
   testCommandRequired: 'テスト実行にはコード版へテストコマンドを保存してください。',
   testEntrypoint: 'テストコマンド（引数のJSON配列・任意）',
   commandSizeError: '実行コマンドは100引数以内、1引数4000文字以内で指定してください。',
@@ -87,6 +87,10 @@ export const workbenchText = {
   outputModelArtifactPath: 'Artifactのパス',
   outputModelDefaultCode: '登録する版の既定コード版',
   outputModelDisabled: '登録しない',
+  outputModelModel: '登録先のモデル',
+  gpuNoneOnTarget: 'このCompute targetにはGPUがないため、CPUのみで実行します。',
+  gpuSelectTargetFirst: 'Compute targetを選ぶと、使えるGPU IDを選べます。',
+  taskLaunchNoRegistration: '成功しても、このTaskからモデル版は登録しません。',
   outputModelTargetError: '登録先のモデル、または新しいモデルの名前と系列を指定してください。',
   outputModelFamilyError: '選択したコード版が対応する系列を指定してください。',
   outputModelCodeError: '既定コード版は、このプロジェクトでモデルの系列に対応する版を選択してください。',
@@ -107,4 +111,10 @@ export const outputRegistrationErrorLabels: Record<string, string> = {
   version_conflict: '同じ版名の版が既にあります',
   creator_access_revoked: 'Runの作成者がこのプロジェクトの権限を失っています',
   registration_failed: '登録中にエラーが発生しました',
+};
+
+// Text that embeds values.
+export const workbenchTextTemplates = {
+  taskLaunchRegistration: (modelLabel: string) =>
+    `成功すると「${modelLabel}」にモデル版を登録します。その系列を対象にした自動実行ルールがあれば、登録した版で推論・評価が続けて自動で動きます。`,
 };

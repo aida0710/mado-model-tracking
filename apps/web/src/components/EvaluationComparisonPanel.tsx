@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import type {
   EvaluationComparison,
@@ -5,14 +6,20 @@ import type {
   MetricComparison,
   MetricValueSource,
   Model,
+  ModelVersion,
 } from '@mmt/contracts';
 import type { useEvaluationComparison } from '../hooks/useEvaluationComparison';
+import type { EvaluationBaseline } from '../hooks/useEvaluationBaseline';
+import { decodeBaselineChoice, encodeBaselineChoice } from '../lib/evaluationBaseline';
+import { isSystemMetricKey } from '../lib/systemMetricKeys';
 import {
+  defaultBaselineAlias,
   formatDelta,
   formatMetricValue,
   formatRelativeDelta,
 } from '../lib/evaluationComparisonDisplay';
 import { text } from '../i18n/catalog';
+import { evaluationTextTemplates } from '../i18n/evaluation';
 import { DataTable } from './DataTable';
 import { Resource } from './Feedback';
 import { DetailsList } from './JsonDetails';
@@ -40,9 +47,11 @@ function RunLink({ projectId, runId }: { projectId: string; runId: string | null
 function ComparisonConditions({
   projectId,
   comparison,
+  versionLabel,
 }: {
   projectId: string;
   comparison: EvaluationComparison;
+  versionLabel: (versionId: string) => string;
 }) {
   return (
     <DetailsList
@@ -54,7 +63,7 @@ function ComparisonConditions({
               className="mono"
               to={`/projects/${projectId}/models?version=${comparison.baselineVersionId}`}
             >
-              {comparison.baselineVersionId}
+              {versionLabel(comparison.baselineVersionId)}
             </Link>
           ) : (
             '—'
@@ -143,41 +152,86 @@ function MetricComparisonTable({ metrics }: { metrics: MetricComparison[] }) {
 }
 
 /**
- * Compares a model version's latest evaluation with the evaluation of the version a baseline alias
- * points to, under the same reference set and evaluation code. Placed on a page by its owner.
+ * Compares a model version's latest evaluation with the evaluation of a baseline version, chosen
+ * by an alias or directly, under the same reference set and evaluation code. Placed on a page by
+ * its owner, which also owns the baseline choice so that the metric summary uses the same one.
  */
 export function EvaluationComparisonPanel({
   projectId,
   model,
+  candidateVersionId,
+  versions,
+  versionLabel,
+  baseline,
   evaluationComparison,
 }: {
   projectId: string;
   model: Pick<Model, 'aliases'>;
+  candidateVersionId: string;
+  versions: readonly ModelVersion[];
+  versionLabel: (versionId: string) => string;
+  baseline: EvaluationBaseline;
   // From useEvaluationComparison on the page, so that the page's reload refreshes it.
   evaluationComparison: ReturnType<typeof useEvaluationComparison>;
 }) {
-  const { baselineAlias, selectBaselineAlias, comparison } = evaluationComparison;
+  const { comparison } = evaluationComparison;
+  const selectId = useId();
   const aliasNames = Object.keys(model.aliases).sort();
+  const otherVersions = versions.filter((version) => version.id !== candidateVersionId);
+  const defaultAlias = defaultBaselineAlias(model.aliases);
+  const fellBackFromAlias =
+    baseline.isDefault &&
+    baseline.choice?.kind === 'version' &&
+    defaultAlias !== null &&
+    model.aliases[defaultAlias] === candidateVersionId;
   return (
     <section className="automation-panel" aria-label={text.evaluationComparison}>
       <div className="section-heading">
         <h2>{text.evaluationComparison}</h2>
       </div>
-      <label className="field">
-        <span>{text.baselineAlias}</span>
+      <div className="field">
+        <label htmlFor={selectId}>{text.baselineChoice}</label>
         <select
-          value={baselineAlias ?? ''}
-          disabled={!aliasNames.length}
-          onChange={(event) => selectBaselineAlias(event.target.value)}
+          id={selectId}
+          value={encodeBaselineChoice(baseline.choice)}
+          disabled={!aliasNames.length && !otherVersions.length}
+          onChange={(event) => baseline.select(decodeBaselineChoice(event.target.value))}
         >
-          {!aliasNames.length && <option value="">{text.noModelAliases}</option>}
-          {aliasNames.map((alias) => (
-            <option key={alias} value={alias}>
-              {alias}
-            </option>
-          ))}
+          {!baseline.choice && <option value="">{text.noModelAliases}</option>}
+          {aliasNames.length > 0 && (
+            <optgroup label={text.baselineChoiceAliasGroup}>
+              {aliasNames.map((alias) => (
+                <option key={alias} value={encodeBaselineChoice({ kind: 'alias', alias })}>
+                  {evaluationTextTemplates.baselineAliasOption(
+                    alias,
+                    versionLabel(model.aliases[alias]!),
+                  )}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {otherVersions.length > 0 && (
+            <optgroup label={text.baselineChoiceVersionGroup}>
+              {otherVersions.map((version) => (
+                <option
+                  key={version.id}
+                  value={encodeBaselineChoice({ kind: 'version', versionId: version.id })}
+                >
+                  {versionLabel(version.id)}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
-      </label>
+      </div>
+      {fellBackFromAlias && defaultAlias && (
+        <p className="muted">{evaluationTextTemplates.baselineFallbackHint(defaultAlias)}</p>
+      )}
+      {baseline.versionId === candidateVersionId && (
+        <div className="notice" role="status">
+          <span>{text.baselineIsCandidate}</span>
+        </div>
+      )}
       <Resource query={comparison}>
         {(value) => (
           <>
@@ -187,8 +241,14 @@ export function EvaluationComparisonPanel({
               </div>
             )}
             <h3>{text.comparisonConditions}</h3>
-            <ComparisonConditions projectId={projectId} comparison={value} />
-            <MetricComparisonTable metrics={value.metrics} />
+            <ComparisonConditions
+              projectId={projectId}
+              comparison={value}
+              versionLabel={versionLabel}
+            />
+            <MetricComparisonTable
+              metrics={value.metrics.filter((metric) => !isSystemMetricKey(metric.key))}
+            />
           </>
         )}
       </Resource>

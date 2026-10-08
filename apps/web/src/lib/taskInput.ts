@@ -19,6 +19,17 @@ export const DEFAULT_OUTPUT_MODEL_ARTIFACT_PATH = 'model/weights.json';
 
 export const hasOutputModel = (kind: RunKind) => OUTPUT_MODEL_KINDS.includes(kind);
 
+/** The Model a Task registers into: an existing one by name, or the one it will create. */
+export function outputModelLabel(
+  outputModel: Pick<TaskOutputModel, 'modelId' | 'createModel'>,
+  catalog: Pick<ExecutionCatalog, 'models'>,
+): string {
+  if (outputModel.createModel)
+    return `${outputModel.createModel.name} · ${outputModel.createModel.family}`;
+  const model = catalog.models.find((item) => item.id === outputModel.modelId);
+  return model ? `${model.name} · ${model.family}` : (outputModel.modelId ?? '');
+}
+
 function createOutputModelValues(outputModel: TaskOutputModel | null | undefined): FormValues {
   return {
     outputModelEnabled: String(!!outputModel),

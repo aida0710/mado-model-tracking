@@ -2,7 +2,8 @@ import type { ComputeTarget, ExperimentTask, ExecutionMode, TaskExecution } from
 import type { ExecutionCatalog } from '../types/executionCatalog';
 import { useProject } from '../hooks/useProject';
 import { useTaskLaunchForm } from '../hooks/useTaskLaunchForm';
-import { getExecutionCommand } from '../lib/taskInput';
+import { getExecutionCommand, hasOutputModel, outputModelLabel } from '../lib/taskInput';
+import { workbenchTextTemplates } from '../i18n/workbench';
 import { Dialog } from '../components/Dialog';
 import { TaskFields } from '../components/TaskFields';
 import { DetailsList, KeyValues } from '../components/JsonDetails';
@@ -24,8 +25,11 @@ export function TaskLaunchDialog({ task, initialMode, catalog, targets, onClose,
     }} data-testid="task-launch-form">
       <DetailsList entries={[[text.taskRevision, task.revision], [text.codeVersion, code?.version],
         [text.entrypoint, <code className="break-word">{JSON.stringify(code ? getExecutionCommand(code, mode) : [])}</code>]]} />
+      {hasOutputModel(task.kind) && mode === 'run' && <p className="notice" data-testid="task-launch-registration">
+        {task.outputModel ? workbenchTextTemplates.taskLaunchRegistration(outputModelLabel(task.outputModel, catalog)) : text.taskLaunchNoRegistration}
+      </p>}
       <fieldset disabled={form.pending}>
-        <details><summary>{text.parameters}</summary><KeyValues values={task.parameters} /></details>
+        <details className="form-details"><summary>{text.parameters}</summary><KeyValues values={task.parameters} /></details>
         <label className="field"><span>{text.executionMode}</span>
           <select aria-label={text.executionMode} value={mode} onChange={(event) => form.changeMode(event.target.value as ExecutionMode)}>
             <option value="run">{text.runMode}</option><option value="test" disabled={!code?.testEntrypoint?.length}>{text.testMode}</option>

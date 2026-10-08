@@ -106,3 +106,11 @@
     font-size: 11px;
   }
 }
+/* A field that has nothing to choose explains why in place of the control. */
+.field-note {
+  margin: 0;
+}
+/* A collapsible block inside a form keeps the same distance to the next field as a field does. */
+.form-details {
+  margin-bottom: 16px;
+}

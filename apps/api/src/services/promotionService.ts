@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type {
-  PromotionCriterionResult,
   PromotionEvaluation,
   PromotionEvaluationPage,
   PromotionPolicy,
@@ -11,6 +10,7 @@ import { transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { evaluateCriteria } from '../domain/promotionCriteria.js';
 import { MAX_MODEL_ALIAS_REASON_LENGTH } from '../domain/modelAliasValidation.js';
+import { describeCriterionResult } from '../domain/promotionReasonText.js';
 import type {
   PromotionEvaluationQuery,
   PromotionPolicyInput,
@@ -105,11 +105,6 @@ async function readPromotionAliases(
           alias: policy.targetAlias,
         });
   return { baselineVersionId, targetVersionId };
-}
-
-function describeCriterionResult(result: PromotionCriterionResult): string {
-  const comparator = result.direction === 'higher' ? '≥' : '≤';
-  return `${result.metric}(${result.mode})=${result.observed ?? '-'}${comparator}${result.threshold}`;
 }
 
 /** The alias event's reason: which policy passed the version and on what numbers. */

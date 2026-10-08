@@ -1567,7 +1567,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     tag: 'execution',
     summary: 'Job一覧',
     access: PROJECT_VIEWER,
-    responses: { 200: contract.itemsOf(contract.jobSchema) },
+    responses: { 200: contract.itemsOf(contract.jobListItemSchema) },
   },
   {
     method: 'post',

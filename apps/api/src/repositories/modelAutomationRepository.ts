@@ -311,9 +311,12 @@ export async function hasAutomationOwnerAccess(
   return owner?.hasAccess === true;
 }
 
-// API responses name the owner, so the page can tell a person from a Service Account.
-const ruleWithOwnerSelect = `SELECT r.*,u.kind AS run_as_kind,u.display_name AS run_as_name
-  FROM model_automation_rules r JOIN users u ON u.id=r.run_as_user_id`;
+// API responses name the owner, so the page can tell a person from a Service Account, and the
+// creator, so the rule detail does not show a bare user id.
+const ruleWithOwnerSelect = `SELECT r.*,u.kind AS run_as_kind,u.display_name AS run_as_name,
+  c.display_name AS created_by_name
+  FROM model_automation_rules r JOIN users u ON u.id=r.run_as_user_id
+  LEFT JOIN users c ON c.id=r.created_by`;
 
 export async function listAutomationRules(
   connection: Connection,

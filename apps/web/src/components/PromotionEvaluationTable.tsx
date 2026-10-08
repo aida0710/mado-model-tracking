@@ -14,7 +14,11 @@ import {
   formatMetricValue,
   formatRelativeDelta,
 } from '../lib/evaluationComparisonDisplay';
-import { promotionDecisionLabels, promotionTextTemplates } from '../i18n/promotion';
+import {
+  promotionCriterionReasonLabels,
+  promotionDecisionLabels,
+  promotionTextTemplates,
+} from '../i18n/promotion';
 import { text } from '../i18n/catalog';
 
 // Decisions reuse the Run status colors: passed reads as finished, failed as failed.
@@ -55,6 +59,18 @@ const criterionOutcomeLabel: Record<PromotionCriterionOutcome, string> = {
   insufficient: text.promotionCriterionInsufficient,
 };
 
+// A criterion that passed without comparing (no baseline version on a first release) is not shown
+// in the passed color: nothing was measured against its threshold.
+function CriterionOutcome({ result }: { result: PromotionCriterionResult }) {
+  if (result.outcome === 'passed' && result.observed === null)
+    return <span className="muted">{text.promotionCriterionNotCompared}</span>;
+  return (
+    <span className={criterionOutcomeClass[result.outcome]}>
+      {criterionOutcomeLabel[result.outcome]}
+    </span>
+  );
+}
+
 function formatComparedValue(result: PromotionCriterionResult): string {
   if (result.mode === 'relative_delta') return formatRelativeDelta(result.observed);
   if (result.mode === 'delta') return formatDelta(result.observed);
@@ -68,9 +84,7 @@ export function CriterionResults({ results }: { results: PromotionCriterionResul
     <ul className="promotion-criterion-results">
       {results.map((result, index) => (
         <li key={`${result.metric}-${index}`}>
-          <span className={criterionOutcomeClass[result.outcome]}>
-            {criterionOutcomeLabel[result.outcome]}
-          </span>{' '}
+          <CriterionOutcome result={result} />{' '}
           <span className="mono">{summarizeCriterion(result)}</span>
           {' : '}
           <span className="mono">{formatComparedValue(result)}</span>
@@ -89,7 +103,9 @@ export function CriterionResults({ results }: { results: PromotionCriterionResul
               )
             </span>
           )}
-          {result.reason && <span className="muted mono"> {result.reason}</span>}
+          {result.reason && (
+            <span className="muted"> {promotionCriterionReasonLabels[result.reason] ?? result.reason}</span>
+          )}
         </li>
       ))}
     </ul>
