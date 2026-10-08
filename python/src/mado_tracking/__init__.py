@@ -13,6 +13,7 @@ from .execution_runtime import (
     SifRuntime,
 )
 from .execution_snapshot import ExecutionMode
+from .media import Audio, Image, Table, Video, artifact_reference
 from .offline.transport import RunMode, resolve_mode
 from .run import Run
 from .sweeps import SweepsClient, trial_parameters
@@ -20,18 +21,23 @@ from .upstream import download_upstream_artifacts, list_upstream_artifacts, upst
 
 __all__ = [
     "ApiError",
+    "Audio",
     "Client",
     "ConfigurationError",
     "DockerRuntime",
     "ExecutionMode",
     "ExecutionRuntime",
     "ExecutionRuntimeKind",
+    "Image",
     "PythonRuntime",
     "ResumeMode",
     "Run",
     "RunMode",
     "SifRuntime",
     "SweepsClient",
+    "Table",
+    "Video",
+    "artifact_reference",
     "download_upstream_artifacts",
     "list_upstream_artifacts",
     "start_run",

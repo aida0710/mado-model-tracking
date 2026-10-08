@@ -12,7 +12,10 @@ dependencies = ["httpx>=0.27,<1"]
 
 [project.optional-dependencies]
 telemetry = ["psutil>=5.9,<8", "nvidia-ml-py>=12,<14"]
-test = ["pytest>=8,<10", "mypy>=1.11,<2", "ruff>=0.9,<1"]
+# Optional: Run.log_audio / log_image accept numpy arrays and PIL images when these are installed.
+media = ["numpy>=1.24", "Pillow>=10"]
+# The tests encode numpy arrays and PIL images, so they install the media extra's packages too.
+test = ["pytest>=8,<10", "mypy>=1.11,<2", "ruff>=0.9,<1", "numpy>=1.24", "Pillow>=10"]
 
 [project.scripts]
 mado-tracking = "mado_tracking.cli:main"
