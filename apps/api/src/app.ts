@@ -10,6 +10,7 @@ import type { ApiConfig } from './config.js';
 import type { Database } from './db/database.js';
 import { DomainError } from './domain/errors.js';
 import { authentication } from './http/authMiddleware.js';
+import { isAllowedOrigin } from './http/originPolicy.js';
 import { principal, type ApiEnvironment } from './http/request.js';
 import { AuthService } from './services/authService.js';
 import { ArtifactService } from './services/artifactService.js';
@@ -100,8 +101,7 @@ export function createApplication(options: ApplicationOptions) {
   app.use(
     '/api/*',
     cors({
-      origin: (origin) =>
-        [config.webOrigin, config.publicUrl].includes(origin) ? origin : undefined,
+      origin: (origin) => (isAllowedOrigin(origin, config) ? origin : undefined),
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Content-Type', 'Authorization', 'Range'],

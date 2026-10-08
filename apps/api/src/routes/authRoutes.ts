@@ -17,7 +17,7 @@ export function authRoutes(auth: AuthService): Hono<ApiEnvironment> {
   );
   routes.get('/me', (context) => context.json({ user: principal(context).user }));
   routes.post('/dev-login', async (context) => {
-    validateOrigin(context.req.header('Origin'), [auth.config.webOrigin, auth.config.publicUrl]);
+    validateOrigin(context.req.header('Origin'), auth.config);
     const input = await jsonBody(
       context,
       z.strictObject({
@@ -71,7 +71,7 @@ export function authRoutes(auth: AuthService): Hono<ApiEnvironment> {
     return context.redirect(auth.config.webOrigin);
   });
   routes.post('/logout', async (context) => {
-    validateOrigin(context.req.header('Origin'), [auth.config.webOrigin, auth.config.publicUrl]);
+    validateOrigin(context.req.header('Origin'), auth.config);
     await auth.logout(getCookie(context, SESSION_COOKIE));
     deleteCookie(context, SESSION_COOKIE, { path: '/', secure: auth.config.secureCookies });
     return context.body(null, 204);

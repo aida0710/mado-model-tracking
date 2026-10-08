@@ -15,6 +15,7 @@ const environmentSchema = z.object({
   AUTH_MODE: z.enum(['oidc', 'development']).default('oidc'),
   MMT_PUBLIC_URL: z.url().default('http://127.0.0.1:4182'),
   MMT_WEB_ORIGIN: z.url().default('http://127.0.0.1:5182'),
+  MMT_ALLOW_PRIVATE_ORIGINS: z.enum(['true', 'false']).default('false'),
   OIDC_ISSUER_URL: optionalUrl,
   OIDC_CLIENT_ID: optionalSetting,
   OIDC_CLIENT_SECRET: optionalSetting,
@@ -35,6 +36,7 @@ export interface ApiConfig {
   authMode: 'oidc' | 'development';
   publicUrl: string;
   webOrigin: string;
+  allowPrivateOrigins: boolean;
   secureCookies: boolean;
   oidc: {
     issuer: string;
@@ -106,6 +108,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     authMode: settings.AUTH_MODE,
     publicUrl: publicUrl.origin,
     webOrigin: webUrl.origin,
+    allowPrivateOrigins: settings.MMT_ALLOW_PRIVATE_ORIGINS === 'true',
     secureCookies: publicUrl.protocol === 'https:',
     oidc,
     developmentAdminEmail: settings.DEVELOPMENT_ADMIN_EMAIL.toLowerCase(),

@@ -21,6 +21,10 @@ OIDC_ADMIN_GROUP=mmt-admins
 
 Web sessionはHttpOnly/SameSite=Lax cookieで12時間。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを削除します。Authentik全体のsession logout、SCIM、back-channel logoutは提供しません。
 
+LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します。CORS、ログイン/logout、sessionの変更操作で同じ判定を使い、HTTP(S)のIPv4 private・loopback・link-local・CGNAT、IPv6 ULA・loopback・link-localとlocalhostを許可します。設定省略時はfalseです。DNS名で使う場合は`MMT_WEB_ORIGIN`と`MMT_PUBLIC_URL`へ実際のURLを設定してください。Originが欠落/nullの場合や、許可されていないpublic IP・DNS名は拒否します。Bearer API tokenは従来どおりOriginなしで使えます。
+
+開発Webはport5182でLANから接続できます。`/api`はloopbackのAPI4182へproxyします。Authentikのcallbackは`MMT_PUBLIC_URL`の固定URLを使うので、SSOで使うURLはProviderにも完全一致で登録します。
+
 初回に管理者がloginしProjectを作成します。メンバーは一度SSOでloginするとユーザーIDが作られ、Projectの設定からそのIDでviewer/editor/adminを付けられます。API tokenは発行時のscopeに加え、その所有者の現在のProject membershipを確認します。
 
 ## Artifacts

@@ -27,6 +27,8 @@ npm run dev
 
 [http://127.0.0.1:5182](http://127.0.0.1:5182)を開き、開発ログインします。初期状態は空です。ProjectとExperimentを登録して使い始めます。確認用データを入れる場合だけ`.env`に`MMT_ALLOW_SEED=true`を設定して`npm run db:seed`を実行します。開発ログイン・seed・local executorは本番で無効です。
 
+LANからは`http://<このマシンのprivate IP>:5182`を開けます。`.env.example`は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定しています。既存の.envにも追加し、APIを再起動してください。許可範囲とSSOの固定URLは[運用手順](docs/operations.md)にあります。
+
 CPUだけで実行を試す場合は`MMT_ALLOW_LOCAL_EXECUTOR=true`にし、local targetを登録します。[workerの手順](docs/worker.md)に従ってProject用Service Account tokenでworkerを起動します。実際のGPU実行ではSSH target、GPU ID、秘密鍵とknown_hostsをworker側に用意します。
 
 ## 管理するもの

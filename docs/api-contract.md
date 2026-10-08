@@ -6,6 +6,8 @@
 
 prefix `/api`。WebはHttpOnly session cookie、SDKはBearer token。Cookieによる変更はOrigin検証。viewer=読む、editor=実験/登録/実行、admin=project設定/メンバー/token/plugin。API tokenはscopeとproject membershipを両方確認する。
 
+Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALLOW_PRIVATE_ORIGINS=true`ならHTTP(S)のprivate/local/VPN IPとlocalhostも許可する。CORS・開発login/logout・sessionの変更で同じ判定を使う。設定省略時はfalse。null/欠落や未許可のOriginはsession変更操作で403 `invalid_origin`。BearerリクエストはOrigin不要。許可範囲とSSOの固定callbackは[運用手順](operations.md)を参照する。
+
 - `GET /health` → `{status:'ok'}`。DB障害は503。
 - `GET /auth/config` → AuthConfig。`GET /auth/me` → `{user:User}` (未認証401)。`POST /auth/dev-login` → `{user}`はdevelopment modeだけ。`GET /auth/login` / `GET /auth/callback` / `POST /auth/logout`。
 - `GET /projects` / `POST /projects` (name,description?,artifactBackend?) / `PATCH /projects/:id` (description?,artifactBackend?)。
