@@ -5,6 +5,8 @@ import { computeText } from './compute';
 import { runsText, runsTextTemplates } from './runs';
 import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
+import { storageText, storageTextTemplates } from './storage';
+import { adminText } from './admin';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -29,6 +31,7 @@ export const lineageRelationLabels: Record<string, string> = {
 // Text that embeds values. Kept apart from `text` so every `text` entry stays a plain string.
 export const textTemplates = {
   ...runsTextTemplates,
+  ...storageTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -42,6 +45,8 @@ export const text = {
   ...evaluationText,
   ...computeText,
   ...runsText,
+  ...storageText,
+  ...adminText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

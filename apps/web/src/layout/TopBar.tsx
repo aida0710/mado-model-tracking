@@ -23,6 +23,7 @@ const screens = [
 ] as const;
 
 export const ACCOUNT_PASSWORD_PATH = '/account/password';
+export const ADMIN_PATH = '/admin';
 
 /** The header: screen navigation for the open Project, theme, the signed-in user and logout. */
 export function TopBar({
@@ -57,6 +58,7 @@ export function TopBar({
                   {text[screen]}
                 </NavLink>
               ))}
+          {isGlobalAdmin(auth.user) && <NavLink to={ADMIN_PATH}>{text.administration}</NavLink>}
         </nav>
         <div className="topbar-actions">
           <button

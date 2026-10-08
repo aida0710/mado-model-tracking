@@ -10,7 +10,8 @@ export type ProjectRole = 'viewer' | 'editor' | 'admin';
 export type RunKind = 'inference' | 'evaluation' | 'training' | 'finetuning' | 'processing';
 export type RunStatus = 'queued' | 'running' | 'finished' | 'failed' | 'canceled';
 export type JobStatus = RunStatus | 'claimed';
-export type ArtifactBackend = 'filesystem' | 's3';
+// Immutable backend name: 'filesystem' and 's3' from the environment, or one stored in the DB.
+export type ArtifactBackend = string;
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
@@ -29,6 +30,7 @@ export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, Artifa
 export type { RunSearchPage, RunSearchRequest } from './runSearch.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
+export type { StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

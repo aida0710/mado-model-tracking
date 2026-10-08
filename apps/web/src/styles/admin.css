@@ -70,3 +70,115 @@
     gap: 24px;
   }
 }
+
+/* Global administration (/admin): storage backends and the Project backend picker. */
+.admin-storage .table-scroll {
+  margin-bottom: 16px;
+}
+.storage-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.storage-tag {
+  display: inline-block;
+  border-radius: 10px;
+  padding: 2px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.storage-tag.storage-default {
+  background: var(--teal-tint);
+  color: var(--teal-strong);
+}
+.storage-location code {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.storage-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+.storage-row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.storage-actions {
+  text-align: right;
+}
+.storage-test-result {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.storage-test-result h3 {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.storage-test-summary {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.storage-test-summary.ok,
+.storage-test-result li.ok svg {
+  color: var(--success);
+}
+.storage-test-summary.ng,
+.storage-test-result li.ng svg,
+.storage-test-result li.ng strong {
+  color: var(--error);
+}
+.storage-test-result ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.storage-test-result li {
+  display: grid;
+  grid-template-columns: 16px 12em 3em minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.storage-test-error {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.storage-picker {
+  border: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  min-width: 0;
+}
+.storage-picker legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.storage-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-bottom-width: 0;
+}
+.storage-picker-option:last-of-type {
+  border-bottom-width: 1px;
+}
+.storage-picker-option:has(input:checked) {
+  background: var(--surface);
+}
+.storage-picker-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

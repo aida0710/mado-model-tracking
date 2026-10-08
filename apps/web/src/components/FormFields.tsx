@@ -81,6 +81,8 @@ export function FormFields({
                   value={value}
                   required={field.required}
                   readOnly={field.readOnly}
+                  // Keeps the browser from filling a saved login password into a secret field.
+                  autoComplete={field.type === 'password' ? 'new-password' : undefined}
                   min={field.min}
                   max={field.max}
                   maxLength={field.maxLength}

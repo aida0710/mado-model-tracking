@@ -290,7 +290,8 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       return reply({ ok: true });
     }
     if (!state.loggedIn) return reply({ error: 'Unauthorized' }, 401);
-    if (path === '/storage/backends') return list(['filesystem', 's3']);
+    if (path === '/storage/backends')
+      return reply({ items: ['filesystem', 's3'], defaultBackend: 'filesystem' });
     if (path === '/projects' && method === 'GET') return list([project]);
     if (path === `/projects/${project.id}` && method === 'PATCH') {
       Object.assign(project, body);
