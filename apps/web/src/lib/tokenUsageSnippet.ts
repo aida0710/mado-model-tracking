@@ -32,6 +32,59 @@ export function buildTokenUsageSnippet(settings: {
     `export MMT_PROJECT_ID=${shellQuote(settings.projectId)}`,
     `export MMT_API_TOKEN=${shellQuote(settings.token)}`,
   ];
+  return joinLines(lines);
+}
+
+/** What the MLflow connection card on the settings page offers to copy. */
+export interface MlflowConnectionSnippets {
+  trackingUri: string;
+  // The Model Registry lives under the same Project URL as tracking.
+  registryUri: string;
+  bearerEnvironment: string;
+  basicEnvironment: string;
+  python: string;
+}
+
+/**
+ * Settings shown before any token exists, so the token is read from the terminal with `read -s`
+ * instead of being written into the snippet, the shell history or the page.
+ */
+export function buildMlflowConnectionSnippets(settings: {
+  origin: string;
+  projectId: string;
+}): MlflowConnectionSnippets {
+  const trackingUri = mlflowTrackingUri(settings.origin, settings.projectId);
+  const uriLines = [
+    `export MLFLOW_TRACKING_URI=${shellQuote(trackingUri)}`,
+    `export MLFLOW_REGISTRY_URI=${shellQuote(trackingUri)}`,
+  ];
+  return {
+    trackingUri,
+    registryUri: trackingUri,
+    bearerEnvironment: joinLines([...uriLines, ...promptedSecretLines('MLFLOW_TRACKING_TOKEN')]),
+    basicEnvironment: joinLines([
+      ...uriLines,
+      `export MLFLOW_TRACKING_USERNAME=${BASIC_USERNAME_PLACEHOLDER}`,
+      ...promptedSecretLines('MLFLOW_TRACKING_PASSWORD'),
+    ]),
+    python: PYTHON_EXAMPLE,
+  };
+}
+
+// The SDK reads the URI and the token from the environment, so the code itself has no settings.
+const PYTHON_EXAMPLE = `import mlflow
+
+mlflow.set_experiment("my-experiment")
+with mlflow.start_run():
+    mlflow.log_param("learning_rate", 2e-5)
+    mlflow.log_metric("train.loss", 0.42, step=1)
+`;
+
+function promptedSecretLines(variable: string): string[] {
+  return [`read -r -s -p 'API token: ' ${variable}`, `export ${variable}`];
+}
+
+function joinLines(lines: string[]): string {
   return `${lines.join('\n')}\n`;
 }
 
