@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isSweepEarlyStoppedRun, SWEEP_EARLY_STOPPED_TAG } from './sweepEarlyStop';
+import { isSweepEarlyStoppedRun } from './sweepEarlyStop';
+import { SWEEP_EARLY_STOPPED_TAG } from './sweepRunTags';
 
 describe('isSweepEarlyStoppedRun', () => {
   it('Sweepが打ち切ったRunは早期打ち切りとして扱う', () => {

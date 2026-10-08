@@ -2,7 +2,7 @@ import { useState, type CSSProperties, type KeyboardEvent, type PointerEvent, ty
 import { Link } from 'react-router-dom';
 import { RUN_NOTE_TAG, type Run, type SavedViewColumn } from '@mmt/contracts';
 import { RunStatusBadge } from './RunStatusBadge';
-import { runCreatorName } from '../../lib/runCreator';
+import { creatorName } from '../../lib/creatorName';
 import { CompactValue } from '../CompactValue';
 import { Empty } from '../Feedback';
 import { MarkdownView } from '../markdown/MarkdownView';
@@ -75,7 +75,7 @@ function runColumn(key: string): RunColumn | null {
         label: text.user,
         render: (run) => (
           <span className="run-user" title={run.createdBy}>
-            {runCreatorName(run)}
+            {creatorName(run)}
           </span>
         ),
       };

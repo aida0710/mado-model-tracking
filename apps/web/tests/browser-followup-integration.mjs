@@ -54,7 +54,7 @@ try {
   await adminPage.getByRole('link', { name: 'CPU linear regression', exact: true }).waitFor();
   const table = adminPage.locator('.runs-page table');
   assert.equal(await table.locator('th').filter({ hasText: 'Metrics' }).count(), 2);
-  assert.equal(await table.locator('th').filter({ hasText: 'Parameters' }).count(), 2);
+  assert.equal(await table.locator('th').filter({ hasText: 'パラメータ' }).count(), 2);
   const metricBounds = await table
     .locator('th')
     .filter({ hasText: 'Metrics' })

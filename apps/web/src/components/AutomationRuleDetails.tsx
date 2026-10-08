@@ -9,6 +9,7 @@ import { AutomationOwnerTransfer } from './AutomationOwnerTransfer';
 import { automationOwnerLabel } from '../lib/automationOwner';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { formatDate } from '../lib/format';
+import { creatorName } from '../lib/creatorName';
 import { text } from '../i18n/catalog';
 import { automationText, automationTriggerLabels } from '../i18n/automation';
 
@@ -88,7 +89,7 @@ export function AutomationRuleDetails({
             automationText.owner,
             <span title={automationText.ownerHint}>{automationOwnerLabel(rule)}</span>,
           ],
-          [text.user, <span title={rule.createdBy}>{rule.createdByName || rule.createdBy}</span>],
+          [text.user, <span title={rule.createdBy}>{creatorName(rule)}</span>],
           [text.created, formatDate(rule.createdAt)],
         ]}
       />

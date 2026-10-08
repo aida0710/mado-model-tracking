@@ -49,7 +49,7 @@ import { getRunChartKeys } from '../lib/runChartKeys';
 import { useChartPanelLayout } from '../hooks/useChartPanelLayout';
 import { useRunResumeEvents } from '../hooks/useRunResumeEvents';
 import { getRunParameters } from '../lib/runParameters';
-import { runCreatorName } from '../lib/runCreator';
+import { creatorName } from '../lib/creatorName';
 import { getResumeCheckpointRecord } from '../lib/checkpointResume';
 import { text, textTemplates } from '../i18n/catalog';
 import { systemMetricCategoryLabels, systemMetricUnitLabels } from '../i18n/runs';
@@ -209,7 +209,7 @@ export function RunDetailPage() {
                     <DetailsList
                       entries={[
                         [text.created, formatDate(item.createdAt)],
-                        [text.user, <span title={item.createdBy}>{runCreatorName(item)}</span>],
+                        [text.user, <span title={item.createdBy}>{creatorName(item)}</span>],
                         [
                           text.modelVersion,
                           item.modelVersionId ? (

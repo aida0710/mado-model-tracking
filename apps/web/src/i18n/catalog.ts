@@ -382,7 +382,6 @@ export const text = {
   finished: '完了',
   failed: '失敗',
   canceled: '中止',
-  earlyStopped: '早期打ち切り',
   logsLevel: 'レベル',
   tokenScopesError: 'Scopeを1つ以上選択してください',
   automationRules: '自動実行ルール',
