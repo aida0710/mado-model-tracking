@@ -396,11 +396,17 @@ describe.skipIf(!testDatabaseUrl)('Artifact保存先の全体設定（独立Post
     expect(tested.steps.every((step) => step.ok)).toBe(true);
   });
 
-  it('署名v2・不正な名前・不正な設定は422で拒否する', async () => {
+  it('署名v2とWHEN_SUPPORTEDの組み合わせ・不正な名前・不正な設定は422で拒否する', async () => {
     const cases: [Record<string, unknown>, string][] = [
       [
-        { name: 'legacy', kind: 's3', bucket: 'mmt-legacy', signatureVersion: 'v2' },
-        'storage_signature_unsupported',
+        {
+          name: 'legacy',
+          kind: 's3',
+          bucket: 'mmt-legacy',
+          signatureVersion: 'v2',
+          checksumMode: 'when_supported',
+        },
+        'invalid_storage_backend_config',
       ],
       [
         { name: 'Bad_Name', kind: 'filesystem', rootPath: '/srv/mmt' },

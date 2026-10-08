@@ -130,6 +130,7 @@ export function createArtifactStoreFromConfig({
     bucket: config.bucket,
     prefix: config.prefix,
     multipartPartSizeBytes: config.multipartPartSizeBytes,
+    multipartEnabled: config.multipartEnabled,
   });
 }
 

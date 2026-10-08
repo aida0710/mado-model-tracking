@@ -11,7 +11,12 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3';
 import { createHash } from 'node:crypto';
-import { PassThrough, Readable } from 'node:stream';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { PassThrough, Readable, Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { validateArtifactKey } from './artifactKey.js';
 import {
   ArtifactPartCheck,
@@ -30,6 +35,17 @@ import {
 
 // Two parts in flight bound streaming upload memory to twice the part size.
 const MULTIPART_CONCURRENCY = 2;
+// S3 refuses a single PutObject above 5 GiB; larger Artifacts need multipart.
+export const MAX_SINGLE_PUT_BYTES = 5 * 1024 * 1024 * 1024;
+
+/** A single PUT would exceed what S3 accepts, and multipart is disabled for the backend. */
+export class SinglePutTooLargeError extends Error {
+  constructor() {
+    super(`Artifact exceeds the ${MAX_SINGLE_PUT_BYTES}-byte limit of a single S3 PUT`);
+    this.name = 'SinglePutTooLargeError';
+  }
+}
+
 function httpStatus(error: unknown): number | undefined {
   return (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
 }
@@ -47,12 +63,18 @@ export function createS3ArtifactStore({
   bucket,
   prefix = '',
   multipartPartSizeBytes = DEFAULT_MULTIPART_PART_SIZE_BYTES,
+  multipartEnabled = true,
 }: {
   client: S3Client;
   bucket: string;
   prefix?: string;
   /** Part size of streamed single-request uploads; upload sessions choose their own part size. */
   multipartPartSizeBytes?: number;
+  /**
+   * false sends every put() as one PutObject and offers no multipart store, so upload sessions
+   * are refused for the backend. For S3-compatible services whose multipart API fails.
+   */
+  multipartEnabled?: boolean;
 }): ArtifactStore {
   const keyPrefix = prefix ? `${prefix.replace(/\/$/, '')}/` : '';
   function objectKey(key: string): string {
@@ -236,9 +258,44 @@ export function createS3ArtifactStore({
     }
   }
 
+  /**
+   * PutObject needs the length before sending, and Artifacts can be far larger than memory, so the
+   * body is spooled to a temporary file first. The file is removed whether or not the PUT succeeds.
+   */
+  async function putSingleObject(key: string, body: Readable, mimeType: string) {
+    const digest = createHash('sha256');
+    let size = 0;
+    const measure = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        size += chunk.length;
+        if (size > MAX_SINGLE_PUT_BYTES) return callback(new SinglePutTooLargeError());
+        digest.update(chunk);
+        callback(null, chunk);
+      },
+    });
+    const directory = await mkdtemp(path.join(tmpdir(), 'mmt-s3-put-'));
+    const spoolPath = path.join(directory, 'body');
+    try {
+      await pipeline(body, measure, createWriteStream(spoolPath));
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: objectKey(key),
+          Body: createReadStream(spoolPath),
+          ContentLength: size,
+          ContentType: mimeType,
+        }),
+      );
+      return { size, sha256: digest.digest('hex') };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
   return {
     async put({ key, body, mimeType }) {
       try {
+        if (!multipartEnabled) return await putSingleObject(key, body, mimeType);
         return await putObject(key, body, mimeType);
       } catch (error) {
         throwStorageError(error);
@@ -279,6 +336,6 @@ export function createS3ArtifactStore({
     async remove(key) {
       await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: objectKey(key) }));
     },
-    multipart,
+    ...(multipartEnabled ? { multipart } : {}),
   };
 }
