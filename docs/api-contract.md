@@ -104,21 +104,31 @@ Runは固定CodeVersion IDと`environment.runtime`を保存する。Job登録時
 ## モデル登録後の自動実行
 
 - `GET /projects/:p/automation-rules` → `{items:ModelAutomationRule[]}`。
-- `POST /projects/:p/automation-rules` → ModelAutomationRule、201。bodyは`name,modelFamilies,kind,experimentId,codeVersionId,targetId,gpuIds?,inputDatasetVersionIds?,parameters?,tags?,maxAttempts?,enabled?`。`kind`は`inference`または`evaluation`。`enabled`はtrue、GPU/入力は空、parameters/tagsは空、maxAttemptsは3が既定。
+- `POST /projects/:p/automation-rules` → ModelAutomationRule、201。bodyは`name,modelFamilies,kind,experimentId,codeVersionId,targetId,trigger?,upstreamRuleId?,gpuIds?,inputDatasetVersionIds?,parameters?,tags?,maxAttempts?,enabled?`。`kind`は`inference`・`evaluation`・`processing`。`trigger`は`model_registered`（既定）または`upstream_run_finished`（下記の連鎖）。`enabled`はtrue、GPU/入力は空、parameters/tagsは空、maxAttemptsは3が既定。
 - `PATCH /projects/:p/automation-rules/:id` ({enabled:boolean}) → ModelAutomationRule。設定は不変で、有効/無効だけを切り替える。設定変更は新しいruleを登録する。
 - `GET /projects/:p/automation-executions` → `{items:ModelAutomationExecution[]}`。最新100件を返す。保留中の登録（下記）も`status:'pending'`の行として含める。
+- `POST /projects/:p/automation-rules/:id/executions` ({modelVersionId}|{triggerRunId}) → ModelAutomationExecution、201。既存の版への手動適用（下記）。
 
 作成・切替はProject adminまたはglobal adminだけが行える。API tokenには`admin` scopeに加え、Project制限と現在のmembershipを要求する。読む操作はviewerと`read` scope。CodeVersion、Experiment、入力DatasetVersionは同じProjectで照合し、モデル系列/kind、targetの有効状態/runtime/GPUも登録時に検証する。ruleには`createdBy`を保存する。登録処理では作成者の現在のProject admin/global admin権限を再確認し、失効していれば`skipped`を記録する。
 
 ModelVersion登録のtransaction内で、同じ系列の有効ruleを判定し、共通のRun/Job登録処理を使って自動実行をqueueへ追加する。SDKのモデル出力登録もこの経路を通る。保存済み重みArtifactをProjectで照合する。`weightsUri`の実体はworkerが取得確認し、APIからはfetchしない。重みが指定されていなければ`skipped`を記録する。Artifact uploadだけでは起動しない。
 
-登録イベントは`model_automation_events`で一度だけ処理し、executionにも`UNIQUE(rule_id,model_version_id)`を設ける。モデル登録と同じtransactionなので外側のrollbackではRun/Job/イベントも残らない。各ruleの失敗はsavepointでRun/Jobをrollbackして`failed`と安全なerror文字列を保存し、ほかのruleとModelVersion登録を残す。設定が変わったtargetや不正な参照もここで再検証する。過去モデル、disabled中の登録、有効ruleがない登録へは遡及しない。失敗・skipした登録イベントの再送でも自動実行を増やさない。
+登録イベントは`model_automation_events`で一度だけ処理し、executionにも登録起動（`trigger_run_id IS NULL`かつ`source='automatic'`）に限る部分unique`(rule_id,model_version_id,attempt)`を設ける。モデル登録と同じtransactionなので外側のrollbackではRun/Job/イベントも残らない。各ruleの失敗はsavepointでRun/Jobをrollbackして`failed`と安全なerror文字列を保存し、ほかのruleとModelVersion登録を残す。設定が変わったtargetや不正な参照もここで再検証する。過去モデル、disabled中の登録、有効ruleがない登録へは遡及しない。失敗・skipした登録イベントの再送でも自動実行を増やさない。
 
 自動Runはruleの固定CodeVersion/設定を使い、`sourceRunId`を`parentRunId`へ関連付ける。`tags['automation.ruleId']`と`environment.automationRuleId`にrule ID、`environment.runtime`に固定runtimeを保存する。executionの`status`は登録時の結果（queued/failed/skipped）で、実行後も変わらない。`runStatus`と`jobStatus`で現在の実行状態を返し、Run/Jobを作らなかった場合はnullになる。
 
 自動実行の起動時点は、版の`sourceRunId`が指すRunの状態で決まる。生成元Runがない、または登録時点で終端（finished/failed/canceled）なら登録のtransactionで即時に処理する。終端でなければ`model_automation_events.state='pending'`で保留し、そのRunの終端遷移（RunCompletionServiceのterminal handler `AutomationSourceRunHandler`。出力登録handlerの後）で処理する。finishedなら終端時点で有効なruleを従来と同じ方法で実行し`processed`へ、failed/canceledなら有効な各ruleに`skipped`・error`source_run_unsuccessful: …`を残して`source_unsuccessful`へ。保留から7日（`AUTOMATION_PENDING_MAX_AGE_HOURS=168`）を超えたもの、または生成元Runがsoft-deleteされたものは、API内のsweeper（10分ごと、`pg_try_advisory_xact_lock`で1 processだけ）が有効な各ruleに`skipped`・error`source_run_timeout: …`を残して`source_timeout`へ。閉じた保留は、その後に生成元Runが成功しても起動しない。handlerは保留中のeventだけを`FOR UPDATE`で処理するので、終端通知の再送やMLflowの再開（FINISHED→RUNNING→FINISHED）でも1回だけ起動する。
 
 ModelAutomationExecutionは`sourceRunId`（版の生成元Run、なければnull）を持つ。`status:'pending'`の行は保存されたexecutionではなく、保留中の版について現在有効な同系列ruleごとに1行を返す（`runId`/`jobId`/`error`/`runStatus`/`jobStatus`はnull、`createdAt`は保留の開始時刻、`id`は版とruleから決まる値）。終端後は保存されたexecutionに置き換わる。
+
+### 自動実行の連鎖と既存版への手動適用
+
+- `trigger:'upstream_run_finished'`のruleは`upstreamRuleId`（同じProjectのrule）が必須で、`model_registered`のruleには指定できない（どちらも422 `invalid_automation_trigger`）。上流ruleが別Projectまたは存在しなければ404、無効なら422 `upstream_rule_disabled`。連鎖は登録起動のruleを1段目として`MAX_AUTOMATION_CHAIN_DEPTH=5`段まで（超えると422 `automation_chain_too_deep`）。ruleは不変で上流は作成前に存在するので循環は作れないが、検出時は422 `automation_chain_cycle`。`trigger`と`upstreamRuleId`も不変。
+- 上流の特定は`model_automation_executions.run_id`で行い、tagは使わない。Runが終端になったとき（RunCompletionServiceのterminal handler `AutomationChainHandler`。保留自動実行の後）、そのRunを作ったexecutionを引く。Jobの手動retryで作られたRunは`jobs.retry_of_job_id`を元のJobまで辿って元のRunのexecutionを使う。executionが無いRun（人が作ったRun。`automation.ruleId` tagが付いていても）は連鎖しない。上流ruleが無効なら下流を起動しない。
+- 起動対象は`upstreamRuleId`がそのruleで、有効かつ版の系列を`modelFamilies`に含むrule。上流Runがfinishedで出力DatasetVersionがあれば、下流Runを同じ版で作る: `inputDatasetVersionIds`＝ruleの固定分＋上流Runの`outputDatasetVersionIds`、`upstreamDatasetVersionIds`＝上流Runの出力、`parentRunId`＝上流Run、`tags['automation.pipelineRoot']`＝1段目のexecution ID。上流がfinishedで出力が無ければ`skipped`・error`upstream_outputs_missing: …`、failed/canceledなら`skipped`・error`upstream_unsuccessful: …`。（下流rule, 上流Run）の組は1回だけ処理するので、complete再送でも重複しない。作成者権限・重み・参照先はモデル登録時と同じく再検証する。
+- ModelAutomationExecutionは`triggerRunId`（下流を起動した上流Run。1段目はnull）、`pipelineRootExecutionId`（1段目のexecution。1段目は自身のid）、`attempt`（1始まり）、`source`（`automatic`|`manual`）、`requestedBy`（手動適用した利用者。自動はnull）を持つ。保留中の行は`triggerRunId:null`、`pipelineRootExecutionId`＝`id`、`attempt:1`、`source:'automatic'`。
+- 手動適用`POST /projects/:p/automation-rules/:id/executions`はProject admin（global adminを含む）と`admin` scopeのtokenだけ（editorは403）。`model_registered`のruleは`{modelVersionId}`、`upstream_run_finished`のruleは`{triggerRunId}`を受け、逆は422 `automation_trigger_mismatch`。`triggerRunId`はfinished（違えば422 `upstream_run_not_finished`）で、そのruleの上流ruleが作ったRun（違えば422 `upstream_rule_mismatch`）で、出力DatasetVersionがあるRun（無ければ422 `upstream_outputs_missing`）に限る。ruleが無効なら422 `automation_rule_disabled`、版の系列がruleの`modelFamilies`に無ければ422 `incompatible_model_family`、同じruleと版のexecutionのJobがqueued/claimed/runningなら409 `automation_execution_active`。`attempt`は同じruleと版の最大＋1、`source:'manual'`、`requestedBy`を記録する。重み・作成者権限・参照先の再検証の結果は`skipped`/`failed`のexecutionとして201で返す。手動適用したRunが成功すると下流ruleは通常どおり連鎖する。監査は`automation.execution.manual`（403/409は`denied`）。
+- 作成者権限の再確認は`effective_project_roles`（直接付与とgroup bindingの最大値）のadminまたはglobal adminで判定する。
 
 ## 評価結果の比較
 

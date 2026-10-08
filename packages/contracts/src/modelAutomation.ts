@@ -6,7 +6,10 @@ export interface ModelAutomationRule {
   name: string;
   enabled: boolean;
   modelFamilies: string[];
-  kind: 'inference' | 'evaluation';
+  kind: 'inference' | 'evaluation' | 'processing';
+  // 'upstream_run_finished' starts this rule when a Run created by upstreamRuleId finishes.
+  trigger: 'model_registered' | 'upstream_run_finished';
+  upstreamRuleId: string | null;
   experimentId: string;
   codeVersionId: string;
   targetId: string;
@@ -34,5 +37,16 @@ export interface ModelAutomationExecution {
   runStatus: RunStatus | null;
   jobStatus: JobStatus | null;
   error: string | null;
+  // The upstream Run that started this stage; null for the first stage of a pipeline.
+  triggerRunId: string | null;
+  // The first-stage execution of the same pipeline; equals id for the first stage.
+  pipelineRootExecutionId: string | null;
+  attempt: number;
+  source: 'automatic' | 'manual';
+  // The Project admin who applied the rule by hand; null for automatic executions.
+  requestedBy: string | null;
   createdAt: string;
 }
+
+/** POST /projects/:p/automation-rules/:id/executions: a version, or an upstream Run for chained rules. */
+export type CreateAutomationExecution = { modelVersionId: string } | { triggerRunId: string };

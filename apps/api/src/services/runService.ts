@@ -104,6 +104,8 @@ export class RunService {
       createdBy: string;
       input: RunCreate;
       task?: { id: string; revision: number };
+      // Inputs that came from an upstream Run's outputs (chained automation); a subset of the inputs.
+      upstreamDatasetVersionIds?: string[];
     },
   ): Promise<Run> {
     const { projectId, input } = registration;
@@ -136,8 +138,8 @@ export class RunService {
     const snapshot = code ? createExecutionSnapshot(code, mode) : null;
     return (await first<Run>(
       connection,
-      `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING ${runColumns}`,
+      `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision,upstream_dataset_version_ids)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING ${runColumns}`,
       [
         projectId,
         input.experimentId,
@@ -155,6 +157,7 @@ export class RunService {
         snapshot ? JSON.stringify(snapshot) : null,
         registration.task?.id ?? null,
         registration.task?.revision ?? null,
+        registration.upstreamDatasetVersionIds ?? [],
       ],
     ))!;
   }

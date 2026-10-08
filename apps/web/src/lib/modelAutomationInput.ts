@@ -103,6 +103,9 @@ export function buildAutomationRuleInput(
     enabled: getFieldValue(values, 'enabled') === 'true',
     modelFamilies,
     kind,
+    // Chained rules are added by automation-chaining-web; this form creates registration rules.
+    trigger: 'model_registered',
+    upstreamRuleId: null,
     experimentId: getFieldValue(values, 'experimentId'),
     codeVersionId: code.id,
     targetId: target.id,
