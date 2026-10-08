@@ -46,6 +46,7 @@ import { TargetService } from './services/targetService.js';
 import { JobService } from './services/jobService.js';
 import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
+import { RunOutputDeclarationService } from './services/runOutputDeclarationService.js';
 import { TokenService } from './services/tokenService.js';
 import { EvaluationService } from './services/evaluationService.js';
 import { PromotionService } from './services/promotionService.js';
@@ -173,6 +174,8 @@ export function createApplication(options: ApplicationOptions) {
   const promotion = new PromotionService(database);
   terminalHandlers.push(new PromotionRunHandler(promotion));
   const worker = new WorkerService({ database, jobs, config, runCompletion });
+  const outputDeclarations = new RunOutputDeclarationService(registry);
+  const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
   const tokens = new TokenService(database);
   const evaluation = new EvaluationService(database);
   const plugins = new PluginService({

@@ -13,6 +13,7 @@ import {
   workerLogSchema,
   workerMetricSchema,
 } from '../domain/validation.js';
+import { workerOutputsSchema } from '../domain/workerOutputValidation.js';
 import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 
 export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
@@ -118,6 +119,15 @@ export function workerRoutes(worker: WorkerService): Hono<ApiEnvironment> {
     );
     return context.body(null, 204);
   });
+  routes.post('/jobs/:id/outputs', async (context) =>
+    context.json({
+      items: await worker.outputs(
+        principal(context),
+        uuidParam(context, 'id'),
+        await jsonBody(context, workerOutputsSchema),
+      ),
+    }),
+  );
   routes.post('/jobs/:id/complete', async (context) =>
     context.json(
       await worker.complete(
