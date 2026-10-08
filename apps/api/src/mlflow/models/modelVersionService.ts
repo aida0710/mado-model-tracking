@@ -2,6 +2,7 @@ import type { Principal } from '../../auth/principal.js';
 import { first, type Database, type Connection } from '../../db/database.js';
 import { conflict } from '../../domain/errors.js';
 import { findRun } from '../../repositories/registryRepository.js';
+import { modelAliasActor, removeModelAliases } from '../../repositories/modelAliasRepository.js';
 import type { RegistryService } from '../../services/registryService.js';
 import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
@@ -174,7 +175,12 @@ export class ModelVersionService {
           'UPDATE mlflow_model_version_metadata SET deleted_at=now(),updated_at=now() WHERE version_id=$1',
           [version.id],
         );
-        await connection.query('DELETE FROM model_aliases WHERE version_id=$1', [version.id]);
+        await removeModelAliases(connection, {
+          modelId: version.modelId,
+          versionId: version.id,
+          actor: modelAliasActor(principal),
+          source: 'version_deleted',
+        });
       },
     );
   }

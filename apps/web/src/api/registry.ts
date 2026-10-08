@@ -4,10 +4,30 @@ import type {
   Dataset,
   DatasetVersion,
   Model,
+  ModelAliasEventPage,
   ModelVersion,
 } from '@mmt/contracts';
 import type { CreateCodeVersion, CreateDatasetVersion, CreateModelVersion } from './inputs';
-import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
+import {
+  encodeId,
+  invalidResponseError,
+  jsonRequest,
+  projectPath,
+  request,
+  requestItems,
+} from './http';
+
+// Matches the API limit so the form stops input the server would reject.
+export const MAX_MODEL_ALIAS_REASON_LENGTH = 2000;
+// Matches the API default so each "load more" fetches one server page.
+export const MODEL_ALIAS_EVENT_PAGE_SIZE = 50;
+
+export interface ModelAliasAssignment {
+  alias: string;
+  versionId: string;
+  /** Empty means no reason; the API stores it as ''. */
+  reason: string;
+}
 
 const registryPath = (projectId: string, registry: string, id?: string) =>
   `${projectPath(projectId)}/${registry}${id ? `/${encodeId(id)}` : ''}`;
@@ -23,11 +43,36 @@ export const registryApi = {
       `${registryPath(projectId, 'models', id)}/versions`,
       jsonRequest('POST', body),
     ),
-  assignAlias: (projectId: string, id: string, alias: string, versionId: string) =>
-    request<unknown>(
-      `${registryPath(projectId, 'models', id)}/aliases/${encodeId(alias)}`,
-      jsonRequest('PUT', { versionId }),
+  assignAlias: (projectId: string, id: string, assignment: ModelAliasAssignment) =>
+    request<Model>(
+      `${registryPath(projectId, 'models', id)}/aliases/${encodeId(assignment.alias)}`,
+      jsonRequest('PUT', {
+        versionId: assignment.versionId,
+        ...(assignment.reason ? { reason: assignment.reason } : {}),
+      }),
     ),
+  removeAlias: (projectId: string, id: string, alias: string) =>
+    request<void>(`${registryPath(projectId, 'models', id)}/aliases/${encodeId(alias)}`, {
+      method: 'DELETE',
+    }),
+  aliasEvents: async (
+    projectId: string,
+    id: string,
+    { cursor, signal }: { cursor?: string; signal?: AbortSignal } = {},
+  ): Promise<ModelAliasEventPage> => {
+    const query = new URLSearchParams({ limit: String(MODEL_ALIAS_EVENT_PAGE_SIZE) });
+    if (cursor) query.set('cursor', cursor);
+    const page = await request<ModelAliasEventPage>(
+      `${registryPath(projectId, 'models', id)}/alias-events?${query}`,
+      { signal },
+    );
+    if (
+      !Array.isArray(page.items) ||
+      (page.nextCursor !== null && typeof page.nextCursor !== 'string')
+    )
+      throw invalidResponseError();
+    return page;
+  },
   codes: (projectId: string, signal?: AbortSignal) =>
     requestItems<Code>(registryPath(projectId, 'codes'), signal),
   createCode: (projectId: string, body: { name: string; description?: string }) =>

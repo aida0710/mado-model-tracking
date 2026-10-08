@@ -15,6 +15,11 @@ import {
 import { searchRegisteredModels, searchModelVersions } from './registrySearch.js';
 import type { RegisteredModelRecord } from './types.js';
 import { MAX_MODEL_NAME_LENGTH } from './limits.js';
+import {
+  assignModelAlias,
+  modelAliasActor,
+  removeModelAliases,
+} from '../../repositories/modelAliasRepository.js';
 
 export class RegisteredModelService {
   constructor(private readonly database: Database) {}
@@ -162,7 +167,11 @@ export class RegisteredModelService {
         ON CONFLICT(version_id) DO UPDATE SET deleted_at=now(),updated_at=now()`,
           [model.id],
         );
-        await connection.query('DELETE FROM model_aliases WHERE model_id=$1', [model.id]);
+        await removeModelAliases(connection, {
+          modelId: model.id,
+          actor: modelAliasActor(principal),
+          source: 'model_deleted',
+        });
       },
     );
   }
@@ -208,10 +217,13 @@ export class RegisteredModelService {
           version: reference.version,
         });
         // The native FK also binds the alias to a version of this same Model.
-        await connection.query(
-          'INSERT INTO model_aliases(model_id,alias,version_id) VALUES($1,$2,$3) ON CONFLICT(model_id,alias) DO UPDATE SET version_id=EXCLUDED.version_id',
-          [model.id, reference.alias, version.id],
-        );
+        await assignModelAlias(connection, {
+          modelId: model.id,
+          alias: reference.alias,
+          versionId: version.id,
+          actor: modelAliasActor(principal),
+          source: 'mlflow',
+        });
         await this.touchMetadata(connection, model);
       },
     );
@@ -226,10 +238,12 @@ export class RegisteredModelService {
       this.database,
       { principal, projectId, name: reference.name },
       async (connection, model) => {
-        await connection.query('DELETE FROM model_aliases WHERE model_id=$1 AND alias=$2', [
-          model.id,
-          reference.alias,
-        ]);
+        await removeModelAliases(connection, {
+          modelId: model.id,
+          alias: reference.alias,
+          actor: modelAliasActor(principal),
+          source: 'mlflow',
+        });
         await this.touchMetadata(connection, model);
       },
     );
