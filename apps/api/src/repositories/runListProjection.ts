@@ -17,5 +17,5 @@ export const runSummarySelect = `SELECT
   ${outputModelVersionIdsColumn},
   parent_run_id,environment,created_by,created_at,started_at,ended_at,error,
   lifecycle_stage,mlflow_managed,mlflow_user_id,recorded_parameters,
-  task_id,task_revision,execution_mode
+  task_id,task_revision,execution_mode,resume_checkpoint_id
   FROM runs`;

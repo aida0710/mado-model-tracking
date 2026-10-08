@@ -80,6 +80,8 @@ export const taskLaunchSchema = z.strictObject({
   parameters: jsonObjectSchema.optional(),
   modelVersionId: uuidSchema.nullable().optional(),
   inputDatasetVersionIds: uniqueIdsSchema.optional(),
+  // Continue a training/finetuning launch from a saved checkpoint (same Code and kind).
+  resumeCheckpointId: uuidSchema.optional(),
 });
 export const taskHistoryQuerySchema = z.strictObject({
   limit: z.coerce

@@ -34,6 +34,7 @@ import {
   findOutputModelByName,
 } from '../repositories/runOutputRegistrationRepository.js';
 import { requireProject, requireScope } from './accessService.js';
+import { pinResumeCheckpoint } from './checkpointResume.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
@@ -162,7 +163,7 @@ export class TaskService {
     const targetId = input.targetId ?? task.targetId;
     if (!targetId)
       throw new DomainError(422, '実行するComputeTargetを指定してください', 'target_required');
-    const run = await this.runs.insertRun(connection, {
+    const insertedRun = await this.runs.insertRun(connection, {
       projectId: task.projectId,
       createdBy: launch.createdBy,
       task: { id: task.id, revision: task.revision },
@@ -180,6 +181,12 @@ export class TaskService {
         environment: {},
       },
     });
+    const run = input.resumeCheckpointId
+      ? await pinResumeCheckpoint(connection, {
+          run: insertedRun,
+          checkpointId: input.resumeCheckpointId,
+        })
+      : insertedRun;
     const job = await this.jobs.insertJob(connection, {
       run,
       input: {

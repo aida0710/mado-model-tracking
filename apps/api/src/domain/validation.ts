@@ -153,6 +153,8 @@ export const runCreateSchema = z.strictObject({
   inputDatasetVersionIds: uniqueIdsSchema.default([]),
   parentRunId: uuidSchema.nullish(),
   environment: jsonObjectSchema.default({}),
+  // Continue from a saved checkpoint; fixed at creation (see checkpointService).
+  resumeCheckpointId: uuidSchema.optional(),
 });
 export const runPatchSchema = z.strictObject({
   name: nameSchema.optional(),

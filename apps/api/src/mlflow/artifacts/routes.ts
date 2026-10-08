@@ -21,6 +21,7 @@ import {
   validateArtifactOwner,
 } from './artifactPath.js';
 import { artifactContentResponse } from './artifactResponse.js';
+import type { CheckpointService } from '../../services/checkpointService.js';
 import { ArtifactTransferService } from './artifactTransferService.js';
 import {
   abortMultipartRequestSchema,
@@ -149,9 +150,14 @@ export function mlflowArtifactRoutes(options: {
   artifacts: ArtifactService;
   /** Absent when MMT_MLFLOW_MULTIPART_UPLOADS=false: mpu/* then answers the SDK's fallback 501. */
   multipart?: MlflowMultipartUploadService;
+  checkpoints?: CheckpointService;
 }): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
-  const transfers = new ArtifactTransferService(options.database, options.artifacts);
+  const transfers = new ArtifactTransferService(
+    options.database,
+    options.artifacts,
+    options.checkpoints,
+  );
 
   routes.get(ARTIFACT_TRANSFER_ROOT, async (context) => {
     const query = parse(proxyListQuery, context.req.query());

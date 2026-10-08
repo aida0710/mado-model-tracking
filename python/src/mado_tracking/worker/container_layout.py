@@ -1,4 +1,7 @@
-"""Prepare only the container's input, context, optional source, and output mounts."""
+"""Prepare only the container's input, context, optional source, and output mounts.
+
+Also places the resume checkpoint, which sits under inputs for every runtime.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
+from ..checkpoint_archive import extract_checkpoint_archive
 from .container_outputs import HASH_CHUNK_BYTES, file_checksum
 from .host_state import write_json
 
@@ -21,6 +25,10 @@ OUTPUTS_PATH = "/mmt/outputs"
 SOURCE_PATH = "/mmt/source"
 WEIGHTS_FILENAME = "weights"
 UPSTREAM_RUN_FILENAME = "upstream-run.json"
+# The checkpoint is extracted to inputs/checkpoint (read-only /mmt/inputs/checkpoint in a container).
+RESUME_CHECKPOINT_DIRECTORY = "checkpoint"
+RESUME_CHECKPOINT_FILENAME = "resume-checkpoint.json"
+RESUME_CHECKPOINT_ARCHIVE = "checkpoint.tar"
 
 
 @dataclass(frozen=True)
@@ -67,6 +75,55 @@ def upstream_environment(context: dict[str, Any], upstream_run_file: str) -> dic
     return {"MMT_UPSTREAM_RUN_ID": upstream_run["runId"], "MMT_UPSTREAM_RUN_FILE": upstream_run_file}
 
 
+def resume_checkpoint_document(checkpoint: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What the Job's code reads about its checkpoint (MMT_RESUME_CHECKPOINT_FILE)."""
+    if checkpoint is None:
+        return None
+    manifest = checkpoint["manifest"]
+    return {
+        "checkpointId": checkpoint["id"],
+        "sourceRunId": checkpoint["runId"],
+        "step": checkpoint["step"],
+        "source": checkpoint["source"],
+        "files": manifest["files"],
+        "includesOptimizer": bool(manifest.get("includesOptimizer", False)),
+        "framework": manifest.get("framework"),
+        "metadata": checkpoint.get("metadata", {}),
+    }
+
+
+def resume_checkpoint_environment(
+    context: dict[str, Any], *, checkpoint_directory: str, document_file: str
+) -> dict[str, str]:
+    # A Job that starts from scratch gets no variables, so code can test for their presence.
+    document = context.get("resumeCheckpoint")
+    if document is None:
+        return {}
+    return {
+        "MMT_RESUME_CHECKPOINT_DIR": checkpoint_directory,
+        "MMT_RESUME_STEP": str(document["step"]),
+        "MMT_RESUME_CHECKPOINT_FILE": document_file,
+    }
+
+
+def install_resume_checkpoint(workspace: Path, specification: dict[str, Any]) -> None:
+    """Extract the staged checkpoint tar, verifying it again on the target, as read-only files."""
+    document = specification["context"].get("resumeCheckpoint")
+    if document is None:
+        return
+    archive = workspace / RESUME_CHECKPOINT_ARCHIVE
+    expected = specification.get("stagedInputs", {}).get("checkpoint")
+    if expected is None or not archive.exists():
+        raise ValueError("Resume checkpoint was not staged")
+    verify_staged_file(archive, expected)
+    inputs = workspace / "inputs"
+    if inputs.is_symlink():
+        raise ValueError("Container mount directory must not be a symlink")
+    inputs.mkdir(mode=0o700, exist_ok=True)
+    extract_checkpoint_archive(archive, inputs / RESUME_CHECKPOINT_DIRECTORY, document["files"])
+    archive.unlink()
+
+
 def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> list[ContainerMount]:
     mounts = []
     for name, container_path, readonly in (
@@ -89,6 +146,8 @@ def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> 
     # A spec saved before upstream inputs existed has no upstreamRun key.
     if context.get("upstreamRun") is not None:
         context_files[UPSTREAM_RUN_FILENAME] = context["upstreamRun"]
+    if context.get("resumeCheckpoint") is not None:
+        context_files[RESUME_CHECKPOINT_FILENAME] = context["resumeCheckpoint"]
     for name, document in context_files.items():
         write_json(workspace / "context" / name, document)
     if specification["codeVersion"]["source"] is not None:
@@ -169,6 +228,13 @@ def container_environment(specification: dict[str, Any]) -> dict[str, str]:
         PYTHONUNBUFFERED="1",
     )
     environment.update(upstream_environment(context, f"{CONTEXT_PATH}/{UPSTREAM_RUN_FILENAME}"))
+    environment.update(
+        resume_checkpoint_environment(
+            context,
+            checkpoint_directory=f"{INPUTS_PATH}/{RESUME_CHECKPOINT_DIRECTORY}",
+            document_file=f"{CONTEXT_PATH}/{RESUME_CHECKPOINT_FILENAME}",
+        )
+    )
     # A Docker-selected GPU UUID/index is remapped to a container-local CUDA ordinal.
     gpu_ids = specification["gpuIds"]
     runtime_kind = specification["codeVersion"].get("runtime", {}).get("kind")

@@ -124,6 +124,19 @@ export {
   NOTIFICATION_RECIPIENTS_MAX,
 } from './notifications.js';
 export type {
+  JobRetryRequest,
+  RunCheckpoint,
+  RunCheckpointArtifact,
+  RunCheckpointCreate,
+  RunCheckpointFile,
+  RunCheckpointManifest,
+  RunCheckpointPage,
+  RunCheckpointSource,
+  RunResumeCheckpointRecord,
+  WorkerResumeCheckpoint,
+} from './checkpoints.js';
+export { DEFAULT_CHECKPOINT_KEEP_COUNT, MLFLOW_CHECKPOINT_PATH_PREFIX } from './checkpoints.js';
+export type {
   Sweep,
   SweepCancel,
   SweepCreate,
@@ -161,6 +174,7 @@ export { ANALYSIS_MAX_METRICS, ANALYSIS_MAX_PARAMS, ANALYSIS_MAX_RUNS } from './
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
+import type { WorkerResumeCheckpoint } from './checkpoints.js';
 
 export type AuthMode = 'local' | 'oidc' | 'hybrid' | 'development';
 export type AuthSource = 'local' | 'oidc';
@@ -227,6 +241,8 @@ export interface Run {
   /** Task outputModel copied at launch; registration runs when the Run ends. */
   outputModelRegistration?: TaskOutputModel | null;
   parentRunId: string | null;
+  // The checkpoint this Run continues from; fixed at creation (environment.resume mirrors it).
+  resumeCheckpointId?: string | null;
   environment: JsonObject;
   createdBy: string;
   createdAt: string;
@@ -407,6 +423,8 @@ export interface WorkerJob {
   // Token for the Job's code (mmtj_). Set only when this claim/resume issued a new one; null
   // for a running Job, whose process keeps the token the worker saved earlier.
   jobToken: string | null;
+  // Set when the Run continues from a checkpoint; the worker verifies it before the entrypoint.
+  resumeCheckpoint?: WorkerResumeCheckpoint | null;
 }
 export interface TokenSummary {
   id: string;

@@ -14,6 +14,9 @@ import { RunLogs } from '../components/RunLogs';
 import { RunExecutionSnapshot } from '../components/RunExecutionSnapshot';
 import { FormDialog } from '../components/FormDialog';
 import { LaunchDialog } from '../dialogs/LaunchDialog';
+import { ResumeDialog } from '../dialogs/ResumeDialog';
+import { useResumedRunIds } from '../hooks/useResumedRunIds';
+import { isResumableStatus } from '../lib/checkpointResume';
 import { formatDate } from '../lib/format';
 import { isJobUnresponsive } from '../lib/jobLiveness';
 import { text } from '../i18n/catalog';
@@ -26,13 +29,17 @@ export function JobsPage() {
   const selectedId = params.get('job') ?? '';
   const statusFilter = params.get('status') ?? '';
   const [showLaunch, setShowLaunch] = useState(false);
-  const [jobAction, setJobAction] = useState<{ id: string; type: 'cancel' | 'retry' } | null>(null);
+  const [jobAction, setJobAction] = useState<{
+    id: string;
+    type: 'cancel' | 'retry' | 'resumeLatest';
+  } | null>(null);
   const jobs = useQuery(
     `${project.id}:jobs`,
     (signal) => executionApi.jobs(project.id, signal),
     EXECUTION_POLL_MS,
   );
   const targets = useQuery('job-targets', executionApi.targets);
+  const resumedRunIds = useResumedRunIds(project.id, jobs.value);
   const selected = jobs.value?.find((job) => job.id === selectedId);
   const selectedRun = useQuery(selected ? `${project.id}:job-run:${selected.runId}` : null,
     (signal) => trackingApi.run(project.id, selected!.runId, signal), EXECUTION_POLL_MS);
@@ -130,9 +137,19 @@ export function JobsPage() {
                 key: 'run',
                 label: text.runs,
                 render: (job) => (
-                  <Link className="mono" to={`/projects/${project.id}/runs/${job.runId}`}>
-                    {job.runId}
-                  </Link>
+                  <>
+                    <Link className="mono" to={`/projects/${project.id}/runs/${job.runId}`}>
+                      {job.runId}
+                    </Link>
+                    {resumedRunIds.value?.has(job.runId) && (
+                      <span
+                        className="status-badge status-running resumed-run-badge"
+                        title={text.checkpointResumedBadgeHint}
+                      >
+                        {text.checkpointResumedBadge}
+                      </span>
+                    )}
+                  </>
                 ),
               },
               {
@@ -168,12 +185,22 @@ export function JobsPage() {
                       {text.cancelJob}
                     </button>
                   ) : (
-                    <button
-                      className="button small"
-                      onClick={() => setJobAction({ id: job.id, type: 'retry' })}
-                    >
-                      {text.retryJob}
-                    </button>
+                    <span className="job-row-actions">
+                      <button
+                        className="button small"
+                        onClick={() => setJobAction({ id: job.id, type: 'retry' })}
+                      >
+                        {text.retryJob}
+                      </button>
+                      {isResumableStatus(job.status) && (
+                        <button
+                          className="button small"
+                          onClick={() => setJobAction({ id: job.id, type: 'resumeLatest' })}
+                        >
+                          {text.checkpointResumeLatest}
+                        </button>
+                      )}
+                    </span>
                   )),
               },
             ]}
@@ -211,7 +238,14 @@ export function JobsPage() {
           }}
         />
       )}
-      {jobAction && (
+      {jobAction?.type === 'resumeLatest' && (
+        <ResumeDialog
+          projectId={project.id}
+          jobId={jobAction.id}
+          onClose={() => setJobAction(null)}
+        />
+      )}
+      {(jobAction?.type === 'cancel' || jobAction?.type === 'retry') && (
         <FormDialog
           title={jobAction.type === 'cancel' ? text.cancelJob : text.retryJob}
           onClose={() => setJobAction(null)}
@@ -219,7 +253,7 @@ export function JobsPage() {
           onSubmit={async () =>
             jobAction.type === 'cancel'
               ? { canceled: await executionApi.cancelJob(project.id, jobAction.id) }
-              : executionApi.retryJob(project.id, jobAction.id)
+              : executionApi.retryJob(project.id, jobAction.id, {})
           }
           onSaved={(saved) => {
             setJobAction(null);

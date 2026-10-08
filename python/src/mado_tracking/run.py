@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, BinaryIO, Literal, cast
 
 from .artifact_uploads import SESSION_UPLOAD_THRESHOLD_BYTES, UploadTarget, upload_file_sync
+from .checkpoints import ResumeCheckpoint, log_checkpoint, resume_checkpoint_from_environment
 from .client import path_id
 from .errors import ConfigurationError
 from .timestamps import utc_timestamp
@@ -175,6 +176,32 @@ class Run:
         # rglob does not descend into symlinked directories, so the walk stays inside the tree.
         files = sorted(file for file in root.rglob("*") if file.is_file())
         return [self.log_artifact(file, path=prefix + file.relative_to(root).as_posix()) for file in files]
+
+    def log_checkpoint(
+        self,
+        directory: str | Path,
+        *,
+        step: int,
+        includes_optimizer: bool = False,
+        framework: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Save directory as this Run's checkpoint at step; a later Run can continue from it."""
+        return log_checkpoint(
+            self,
+            directory,
+            step=step,
+            includes_optimizer=includes_optimizer,
+            framework=framework,
+            metadata=metadata,
+        )
+
+    def resume_checkpoint(self) -> ResumeCheckpoint | None:
+        """The checkpoint this Job continues from (path and step), or None for a fresh start.
+
+        Log metrics from step + 1 onwards so the curve continues where the checkpoint was saved.
+        """
+        return resume_checkpoint_from_environment()
 
     def download_input_model(
         self, destination: str | Path, *, model_version: Mapping[str, Any] | None = None

@@ -188,6 +188,7 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデル版ID |
 | `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONと版ID配列のJSON |
 | `MMT_UPSTREAM_RUN_ID`, `MMT_UPSTREAM_RUN_FILE` | 上流Run（`run.parentRunId`）のIDと`upstream-run.json`のpath。上流が無いJobには付かない |
+| `MMT_RESUME_CHECKPOINT_DIR`, `MMT_RESUME_STEP`, `MMT_RESUME_CHECKPOINT_FILE` | 再開元checkpointの展開先（read-only）、保存時のstep、`resume-checkpoint.json`のpath。checkpointから再開しないJobには付かない（「学習を途中から再開する」節） |
 | `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報。tokenはJob限定token |
 | `MMT_PROJECT_ID`, `MMT_EXPERIMENT_ID`, `MMT_RUN_ID`, `MMT_JOB_ID` | 実行対象のID |
 | `MMT_JOB_KIND` | 実行するRunのkind。CodeVersionの環境変数より優先する |
@@ -219,6 +220,7 @@ if upstream_run_id() is not None:
 | コンテナ内path | 内容 | mount |
 |---|---|---|
 | `/mmt/inputs/weights` | 入力ModelVersionのprimary weights file | read-only |
+| `/mmt/inputs/checkpoint` | 再開元checkpointのファイル（再開するJobだけ） | read-only |
 | `/mmt/context` | context、parameters、model-version、dataset-versionsのJSON | read-only |
 | `/mmt/source` | 任意sourceの固定版。source=nullならmountしない | read-only |
 | `/mmt/outputs` | imageが生成する結果 | read/write |
@@ -326,6 +328,69 @@ APIなしでも、明示した入力ファイルからのfine-tuningを試せる
 MMT_JOB_KIND=finetuning MMT_MODEL_FILE=python/.venv/example-weights.json \
   python/.venv/bin/python python/examples/training.py --offline --steps 5 --output python/.venv/fine-tuned-weights.json
 ```
+
+## 学習を途中から再開する（checkpoint）
+
+長い学習が止まっても、保存したcheckpointから新しいRunとして続きを回せる。再開は手動で、元のRunは変えない（失敗・停止の記録として残る）。
+
+### 学習コードでcheckpointを保存する
+
+```python
+from mado_tracking import start_run
+
+with start_run(kind="training", parameters={"steps": 1000}) as run:
+    checkpoint = run.resume_checkpoint()          # 再開でなければNone
+    if checkpoint is not None:
+        state = load(checkpoint.path)              # read-onlyのディレクトリ
+        start_step = checkpoint.step
+    else:
+        state, start_step = initial_state(), 0
+    for step in range(start_step, 1000):
+        loss = train_one_step(state)
+        run.log_metrics({"train.loss": loss}, step=step)
+        if (step + 1) % 100 == 0:
+            save(state, "ckpt")                   # 重み、optimizerの状態、乱数の状態など
+            run.log_checkpoint("ckpt", step=step + 1, includes_optimizer=True, framework="torch")
+```
+
+- `run.log_checkpoint(directory, step=, includes_optimizer=False, framework=None, metadata=None)`は、ディレクトリを1つのtarにまとめ、Run Artifact `checkpoints/step-<step>.tar`へupload sessionで送り（サイズにかかわらず再開可能な方式）、各ファイルのpath・sha256・sizeをmanifestとして`POST /projects/:p/runs/:r/checkpoints`へ登録する。symlinkを含むディレクトリと空のディレクトリは拒否する。同じRunの同じstepは409。
+- tarは所有者・mode・時刻を固定して作るので、同じファイルからは同じbytesになる。
+- `step`は「そこまでに終えたstep数」として扱うと、再開側が`range(checkpoint.step, total)`でそのまま続けられる。**metricの`step`は再開後も続きの値で記録する**（0から数え直さない）。Run詳細のグラフが1本につながる。
+- `run.resume_checkpoint()`は`ResumeCheckpoint(path, step, checkpoint_id, source_run_id, includes_optimizer, metadata)`かNoneを返す。APIなしで試すときは`mado_tracking.checkpoints.resume_checkpoint_from_environment()`で同じ値を読める。
+- MLflowで`mlflow.log_artifacts(dir, "checkpoints/step-<N>")`のように`checkpoints/step-<整数>/`の下へ保存したファイルも、training/finetuningのRunなら自動でcheckpointになる（同じstepの最初のファイルで作り、以降のファイルをmanifestへ足す）。Runが終わった後はそのstepへファイルを足せない（409）。
+- checkpointはRunごとに既定5件（APIの`MMT_CHECKPOINT_KEEP_COUNT`）を一覧に出し、古いものは`retained=false`で既定の一覧から外す。Artifactは消さないので、外れたcheckpointからも再開できる。
+
+### 再開する
+
+- Webの**Run詳細**の**Checkpoint**タブで、失敗・停止したRunの行の「このcheckpointから再開」を押すと、そのRunのJobをretryして新しいRunへ移る。**Jobs**の「最新checkpointから再開」は最大stepのcheckpointを選ぶ（そのRunにcheckpointが無く、Run自体が再開Runなら、その再開元を引き継ぐ）。
+- APIでは`POST /projects/:p/jobs/:j/retry`の本文`{checkpointId}`か`{resumeFromLatestCheckpoint:true}`、Task起動・Run作成の`resumeCheckpointId`。再開できるのは、checkpointと同じProjectで、元のRunと同じkind（trainingまたはfinetuning）、同じCode（版は違ってよい）のRunだけ。
+- 新しいRunには`resumeCheckpointId`、`environment.resume={checkpointId, sourceRunId, step}`、`parentRunId`（元のRun）が入り、Jobの作成後は変えられない。
+
+### workerが行うこと
+
+1. claimしたWorkerJobの`resumeCheckpoint`（id、元のRun、step、source、Artifact一覧、manifest）を、RunのresumeCheckpointIdと一致するか確かめる。
+2. Artifactを認証済みAPIからRange再開つきで取得し、Artifactごとにsha256とsizeを照合する。SDKのcheckpoint（tar 1個）はそのまま、MLflowのcheckpoint（ファイルごとのArtifact）は検証後にtarへまとめる。
+3. tarの中身がmanifestと完全に一致する（余分なファイル・不足・sha256違い・`..`やsymlinkが無い）ことを確かめてからtargetへ送り、target側でもtarのsha256を確かめてから展開する。
+4. 展開先はworkspaceの`inputs/checkpoint`で、ファイルは400、ディレクトリは500。コンテナでは`/mmt/inputs`のread-only mountの下（`/mmt/inputs/checkpoint`）に見える。
+5. `MMT_RESUME_CHECKPOINT_DIR`、`MMT_RESUME_STEP`、`MMT_RESUME_CHECKPOINT_FILE`を渡す。`resume-checkpoint.json`は`{checkpointId, sourceRunId, step, source, files, includesOptimizer, framework, metadata}`で、host pythonはworkspace直下、コンテナは`/mmt/context/resume-checkpoint.json`。
+
+どこかで照合に失敗したら、entrypointを起動せずにJobを`failed`にし、理由をJobのerrorに残す。
+
+### サンプルで途中失敗と再開を試す
+
+`examples/training.py`はmomentum付きSGDで、`--checkpoint-every N`（parameters の`checkpoint_every`）ごとに重み（`model.json`）とoptimizerの状態とstep（`optimizer.json`）を保存する。`--fail-at-step`で途中失敗を起こせる。同じ乱数を使わない決定的な計算なので、再開した最終の重みとoptimizerの状態は通しで学習した結果と一致する（`tests/test_checkpoint_resume.py`で確認している）。
+
+```bash
+python/.venv/bin/python python/examples/training.py --offline --steps 40 --checkpoint-every 10 \
+  --fail-at-step 27 --output /tmp/mmt-ckpt/weights.json   # step 27で失敗。checkpoints/step-10, step-20が残る
+echo '{"checkpointId":"local","sourceRunId":"local","step":20}' > /tmp/mmt-ckpt/resume.json
+MMT_RESUME_CHECKPOINT_DIR=/tmp/mmt-ckpt/checkpoints/step-20 MMT_RESUME_STEP=20 \
+MMT_RESUME_CHECKPOINT_FILE=/tmp/mmt-ckpt/resume.json \
+  python/.venv/bin/python python/examples/training.py --offline --steps 40 --checkpoint-every 10 \
+  --output /tmp/mmt-ckpt/resumed.json
+```
+
+APIに接続したRunでは、同じ保存が`run.log_checkpoint`でRunのcheckpointとして登録される。
 
 ## SSH切断後も同じjobへ復帰する
 

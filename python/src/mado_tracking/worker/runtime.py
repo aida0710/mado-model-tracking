@@ -11,7 +11,7 @@ from typing import Any
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker, secret_values
 from .config import WorkerSettings
-from .container_layout import upstream_run_document
+from .container_layout import resume_checkpoint_document, upstream_run_document
 from .contracts import WorkerJob
 from .tracking_environment import build_tracking_environment
 from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, LocalTransport, SSHTransport
@@ -63,6 +63,7 @@ def build_runtime_bundle() -> bytes:
         archive.write(package_directory / "code_source.py", "runtime/code_source.py")
         archive.write(package_directory / "execution_snapshot.py", "runtime/execution_snapshot.py")
         archive.write(package_directory / "system_metrics.py", "runtime/system_metrics.py")
+        archive.write(package_directory / "checkpoint_archive.py", "runtime/checkpoint_archive.py")
         for name in (
             "host_runner",
             "host_state",
@@ -87,7 +88,8 @@ def build_runtime_bundle() -> bytes:
                 .replace("from ..execution_runtime", "from .execution_runtime")
                 .replace("from ..code_source", "from .code_source")
                 .replace("from ..execution_snapshot", "from .execution_snapshot")
-                .replace("from ..system_metrics", "from .system_metrics"),
+                .replace("from ..system_metrics", "from .system_metrics")
+                .replace("from ..checkpoint_archive", "from .checkpoint_archive"),
             )
         for path in package_directory.glob("*.py"):
             archive.write(path, f"sdk/mado_tracking/{path.name}")
@@ -118,6 +120,7 @@ def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[st
             "gpuIds": job.job["gpuIds"],
             "executionMode": snapshot["mode"],
             "upstreamRun": upstream_run_document(job.run, job.model_version),
+            "resumeCheckpoint": resume_checkpoint_document(job.resume_checkpoint),
         },
         "sdkEnvironment": build_tracking_environment(job, settings.api),
         "installDependencies": settings.install_dependencies,

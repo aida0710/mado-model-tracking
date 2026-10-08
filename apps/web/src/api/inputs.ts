@@ -86,6 +86,8 @@ export interface LaunchTask {
   parameters?: JsonObject;
   modelVersionId?: string | null;
   inputDatasetVersionIds?: string[];
+  /** Starts the new Run from this checkpoint; the API checks it matches the Task's code. */
+  resumeCheckpointId?: string;
 }
 export interface UpdateRun {
   name?: string;
