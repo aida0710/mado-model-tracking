@@ -9,7 +9,11 @@ prefix `/api`。WebはHttpOnly session cookie、SDKはBearer token。Cookieに�
 Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALLOW_PRIVATE_ORIGINS=true`ならHTTP(S)のprivate/local/VPN IPとlocalhostも許可する。CORS・開発login/logout・sessionの変更で同じ判定を使う。設定省略時はfalse。null/欠落や未許可のOriginはsession変更操作で403 `invalid_origin`。BearerリクエストはOrigin不要。許可範囲とSSOの固定callbackは[運用手順](operations.md)を参照する。
 
 - `GET /health` → `{status:'ok'}`。DB障害は503。
-- `GET /auth/config` → AuthConfig。`GET /auth/me` → `{user:User}` (未認証401)。`POST /auth/dev-login` → `{user}`はdevelopment modeだけ。`GET /auth/login` / `GET /auth/callback` / `POST /auth/logout`。
+- `GET /auth/config` → AuthConfig `{mode,methods:{local,oidc:{label,loginUrl}|null}}`。modeは`local`/`oidc`/`hybrid`/`development`。`methods.local`はローカルアカウントのloginを受け付けるか、`methods.oidc`はSSOの表示名と開始URL。`GET /auth/me` → AuthMe `{user:User,mustChangePassword:boolean}` (未認証401)。`POST /auth/dev-login` → `{user}`はdevelopment modeだけ。`GET /auth/login` / `GET /auth/callback` / `POST /auth/logout`。
+- Userは`username:string|null`（ローカルアカウントのlogin名。SSOのみはnull）、`status:'active'|'disabled'`、`authSources:('local'|'oidc')[]`を持つ。無効化したUserはsession・API tokenとも401。Userは物理削除しない。
+- `POST /auth/local-login` ({username,password}) → AuthMe、session cookieを発行する。`methods.local=false`なら404 `local_login_disabled`。Origin検証はdev-loginと同じ。存在しないusername・誤ったpassword・無効化Userは区別せず401 `invalid_credentials`。passwordはArgon2idで照合する。usernameと接続元の失敗回数を制限し、超過は429 `rate_limited`と`Retry-After`秒を返す。
+- `POST /auth/change-password` ({currentPassword,newPassword}) → 204。sessionのローカルアカウントだけが使える。現在のpasswordが誤りなら401 `invalid_credentials`、新しいpasswordが条件を満たさなければ422 `weak_password`。変更後は同じUserのほかのsessionを失効させる。
+- `mustChangePassword=true`のsession（初期管理者・管理者による再設定直後）は、`GET /auth/config`・`GET /auth/me`・`POST /auth/change-password`・`POST /auth/logout`以外を403 `password_change_required`で拒否する。
 - `GET /projects` / `POST /projects` (name,description?,artifactBackend?) / `PATCH /projects/:id` (description?,artifactBackend?)。
 - `GET /projects/:p/members` / `PUT /projects/:p/members/:userId` (role)。管理者以外は権限変更不可。
 - `GET|POST /projects/:p/experiments` (name,description?)。
@@ -19,8 +23,11 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET|POST /projects/:p/runs/:r/logs` (POST:{entries:LogEntry[]})。
 - `GET /projects/:p/runs/:r/artifacts` / `PUT /projects/:p/runs/:r/artifacts?path=` (raw binary、Content-Type; Artifactを返す)。Run無しの登録は`PUT /projects/:p/artifacts?path=`。
 - `GET /projects/:p/artifacts?query=&limit=` → `{items:Artifact[]}`。Projectの保存済みArtifact一覧で、limitは既定100、最大500。`GET /projects/:p/artifacts/:a` → Artifactのmetadata。viewer/readで参照でき、保存先のblobは読み込まない。
-- `GET /projects/:p/artifacts/:a/content` (Range対応。危険なHTML/SVG等はattachment)。`GET /storage/backends` → `{items:('filesystem'|'s3')[]}`。
-- `GET|POST /projects/:p/models` (name,family,description?) / `GET|POST /projects/:p/models/:id/versions` (version,parentModelVersionIds?,sourceRunId?,weightsUri?,artifactId?,defaultCodeVersionId?,metadata?)。
+- `GET /projects/:p/artifacts/:a/content` (Range対応。危険なHTML/SVG等はattachment)。Artifactは不変なので、応答に強いETag `"sha256-<hex>"`と`Cache-Control: private, max-age=31536000, immutable`を付ける（API共通の`no-store`を上書きする）。`If-None-Match`が一致すれば本文なしの304。Rangeの206にも同じETagを付け、`If-Range`が一致しなければ全体を200で返す。
+- Artifactのupload（native・MLflowとも）は1件`MMT_ARTIFACT_MAX_BYTES`（既定200GiB）まで。Content-Lengthが上限を超える場合は読み込まずに、chunk転送で途中から超えた場合は書きかけのblobを消して、413 `artifact_too_large`を返す（MLflow経路は`RESOURCE_EXHAUSTED`）。uploadはrequest全体のtimeout（`MMT_UPLOAD_REQUEST_TIMEOUT_MS`、既定0=無効）と無通信timeout（`MMT_UPLOAD_IDLE_TIMEOUT_MS`、既定120000）で打ち切る。`GET /storage/backends` → `{items:('filesystem'|'s3')[]}`。
+- `GET|POST /projects/:p/models` (name,family,description?)。`GET /projects/:p/models?name=`はnameの完全一致で絞り込み、`{items:Model[]}`（0件または1件）を返す。既存系列を再利用するSDKの登録で使う。
+- `GET|POST /projects/:p/models/:id/versions` (ModelVersionCreate: version?,parentModelVersionIds?,sourceRunId?,weightsUri?,artifactId?,defaultCodeVersionId?,metadata?)。versionを省略すると、同じModelの整数の版の最大値＋1（初回は`1`）をAPIが採番する。整数でない既存の版は残し、採番の計算から除外する。採番はModelの行lockで直列化し、同時登録でも重複しない。明示したversionの重複は409。
+- sourceRunIdを指定する場合、Runは同じProjectで、kindが`training`または`finetuning`であることを検証する。それ以外のkindは422 `output_model_kind`。Runの`outputModelVersionIds`は、そのRunをsourceRunIdに持つModelVersionのIDを登録順に返す。
 - `PUT /projects/:p/models/:id/aliases/:alias` ({versionId})。実行時はaliasではなく実際のModelVersion IDをRunへ保存。
 - `GET|POST /projects/:p/codes` (name,description?) / `GET|POST /projects/:p/codes/:id/versions` (version,source?,runtime?,entrypoint,testEntrypoint?,requirements?,environment?,supportedModelFamilies,taskTypes)。source/runtime/entrypointは下記とcontracts参照。Qwen2/Qwen3の組合せをサービスで検証。training/finetuningも同じCodeVersion契約を使う。
 - `GET|POST /projects/:p/datasets` (name,namespace?,description?) / `GET|POST /projects/:p/datasets/:id/versions` (version,uri,digest,schema?,metadata?,sourceRunId?,parentDatasetVersionIds?,externalRef?)。sourceRunIdがあればRun.outputへ関係を保存。
@@ -59,6 +66,8 @@ workerは実行前のソースを`.mmt/source.zip`と`.mmt/source-manifest.json`
 - `/api/2.0/mlflow/registered-models/*`、`/model-versions/*`：native Model/ModelVersionを使った登録、数字版の採番、検索、tags、alias。登録とモデル自動実行を同じtransactionへ保存する。
 - `GET /api/2.0/mlflow/artifacts/list`、Logged ModelのArtifacts一覧、`GET|PUT /api/2.0/mlflow-artifacts/artifacts/*`：Projectのfilesystem/S3へstream転送。SDKにストレージの秘密を渡さず、Rangeに対応する。
 - `GET /server-info`：SDKへの転送capabilityを返す。SDK向けmultipartはfalseで、通常のstream転送を使う。
+- `GET|POST /api/2.0/mlflow/registered-models/get-latest-versions`：GETはquery（`name`、繰り返しの`stages`）、POSTはJSON。stageは使わないため、`stages`が省略または`None`を含むとき最新の版を1件返し、それ以外は空配列を返す。
+- `POST /api/2.0/mlflow-artifacts/mpu/create|complete|abort/*`：multipart uploadは未対応。501 `NOT_IMPLEMENTED`を返し、SDKを通常のstream転送へ戻す。
 
 Artifactのroot URIは`mlflow-artifacts:/runs/:runId/artifacts`または`mlflow-artifacts:/models/:loggedModelId/artifacts`。登録したモデル版の取得先は`mlflow-artifacts:/model-versions/:nativeVersionId/artifacts`で、版の不変manifestから全ファイルを解決する。元Runのpath上書きやLogged Modelの削除で保存済み版を変更しない。
 
@@ -92,6 +101,15 @@ ModelVersion登録のtransaction内で、同じ系列の有効ruleを判定し�
 登録イベントは`model_automation_events`で一度だけ処理し、executionにも`UNIQUE(rule_id,model_version_id)`を設ける。モデル登録と同じtransactionなので外側のrollbackではRun/Job/イベントも残らない。各ruleの失敗はsavepointでRun/Jobをrollbackして`failed`と安全なerror文字列を保存し、ほかのruleとModelVersion登録を残す。設定が変わったtargetや不正な参照もここで再検証する。過去モデル、disabled中の登録、有効ruleがない登録へは遡及しない。失敗・skipした登録イベントの再送でも自動実行を増やさない。
 
 自動Runはruleの固定CodeVersion/設定を使い、`sourceRunId`を`parentRunId`へ関連付ける。`tags['automation.ruleId']`と`environment.automationRuleId`にrule ID、`environment.runtime`に固定runtimeを保存する。executionの`status`は登録時の結果（queued/failed/skipped）で、実行後も変わらない。`runStatus`と`jobStatus`で現在の実行状態を返し、Run/Jobを作らなかった場合はnullになる。
+
+## 監査ログ
+
+認証・Project・token・権限などの操作を`audit_events`へ記録する。AuditEventは`{id,occurredAt,actorType:'user'|'token'|'system',actorUserId,actorTokenId,action,outcome:'success'|'denied'|'failed',resourceType,resourceId,projectId,details,ip,userAgent}`。成功の記録は業務と同じtransactionでINSERTし、業務がrollbackすれば記録も残らない。拒否・失敗の記録は業務のtransactionの外で書く。`details`へpassword・token・secretの値を入れない。`ip`はAPIが受けたsocketの接続元で、転送ヘッダーは信頼しない。
+
+- `GET /audit-events?projectId=&action=&actorUserId=&outcome=&limit=&cursor=` → `{items:AuditEvent[],nextCursor:string|null}`。全体管理者のsessionだけ。
+- `GET /projects/:p/audit-events?action=&actorUserId=&outcome=&limit=&cursor=` → 同じ形。Project admin（API tokenは`admin` scopeとProject制限・membershipも要求）。
+- 新しい順（occurredAt、idの降順）。limitは既定50、最大200。cursorは前ページ末尾のAuditEvent ID。
+- 記録は無期限に保存する。削除・変更のAPIはなく、DBでもUPDATE/DELETEを拒否する。
 
 ## Worker API
 

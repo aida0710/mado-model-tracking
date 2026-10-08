@@ -16,16 +16,27 @@ import { appendLogs, appendMetrics } from '../repositories/telemetryRepository.j
 import { requireWorker } from './accessService.js';
 import type { JobService } from './jobService.js';
 import { enqueueRunEvent } from './outboxEvents.js';
+import type { RunCompletionService } from './runCompletionService.js';
 
 // A busy target should not block claims for other targets in the same queue.
 const CLAIM_CANDIDATE_LIMIT = 100;
 
 export class WorkerService {
-  constructor(
-    private readonly database: Database,
-    private readonly jobs: JobService,
-    private readonly config: ApiConfig,
-  ) {}
+  private readonly database: Database;
+  private readonly jobs: JobService;
+  private readonly config: ApiConfig;
+  private readonly runCompletion: RunCompletionService;
+  constructor(options: {
+    database: Database;
+    jobs: JobService;
+    config: ApiConfig;
+    runCompletion: RunCompletionService;
+  }) {
+    this.database = options.database;
+    this.jobs = options.jobs;
+    this.config = options.config;
+    this.runCompletion = options.runCompletion;
+  }
 
   async resume(
     principal: Principal,

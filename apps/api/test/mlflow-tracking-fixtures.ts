@@ -22,6 +22,7 @@ export function trackingTestApp(harness: Harness) {
       database: harness.database,
       runs: harness.services.runs,
       registry: harness.services.registry,
+      runCompletion: harness.services.runCompletion,
     }),
   );
   return app;

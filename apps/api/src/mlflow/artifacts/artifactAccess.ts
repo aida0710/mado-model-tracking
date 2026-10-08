@@ -1,6 +1,7 @@
 import type { Principal } from '../../auth/principal.js';
 import { first, type Connection } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
+import { userColumns } from '../../repositories/identityRepository.js';
 import { requireProject } from '../../services/accessService.js';
 import type { ArtifactAccess } from './artifactTypes.js';
 
@@ -12,7 +13,7 @@ export async function requireArtifactProject(
   const lock = options.lock ? 'FOR SHARE' : '';
   const user = await first<Principal['user']>(
     connection,
-    `SELECT id,email,display_name,is_admin FROM users WHERE id=$1 ${lock}`,
+    `SELECT ${userColumns} FROM users u WHERE u.id=$1 ${lock}`,
     [access.principal.user.id],
   );
   if (!user) throw new DomainError(401, 'Loginが無効です', 'authentication_required');

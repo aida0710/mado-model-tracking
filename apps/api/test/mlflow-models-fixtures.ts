@@ -74,6 +74,7 @@ export async function modelFixture(harness: Harness) {
       database: harness.database,
       runs: harness.services.runs,
       registry: harness.services.registry,
+      runCompletion: harness.services.runCompletion,
     }),
   );
   const run = await entity<Run>(

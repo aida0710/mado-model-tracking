@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Database } from '../../db/database.js';
 import type { RegistryService } from '../../services/registryService.js';
+import type { RunCompletionService } from '../../services/runCompletionService.js';
 import type { RunService } from '../../services/runService.js';
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../../http/request.js';
 import { uuidSchema } from '../../domain/validation.js';
@@ -39,6 +40,7 @@ export function mlflowTrackingRoutes(options: {
   database: Database;
   runs: RunService;
   registry: RegistryService;
+  runCompletion: RunCompletionService;
 }): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   const experiments = new ExperimentService(options.database);

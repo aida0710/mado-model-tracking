@@ -29,6 +29,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow Artifact転送（隔離PostgreSQL）',
         database: harness.database,
         runs: harness.services.runs,
         registry: harness.services.registry,
+        runCompletion: harness.services.runCompletion,
       }),
     );
     // Several concurrent writes exercise the shared source Run and model lock order.

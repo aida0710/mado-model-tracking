@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PluginEvent, Run } from '@mmt/contracts';
 import type { Connection } from '../db/database.js';
 import { findDatasetVersions } from '../repositories/registryRepository.js';
+import type { RunCompletionHandler } from './runCompletionService.js';
 
 export async function enqueueRunEvent(connection: Connection, run: Run): Promise<void> {
   if (run.status === 'queued') return;
@@ -29,3 +30,8 @@ export async function enqueueRunEvent(connection: Connection, run: Run): Promise
     [run.projectId, event.id, JSON.stringify(event)],
   );
 }
+
+export const pluginOutboxCompletionHandler: RunCompletionHandler = {
+  name: 'pluginOutbox',
+  handle: enqueueRunEvent,
+};

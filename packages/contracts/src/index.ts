@@ -14,14 +14,20 @@ export type ArtifactBackend = 'filesystem' | 's3';
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
+export type { AuditActorType, AuditEvent, AuditOutcome } from './audit.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 
+export type AuthMode = 'local' | 'oidc' | 'hybrid' | 'development';
+export type AuthSource = 'local' | 'oidc';
 export interface User {
   id: string;
   email: string;
   displayName: string;
   isAdmin: boolean;
+  username: string | null;
+  status: 'active' | 'disabled';
+  authSources: AuthSource[];
 }
 export interface Project {
   id: string;
@@ -69,6 +75,7 @@ export interface Run {
   executionSnapshot?: ExecutionSnapshot | null;
   inputDatasetVersionIds: string[];
   outputDatasetVersionIds: string[];
+  outputModelVersionIds: string[];
   parentRunId: string | null;
   environment: JsonObject;
   createdBy: string;
@@ -100,6 +107,16 @@ export interface ModelVersion {
   defaultCodeVersionId: string | null;
   metadata: JsonObject;
   createdAt: string;
+}
+export interface ModelVersionCreate {
+  // Omitted versions are numbered by the API with the next MLflow-style integer.
+  version?: string;
+  parentModelVersionIds?: string[];
+  sourceRunId?: string | null;
+  weightsUri?: string | null;
+  artifactId?: string | null;
+  defaultCodeVersionId?: string | null;
+  metadata?: JsonObject;
 }
 export type CodeSource =
   | { kind: 'git'; url: string; commit: string; files?: Record<string, string>; deletedFiles?: string[] }
@@ -278,9 +295,15 @@ export interface LineageGraph {
   edges: LineageEdge[];
 }
 export interface AuthConfig {
-  mode: 'oidc' | 'development';
-  label: string;
-  loginUrl: string;
+  mode: AuthMode;
+  methods: {
+    local: boolean;
+    oidc: { label: string; loginUrl: string } | null;
+  };
+}
+export interface AuthMe {
+  user: User;
+  mustChangePassword: boolean;
 }
 export interface ApiError {
   error: string;

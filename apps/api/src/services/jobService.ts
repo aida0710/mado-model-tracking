@@ -22,14 +22,25 @@ import {
 import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { requireProject } from './accessService.js';
 import { enqueueRunEvent } from './outboxEvents.js';
+import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 
 export class JobService {
-  constructor(
-    private readonly database: Database,
-    private readonly runs: RunService,
-    private readonly config: ApiConfig,
-  ) {}
+  private readonly database: Database;
+  private readonly runs: RunService;
+  private readonly config: ApiConfig;
+  private readonly runCompletion: RunCompletionService;
+  constructor(options: {
+    database: Database;
+    runs: RunService;
+    config: ApiConfig;
+    runCompletion: RunCompletionService;
+  }) {
+    this.database = options.database;
+    this.runs = options.runs;
+    this.config = options.config;
+    this.runCompletion = options.runCompletion;
+  }
 
   async list(principal: Principal, projectId: string): Promise<Job[]> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });

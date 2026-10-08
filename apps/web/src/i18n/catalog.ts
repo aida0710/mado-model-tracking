@@ -1,3 +1,5 @@
+import { accessText } from './access';
+import { artifactsText } from './artifacts';
 import { workbenchText } from './workbench';
 
 export const lineageNodeKindLabels = {
@@ -22,6 +24,8 @@ export const lineageRelationLabels: Record<string, string> = {
 
 export const text = {
   ...workbenchText,
+  ...accessText,
+  ...artifactsText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

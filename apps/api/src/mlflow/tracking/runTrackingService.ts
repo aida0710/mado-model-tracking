@@ -7,6 +7,7 @@ import { parse } from '../../http/request.js';
 import { findRun } from '../../repositories/registryRepository.js';
 import { requireProject } from '../../services/accessService.js';
 import { enqueueRunEvent } from '../../services/outboxEvents.js';
+import type { RunCompletionService } from '../../services/runCompletionService.js';
 import type { RegistryService } from '../../services/registryService.js';
 import type { RunService } from '../../services/runService.js';
 import { logDatasetInputs } from './datasetInputs.js';
@@ -36,10 +37,17 @@ export class RunTrackingService {
   private readonly database: Database;
   private readonly runs: RunService;
   private readonly registry: RegistryService;
-  constructor(options: { database: Database; runs: RunService; registry: RegistryService }) {
+  private readonly runCompletion: RunCompletionService;
+  constructor(options: {
+    database: Database;
+    runs: RunService;
+    registry: RegistryService;
+    runCompletion: RunCompletionService;
+  }) {
     this.database = options.database;
     this.runs = options.runs;
     this.registry = options.registry;
+    this.runCompletion = options.runCompletion;
   }
   async create(
     principal: Principal,

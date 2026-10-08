@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { AuthConfig, AuthMe } from '@mmt/contracts';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
 import type { AuthService } from '../services/authService.js';
@@ -9,13 +10,21 @@ import { jsonBody, principal, type ApiEnvironment } from '../http/request.js';
 export function authRoutes(auth: AuthService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/config', (context) =>
-    context.json({
+    context.json<AuthConfig>({
       mode: auth.config.authMode,
-      label: auth.config.authMode === 'oidc' ? 'Authentik' : '開発ログイン',
-      loginUrl: '/api/auth/login',
+      methods: {
+        local: false,
+        oidc:
+          auth.config.authMode === 'oidc'
+            ? { label: 'Authentik', loginUrl: '/api/auth/login' }
+            : null,
+      },
     }),
   );
-  routes.get('/me', (context) => context.json({ user: principal(context).user }));
+  // Password changes arrive with local accounts; until then no session requires one.
+  routes.get('/me', (context) =>
+    context.json<AuthMe>({ user: principal(context).user, mustChangePassword: false }),
+  );
   routes.post('/dev-login', async (context) => {
     validateOrigin(context.req.header('Origin'), auth.config);
     const input = await jsonBody(

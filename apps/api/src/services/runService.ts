@@ -32,9 +32,13 @@ import {
 } from '../repositories/telemetryRepository.js';
 import { requireProject } from './accessService.js';
 import { enqueueRunEvent } from './outboxEvents.js';
+import type { RunCompletionService } from './runCompletionService.js';
 
 export class RunService {
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly runCompletion: RunCompletionService,
+  ) {}
 
   async list(
     principal: Principal,

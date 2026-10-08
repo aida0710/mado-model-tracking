@@ -51,15 +51,17 @@ export function LoginPage({ config, onLogin }: { config: AuthConfig; onLogin: ()
             </button>
           </form>
         ) : (
-          <a
-            className="button primary"
-            href={config.loginUrl}
-            onClick={() =>
-              rememberAuthReturnPath(location.pathname + location.search + location.hash)
-            }
-          >
-            {config.label || text.login}
-          </a>
+          config.methods.oidc && (
+            <a
+              className="button primary"
+              href={config.methods.oidc.loginUrl}
+              onClick={() =>
+                rememberAuthReturnPath(location.pathname + location.search + location.hash)
+              }
+            >
+              {config.methods.oidc.label || text.login}
+            </a>
+          )
         )}
       </main>
     </div>

@@ -16,6 +16,13 @@ const optionalSshPath = z.preprocess(
     .optional(),
 );
 
+// One artifact may hold a full checkpoint set; operators can lower or raise this limit.
+const DEFAULT_ARTIFACT_MAX_BYTES = 200 * 1024 ** 3;
+// 0 disables the whole-request deadline so multi-hour uploads are bounded only by idle time.
+const DEFAULT_UPLOAD_REQUEST_TIMEOUT_MS = 0;
+// A stalled client releases its socket after two minutes without received bytes.
+const DEFAULT_UPLOAD_IDLE_TIMEOUT_MS = 120_000;
+
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
   MMT_DATABASE_URL: optionalSetting,
@@ -39,6 +46,22 @@ const environmentSchema = z.object({
   MMT_ALLOW_SEED: z.enum(['true', 'false']).default('false'),
   MMT_GIT_SSH_KEY_PATH: optionalSshPath,
   MMT_GIT_KNOWN_HOSTS_PATH: optionalSshPath,
+  MMT_ARTIFACT_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER)
+    .default(DEFAULT_ARTIFACT_MAX_BYTES),
+  MMT_UPLOAD_REQUEST_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(DEFAULT_UPLOAD_REQUEST_TIMEOUT_MS),
+  MMT_UPLOAD_IDLE_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(DEFAULT_UPLOAD_IDLE_TIMEOUT_MS),
 });
 
 export interface ApiConfig {
@@ -61,6 +84,10 @@ export interface ApiConfig {
   allowLocalExecutor: boolean;
   allowSeed: boolean;
   repositorySsh: { keyPath: string; knownHostsPath: string } | null;
+  artifactMaxBytes: number;
+  // 0 means the timeout is disabled.
+  uploadRequestTimeoutMs: number;
+  uploadIdleTimeoutMs: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -137,5 +164,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
             knownHostsPath: settings.MMT_GIT_KNOWN_HOSTS_PATH,
           }
         : null,
+    artifactMaxBytes: settings.MMT_ARTIFACT_MAX_BYTES,
+    uploadRequestTimeoutMs: settings.MMT_UPLOAD_REQUEST_TIMEOUT_MS,
+    uploadIdleTimeoutMs: settings.MMT_UPLOAD_IDLE_TIMEOUT_MS,
   };
 }

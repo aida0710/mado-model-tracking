@@ -138,6 +138,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow tracking reviewの回帰検証（隔�
           database: renameBarrier.database,
           runs: harness.services.runs,
           registry: harness.services.registry,
+          runCompletion: harness.services.runCompletion,
         }),
       );
       app.route(
