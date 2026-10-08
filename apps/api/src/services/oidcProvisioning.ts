@@ -42,7 +42,8 @@ export type OidcLoginDenialReason =
   | 'group_not_allowed'
   | 'privileged_link_required'
   | 'user_disabled'
-  | 'last_admin';
+  | 'last_admin'
+  | 'service_account';
 
 export class OidcLoginDeniedError extends Error {
   constructor(
@@ -87,6 +88,8 @@ async function syncAccount(
   const { userId, claims } = input;
   const account = await lockAccount(connection, userId);
   if (!account) throw new Error('OIDC user is missing');
+  // A Service Account never logs in, even if an SSO identity was linked to it by hand.
+  if (account.kind !== 'human') throw new OidcLoginDeniedError('service_account', userId);
   // Disabling is local to this app, so it overrides a still-valid SSO account.
   if (account.status !== 'active') throw new OidcLoginDeniedError('user_disabled', userId);
   const access = resolveOidcAccess(input.rolePolicy, claims.groups);

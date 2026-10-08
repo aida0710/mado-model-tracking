@@ -1,11 +1,13 @@
 import { useProject } from '../hooks/useProject';
 import { useAuditEvents } from '../hooks/useAuditEvents';
 import { useProjectMembers } from '../hooks/useProjectMembers';
+import { useServiceAccounts } from '../hooks/useServiceAccounts';
 import { PageHeader } from '../components/PageHeader';
 import { ProjectSettings } from '../components/ProjectSettings';
 import { ProjectMembers } from '../components/ProjectMembers';
 import { ProjectGroupBindings } from '../components/ProjectGroupBindings';
 import { ProjectTokens } from '../components/ProjectTokens';
+import { ProjectServiceAccounts } from '../components/ProjectServiceAccounts';
 import { ProjectList } from '../components/ProjectList';
 import { AuditEventsTable } from '../components/AuditEventsTable';
 import { ErrorNotice, Loading } from '../components/Feedback';
@@ -17,6 +19,8 @@ export function SettingsPage() {
   const audit = useAuditEvents(isProjectAdmin ? project.id : null);
   // Shared so a group binding change also refreshes the effective roles in the member list.
   const projectMembers = useProjectMembers(project.id);
+  // Shared so a key issued to a Service Account appears in the Project token list.
+  const serviceAccounts = useServiceAccounts(project.id, isProjectAdmin);
   return (
     <section className="page">
       <PageHeader title={text.settings} eyebrow={project.name} />
@@ -25,7 +29,8 @@ export function SettingsPage() {
         <ProjectSettings />
         <ProjectMembers projectMembers={projectMembers} />
         <ProjectGroupBindings onChanged={projectMembers.members.reload} />
-        <ProjectTokens />
+        <ProjectServiceAccounts access={serviceAccounts} />
+        <ProjectTokens projectTokens={serviceAccounts.projectTokens} />
         {isProjectAdmin && (
           <section className="settings-section">
             <div className="section-heading">

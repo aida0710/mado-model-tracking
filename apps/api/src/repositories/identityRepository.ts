@@ -3,18 +3,18 @@ import type { ProjectAdminGrants } from '../domain/projectAdminInvariant.js';
 import { first, rows, type Connection } from '../db/database.js';
 
 // auth_sources lists the login methods the user holds; development logins hold neither.
-export const userColumns = `u.id,u.email,u.display_name,u.is_admin,u.username,u.status,
+export const userColumns = `u.id,u.email,u.display_name,u.is_admin,u.username,u.status,u.kind,
   ARRAY_REMOVE(ARRAY[
     CASE WHEN EXISTS(SELECT 1 FROM user_local_credentials lc WHERE lc.user_id=u.id) THEN 'local' END,
     CASE WHEN EXISTS(SELECT 1 FROM user_oidc_identities oi WHERE oi.user_id=u.id) THEN 'oidc' END
   ]::text[],NULL) AS auth_sources`;
-export const tokenColumns = 'id,name,kind,project_id,scopes,expires_at,last_used_at,created_at';
 
 export interface LocalCredential {
   userId: string;
   passwordHash: string;
   mustChangePassword: boolean;
   status: User['status'];
+  kind: User['kind'];
 }
 
 // Development logins and the demo seed identify users by (issuer, subject) on users itself.
@@ -56,6 +56,7 @@ export interface LockedAccount {
   displayName: string;
   isAdmin: boolean;
   status: User['status'];
+  kind: User['kind'];
 }
 
 export interface AutoLinkCandidate {
@@ -84,7 +85,7 @@ export async function findAutoLinkCandidates(
   return rows<AutoLinkCandidate>(
     connection,
     `SELECT u.id,(u.is_admin OR EXISTS(SELECT 1 FROM project_members m WHERE m.user_id=u.id AND m.role='admin')) AS is_privileged
-    FROM users u WHERE lower(u.email)=lower($1)
+    FROM users u WHERE lower(u.email)=lower($1) AND u.kind='human'
     AND EXISTS(SELECT 1 FROM user_local_credentials c WHERE c.user_id=u.id)
     AND NOT EXISTS(SELECT 1 FROM user_oidc_identities i WHERE i.user_id=u.id)
     ORDER BY u.id FOR UPDATE OF u`,
@@ -110,7 +111,7 @@ export async function lockAccount(
 ): Promise<LockedAccount | undefined> {
   return first<LockedAccount>(
     connection,
-    'SELECT id,email,display_name,is_admin,status FROM users WHERE id=$1 FOR UPDATE',
+    'SELECT id,email,display_name,is_admin,status,kind FROM users WHERE id=$1 FOR UPDATE',
     [userId],
   );
 }
@@ -187,7 +188,7 @@ export async function findLocalCredentialByUsername(
 ): Promise<LocalCredential | undefined> {
   return first<LocalCredential>(
     connection,
-    `SELECT c.user_id,c.password_hash,c.must_change_password,u.status
+    `SELECT c.user_id,c.password_hash,c.must_change_password,u.status,u.kind
     FROM user_local_credentials c JOIN users u ON u.id=c.user_id WHERE lower(u.username)=lower($1)`,
     [username],
   );
@@ -199,7 +200,7 @@ export async function findLocalCredential(
 ): Promise<LocalCredential | undefined> {
   return first<LocalCredential>(
     connection,
-    `SELECT c.user_id,c.password_hash,c.must_change_password,u.status
+    `SELECT c.user_id,c.password_hash,c.must_change_password,u.status,u.kind
     FROM user_local_credentials c JOIN users u ON u.id=c.user_id WHERE c.user_id=$1`,
     [userId],
   );
@@ -269,6 +270,9 @@ export async function upsertLocalAdministrator(
   return (await findUser(connection, user!.id))!;
 }
 
+// Recording every use would write a row on each request, so last_used_at advances at most this often.
+export const TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS = 5 * 60;
+
 export async function tokenIdentity(
   connection: Connection,
   tokenHash: string,
@@ -276,17 +280,25 @@ export async function tokenIdentity(
   { user: User; token: { id: string; projectId: string | null; scopes: string[] } } | undefined
 > {
   const identity = await first<
-    User & { tokenId: string; projectId: string | null; scopes: string[] }
+    User & { tokenId: string; projectId: string | null; scopes: string[]; usageIsStale: boolean }
   >(
     connection,
-    `UPDATE api_tokens t SET last_used_at=now() FROM users u
-    WHERE t.token_hash=$1 AND t.user_id=u.id AND u.status='active' AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>now())
-    AND (t.project_id IS NULL OR EXISTS(SELECT 1 FROM effective_project_roles e WHERE e.project_id=t.project_id AND e.user_id=t.user_id))
-    RETURNING ${userColumns},t.id AS token_id,t.project_id,t.scopes`,
-    [tokenHash],
+    `SELECT ${userColumns},t.id AS token_id,t.project_id,t.scopes,
+    (t.last_used_at IS NULL OR t.last_used_at<now()-make_interval(secs=>$2)) AS usage_is_stale
+    FROM api_tokens t JOIN users u ON u.id=t.user_id
+    WHERE t.token_hash=$1 AND u.status='active' AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>now())
+    AND (t.project_id IS NULL OR EXISTS(SELECT 1 FROM effective_project_roles e WHERE e.project_id=t.project_id AND e.user_id=t.user_id))`,
+    [tokenHash, TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS],
   );
   if (!identity) return undefined;
-  const { tokenId, projectId, scopes, ...user } = identity;
+  const { tokenId, projectId, scopes, usageIsStale, ...user } = identity;
+  // The condition is repeated so concurrent requests write the timestamp only once.
+  if (usageIsStale)
+    await connection.query(
+      `UPDATE api_tokens SET last_used_at=now() WHERE id=$1
+      AND (last_used_at IS NULL OR last_used_at<now()-make_interval(secs=>$2))`,
+      [tokenId, TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS],
+    );
   return { user, token: { id: tokenId, projectId, scopes } };
 }
 
@@ -341,6 +353,7 @@ export async function findDirectRole(
 }
 
 // Locks the Project row first so every change that can remove an admin grant serializes.
+// Service Accounts are left out: they cannot manage the Project, so people must keep an admin grant.
 export async function lockProjectAdminGrants(
   connection: Connection,
   projectId: string,
@@ -348,7 +361,8 @@ export async function lockProjectAdminGrants(
   await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
   const directAdmins = await rows<{ userId: string }>(
     connection,
-    "SELECT user_id FROM project_members WHERE project_id=$1 AND role='admin' ORDER BY user_id",
+    `SELECT m.user_id FROM project_members m JOIN users u ON u.id=m.user_id
+    WHERE m.project_id=$1 AND m.role='admin' AND u.kind='human' ORDER BY m.user_id`,
     [projectId],
   );
   const adminGroups = await rows<{ groupName: string }>(
@@ -391,7 +405,7 @@ export async function holdsAnyProjectAdminRole(
 }
 
 // Prefix match on email, username, and display name, ignoring case. Disabled users are omitted
-// because they cannot be given access.
+// because they cannot be given access, and Service Accounts because their role is set on them.
 export async function searchActiveUsers(
   connection: Connection,
   search: { query: string; limit: number },
@@ -399,7 +413,7 @@ export async function searchActiveUsers(
   const pattern = `${search.query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
   return rows<UserSearchResult>(
     connection,
-    `SELECT id,email,display_name FROM users WHERE status='active'
+    `SELECT id,email,display_name FROM users WHERE status='active' AND kind='human'
     AND (email ILIKE $1 OR username ILIKE $1 OR display_name ILIKE $1)
     ORDER BY lower(email),id LIMIT $2`,
     [pattern, search.limit],

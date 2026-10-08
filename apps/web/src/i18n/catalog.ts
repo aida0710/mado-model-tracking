@@ -10,6 +10,7 @@ import { promotionText } from './promotion';
 import { uploadsText, uploadsTextTemplates } from './uploads';
 import { storageText, storageTextTemplates } from './storage';
 import { adminText } from './admin';
+import { serviceAccountsText } from './serviceAccounts';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -54,6 +55,7 @@ export const text = {
   ...uploadsText,
   ...storageText,
   ...adminText,
+  ...serviceAccountsText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

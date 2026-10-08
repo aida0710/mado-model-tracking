@@ -12,6 +12,7 @@ function member(overrides: Partial<ProjectMember>): ProjectMember {
       username: null,
       status: 'active',
       authSources: ['oidc'],
+      kind: 'human',
     },
     role: 'viewer',
     directRole: null,

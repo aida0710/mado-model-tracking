@@ -37,6 +37,8 @@ const DEFAULT_UPLOAD_IDLE_TIMEOUT_MS = 120_000;
 // MLflow's mpu/complete is synchronous. The wait stays below the SDK's default 120-second request
 // timeout so a slow verification answers 503 instead of the SDK giving up and aborting.
 const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
+// New API tokens expire within a year; it is also the expiry of a token issued without one.
+const DEFAULT_TOKEN_MAX_LIFETIME_DAYS = 365;
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -107,6 +109,12 @@ const environmentSchema = z.object({
     .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
   // base64 of 32 bytes. Without it, storage backends that need a secret cannot be created.
   MMT_STORAGE_SECRET_KEY: optionalSetting,
+  MMT_TOKEN_MAX_LIFETIME_DAYS: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(3650)
+    .default(DEFAULT_TOKEN_MAX_LIFETIME_DAYS),
 });
 
 export interface ApiConfig {
@@ -145,6 +153,8 @@ export interface ApiConfig {
   uploadFinalizeWaitMs: number;
   // Encrypts storage backend secrets in the DB; null when MMT_STORAGE_SECRET_KEY is unset.
   storageSecretKey: SecretKey | null;
+  // Upper limit and default for the lifetime of a new API token.
+  tokenMaxLifetimeDays: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -259,5 +269,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     },
     uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
     storageSecretKey,
+    tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
   };
 }

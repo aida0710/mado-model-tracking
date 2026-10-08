@@ -50,6 +50,7 @@ import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
 import { RunOutputDeclarationService } from './services/runOutputDeclarationService.js';
 import { TokenService } from './services/tokenService.js';
+import { ServiceAccountService } from './services/serviceAccountService.js';
 import { EvaluationService } from './services/evaluationService.js';
 import { PromotionService } from './services/promotionService.js';
 import { PromotionRunHandler } from './services/promotionRunHandler.js';
@@ -88,6 +89,7 @@ import {
   workerRoutes,
 } from './routes/executionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
+import { serviceAccountRoutes } from './routes/serviceAccountRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
@@ -193,7 +195,7 @@ export function createApplication(options: ApplicationOptions) {
   const sweepScheduler = new SweepScheduler(database, sweepController);
   const outputDeclarations = new RunOutputDeclarationService(registry);
   const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
-  const tokens = new TokenService(database);
+  const tokens = new TokenService({ database, tokenMaxLifetimeDays: config.tokenMaxLifetimeDays });
   const evaluation = new EvaluationService(database);
   const plugins = new PluginService({
     database,
@@ -294,7 +296,16 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/auth', authRoutes(auth));
   app.route('/api/auth/token', currentTokenRoutes());
   app.route('/api', auditRoutes(audit));
-  app.route('/api/projects', projectRoutes(projects, new ProjectGroupBindingService(database)));
+  app.route(
+    '/api/projects',
+    projectRoutes(projects, new ProjectGroupBindingService(database), tokens),
+  );
+  app.route(
+    '/api/projects',
+    serviceAccountRoutes(
+      new ServiceAccountService({ database, tokenMaxLifetimeDays: config.tokenMaxLifetimeDays }),
+    ),
+  );
   app.route('/api', userRoutes(new UserDirectoryService(database)));
   app.route('/api/projects', registryRoutes(registry));
   app.route('/api/projects', modelAutomationRoutes(automation));

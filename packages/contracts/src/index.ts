@@ -35,6 +35,8 @@ export { ARTIFACT_MEDIA_INFO_BATCH_LIMIT } from './artifactMediaInfo.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
 export type { ProjectGroupBinding, ProjectMember, ProjectMemberGroupRole, UserSearchResult } from './projectAccess.js';
+export type { ServiceAccount, ServiceAccountCreate, ServiceAccountTokenCreate, ServiceAccountUpdate, TokenScope } from './serviceAccounts.js';
+export { TOKEN_SCOPE_REQUIRED_ROLE, TOKEN_SCOPES } from './serviceAccounts.js';
 export type {
   PromotionCriterion,
   PromotionCriterionDirection,
@@ -109,6 +111,8 @@ export interface User {
   username: string | null;
   status: 'active' | 'disabled';
   authSources: AuthSource[];
+  // 'service' is a Service Account: it has no login method and acts only through its tokens.
+  kind: 'human' | 'service';
 }
 export interface Project {
   id: string;
@@ -346,6 +350,13 @@ export interface TokenSummary {
   expiresAt: string | null;
   lastUsedAt: string | null;
   createdAt: string;
+  ownerType: 'user' | 'service_account';
+  ownerId: string;
+  ownerName: string;
+  // First 12 characters of the token value; null for tokens issued before prefixes were kept.
+  tokenPrefix: string | null;
+  // kind='service' owned by a person: the form used before Service Accounts. It keeps working.
+  legacy: boolean;
 }
 // GET /auth/token: the authenticating API token itself (`job` is true for Job tokens).
 export interface CurrentApiToken {
