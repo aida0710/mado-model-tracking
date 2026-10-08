@@ -2,7 +2,7 @@
 
 Sweep は、探索空間から parameter の組を提案して試行（trial）を繰り返し、目的メトリクスが最良の試行を探す仕組みである。語は W&B の sweep config（`method`、`metric.goal`、`parameters`、`early_terminate`）に合わせる。
 
-Sweep の試行は、既存の Task の起動（Run と Job）として ComputeTarget のキューに入る。worker 側の変更は無い。API と制御は `apps/api/src/services/sweep*.ts`、探索アルゴリズムは `apps/api/src/domain/sweeps/`。SDK（sweeps-sdk）と画面（sweeps-web）は後の波で作る。API の契約は [api-contract.md の Sweeps](api-contract.md#sweeps)。
+Sweep の試行は、既存の Task の起動（Run と Job）として ComputeTarget のキューに入る。worker 側の変更は無い。API と制御は `apps/api/src/services/sweep*.ts`、探索アルゴリズムは `apps/api/src/domain/sweeps/`。Python SDK は `python/src/mado_tracking/sweeps.py`（下の「Python SDK」）。画面（sweeps-web）は後の波で作る。API の契約は [api-contract.md の Sweeps](api-contract.md#sweeps)。
 
 ## 使い方
 
@@ -54,7 +54,94 @@ parameters = json.loads(os.environ["MMT_PARAMETERS_JSON"])
 lr = parameters["lr"]
 ```
 
-目的メトリクスは、Run のメトリクスとして step 付きで記録する（Python SDK の `run.log_metrics({"val_loss": v}, step=epoch)`、または MLflow の `log_metric`）。早期打ち切りを使うときは step を epoch などの進み具合にする。Sweep の SDK 補助は sweeps-sdk（第4波）で追加する。
+Python SDK では `trial_parameters` で1行で読める（下の「Python SDK」）。
+
+目的メトリクスは、Run のメトリクスとして step 付きで記録する（Python SDK の `run.log_metrics({"val_loss": v}, step=epoch)`、または MLflow の `log_metric`）。早期打ち切りを使うときは step を epoch などの進み具合にする。
+
+## Python SDK
+
+`mado_tracking.sweeps` に、学習コード側の `trial_parameters` と、Sweep を作って結果を取る `SweepsClient` がある。例は `python/examples/sweep_training.py`。
+
+### 学習コード: trial_parameters
+
+```python
+from mado_tracking.sweeps import trial_parameters
+
+parameters = trial_parameters({"lr": 0.05, "batch_size": 4})
+lr = float(parameters["lr"])
+```
+
+- `MMT_PARAMETERS_JSON` を読み、無ければ `MMT_PARAMETERS_FILE` のファイルを読む。読んだ値を `defaults` に上書きして返す。
+- worker の外（どちらの環境変数も無い）では `defaults` をそのまま返す。同じスクリプトを手元で試せる。
+- 値は JSON の型のまま返す。文字列の `"0.1"` を数値に直さないので、数値が要るところで `float()` などに変換する。
+- JSON が壊れている、object でない、ファイルが読めないときは `ConfigurationError`（`defaults` で黙って続けない）。
+
+### Sweep の作成と結果: SweepsClient
+
+```python
+from mado_tracking import Client
+from mado_tracking.sweeps import SweepsClient
+
+with Client() as client:
+    sweeps = SweepsClient(client)
+    sweep = sweeps.create_sweep(
+        project_id,
+        task_id=task_id,
+        name="lr-search",
+        config={
+            "method": "bayes",
+            "metric": {"name": "val_loss", "goal": "minimize"},
+            "parameters": {
+                "lr": {"distribution": "log_uniform_values", "min": 1e-5, "max": 1e-2},
+                "batch_size": {"values": [16, 32, 64]},
+            },
+            "early_terminate": {"type": "hyperband", "min_iter": 1, "eta": 3},
+            "run_cap": 30,
+            "parallelism": 4,
+        },
+    )
+    for trial in sweeps.iter_trials(project_id, sweep["id"], order_by="objective"):
+        print(trial["trialIndex"], trial["state"], trial["objectiveValue"])
+    print(sweeps.best_trial(project_id, sweep["id"]))
+```
+
+| メソッド | API | 備考 |
+|---|---|---|
+| `create_sweep(project_id, *, task_id, config, name, target_id=None, gpu_ids=None, seed=None)` | `POST /projects/:p/sweeps` | config は W&B 形式（下の表）。試行の Run は Task の Experiment に入る。target/GPU は None で Task の既定。seed は省略でサーバーが決める |
+| `get_sweep(project_id, sweep_id)` | `GET /projects/:p/sweeps/:s` | |
+| `iter_sweeps(project_id, *, status=None, page_size=50)` | `GET /projects/:p/sweeps` | 新しい順。`nextCursor` を辿る |
+| `iter_trials(project_id, sweep_id, *, order_by="trial_index", page_size=100)` | `GET /projects/:p/sweeps/:s/trials` | `order_by="objective"` は良い順。`nextCursor` を辿る |
+| `best_trial(project_id, sweep_id)` | `GET /projects/:p/sweeps/:s` の `bestTrial` | 最良の試行がまだ無ければ None |
+| `pause` / `resume` | `POST .../pause` / `.../resume` | |
+| `cancel(project_id, sweep_id, *, cancel_running_trials=False)` | `POST .../cancel` | queued の試行は必ず止まる。実行中も止めるときは True |
+
+- 読み取り（get・iter・best_trial）は一時的な失敗（408・429・5xx・接続失敗）を再試行する。書き込み（create・pause・resume・cancel）は冪等でないので再試行しない。失敗は `ApiError`（`status_code`・`code`）で返る。
+- iterator はページを必要になった時点で取りに行く。同じ cursor が2回返ったら `ConfigurationError` で止める。
+
+### W&B 形式の config の変換規則
+
+SDK（`python/src/mado_tracking/sweep_config.py` の `convert_sweep_config`）と画面（sweeps-web の `lib/sweepConfig.ts`）は、同じ config を同じ API の body に変換する。どちらかを変えるときは、この表ともう一方を合わせて直す。未対応のキーは無視せずエラーにする（SDK は `ConfigurationError`、画面は入力エラー）。黙って捨てると、書いたものと違う探索が回るため。
+
+| W&B の config | API の body | 例 |
+|---|---|---|
+| `method: grid / random / bayes` | `method` | それ以外はエラー |
+| `metric: {name, goal}` | `objective: {metric, goal}` | goal は `minimize` / `maximize`。`target` などほかのキーはエラー |
+| `metric.aggregation`（Mado の拡張） | `objective.aggregation` | `last` / `min` / `max`。省略時はサーバーの既定 `last` |
+| `parameters.x: {values: [...]}`、`distribution: categorical` | `searchSpace.x: {values}` | `probabilities` はエラー |
+| `parameters.x: {value: v}`、`distribution: constant` | `searchSpace.x: {value}` | |
+| `{distribution: uniform, min, max}` | `{distribution: 'uniform', min, max}` | |
+| `{distribution: int_uniform, min, max}` | `{distribution: 'int_uniform', min, max}` | |
+| `{distribution: q_uniform, min, max, q}` | `{distribution: 'q_uniform', min, max, q}` | q は q_uniform だけ |
+| `{distribution: log_uniform_values, min, max}` | `{distribution: 'log_uniform', min, max}` | `{min: 1e-5, max: 1e-2}` はそのまま |
+| `{min, max}`（distribution 省略） | 両方整数なら `int_uniform`、それ以外は `uniform` | W&B の推定と同じ。`{min: 1, max: 8}` → int_uniform、`{min: 0, max: 0.5}` → uniform |
+| `distribution: log_uniform`（指数を渡す） | エラー | 意味が違うので `log_uniform_values` に書き換える |
+| `normal`・`q_log_uniform_values` などほかの distribution、入れ子の `parameters` | エラー | |
+| `early_terminate: {type: hyperband, min_iter, eta, max_iter}` | `earlyStopping: {type: 'hyperband', minIter, eta, maxIter}` | min_iter は必須。eta は省略で3（W&B の既定）。`s`・`strict` はエラー |
+| `run_cap` | `maxTrials` | 必須（API が試行数の上限を必須にしているため） |
+| `parallelism` | `parallelism` | 省略時はサーバーの既定1 |
+| `program`・`command`・`name`・`project` などほかのトップレベルのキー | エラー | 名前は `create_sweep(name=)`、実行するコードは Task で決める |
+
+値の範囲（min<max、grid の組み合わせ数など）は SDK では確かめず、API の 422（`sweep_space_invalid`・`sweep_early_terminate_invalid`）で返る。
 
 ## 試行の制御
 
