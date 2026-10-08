@@ -1,0 +1,23 @@
+# Compute worker as a container: an alternative to the systemd unit (deploy/worker/) for SSH targets.
+# Jobs on a local executor run inside this container and stop with it; use systemd for those.
+FROM python:3.12-slim-bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+# Match the host owner of the mounted ssh key; ssh refuses a key owned by another uid.
+ARG WORKER_UID=10001
+ARG WORKER_GID=10001
+RUN groupadd --gid "${WORKER_GID}" worker \
+  && useradd --uid "${WORKER_UID}" --gid worker --create-home --home-dir /home/worker worker \
+  && install -d -o worker -g worker -m 700 /var/lib/mado-tracking-worker
+COPY python /opt/mado-tracking/python
+RUN python -m venv /opt/mado-tracking-worker/venv \
+  && /opt/mado-tracking-worker/venv/bin/pip install --no-cache-dir '/opt/mado-tracking/python[telemetry]' \
+  && rm -rf /opt/mado-tracking/python
+# The token comes from a Docker secret file; it is never baked into the image or the environment.
+ENV PATH=/opt/mado-tracking-worker/venv/bin:$PATH \
+  MMT_WORKER_STATE_DIR=/var/lib/mado-tracking-worker \
+  MMT_API_TOKEN_FILE=/run/secrets/mmt_worker_token
+USER worker
+WORKDIR /home/worker
+ENTRYPOINT ["mado-tracking-worker"]
+CMD ["run"]

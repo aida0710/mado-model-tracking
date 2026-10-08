@@ -284,6 +284,13 @@ export interface TokenSummary {
   lastUsedAt: string | null;
   createdAt: string;
 }
+// GET /auth/token: the authenticating API token itself (`job` is true for Job tokens).
+export interface CurrentApiToken {
+  id: string;
+  projectId: string | null;
+  scopes: string[];
+  job: boolean;
+}
 export interface PluginManifest {
   id: string;
   name: string;

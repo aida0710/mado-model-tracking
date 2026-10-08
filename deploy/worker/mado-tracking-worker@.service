@@ -1,0 +1,29 @@
+# Mado Model Tracking worker (system unit template). One instance per worker ID:
+#   /etc/systemd/system/mado-tracking-worker@.service      (this file)
+#   /etc/mado-tracking-worker/<worker-id>.env               (mode 600, root; see worker.env.example)
+#   systemctl enable --now mado-tracking-worker@<worker-id>.service
+# `sudo mado-tracking-worker install --systemd-system --service-user mado-worker ...` writes the same
+# unit with your venv path and service user. Edit User= and ExecStart= when installing by hand.
+[Unit]
+Description=Mado Model Tracking worker %i
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=mado-worker
+# The API token lives only in this mode-600 file, never in the unit or in argv.
+EnvironmentFile=/etc/mado-tracking-worker/%i.env
+ExecStart=/opt/mado-tracking-worker/venv/bin/python -m mado_tracking.worker.cli run
+Restart=on-failure
+RestartSec=10
+# SIGTERM reaches only the worker, which stops monitoring and keeps its journal. Detached Job
+# supervisors stay in this cgroup; KillMode=control-group would kill running Jobs on every
+# restart or upgrade, while the restarted worker is meant to reattach to them.
+KillMode=process
+# The worker writes journals and Job tokens; keep new files private.
+UMask=0077
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

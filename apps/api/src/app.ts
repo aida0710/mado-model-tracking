@@ -56,6 +56,7 @@ import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
+import { currentTokenRoutes } from './routes/currentTokenRoutes.js';
 import { auditRoutes } from './routes/auditRoutes.js';
 import { projectRoutes } from './routes/projectRoutes.js';
 import { registryRoutes } from './routes/registryRoutes.js';
@@ -244,6 +245,7 @@ export function createApplication(options: ApplicationOptions) {
   app.get('/health', async (context) => context.json(await health()));
   app.get('/api/health', async (context) => context.json(await health()));
   app.route('/api/auth', authRoutes(auth));
+  app.route('/api/auth/token', currentTokenRoutes());
   app.route('/api', auditRoutes(audit));
   app.route('/api/projects', projectRoutes(projects, new ProjectGroupBindingService(database)));
   app.route('/api', userRoutes(new UserDirectoryService(database)));
