@@ -315,6 +315,30 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - `GET /projects/:p/artifact-media-info?artifactIds=<id>,<id>,…` → `{items:ArtifactMediaInfo[]}`。viewer+`read`。IDはカンマ区切りで重複を除き最大200件（`ARTIFACT_MEDIA_INFO_BATCH_LIMIT`）。超過・UUIDでない値は422 `invalid_request`。media情報が無いIDや別ProjectのIDは結果から除くだけでエラーにしない。
 - Webの音声viewerはdecode前でもmedia情報があれば長さ・sample rate・チャンネル数を表示し、decode結果が出たらそちらを正として置き換える。
 
+## 通知
+
+型はcontractsの`notifications.ts`。運用（環境変数の置き方、送信の再試行）は[運用](operations.md)の「通知」。
+
+NotificationChannel `{id,projectId:string|null,kind:'slack_webhook'|'webhook'|'email',name,urlEnv,secretEnv,recipients:string[],enabled,configured,createdBy,createdAt,updatedAt}`。`projectId=null`はすべてのProjectのruleが使える。`urlEnv`/`secretEnv`はAPI serverの環境変数名で、値はDBにも応答にも入れない。`configured`はそれらの変数がAPIのプロセスに設定されているか。
+
+- `GET /notification-channels` → `{items}`。全体管理者（tokenは`admin` scopeでProject制限なし）。
+- `POST /notification-channels` ({kind,name,projectId?,urlEnv?,secretEnv?,recipients?,enabled?}) → NotificationChannel、201。全体管理者だけ（Project adminも403）。種類ごとの必須: `slack_webhook`は`urlEnv`のみ、`webhook`は`urlEnv`と`secretEnv`、`email`は`recipients`（1〜50件のメールアドレス）のみ。違反は422 `notification_channel_invalid`。変数名は`^MMT_NOTIFICATION_[A-Z0-9_]+$`（違反は422 `invalid_request`）。名前は全体のchannel同士、同じProjectのchannel同士で一意（409 `notification_channel_exists`）。存在しない`projectId`は404。
+- `PATCH /notification-channels/:id` ({name?,urlEnv?,secretEnv?,recipients?,enabled?}) → NotificationChannel。全体管理者だけ。`kind`と`projectId`は変えられない（既存ruleの参照先を保つ）。
+- `POST /notification-channels/:id/test` → NotificationTestResult `{delivered,sentDeliveryId,error}`。全体管理者だけ。outboxを通さずに`type='notification.test'`のイベントをその場で1件送る。失敗も200で、`error`は`notification_http_<status>`・`notification_timeout`・`notification_channel_unconfigured`・`email_sender_unavailable`などのcodeだけ（URLや応答本文は返さない）。
+- `GET /projects/:p/notification-channels` → `{items}`。Project admin（tokenは`admin` scope）。そのProjectのruleが使える通知先（全体のものとそのProjectのもの）。
+- 監査`notification.channel.create`・`update`・`test`（resource_type `notification_channel`。detailsは name、kind、urlEnv、secretEnv、recipientCount、enabled。updateは`changed`、testは`error`。宛先のアドレスは入れない）。403/409はdeniedで残る。
+
+NotificationRule `{id,projectId,channelId,eventTypes:NotificationEventType[],filter:{runKinds?,experimentIds?,automationOnly?},enabled,createdBy,createdAt}`。NotificationEventTypeは`run.failed`・`run.canceled`・`run.finished`・`automation.failed`・`job.heartbeat_stale`・`job.heartbeat_recovered`・`worker.offline`・`plugin.delivery_stalled`。
+
+- `GET /projects/:p/notification-rules` → `{items}`（新しい順）。`POST /projects/:p/notification-rules` ({channelId,eventTypes,filter?,enabled?}) → NotificationRule、201。`PATCH /projects/:p/notification-rules/:id` ({enabled}) → NotificationRule。いずれもProject admin（editorは403）、tokenは`admin` scope。設定は不変で、変えられるのは`enabled`だけ。`channelId`は全体のchannelかそのProjectのchannelで、別Projectのchannelは404。`eventTypes`は1件以上で重複なし。`filter.experimentIds`は同じProjectのExperiment（無ければ404）。監査`notification.rule.create`・`update`（resource_type `notification_rule`）。
+- filterの意味: 指定した条件をすべて満たすイベントだけを積む。`runKinds`・`experimentIds`はRunを持たないイベントには一致しない。`automationOnly`は自動実行ruleが作ったRun（手動retryのRunも元のJobへ辿る。`findExecutionForRun`）だけ。
+
+NotificationEvent（Webhookの本文、Slackとメールの元）`{schemaVersion:1,id,type,occurredAt,title,project:{id,name}|null,run:NotificationRunSummary|null,details:{[key]:string|number|boolean|null},url:string|null}`。NotificationRunSummary `{id,name,kind,status,experimentId,experimentName,error(先頭1000文字),startedAt,endedAt}`。execution snapshot・parameters・tags・環境変数・tokenは入れない。`url`は`MMT_WEB_ORIGIN`のRun詳細。
+
+- 積む: RunCompletionServiceの最後のterminal handler `NotificationRunHandler`が、終端遷移のtransactionで`run.failed`/`run.canceled`/`run.finished`を`enqueueNotificationEvent`（`services/notificationEvents.ts`）で積む。dedupe keyは`<種別>:<Run ID>`で、同じruleに同じkeyは1件だけ（`UNIQUE(rule_id,dedupe_key)`）。ほかの種別（自動実行の失敗、heartbeat、worker停止、plugin滞留）は検知する機能が同じ関数を呼ぶ（`dedupeKey`はその機能が決める）。積むのは有効なruleかつ有効なchannelだけ。
+- 送る: `NotificationDispatcher`（API process内、1秒間隔）が`FOR UPDATE SKIP LOCKED`で取り、60秒のleaseで送る。kindごとの送信部品はplatformの`NotificationSender`（`send(channel,event)→{deliveryId}`）。送信部品の無いkind（SMTP追加前のemail）は再試行せず`failed`（`email_sender_unavailable`）。失敗は5秒から倍々・上限3600秒で待ち、8回目（`NOTIFICATION_MAX_ATTEMPTS`）の失敗で`failed`。無効にしたchannel・ruleの行は送らず`failed`（`notification_channel_disabled`／`notification_rule_disabled`）。plugin outboxと同じclaim・lease・backoffの実装（`services/leasedOutbox.ts`）を使う。
+- `GET /projects/:p/notification-deliveries?limit=` → `{items:NotificationDelivery[]}`。Project admin。新しい順、limitは既定50・最大200。NotificationDelivery `{id,ruleId,channelId,channelName,channelKind,eventId,eventType,title,runId,status:'pending'|'sending'|'delivered'|'failed',attempts,nextAttemptAt,lastError,sentDeliveryId,createdAt,deliveredAt}`。`sentDeliveryId`は最後に成功した送信の`X-MMT-Delivery`。
+
 ## Platform保存API（親担当）
 
 `@mmt/platform`は`createArtifactStoresFromEnv(env?)` → `ArtifactStores`をexportする。`stores.backends():ArtifactBackend[]`、`stores.put({backend,key,body:Readable,mimeType})` → `{size,sha256}`、`stores.read({backend,key,range?:string})` → `{body:Readable,size,totalSize,contentRange?:string,status:200|206}`。`stores.remove({backend,key})`。`stores.multipart(backend)`は再開可能uploadに対応する保存先で`createMultipart`／`putPart`（宣言sizeと任意のpart SHA-256を検証）／`completeMultipart`（S3は最後以外5MiB以上）／`abortMultipart`／`listIncompleteUploads`／`removeAbandonedStaging`を返し、未対応ならnull。S3の単一`put()`は送信元の失敗時にAbortMultipartUploadの完了を待ってからrejectする。keyはprojectId/artifactId配下の不変ID。登録DB失敗時は書いたblobをcleanup。streamingでGBファイルを全量メモリへ載せない。`.env`設定は`ARTIFACT_FILESYSTEM_ROOT`、`S3_BUCKET`, `S3_ENDPOINT?`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`。FSは常時available、S3は必要設定がある場合available。DB由来の保存先は`createArtifactStoreFromConfig({config,credentials?,caBundle?})`（S3 clientは`createS3Client`）で作り、`createReplaceableArtifactStores()`が名前→storeの差し替えと書き込み停止（`ArtifactBackendDisabledError`）を受け持つ。APIでは`services/artifactStoreRegistry.ts`が環境変数由来とDB由来をまとめて`ArtifactStores`を実装する。

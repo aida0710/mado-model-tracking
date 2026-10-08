@@ -5,7 +5,9 @@ import {
   ArtifactRangeError,
   createArtifactStoresFromEnv,
   describeEnvironmentBackends,
+  createNotificationSenders,
   type ArtifactStores,
+  type NotificationSenders,
 } from '@mmt/platform';
 import type { ApiConfig } from './config.js';
 import type { Database } from './db/database.js';
@@ -101,6 +103,10 @@ import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
 import { sweepRoutes } from './routes/sweepRoutes.js';
+import { NotificationService } from './services/notificationService.js';
+import { NotificationDispatcher } from './services/notificationDispatcher.js';
+import { NotificationRunHandler } from './services/notificationRunHandler.js';
+import { notificationRoutes } from './routes/notificationRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -110,6 +116,8 @@ export interface ApplicationOptions {
   environment?: NodeJS.ProcessEnv;
   pluginClientFactory?: PluginClientFactory;
   repositoryReader?: RepositoryReader;
+  /** Senders by channel kind; defaults to Slack and webhook over HTTP. */
+  notificationSenders?: NotificationSenders;
 }
 
 // Registry JSON and code uploads are bounded separately from streamed artifact bodies.
@@ -189,6 +197,8 @@ export function createApplication(options: ApplicationOptions) {
   // Sweep trials follow chaining, promotion and automatic retry, and precede notifications.
   const sweepController = new SweepController(tasks, jobs);
   terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));
+  // Notifications end the wave-wide handler order (outputs, pending, chain, promotion, retry, sweep).
+  terminalHandlers.push(new NotificationRunHandler({ webOrigin: config.webOrigin }));
   const sweeps = new SweepService(database, jobs, sweepController);
   const sweepScheduler = new SweepScheduler(database, sweepController);
   const outputDeclarations = new RunOutputDeclarationService(registry);
@@ -202,6 +212,17 @@ export function createApplication(options: ApplicationOptions) {
     clientFactory: options.pluginClientFactory,
   });
   const outbox = new OutboxDispatcher(database, plugins);
+  const notificationSenders = options.notificationSenders ?? createNotificationSenders();
+  const notificationEnvironment = options.environment ?? process.env;
+  const notifications = new NotificationService({
+    database,
+    senders: notificationSenders,
+    environment: notificationEnvironment,
+  });
+  const notificationDispatcher = new NotificationDispatcher(database, {
+    senders: notificationSenders,
+    environment: notificationEnvironment,
+  });
   const runNotes = new RunNoteService(database);
   const runResumes = new RunResumeService(database, runCompletion);
   // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
@@ -334,6 +355,7 @@ export function createApplication(options: ApplicationOptions) {
     }),
   );
   app.route('/api/admin', storageBackendRoutes(storageBackends));
+  app.route('/api', notificationRoutes(notifications));
   app.get('/api/storage/backends', async (context) => {
     requireScope(principal(context), 'read');
     await stores.ensureLoaded();
@@ -349,6 +371,7 @@ export function createApplication(options: ApplicationOptions) {
     artifactUploadFinalizer,
     artifactUploadSweeper,
     sweepScheduler,
+    notificationDispatcher,
     services: {
       auth,
       audit,
@@ -381,6 +404,7 @@ export function createApplication(options: ApplicationOptions) {
       artifactStores: stores,
       sweeps,
       sweepController,
+      notifications,
     },
   };
 }
