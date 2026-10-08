@@ -119,7 +119,7 @@ export async function findLatestRunArtifact(
 ): Promise<string | undefined> {
   const artifact = await first<{ id: string }>(
     connection,
-    `SELECT id FROM artifacts WHERE project_id=$1 AND run_id=$2 AND path=$3
+    `SELECT id FROM artifacts WHERE project_id=$1 AND run_id=$2 AND path=$3 AND deleted_at IS NULL
     ORDER BY created_at DESC,id DESC LIMIT 1`,
     [reference.projectId, reference.runId, reference.path],
   );

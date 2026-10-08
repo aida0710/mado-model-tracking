@@ -19967,6 +19967,151 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteProjectsByPArtifactsByA",
+        "tags": [
+          "artifacts"
+        ],
+        "summary": "Artifactを削除（猶予期間の後にblobを回収）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "artifacts:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "admin",
+          "scope": "artifacts:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "a",
+            "in": "path",
+            "required": true,
+            "description": "Artifact ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Artifact"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "artifact_in_use",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/projects/{p}/artifacts/{a}/content": {
@@ -20138,6 +20283,126 @@
             "description": "一時的に処理できない",
             "x-mmt-error-codes": [
               "artifact_read_failed",
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/artifact-usage": {
+      "get": {
+        "operationId": "getProjectsByPArtifactUsage",
+        "tags": [
+          "artifacts"
+        ],
+        "summary": "保存先ごとのArtifact使用量",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactUsage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
               "oidc_unavailable",
               "internal_error"
             ],
@@ -35640,6 +35905,17 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "deletedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -35653,6 +35929,54 @@
           "size",
           "sha256",
           "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ArtifactBackendUsage": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "type": "string"
+          },
+          "artifactCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "totalBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pendingDeletionCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "pendingDeletionBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unreferencedOldVersionCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unreferencedOldVersionBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "backend",
+          "artifactCount",
+          "totalBytes",
+          "pendingDeletionCount",
+          "pendingDeletionBytes",
+          "unreferencedOldVersionCount",
+          "unreferencedOldVersionBytes"
         ],
         "additionalProperties": false
       },
@@ -36124,6 +36448,27 @@
           "size",
           "sha256",
           "receivedAt"
+        ],
+        "additionalProperties": false
+      },
+      "ArtifactUsage": {
+        "type": "object",
+        "properties": {
+          "backends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ArtifactBackendUsage"
+            }
+          },
+          "deleteGraceDays": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "backends",
+          "deleteGraceDays"
         ],
         "additionalProperties": false
       },

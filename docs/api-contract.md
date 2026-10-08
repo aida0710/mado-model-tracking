@@ -134,6 +134,7 @@ workerは実行前のソースを`.mmt/source.zip`と`.mmt/source-manifest.json`
 - `/api/2.0/mlflow/logged-models/*`：MLflow 3のモデルID、params/tags、PENDING/READY/FAILEDとモデルmetrics。READY確定は保存済みArtifactと`MLmodel`の参照を検証する。
 - `/api/2.0/mlflow/registered-models/*`、`/model-versions/*`：native Model/ModelVersionを使った登録、数字版の採番、検索、tags、alias。登録とモデル自動実行を同じtransactionへ保存する。
 - `GET /api/2.0/mlflow/artifacts/list`、Logged ModelのArtifacts一覧、`GET|PUT /api/2.0/mlflow-artifacts/artifacts/*`：Projectのfilesystem/S3へstream転送。SDKにストレージの秘密を渡さず、Rangeに対応する。
+- `DELETE /api/2.0/mlflow-artifacts/artifacts/*`（`HttpArtifactRepository.delete_artifacts`）：`runs/<id>/artifacts/<path>`または`models/<id>/artifacts/<path>`のファイル・ディレクトリ（pathなしはその持ち主の全部）を消して`{}`を返す。Project adminだけ（tokenは`artifacts:write`か`admin`）。それ以外は403 `PERMISSION_DENIED`。`model-versions/<id>/…`は409（登録モデル版は不変）。Runでは、そのpathに保存された全ての版のうち参照されていないもの（下の「Artifactの削除と使用量」の参照保護）をnativeの削除と同じくsoft deleteし、参照されている版（登録モデル版のmanifestなど）は保存したままRunの一覧・取得からだけ外す（Artifactの無いpath mappingを残す。同じpathへMLflowで保存し直すと再び見える）。Logged Modelではpath mappingを外し、参照されていないArtifactをsoft deleteする。存在しないpathも成功（再送しても同じ結果）。監査は`artifact.mlflow_delete`（path、削除数、残した数）。
 - `GET /server-info`と`GET /api/3.0/mlflow/server-info`（MLflow 3.17以降のSDKが読む）：同じ内容で、viewer＋`read`が必要。`{mlflow_compatibility:'3', multipart_uploads_enabled, multipart_downloads_enabled}`。uploadsは`MMT_MLFLOW_MULTIPART_UPLOADS`（既定true）、downloadsは`MMT_MLFLOW_MULTIPART_DOWNLOADS`（既定false。presigned URLの取得APIは作らないので、trueにするとMLflow 3.17以降のSDKのdownloadが失敗する）。
 - `POST /api/2.0/mlflow/registered-models/get-latest-versions` ({name,stages?})：stageごと（`transition-stage`で設定した`current_stage`。既定は`None`）に最新の版を1件ずつ返す。`stages`を指定するとそのstageだけを返す。削除した版は含めない。GETは提供しない（公式SDKはPOSTから試すので使える）。
 - MLflowのproxied multipart upload（`MMT_MLFLOW_MULTIPART_UPLOADS=true`のとき）。[再開可能なArtifact upload](#再開可能なartifact-upload)のsessionを`owner_kind`/`owner_id`付きで使う。native APIの一覧・取得・part・complete・abortからは見えない（404）。
@@ -487,6 +488,17 @@ DatasetVersionは`contentKind`を持つ。`reference`は従来どおりクライ
 - `GET /projects/:p/artifacts/:a/media-info` → ArtifactMediaInfo `{artifactId,durationSeconds,sampleRate,channels,bitsPerSample:number|null,codec,source:'header'|'ffprobe'}`。viewer+`read`。media情報が無い、または別ProjectのArtifactは404 `not_found`。`codec`はffprobeの`codec_name`と同じ名前（`pcm_s16le`、`pcm_s24le`、`pcm_f32le`、`pcm_alaw`、`flac`など）。
 - `GET /projects/:p/artifact-media-info?artifactIds=<id>,<id>,…` → `{items:ArtifactMediaInfo[]}`。viewer+`read`。IDはカンマ区切りで重複を除き最大200件（`ARTIFACT_MEDIA_INFO_BATCH_LIMIT`）。超過・UUIDでない値は422 `invalid_request`。media情報が無いIDや別ProjectのIDは結果から除くだけでエラーにしない。
 - Webの音声viewerはdecode前でもmedia情報があれば長さ・sample rate・チャンネル数を表示し、decode結果が出たらそちらを正として置き換える。
+
+## Artifactの削除と使用量
+
+削除は2段階。APIはArtifactを削除済みにし（`deletedAt`）、blobは`MMT_ARTIFACT_DELETE_GRACE_DAYS`（既定7日）が過ぎてからAPI内のgarbage collectorが保存先から消す。行は墓標として残す（保存キー、監査、完了済みupload sessionの参照のため）。復元はない。古い版の自動削除はしない。
+
+- `DELETE /projects/:p/artifacts/:a` → Artifact（`deletedAt`付き）。Project adminだけ（tokenは`artifacts:write`か`admin`）。editor以下は403 `project_forbidden`。削除済み・存在しないArtifactは404 `not_found`。次から参照されている間は409 `artifact_in_use`（messageに参照元の種類）: 登録モデル版（`artifactId`、またはMLflow登録の不変manifest`metadata.mlflow.artifactManifest`）、CodeVersion（`source:{kind:'artifact'}`、Singularity/Apptainerの`runtime.artifactId`）、DatasetVersionのファイル、checkpoint（`retained=true`、またはRunの`resumeCheckpointId`が指すもの。`retained=false`で再開に使われていないcheckpointのファイルは削除できる）。監査は`artifact.delete`（path、runId、backend、size）。403・409は`denied`として記録する。
+- 削除すると同じtransactionで、そのArtifactのmedia情報、Run media（`thumbnailArtifactId`はnullにする）、MLflowのpath mapping、サーバー側previewの行を消し、previewの生成物Artifactも削除済みにする。
+- 削除済みArtifactは、Run・Projectの一覧、tree、`GET /projects/:p/artifacts/:a`、content、media-info、previews、`artifacts/by-digest`、sync の`artifacts/check`、MLflowの一覧・取得に出ない（404）。同じpathに古い版があれば、それが現在の版になる（MLflowで削除したpathは除く）。
+- 削除済みArtifactを新しく参照すること（モデル版・CodeVersion・DatasetVersion・checkpoint・Run media・MLflow path mappingの作成）はDBのtriggerで拒否し、422 `invalid_reference`（MLflow経路は400 `INVALID_PARAMETER_VALUE`）になる。削除と参照の作成が同時に起きても、どちらか一方だけが成功する。
+- `GET /projects/:p/artifact-usage` → ArtifactUsage `{backends:ArtifactBackendUsage[],deleteGraceDays}`。viewer＋`read`。保存先（backend名）ごとに`{backend,artifactCount,totalBytes,pendingDeletionCount,pendingDeletionBytes,unreferencedOldVersionCount,unreferencedOldVersionBytes}`。`artifactCount`/`totalBytes`は削除済みでない全ての版、`pendingDeletion*`は削除済みでblobが未回収のもの、`unreferencedOldVersion*`は同じpathの新しい版（またはMLflowの削除）に置き換わり、上の参照保護のどれにも当たらない版。sizeは保存時に記録した値の合計。
+- garbage collector（`ArtifactGarbageCollector`、10分ごと）は、DBで削除済みになって猶予を過ぎたArtifactのblobを、そのArtifactの`backend`（無効化した保存先でも）から消し、`artifact_deletions.blob_removed_at`を記録する。消せなければ回数とエラー名を記録して次回に再試行する。存在しないblobの削除は成功扱いなので、途中で止まっても次回に回収できる。同じ周回で、再開可能なupload（期限切れsession、sessionの無い古い未完了multipart upload、書きかけのstaging）の掃除（`ArtifactUploadSweeper`）も行う。
 
 ## 長い音声・動画のサーバー側preview
 

@@ -12,6 +12,7 @@ import {
   type ApiContext,
   type ApiEnvironment,
 } from '../../http/request.js';
+import { ArtifactDeletionService } from '../../services/artifactDeletionService.js';
 import type { ArtifactService } from '../../services/artifactService.js';
 import {
   artifactRootUri,
@@ -65,13 +66,17 @@ function artifactAccess(
   return { ...location, principal: principal(context), projectId: uuidParam(context, 'p') };
 }
 
-function transferLocation(context: ApiContext): ArtifactLocation {
+function transferLocation(
+  context: ApiContext,
+  options: { directory?: boolean } = {},
+): ArtifactLocation {
   const encodedPath = new URL(context.req.url).pathname;
   const rootPosition = encodedPath.indexOf(`${ARTIFACT_TRANSFER_ROOT}/`);
   if (rootPosition < 0)
     throw new DomainError(422, 'Artifactパスが不正です', 'invalid_parameter_value');
   return decodeArtifactLocation(
     encodedPath.slice(rootPosition + ARTIFACT_TRANSFER_ROOT.length + 1),
+    options,
   );
 }
 
@@ -151,13 +156,16 @@ export function mlflowArtifactRoutes(options: {
   /** Absent when MMT_MLFLOW_MULTIPART_UPLOADS=false: mpu/* then answers the SDK's fallback 501. */
   multipart?: MlflowMultipartUploadService;
   checkpoints?: CheckpointService;
+  /** Defaults to a service on the same database; the app passes the one its native routes use. */
+  deletions?: ArtifactDeletionService;
 }): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
-  const transfers = new ArtifactTransferService(
-    options.database,
-    options.artifacts,
-    options.checkpoints,
-  );
+  const transfers = new ArtifactTransferService({
+    database: options.database,
+    artifacts: options.artifacts,
+    checkpoints: options.checkpoints,
+    deletions: options.deletions ?? new ArtifactDeletionService(options.database),
+  });
 
   routes.get(ARTIFACT_TRANSFER_ROOT, async (context) => {
     const query = parse(proxyListQuery, context.req.query());
@@ -176,6 +184,12 @@ export function mlflowArtifactRoutes(options: {
       body: requestBodyStream(context),
       mimeType: context.req.header('Content-Type') ?? 'application/octet-stream',
     });
+    return context.json({});
+  });
+
+  // HttpArtifactRepository.delete_artifacts sends a file or directory path, or none for the root.
+  routes.delete(`${ARTIFACT_TRANSFER_ROOT}/*`, async (context) => {
+    await transfers.delete(artifactAccess(context, transferLocation(context, { directory: true })));
     return context.json({});
   });
 

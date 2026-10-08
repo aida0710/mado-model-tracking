@@ -41,6 +41,7 @@ export { DEFAULT_BASELINE_ALIAS } from './evaluation.js';
 export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, ArtifactUploadPart, ArtifactUploadStatus } from './artifactUploads.js';
 export type { RunSearchPage, RunSearchRequest } from './runSearch.js';
 export type { ArtifactDirectoryEntry, ArtifactListVersions, ArtifactPage, ArtifactTree } from './artifactListing.js';
+export type { ArtifactBackendUsage, ArtifactUsage } from './artifactUsage.js';
 export type { ArtifactMediaInfo } from './artifactMediaInfo.js';
 export { ARTIFACT_MEDIA_INFO_BATCH_LIMIT } from './artifactMediaInfo.js';
 export type { ArtifactPreview, ArtifactPreviewKind, ArtifactPreviewStatus, WaveformPeaksPreview } from './artifactPreviews.js';
@@ -384,6 +385,8 @@ export interface Artifact {
   size: number;
   sha256: string;
   createdAt: string;
+  /** Set once the Artifact is deleted; deleted Artifacts are not listed and their content is 404. */
+  deletedAt?: string | null;
 }
 export interface ComputeTarget {
   id: string;

@@ -43,7 +43,8 @@ export async function resolveDatasetContent(
   const artifactIds = [...new Set(content.files.map((file) => file.artifactId))];
   const artifacts = await rows<Pick<Artifact, 'id' | 'size' | 'sha256'>>(
     connection,
-    'SELECT id,size,sha256 FROM artifacts WHERE project_id=$1 AND id=ANY($2::uuid[])',
+    `SELECT id,size,sha256 FROM artifacts
+    WHERE project_id=$1 AND id=ANY($2::uuid[]) AND deleted_at IS NULL`,
     [projectId, artifactIds],
   );
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
@@ -185,7 +186,7 @@ export class DatasetContentService {
     await this.requireReadAccess(principal, request.projectId);
     const artifact = await first<Artifact>(
       this.database,
-      `SELECT * FROM artifacts WHERE project_id=$1 AND sha256=$2 AND size=$3
+      `SELECT * FROM artifacts WHERE project_id=$1 AND sha256=$2 AND size=$3 AND deleted_at IS NULL
        ORDER BY created_at DESC,id DESC LIMIT 1`,
       [request.projectId, request.sha256, request.size],
     );

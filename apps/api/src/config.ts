@@ -32,6 +32,8 @@ const MIN_SESSION_ABSOLUTE_SECONDS = 60 * 60;
 
 // One artifact may hold a full checkpoint set; operators can lower or raise this limit.
 const DEFAULT_ARTIFACT_MAX_BYTES = 200 * 1024 ** 3;
+// A week lets an administrator notice a mistaken deletion before the bytes are gone (decisions.md).
+const DEFAULT_ARTIFACT_DELETE_GRACE_DAYS = 7;
 // 0 disables the whole-request deadline so multi-hour uploads are bounded only by idle time.
 const DEFAULT_UPLOAD_REQUEST_TIMEOUT_MS = 0;
 // A stalled client releases its socket after two minutes without received bytes.
@@ -108,6 +110,12 @@ const environmentSchema = z.object({
     .positive()
     .max(Number.MAX_SAFE_INTEGER)
     .default(DEFAULT_ARTIFACT_MAX_BYTES),
+  MMT_ARTIFACT_DELETE_GRACE_DAYS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .max(3650)
+    .default(DEFAULT_ARTIFACT_DELETE_GRACE_DAYS),
   MMT_UPLOAD_REQUEST_TIMEOUT_MS: z.coerce
     .number()
     .int()
@@ -176,6 +184,8 @@ export interface ApiConfig {
   allowSeed: boolean;
   repositorySsh: { keyPath: string; knownHostsPath: string } | null;
   artifactMaxBytes: number;
+  // Days between deleting an Artifact and the garbage collector removing its blob.
+  artifactDeleteGraceDays: number;
   // 0 means the timeout is disabled.
   uploadRequestTimeoutMs: number;
   uploadIdleTimeoutMs: number;
@@ -313,6 +323,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
           }
         : null,
     artifactMaxBytes: settings.MMT_ARTIFACT_MAX_BYTES,
+    artifactDeleteGraceDays: settings.MMT_ARTIFACT_DELETE_GRACE_DAYS,
     uploadRequestTimeoutMs: settings.MMT_UPLOAD_REQUEST_TIMEOUT_MS,
     uploadIdleTimeoutMs: settings.MMT_UPLOAD_IDLE_TIMEOUT_MS,
     mlflowMultipart: {

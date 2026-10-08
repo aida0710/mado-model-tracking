@@ -120,6 +120,8 @@ export class ArtifactStoreRegistry implements ArtifactStores {
 
   async remove(reference: { backend: ArtifactBackend; key: string }): Promise<void> {
     await this.ensureLoaded();
+    // The garbage collector removes blobs of backends another API process may have added.
+    if (!this.stores.backends().includes(reference.backend)) await this.reload();
     return this.stores.remove(reference);
   }
 

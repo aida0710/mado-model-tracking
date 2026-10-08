@@ -13,19 +13,20 @@ export const MAX_TREE_DIRECTORIES = 1000;
 
 /**
  * SQL condition that is true for the Artifact a Run currently shows at its path. An MLflow path
- * mapping stays authoritative (a later native retry does not replace it); without a mapping the
- * newest upload wins, with the id breaking created_at ties. The MLflow artifact list uses the same
- * rule, so both APIs show the same file for a path.
+ * mapping stays authoritative (a later native retry does not replace it), and a mapping without an
+ * Artifact (MLflow delete_artifacts) shows nothing at the path; without a mapping the newest
+ * Artifact not deleted wins, with the id breaking created_at ties. The MLflow artifact list uses
+ * the same rule, so both APIs show the same file for a path. Callers exclude deleted Artifacts.
  */
 export function currentRunArtifactCondition(artifact: string): string {
   return `COALESCE(
-    (SELECT mapping.artifact_id=${artifact}.id FROM mlflow_artifact_paths mapping
+    (SELECT mapping.artifact_id IS NOT DISTINCT FROM ${artifact}.id FROM mlflow_artifact_paths mapping
      WHERE mapping.project_id=${artifact}.project_id AND mapping.owner_kind='run'
        AND mapping.owner_id=${artifact}.run_id::text AND mapping.path=${artifact}.path),
     NOT EXISTS(SELECT 1 FROM artifacts newer
      WHERE newer.project_id=${artifact}.project_id
        AND (newer.run_id=${artifact}.run_id OR (newer.run_id IS NULL AND ${artifact}.run_id IS NULL))
-       AND newer.path COLLATE "C"=${artifact}.path COLLATE "C"
+       AND newer.path COLLATE "C"=${artifact}.path COLLATE "C" AND newer.deleted_at IS NULL
        AND (newer.created_at,newer.id)>(${artifact}.created_at,${artifact}.id)))`;
 }
 
@@ -130,7 +131,7 @@ export async function listRunArtifacts(
   const listed = await rows<ListedArtifact>(
     connection,
     `SELECT a.*,${CURSOR_TIMESTAMP_SQL} AS listing_created_at FROM artifacts a
-     WHERE a.project_id=$1 AND a.run_id=$2 AND a.path COLLATE "C" LIKE $3
+     WHERE a.project_id=$1 AND a.run_id=$2 AND a.path COLLATE "C" LIKE $3 AND a.deleted_at IS NULL
        AND (NOT $4::boolean OR strpos(substr(a.path,length($5)+1),'/')=0)
        AND ($6::text IS NULL OR a.path COLLATE "C">$6 COLLATE "C"
             OR (a.path=$6 AND (a.created_at,a.id)<($7::timestamptz,$8::uuid)))
@@ -169,7 +170,7 @@ export async function runArtifactTree(
        SELECT a.size,CASE WHEN strpos(substr(a.path,length($4)+1),'/')=0 THEN ''
                      ELSE split_part(substr(a.path,length($4)+1),'/',1) END AS child
        FROM artifacts a
-       WHERE a.project_id=$1 AND a.run_id=$2 AND a.path COLLATE "C" LIKE $3
+       WHERE a.project_id=$1 AND a.run_id=$2 AND a.path COLLATE "C" LIKE $3 AND a.deleted_at IS NULL
          AND ${currentRunArtifactCondition('a')}
      ) listed GROUP BY child ORDER BY child COLLATE "C" LIMIT $5`,
     [
@@ -246,7 +247,7 @@ export async function listProjectArtifacts(
   const listed = await rows<ListedArtifact>(
     connection,
     `SELECT a.*,${CURSOR_TIMESTAMP_SQL} AS listing_created_at FROM artifacts a
-     WHERE a.project_id=$1
+     WHERE a.project_id=$1 AND a.deleted_at IS NULL
        AND ($2::text IS NULL OR a.path ILIKE '%' || $2 || '%')
        AND ($3::text IS NULL OR lower(trim(split_part(a.mime_type,';',1))) LIKE $3)
        AND ($4::uuid IS NULL OR a.run_id=$4)

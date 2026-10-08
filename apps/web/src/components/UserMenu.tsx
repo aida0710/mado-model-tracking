@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useId } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { usePopover } from '../hooks/usePopover';
 import { canChangeOwnPassword } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 
@@ -13,28 +14,9 @@ const AVATAR_INITIALS_LENGTH = 2;
 /** The avatar in the top bar; it opens a menu with the signed-in user and their account pages. */
 export function UserMenu() {
   const auth = useAuth();
-  const location = useLocation();
   const menuId = useId();
-  const container = useRef<HTMLDivElement>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const { container, isOpen, toggle } = usePopover();
   const initials = auth.user.displayName.slice(0, AVATAR_INITIALS_LENGTH).toUpperCase();
-
-  useEffect(() => setIsOpen(false), [location.pathname]);
-  useEffect(() => {
-    if (!isOpen) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) setIsOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
-    };
-    document.addEventListener('pointerdown', closeOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [isOpen]);
 
   return (
     <div className="user-menu" ref={container}>
@@ -46,7 +28,7 @@ export function UserMenu() {
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={toggle}
       >
         {initials}
       </button>

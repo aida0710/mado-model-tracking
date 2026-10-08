@@ -10,7 +10,7 @@ export async function listArtifactPaths(
   access: ArtifactAccess,
 ): Promise<ArtifactPathEntry[]> {
   const indexedSql = `SELECT p.path,p.artifact_id,a.size FROM mlflow_artifact_paths p
-     JOIN artifacts a ON a.id=p.artifact_id AND a.project_id=p.project_id
+     JOIN artifacts a ON a.id=p.artifact_id AND a.project_id=p.project_id AND a.deleted_at IS NULL
      WHERE p.project_id=$1 AND p.owner_kind=$2 AND p.owner_id=$3`;
   const parameters = [access.projectId, access.owner.kind, access.owner.id];
   if (access.owner.kind === 'model')
@@ -19,7 +19,8 @@ export async function listArtifactPaths(
   const artifacts = await rows<ArtifactPathEntry>(
     connection,
     `SELECT a.path,a.id AS artifact_id,a.size FROM artifacts a
-     WHERE a.project_id=$1 AND a.run_id=$2::uuid AND ${currentRunArtifactCondition('a')}`,
+     WHERE a.project_id=$1 AND a.run_id=$2::uuid AND a.deleted_at IS NULL
+       AND ${currentRunArtifactCondition('a')}`,
     [access.projectId, access.owner.id],
   );
   return artifacts.filter((artifact) => isSafeArtifactPath(artifact.path));
@@ -35,16 +36,18 @@ export async function findArtifactPath(
     access.owner.kind === 'model'
       ? indexedSql
       : `WITH indexed AS (${indexedSql}), native AS (
-       SELECT id AS artifact_id FROM artifacts WHERE project_id=$1 AND run_id=$3::uuid AND path=$4
+       SELECT id AS artifact_id FROM artifacts
+       WHERE project_id=$1 AND run_id=$3::uuid AND path=$4 AND deleted_at IS NULL
        AND NOT EXISTS(SELECT 1 FROM indexed) ORDER BY created_at DESC,id DESC LIMIT 1
      ) SELECT * FROM indexed UNION ALL SELECT * FROM native`;
-  const artifact = await first<{ artifactId: string }>(connection, sql, [
+  // A mapping without an Artifact is a path removed by MLflow delete_artifacts.
+  const artifact = await first<{ artifactId: string | null }>(connection, sql, [
     access.projectId,
     access.owner.kind,
     access.owner.id,
     access.path,
   ]);
-  if (!artifact) notFound('Artifact');
+  if (!artifact?.artifactId) notFound('Artifact');
   return artifact.artifactId;
 }
 

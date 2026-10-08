@@ -182,6 +182,7 @@ import {
   routeError,
   type NativeRoute,
   type NonJsonContent,
+  type RouteAccess,
 } from './nativeRoute.js';
 
 /**
@@ -232,6 +233,8 @@ const partHeaders = z.object({ [PART_SHA256_HEADER]: z.string().optional() });
 const RUNS_WRITE = projectEditor('runs:write');
 const REGISTRY_WRITE = projectEditor('registry:write');
 const ARTIFACTS_WRITE = projectEditor('artifacts:write');
+// Deleting is for Project admins (decisions.md); a token needs artifacts:write (or admin).
+const ARTIFACTS_DELETE: RouteAccess = { kind: 'project', role: 'admin', scope: 'artifacts:write' };
 const JOBS_WRITE = projectEditor('jobs:write');
 const SERVICE_ACCOUNT_ADMIN = { ...PROJECT_ADMIN, sessionOnly: true };
 
@@ -1413,6 +1416,23 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     headers: artifactRangeHeaders,
     responses: { 200: artifactBytes, 206: artifactBytes, 304: null },
     errors: [...routeError(416, 'invalid_range'), ...routeError(503, 'artifact_read_failed')],
+  },
+  {
+    method: 'delete',
+    path: '/api/projects/:p/artifacts/:a',
+    tag: 'artifacts',
+    summary: 'Artifactを削除（猶予期間の後にblobを回収）',
+    access: ARTIFACTS_DELETE,
+    responses: { 200: contract.artifactSchema },
+    errors: routeError(409, 'artifact_in_use'),
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/artifact-usage',
+    tag: 'artifacts',
+    summary: '保存先ごとのArtifact使用量',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.artifactUsageSchema },
   },
   {
     method: 'get',

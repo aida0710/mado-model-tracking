@@ -253,6 +253,15 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。署名の版は保存先の設定から使われるので、v2 の保存先もこの手順で確かめる（[検証手順](verification.md) の「実S3の保存・取得を確認する」）。
 - API プロセスが複数ある構成では、設定変更は変更を受けたプロセスで即時に効き、他のプロセスは未知の保存先名を読んだときに読み直す。有効/無効や part size の変更を全プロセスへ確実に反映するには API を再起動する。
 
+### Artifactの削除と回収（garbage collection）
+
+- 削除できるのは Project admin だけ（Web は Run の Artifacts で開いたファイルの「⋯」メニュー → 確認、API は `DELETE /projects/:p/artifacts/:a`、MLflow SDK は `delete_artifacts`）。editor 以下は 403。登録モデル版・CodeVersion・DatasetVersion・保持中の checkpoint（`retained=true` か再開元）から参照されている Artifact は 409 `artifact_in_use` で消せない。参照元を確かめて、不要なら参照元の側を先に片付ける。
+- 削除は即時に一覧・取得から消えるが、blob は `MMT_ARTIFACT_DELETE_GRACE_DAYS`（既定 7 日）残る。誤削除に気付いたら猶予中に blob を退避できる（DB の行は残るので `artifacts.storage_key` と `artifact_deletions` で場所が分かる）。画面からの復元はない。
+- 回収は API プロセス内の `ArtifactGarbageCollector` が 10 分ごとに行う。同じ周回で、upload session の期限切れ処理、session の無い 7 日以上前の未完了 multipart upload の abort、24 時間更新の無い filesystem の書きかけ staging（`.upload`・`.tmp`）の削除も行う（以前の `ArtifactUploadSweeper` の周期処理はこの中に入った）。API を複数動かす場合は全プロセスで動くが、同じ blob の二重削除は成功扱いなので害は無い。
+- blob を消せなかったときは `{"event":"artifact_blob_removal_failed","artifactId":…,"name":…}` がログに出て、`artifact_deletions.removal_attempts` と `last_removal_error`（エラー名だけ）が増える。次の周回で再試行する。続く場合は保存先の Delete 権限と疎通、無効化・削除した保存先でないかを確かめる。未回収の一覧: `SELECT artifact_id,removal_attempts,last_removal_error FROM artifact_deletions WHERE blob_removed_at IS NULL`。
+- S3 の必要権限に DeleteObject を含める。multipart を後から無効にした保存先では、未完了 multipart upload を API から abort できないので、bucket の AbortIncompleteMultipartUpload の lifecycle rule に任せる。
+- Project 設定の「Artifactの使用量」（`GET /projects/:p/artifact-usage`）に、保存先ごとの件数・容量、削除待ち、参照されていない古い版の量が出る。古い版は自動では消さない（decisions.md）。消すなら Project admin が個別に削除する。
+
 ### 音声Artifactのmedia情報
 
 - WAV（`audio/wav`・`audio/x-wav`・`audio/wave`）と FLAC（`audio/flac`・`audio/x-flac`）の Artifact は、登録時に保存先から先頭 64KiB を Range で読み、長さ・sample rate・チャンネル数・bit 数・codec を `artifact_media_info` に保存する（migration 029）。ffmpeg などの追加依存は無い。
@@ -449,6 +458,7 @@ API serverは30秒ごとに次を確かめ、見つけたらProjectの「運用�
 | `MMT_TOKEN_MAX_LIFETIME_DAYS` | `365` | 新しいAPI tokenの期限の上限。期限を省略したtokenはこの日数で切れる。1〜3650 |
 | `MMT_CSV_EXPORT_MAX_ROWS` | `50000` | `POST /projects/:p/runs/search/export.csv`の最大行数。超えた分は省き、応答ヘッダ`X-MMT-Export-Truncated: true`とCSV末尾の`# truncated: ...`行で示す。正の整数 |
 | `MMT_CHECKPOINT_KEEP_COUNT` | `5` | Runごとに既定の一覧へ出すcheckpointの数（1以上）。超えた古いcheckpointは`retained=false`になり、一覧の既定表示から外れる。Artifactは消さないので再開には使える |
+| `MMT_ARTIFACT_DELETE_GRACE_DAYS` | `7` | 削除したArtifactのblobをgarbage collectorが保存先から消すまでの日数。0〜3650（0は次の周回で消す） |
 
 ### Run検索のCSV出力
 

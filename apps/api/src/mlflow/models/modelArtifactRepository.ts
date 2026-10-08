@@ -74,7 +74,7 @@ export async function runModelArtifacts(
       WHERE paths.project_id=$1 AND paths.owner_kind='run' AND paths.owner_id=$2
     ), native_saved AS (
       SELECT DISTINCT ON(a.path) a.path,a.id AS artifact_id,a.sha256,a.size FROM artifacts a
-      WHERE a.project_id=$1 AND a.run_id=$2::uuid AND NOT EXISTS(
+      WHERE a.project_id=$1 AND a.run_id=$2::uuid AND a.deleted_at IS NULL AND NOT EXISTS(
         SELECT 1 FROM mlflow_artifact_paths paths WHERE paths.project_id=$1 AND paths.owner_kind='run' AND paths.owner_id=$2 AND paths.path=a.path
       ) ORDER BY a.path,a.created_at DESC,a.id DESC
     ), manifest AS (SELECT * FROM saved UNION ALL SELECT * FROM native_saved)

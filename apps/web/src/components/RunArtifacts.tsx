@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Artifact } from '@mmt/contracts';
+import { ArtifactActionsMenu } from './ArtifactActionsMenu';
 import { ArtifactPreview } from './ArtifactPreview';
 import { ArtifactTree } from './ArtifactTree';
 import { ErrorNotice, Resource } from './Feedback';
+import { useProject } from '../hooks/useProject';
 import { useArtifactVersions, useRunArtifacts } from '../hooks/useRunArtifacts';
 import { formatBytes, formatDate } from '../lib/format';
 import { text } from '../i18n/catalog';
@@ -24,7 +26,9 @@ export function RunArtifacts({
 }) {
   const [params, setParams] = useSearchParams();
   const prefix = params.get(PREFIX_PARAMETER) ?? '';
-  const { tree, files } = useRunArtifacts({ projectId, runId, prefix }, revision);
+  // Counts deletions made here, so the folder and the open file reload after each one.
+  const [deletions, setDeletions] = useState(0);
+  const { tree, files } = useRunArtifacts({ projectId, runId, prefix }, revision + deletions);
   const [chosen, setChosen] = useState<Artifact>();
   // Like the earlier flat list, the first file of the open folder previews until one is chosen.
   const selected = chosen ?? files.items[0];
@@ -56,7 +60,14 @@ export function RunArtifacts({
         <ErrorNotice message={files.error} retry={files.reload} />
       </div>
       {selected ? (
-        <ArtifactDetails key={selected.id} latest={selected} />
+        <ArtifactDetails
+          key={`${selected.id}:${deletions}`}
+          latest={selected}
+          onDeleted={() => {
+            setChosen(undefined);
+            setDeletions((count) => count + 1);
+          }}
+        />
       ) : (
         <section className="artifact-preview">
           <p className="muted">{text.artifactSelectFile}</p>
@@ -67,13 +78,17 @@ export function RunArtifacts({
 }
 
 /** Preview of the latest upload, with earlier uploads to the same path under the details. */
-function ArtifactDetails({ latest }: { latest: Artifact }) {
+function ArtifactDetails({ latest, onDeleted }: { latest: Artifact; onDeleted: () => void }) {
+  const { isProjectAdmin } = useProject();
   const [shown, setShown] = useState(latest);
   const versions = useArtifactVersions(latest);
   const isPrevious = shown.id !== latest.id;
   return (
     <section className="artifact-preview">
-      <h3>{shown.path}</h3>
+      <div className="artifact-preview-heading">
+        <h3>{shown.path}</h3>
+        {isProjectAdmin && <ArtifactActionsMenu artifact={shown} onDeleted={onDeleted} />}
+      </div>
       <p className="mono muted">
         {shown.mimeType} · {formatBytes(shown.size)} · {formatDate(shown.createdAt)}
       </p>
