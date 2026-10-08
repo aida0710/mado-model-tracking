@@ -8,12 +8,15 @@ export interface AuditEvent {
   occurredAt: string;
   actorType: AuditActorType;
   actorUserId: string | null;
+  // Current display name of actorUserId, so screens do not show the bare UUID.
+  actorName: string | null;
   actorTokenId: string | null;
   action: string;
   outcome: AuditOutcome;
   resourceType: string;
   resourceId: string | null;
   projectId: string | null;
+  projectName: string | null;
   details: JsonObject;
   ip: string | null;
   userAgent: string | null;

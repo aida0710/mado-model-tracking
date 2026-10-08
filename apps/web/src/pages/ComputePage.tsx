@@ -12,6 +12,7 @@ import { WorkerPresenceTable } from '../components/WorkerPresenceTable';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { TargetCheckPanel } from '../components/TargetCheckPanel';
+import { formatTargetLocation } from '../lib/computeTargetDisplay';
 import { text } from '../i18n/catalog';
 import { runtimeLabels } from '../i18n/runtime';
 
@@ -61,8 +62,7 @@ export function ComputePage() {
                 key: 'host',
                 label: text.host,
                 className: 'mono',
-                render: (target) =>
-                  target.host ? `${target.username}@${target.host}:${target.port}` : '—',
+                render: (target) => formatTargetLocation(target),
               },
               { key: 'executor', label: text.executor, render: (target) => target.executor },
               {

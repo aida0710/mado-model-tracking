@@ -316,6 +316,18 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
       200,
     );
     expect(filtered.items.map((event) => event.projectId)).toEqual([other.id]);
+    // Screens show who acted and in which Project by name, not by UUID.
+    expect(filtered.items[0]).toMatchObject({
+      actorUserId: fixture.outsider.userId,
+      actorName: expect.any(String),
+      projectName: 'Other Project',
+    });
+    const outsiderName = await harness.database.query(
+      'SELECT display_name FROM users WHERE id=$1',
+      [fixture.outsider.userId],
+    );
+    expect(filtered.items[0]!.actorName).toBe(outsiderName.rows[0].display_name);
+    expect(projectless.every((event) => event.projectName === null)).toBe(true);
   });
 
   it('新しい順にlimitずつ返し、cursorで重複なく続きを読める', async () => {

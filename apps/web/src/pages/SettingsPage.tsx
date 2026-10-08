@@ -12,14 +12,13 @@ import { ProjectTokens } from '../components/ProjectTokens';
 import { ProjectServiceAccounts } from '../components/ProjectServiceAccounts';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { ProjectList } from '../components/ProjectList';
-import { AuditEventsTable } from '../components/AuditEventsTable';
-import { ErrorNotice, Loading } from '../components/Feedback';
+import { AuditEventLog } from '../components/AuditEventLog';
 import { text } from '../i18n/catalog';
 
 export function SettingsPage() {
   const { project, projects, reloadProjects, isProjectAdmin } = useProject();
   // The API refuses non-administrators, so they never request the log.
-  const audit = useAuditEvents(isProjectAdmin ? project.id : null);
+  const audit = useAuditEvents(isProjectAdmin ? { projectId: project.id } : null);
   // Shared so a group binding change also refreshes the effective roles in the member list.
   const projectMembers = useProjectMembers(project.id);
   // Shared so a key issued to a Service Account appears in the Project token list.
@@ -37,6 +36,8 @@ export function SettingsPage() {
       <div className="settings-grid">
         <ProjectList projects={projects} onCreated={reloadProjects} />
         <ProjectSettings />
+      </div>
+      <div className="settings-stack">
         <MlflowConnectionCard onTokenCreated={reloadTokenLists} />
         <ProjectMembers projectMembers={projectMembers} />
         <ProjectGroupBindings onChanged={projectMembers.members.reload} />
@@ -48,17 +49,7 @@ export function SettingsPage() {
             <div className="section-heading">
               <h2>{text.auditEvents}</h2>
             </div>
-            <ErrorNotice message={audit.error} retry={audit.reload} />
-            {audit.loading && !audit.items.length ? (
-              <Loading />
-            ) : audit.error && !audit.items.length ? null : (
-              <AuditEventsTable
-                events={audit.items}
-                hasMore={audit.hasMore}
-                loading={audit.loading}
-                onLoadMore={audit.loadMore}
-              />
-            )}
+            <AuditEventLog audit={audit} />
           </section>
         )}
       </div>

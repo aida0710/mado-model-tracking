@@ -16,6 +16,14 @@ describe('Projectの監査ログ取得', () => {
     );
     expect(page).toEqual({ items: [], nextCursor: 'older' });
   });
+  it('全体の監査ログはProjectを付けないpathから同じ件数で読む', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ items: [], nextCursor: null }), { status: 200 }));
+    vi.stubGlobal('fetch', fetch);
+    await auditApi.globalEvents({ cursor: 'last-event' });
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/audit-events?limit=50&cursor=last-event');
+  });
   it('nextCursorが欠けた応答は最終ページとして扱わずエラーにする', async () => {
     vi.stubGlobal(
       'fetch',

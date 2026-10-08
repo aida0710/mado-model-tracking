@@ -1,64 +1,29 @@
 import type { AuditEvent } from '@mmt/contracts';
 import { DataTable } from './DataTable';
 import { summarizeAuditDetails } from '../lib/auditEventSummary';
-import { formatDate, formatValue } from '../lib/format';
+import { auditActionLabel, auditActorLabel, auditProjectLabel } from '../lib/auditEventDisplay';
+import { formatDate } from '../lib/format';
 import { accessText } from '../i18n/access';
 
-type AuditTextKey = keyof typeof accessText;
-
-const actionTextKeys: Record<string, AuditTextKey> = {
-  'project.member.set': 'auditActionProjectMemberSet',
-  'token.create': 'auditActionTokenCreate',
-  'token.revoke': 'auditActionTokenRevoke',
-  'auth.oidc.sync': 'auditActionOidcSync',
-  'auth.oidc.denied': 'auditActionOidcDenied',
-  'run.note.update': 'auditActionRunNoteUpdate',
-  'comment.create': 'auditActionCommentCreate',
-  'comment.update': 'auditActionCommentUpdate',
-  'comment.delete': 'auditActionCommentDelete',
-  'service_account.create': 'auditActionServiceAccountCreate',
-  'service_account.update': 'auditActionServiceAccountUpdate',
-  'admin.user.create': 'auditActionAdminUserCreate',
-  'admin.user.update': 'auditActionAdminUserUpdate',
-  'admin.user.password_reset': 'auditActionAdminUserPasswordReset',
-  'saved_view.create': 'auditActionSavedViewCreate',
-  'saved_view.update': 'auditActionSavedViewUpdate',
-  'saved_view.delete': 'auditActionSavedViewDelete',
-  'notification.channel.create': 'auditActionNotificationChannelCreate',
-  'notification.channel.update': 'auditActionNotificationChannelUpdate',
-  'notification.channel.test': 'auditActionNotificationChannelTest',
-  'notification.rule.create': 'auditActionNotificationRuleCreate',
-  'notification.rule.update': 'auditActionNotificationRuleUpdate',
+const outcomeLabels: Record<AuditEvent['outcome'], string> = {
+  success: accessText.auditOutcomeSuccess,
+  denied: accessText.auditOutcomeDenied,
+  failed: accessText.auditOutcomeFailed,
 };
 
-const outcomeTextKeys: Record<AuditEvent['outcome'], AuditTextKey> = {
-  success: 'auditOutcomeSuccess',
-  denied: 'auditOutcomeDenied',
-  failed: 'auditOutcomeFailed',
-};
-
-// Actions recorded by other packages keep their raw name until they get a label.
-const actionLabel = (action: string) => {
-  const key = actionTextKeys[action];
-  return key ? accessText[key] : action;
-};
-
-function actorLabel(event: AuditEvent): string {
-  if (event.actorType === 'system') return accessText.auditActorSystem;
-  const user = formatValue(event.actorUserId);
-  return event.actorType === 'token' ? `${user} (${accessText.auditActorToken})` : user;
-}
-
+/** Audit events, newest first. `showProject` adds the Project column for the global log. */
 export function AuditEventsTable({
   events,
   hasMore,
   loading,
   onLoadMore,
+  showProject = false,
 }: {
   events: AuditEvent[];
   hasMore: boolean;
   loading: boolean;
   onLoadMore: () => void;
+  showProject?: boolean;
 }) {
   return (
     <>
@@ -72,21 +37,35 @@ export function AuditEventsTable({
             label: accessText.auditOccurredAt,
             render: (event) => formatDate(event.occurredAt),
           },
+          ...(showProject
+            ? [
+                {
+                  key: 'project',
+                  label: accessText.auditProject,
+                  className: 'audit-label',
+                  render: (event: AuditEvent) => auditProjectLabel(event),
+                },
+              ]
+            : []),
           {
             key: 'actor',
             label: accessText.auditActor,
-            className: 'mono',
-            render: actorLabel,
+            className: 'audit-label',
+            render: (event) => (
+              <span title={event.actorUserId ?? undefined}>{auditActorLabel(event)}</span>
+            ),
           },
           {
             key: 'action',
             label: accessText.auditAction,
-            render: (event) => <span title={event.action}>{actionLabel(event.action)}</span>,
+            className: 'audit-label',
+            render: (event) => <span title={event.action}>{auditActionLabel(event.action)}</span>,
           },
           {
             key: 'outcome',
             label: accessText.auditOutcome,
-            render: (event) => accessText[outcomeTextKeys[event.outcome]],
+            className: 'audit-label',
+            render: (event) => outcomeLabels[event.outcome],
           },
           {
             key: 'resource',

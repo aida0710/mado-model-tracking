@@ -32,6 +32,10 @@ export const notificationsText = {
   notificationTest: 'テスト送信',
   notificationTestDelivered: 'テスト送信が届きました',
   notificationTestFailed: 'テスト送信に失敗しました',
+  notificationTestNotInHistory:
+    'テスト送信は送信履歴には残りません。結果は監査ログ（通知先のテスト送信）に残ります。',
+  notificationEnvNameInvalid:
+    '環境変数名はMMT_NOTIFICATION_で始め、英大文字・数字・_だけで書いてください',
   notificationRules: '通知ルール',
   newNotificationRule: '通知ルールを作成',
   notificationRulesEmpty: '通知ルールはまだありません',
@@ -80,8 +84,30 @@ export const notificationDeliveryStatusLabels: Record<NotificationDeliveryStatus
   failed: '失敗',
 };
 
+// Failure codes stored by the API (packages/platform notification senders and the dispatcher).
+export const notificationErrorLabels: Record<string, string> = {
+  notification_channel_unconfigured:
+    'API serverに、通知先が参照する環境変数（URLまたは署名の鍵）が設定されていません',
+  notification_channel_disabled: '通知先が無効になっています',
+  notification_rule_disabled: '通知ルールが無効になっています',
+  notification_url_invalid: '環境変数のURLが不正です（認証情報を含まないhttp://またはhttps://のURLにしてください）',
+  notification_destination_unavailable: '送信先に接続できませんでした',
+  notification_timeout: '送信先の応答が時間内にありませんでした',
+  notification_redirect_refused: '送信先がリダイレクトを返したため送信しませんでした',
+  notification_recipients_invalid: '宛先のメールアドレスが不正です',
+  notification_smtp_auth_failed: 'SMTPサーバーの認証に失敗しました',
+  notification_smtp_tls_failed: 'SMTPサーバーとのTLS接続に失敗しました',
+  notification_smtp_recipients_rejected: 'SMTPサーバーが宛先を受け付けませんでした',
+  notification_delivery_failed: '送信中に予期しないエラーが発生しました',
+  notification_dispatch_failed: '送信中に予期しないエラーが発生しました',
+  sender_unavailable: 'API serverにこの種類の送信設定がありません',
+};
+
 export const notificationsTextTemplates = {
   notificationRuleFilterRunKinds: (kinds: string) => `実行種別: ${kinds}`,
   notificationRuleFilterExperiments: (count: number) => `実験: ${count}件`,
-  notificationTestError: (code: string) => `テスト送信に失敗しました（${code}）`,
+  notificationTestError: (reason: string) => `テスト送信に失敗しました: ${reason}`,
+  notificationErrorHttp: (status: string) => `送信先がHTTP ${status}を返しました`,
+  notificationErrorSmtp: (reply: string) => `SMTPサーバーが${reply}を返しました`,
+  notificationErrorUnknown: (code: string) => `送信に失敗しました（${code}）`,
 };

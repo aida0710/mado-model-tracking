@@ -70,4 +70,19 @@ describe('通知設定のフォーム入力', () => {
       ),
     ).toBe('実行種別: TRAINING、EVALUATION / 実験: 2件');
   });
+
+  it('環境変数名がMMT_NOTIFICATION_で始まらなければ、送る前に日本語で止める', () => {
+    const values = { kind: 'webhook', scope: 'global', name: 'hook', enabled: 'true' };
+    expect(() =>
+      buildChannelCreate({ ...values, urlEnv: 'PATH', secretEnv: 'MMT_NOTIFICATION_KEY' }, 'p'),
+    ).toThrow('環境変数名はMMT_NOTIFICATION_で始め');
+    expect(() =>
+      buildChannelPatch({ ...values, urlEnv: 'MMT_NOTIFICATION_URL', secretEnv: 'mmt_key' }, {
+        kind: 'webhook',
+      }),
+    ).toThrow('環境変数名はMMT_NOTIFICATION_で始め');
+    expect(() =>
+      buildChannelCreate({ ...values, kind: 'email', urlEnv: 'PATH', recipients: 'a@x' }, 'p'),
+    ).not.toThrow();
+  });
 });

@@ -12,6 +12,7 @@ import { useNotificationSettings } from '../hooks/useNotificationSettings';
 import { useProject } from '../hooks/useProject';
 import { isGlobalAdmin } from '../lib/permissions';
 import { formatDate } from '../lib/format';
+import { describeNotificationError } from '../lib/notificationErrorText';
 import {
   buildChannelCreate,
   buildChannelPatch,
@@ -69,7 +70,9 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
         setTestMessage(
           result.delivered
             ? text.notificationTestDelivered
-            : textTemplates.notificationTestError(result.error ?? ''),
+            : `${textTemplates.notificationTestError(
+                describeNotificationError(result.error ?? ''),
+              )} ${text.notificationTestNotInHistory}`,
         );
       });
   return (
@@ -133,7 +136,7 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
                 ? [
                     {
                       key: 'actions',
-                      label: text.details,
+                      label: text.actions,
                       render: (channel: NotificationChannel) => (
                         <div className="access-actions">
                           <button className="button small" onClick={() => setEditing(channel)}>
@@ -295,7 +298,7 @@ function RuleSection({ settings }: { settings: Settings }) {
               },
               {
                 key: 'actions',
-                label: text.details,
+                label: text.actions,
                 render: (rule) => (
                   <button
                     className="button small"
@@ -415,8 +418,8 @@ function DeliverySection({ settings }: { settings: Settings }) {
               {
                 key: 'error',
                 label: text.notificationDeliveryError,
-                className: 'mono',
-                render: (delivery) => delivery.lastError ?? '',
+                render: (delivery) =>
+                  delivery.lastError ? describeNotificationError(delivery.lastError) : '',
               },
             ]}
           />

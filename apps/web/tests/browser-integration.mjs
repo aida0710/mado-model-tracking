@@ -199,7 +199,7 @@ try {
   await page.getByLabel('説明', { exact: true }).fill('ブラウザで保存したプロジェクト設定');
   await page.getByRole('button', { name: '保存', exact: true }).first().click();
   await page.getByText('プロジェクト設定を保存しました', { exact: true }).waitFor();
-  await page.getByRole('button', { name: 'トークンを作成', exact: true }).click();
+  await page.getByRole('button', { name: 'API tokenを発行', exact: true }).click();
   await fill('名前', 'UI verification personal token');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
   await page.getByText(/トークンは一度だけ表示/).waitFor();

@@ -1,7 +1,7 @@
 // The "connect from MLflow 3" card on the Project settings page.
 export const connectionText = {
   mlflowConnection: 'MLflow 3から接続',
-  mlflowConnectionIssueToken: 'このProject用のtokenを発行',
+  mlflowConnectionIssueToken: 'このProject用のAPI tokenを発行',
   mlflowConnectionEnvironment: '環境変数（tokenは実行時に入力）',
   mlflowConnectionMore: 'Pythonの例・Basic認証',
   mlflowConnectionServiceAccountHint:

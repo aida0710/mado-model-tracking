@@ -30,6 +30,10 @@ export const computeText = {
   targetCheck: '接続確認',
   targetCheckHint:
     'targetを担当するworker（MMT_WORKER_TARGET_IDSに含むもの）がSSHで確認します。APIサーバーはtargetへ接続しません',
+  targetCheckHintLocal:
+    'targetを担当するworker（MMT_WORKER_TARGET_IDSに含むもの）が、自分のホスト上でコマンドを起動して確認します',
+  targetCheckLocalConnection: 'コマンドの起動',
+  targetLocationLocal: 'workerのホスト上',
   targetCheckNone: 'まだ接続確認をしていません',
   targetCheckWaiting: 'workerの応答を待っています',
   targetCheckRequestedAt: '依頼',

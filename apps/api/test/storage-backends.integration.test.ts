@@ -194,6 +194,10 @@ describe.skipIf(!testDatabaseUrl)('Artifact保存先の全体設定（独立Post
     ]);
     expect(JSON.stringify(tested)).not.toContain(SECRET_ACCESS_KEY);
     expect(JSON.stringify(tested)).not.toContain('remote-access-key');
+    // Nothing listens on the endpoint, so the reason names the refusal in Japanese.
+    expect(tested.steps[0]!.error).toBe(
+      '接続を拒否されました。endpointのhostとportを確認してください（ECONNREFUSED）',
+    );
 
     const stored = await harness.database.query(
       "SELECT secret_encrypted, secret_key_id FROM storage_backends WHERE name='remote'",

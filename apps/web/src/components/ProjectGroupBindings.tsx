@@ -55,7 +55,7 @@ export function ProjectGroupBindings({ onChanged }: { onChanged: () => void }) {
                 ? [
                     {
                       key: 'actions',
-                      label: text.details,
+                      label: text.actions,
                       render: (binding: ProjectGroupBinding) => (
                         <div className="access-actions">
                           <button className="button small" onClick={() => setEditing(binding)}>
@@ -79,6 +79,7 @@ export function ProjectGroupBindings({ onChanged }: { onChanged: () => void }) {
       {editing && (
         <GroupBindingEditor
           binding={editing === 'new' ? undefined : editing}
+          existingBindings={bindings.value ?? []}
           onSave={saveGroupBinding}
           onClose={() => setEditing(null)}
           onSaved={() => {
