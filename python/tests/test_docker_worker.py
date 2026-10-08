@@ -31,7 +31,9 @@ from mado_tracking.worker.service import Worker
 from mado_tracking.worker.transport import LocalTransport
 
 EXAMPLE_PATH = Path(__file__).resolve().parent.parent / "examples/container_fixture.py"
-FIXTURE_SCRIPT = runpy.run_path(str(EXAMPLE_PATH))["FIXTURE_SCRIPT"]
+FIXTURE_SCRIPTS = runpy.run_path(str(EXAMPLE_PATH))
+FIXTURE_SCRIPT = FIXTURE_SCRIPTS["FIXTURE_SCRIPT"]
+BULK_OUTPUT_FIXTURE_SCRIPT = FIXTURE_SCRIPTS["BULK_OUTPUT_FIXTURE_SCRIPT"]
 # A leaked client/container fails promptly; cleanup runs against this test's job only.
 DOCKER_TEST_TIMEOUT_SECONDS = 20
 
@@ -88,6 +90,7 @@ class ContainerServer(WorkerServer):
         self.verify_daemon_cleanup = verify_daemon_cleanup
         self.artifact_encoding = None
         self.truncate_artifact = False
+        self.declarations = []
 
     async def serve_container(self, request):
         if request.method == "GET" and self.artifact_encoding == "gzip":
@@ -121,6 +124,21 @@ class ContainerServer(WorkerServer):
                     "size": len(content),
                 },
             )
+        if request.url.path.endswith("/outputs"):
+            body = json.loads(request.content)
+            self.calls.append((request.url.path, body))
+            self.declarations.extend(body["declarations"])
+            items = [
+                {
+                    "index": declaration["index"],
+                    "kind": declaration["kind"],
+                    "modelVersionId": str(uuid4()),
+                    "datasetVersionId": None,
+                    "createdAt": "2026-10-08T00:00:00Z",
+                }
+                for declaration in body["declarations"]
+            ]
+            return httpx.Response(200, json={"items": items})
         if request.url.path.endswith("/metrics"):
             metrics = json.loads(request.content)["metrics"]
             result_metrics = [point for point in metrics if point["name"] == "fixture.score"]
@@ -343,6 +361,22 @@ def test_lost_docker_start_control_response_reattaches_without_creating_a_second
 
     asyncio.run(execute_job(server, worker_settings, executor_factory=executor))
     assert len(identifiers) == 1 and server.completions[-1]["status"] == "finished"
+
+
+def test_container_outputs_a_thousand_files_and_registers_the_declared_model(
+    job_payload, worker_settings, docker_image
+):
+    docker_job(job_payload, docker_image, script=BULK_OUTPUT_FIXTURE_SCRIPT)
+    server = ContainerServer(job_payload)
+    asyncio.run(execute_job(server, replace(worker_settings, poll_seconds=0.2)))
+    assert server.completions[-1]["status"] == "finished", server.completions
+    uploads = dict(server.uploads)
+    assert len(server.uploads) == len(uploads) == 1001
+    assert uploads["container/audio/999.wav"] == b"utterance-999"
+    assert uploads["container/model/weights.bin"] == b"trained-weights"
+    assert server.declarations == [
+        {"index": 0, "kind": "model", "path": "model/weights.bin", "metadata": {"utterances": 1000}}
+    ]
 
 
 def test_temporary_output_api_failure_is_retried_with_the_same_verified_bytes(

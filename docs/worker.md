@@ -108,6 +108,8 @@ python/.venv/bin/mado-tracking-worker
 
 常駐させる場合は、手動の `export` と `read -rsp` の代わりに `mado-tracking-worker install`（systemd user/system unit）を使う。手順は [operations.md](operations.md) の「workerホストへworkerを導入する」。`install`・`upgrade`・`status`・`doctor` のサブコマンドが増えたが、引数なしと `--once` は従来どおりworkerの実行（`run`）になる。containerでは `MMT_API_TOKEN_FILE` に置いたtoken fileを `MMT_API_TOKEN` として読む（`MMT_API_TOKEN` が既にあればそちらを使う）。
 
+出力ファイル数の上限は`MMT_WORKER_MAX_OUTPUT_FILES`（既定10000、1〜1000000）で変えられる。詳しくは下の「コンテナの入力と出力は標準pathを使う」。
+
 `MMT_WORKER_ID`とstate directoryは再起動後も同じものを使う。同じdirectoryのworkerを2つ起動すると後の起動を拒否する。`MMT_WORKER_TARGET_IDS`はカンマ区切り。省略した場合は、tokenとAPI設定で許可されたtargetが対象になる。ただし、targetの接続確認（下の「Compute targetの接続を確認する」）は`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけがclaimする。
 
 通常のworkerは`WorkerSettings.parallel_jobs=2`で最大2Jobを並行して監視・実行する。claimには現在監視中のJob IDsを`activeJobIds`として送る。APIは未監視の未完了Jobを同じleaseで返し、全件を監視中なら次のJobをclaimする。targetの`maxConcurrentJobs`とGPU予約による制限も適用される。
@@ -246,9 +248,59 @@ SDKをimage内に入れた場合は従来のAPIを使える。SDKなしimageは�
 }
 ```
 
-`path`はoutputs内の相対パス、`size`はbyte数。metricsは有限の数値で、`step`は非負の整数。省略したstepは0、timestampは回収時のUTC時刻になる。宣言した全fileのSHA256/size、未宣言file、symlink/hardlink/特殊file、絶対パスや`..`、`.partial`/`.tmp`を検査する。結果は128 files、1000 metrics、manifestは1MiBまで（Python runtimeの出力も同じ上限。ファイル数の上限は第5波のcontainer-outputs-v2-workerで緩める予定）。出力ディレクトリが空ならmanifestは不要。
+`path`はoutputs内の相対パス、`size`はbyte数、`mimeType`は255文字まで（省略時は`application/octet-stream`）。metricsは有限の数値で、`step`は非負の整数。省略したstepは0、timestampは回収時のUTC時刻になる。宣言した全fileのSHA256/size、未宣言file、symlink/hardlink/特殊file、絶対パスや`..`、`.partial`/`.tmp`を検査する。出力ディレクトリが空ならmanifestは不要。
 
-entrypointが成功し、daemon/processが停止した後だけ結果を回収する。workerはfileを再びstream取得してSHA256を確認し、Run Artifactの`container/<path>`へ保存する。metricsはlease付きworker APIへ送り、全保存を確認してからJobをcompleteする。結果検証やAPIの永久失敗はJobをfailedにする。cancel/nonzero exitの出力を成功結果として登録しない。ModelVersion/DatasetVersionの登録はSDKまたはAPIで明示するか、Taskの出力設定（次節）で行う。
+| 上限 | 値 | 変え方 |
+|---|---|---|
+| 出力ファイル数（`artifacts`と`artifactsManifest`の合計） | 10000 | workerの`MMT_WORKER_MAX_OUTPUT_FILES`（1〜1000000） |
+| `result.json` | 1MiB | 固定 |
+| `artifactsManifest`の1行 | 4KiB | 固定（ファイル全体は「ファイル数の上限×4KiB」まで） |
+| metrics | 1000点 | 固定 |
+| `models` / `datasets` | 16件 / 64件 | 固定（APIのRunごとの上限と同じ） |
+
+Python runtimeの出力も同じ検証・上限・転送になる。ファイル数の上限はtarget側のrunnerが検査するので、workerの設定はJobの起動時にspecで渡す（起動後に変えても、実行中のJobには効かない）。
+
+entrypointが成功し、daemon/processが停止した後だけ結果を回収する。workerは出力を1本のtar streamで受け取り（下の「出力の一括転送」）、ファイルごとにSHA256とサイズを確認してRun Artifactの`container/<path>`へ保存する。続いてmetricsをlease付きworker APIへ送り、version 2の宣言があれば登録してからJobをcompleteする。結果検証やAPIの永久失敗はJobをfailedにする。cancel/nonzero exitの出力を成功結果として登録しない。ModelVersion/DatasetVersionの登録は、SDKまたはAPIで明示するか、`result.json` version 2で宣言するか、Taskの出力設定（次節）で行う。
+
+### result.json version 2（出力モデル・出力Datasetの宣言）
+
+SDKを入れないコンテナでも、実行時に決まる出力を自分で宣言して登録できる。version 1 の項目に `models`、`datasets`、`artifactsManifest` を足す。version 1 はそのまま使え、version 1 に新しい項目を書くと検証で失敗する。
+
+```json
+{
+  "version": 2,
+  "complete": true,
+  "artifactsManifest": "artifacts.jsonl",
+  "artifacts": [
+    {"path": "model/weights.bin", "sha256": "<64桁hex>", "size": 1048576},
+    {"path": "data/test.jsonl", "sha256": "<64桁hex>", "size": 2048, "mimeType": "application/jsonl"}
+  ],
+  "models": [{"path": "model/weights.bin", "metadata": {"epoch": 3}}],
+  "datasets": [{"datasetId": "<DatasetのID>", "path": "data/test.jsonl", "digest": "sha256:<64桁hex>"}]
+}
+```
+
+- `artifactsManifest` は JSON Lines の出力ファイル。1行に1件 `{path, sha256, size, mimeType?}` を書き、各行は `artifacts` に足して扱う。音声推論のように数千ファイルを出すときは、`result.json`（1MiBまで）に並べずこちらへ書く。空行は無視する。manifest自身と`result.json`はRun Artifactとして保存しない。
+- `models[].path` と `datasets[].path` は `artifacts`（または `artifactsManifest`）に載せた出力ファイル。`modelId` は省略するとTaskの出力モデルへ登録する。Taskに出力モデルの設定が無いRunでは必須。Taskの出力モデルと別のModelは指定できない。
+- `datasets[]` は `path` と `uri`（外部の場所）のどちらか一方。`digest` は必須。`schema`・`metadata` はJSON object。
+- モデルを宣言できるのは training / finetuning の Run だけ（APIが422 `output_model_kind`で拒否し、Jobはfailedになる）。上限はRunごとにモデル16件・Dataset 64件で、超えた`result.json`はtarget側の検証で失敗する。
+- workerは全Artifactの保存とmetricsの送信の後、complete の前に `POST /worker/jobs/:id/outputs` で宣言を送る。`index` は `models` を0から、続けて `datasets` を `models.length` からの通し番号にする。登録できた `index` はjournalに残し、worker再起動後は未登録の分だけを送る。応答が失われて再送しても同じ `index` なので二重登録にならない。
+- worker token に `registry:write` が必要。宣言のAPIエラー（scope不足の403、Model・Datasetが無い404、上限超過やTaskと別Modelの422など）はJobをfailedにする。lease切れ（409 `invalid_lease`、401、410）だけはlease拒否として扱い、completeを送らない。
+- 登録した版の自動実行は学習Runの成功まで待ち、失敗・キャンセルなら skip される。
+
+### 出力の一括転送（tar stream）
+
+出力の回収は、target側runnerの`output-archive`コマンド1回（SSH接続1本）で行う。以前は64KiBごとに`output`コマンドを1回実行していたため、1GiBの出力で約1.6万回SSH接続していた。
+
+1. runnerはentrypoint成功後の検証で、宣言された全ファイルの一覧（index、JSON Lines）をworkspaceの`output-index.jsonl`へ保存し、`state.json`には件数・合計サイズ・indexのSHA256・metrics・宣言だけを持つ（ファイル数が増えてもpollの応答が大きくならない）。
+2. workerは保存済み（journalで確認済み）の`path:sha256`の一覧をstdinで渡して`output-archive`を起動する。runnerは非圧縮のtar（PAX形式）をstdoutへ書く。先頭のmemberがindex、続いて未確認のファイルをindexの順に並べる。
+3. workerはstreamを読みながら、indexのSHA256を`state.json`の値と、各memberのpath・サイズ・順序をindexと照合する。regular file以外（symlink、hardlink、ディレクトリ、デバイス）、宣言外のpath、`..`や絶対パスを含むmemberがあれば、そのmemberを保存する前に回収を失敗させる。1ファイルずつ一時ファイルへ書きながらSHA256を計算し、一致したものだけを`artifact_uploads`（64MiB以上はupload session）で保存する。1ファイルでもSHA256が合わなければ、そのファイルを保存せずJobをfailedにする。
+4. 保存できたファイルは`path:sha256`でjournalに記録する。journalの書き込みは最大1秒に1回にまとめる（1万ファイルで毎回journal全体を書き直すと遅いため）。worker processが落ちた場合、最後の1秒分のファイルを再び保存することがあり、同じ内容のArtifactの版が1つ増える。
+5. streamが途中で切れた、または300秒何も届かない場合は、通常の再接続（指数backoff）の後、未確認のファイルだけを指定してtarを取り直す。runnerが検証後に変わったファイルを見つけた場合は終了コード65で拒否し、workerは再試行せずJobをfailedにする。
+
+workerが一度に持つのは1ファイル分の一時ファイルと、indexとjournal（1ファイルあたり数百byte）だけ。target側でも出力を圧縮・複製しない。tarは手で中身を確かめられる（`python3 <runner.pyz> output-archive <workspace> < /dev/null | tar tvf -`）。
+
+SSHの接続共有（ControlMaster/ControlPersist）は、接続先の`sshd`の設定（`MaxSessions`など）や利用者の`~/.ssh/config`との干渉を確かめられていないため入れていない。tar転送で出力回収の接続数は定数になったので、残る接続はpoll（監視間隔ごとに1回）と起動前の転送になる。必要になったら、worker専用のControlPathをstate directoryに置き、`ControlPersist`を短く（例: 60秒）する案を検討する。
 
 ### Taskの出力設定で学習済みモデルを登録する
 
@@ -509,13 +561,15 @@ uv build --python python/.venv/bin/python --out-dir python/dist python
 
 Pythonのtestsはlocal subprocess、仮HTTP、SSHの仮transportを使う。並列2Job、claim応答喪失後の同一lease復帰、再起動後の二重起動防止、入力重みからのfine-tuningと不正入力の失敗を確認する。
 
-Dockerの挙動テストはcached digest imageを明示して実行する。SDKなしfixtureの`python/examples/container_fixture.py`はAlpine/BusyBoxで動き、read-only入力、結果file、metrics、token maskingを確認する。`MMT_EXAMPLE_DOCKER_IMAGE`を指定すれば、実API用のCodeVersionも登録できる。
+Dockerの挙動テストはcached digest imageを明示して実行する。SDKなしfixtureの`python/examples/container_fixture.py`はAlpine/BusyBoxで動き、read-only入力、結果file、metrics、token maskingを確認する。`BULK_OUTPUT_FIXTURE_SCRIPT`は1000ファイルを`artifactsManifest`で宣言し、`result.json` version 2でモデルを宣言する。`MMT_EXAMPLE_DOCKER_IMAGE`を指定すれば、実API用のCodeVersionも登録できる。
 
 ```bash
 MMT_TEST_DOCKER_IMAGE='alpine@sha256:<cached digest>' python/.venv/bin/pytest python/tests/test_docker_worker.py
 ```
 
-Docker testsでは成功/失敗、出力検証/API保存失敗、daemon取消、worker/supervisorの復帰、失われた起動応答を確認する。SIFはCLI fixtureと実process groupでSHA、GPU選択env、取消、secret masking、出力回収を検証する。実SIF image、実SSH、GPU driver/Toolkitを含む結合は未確認。wheelから作ったremote zipappにも各runtime moduleを含める。
+出力の一括転送は`python/tests/test_output_archive.py`で、5000ファイルの出力が`output-archive`の1回で届くこと、宣言外・`..`・symlink・hardlinkのmemberの拒否、途中切断後に未確認pathだけを取り直すこと、1ファイルのSHA256違いで回収が失敗することを確かめる。
+
+Docker testsでは成功/失敗、1000ファイルの出力とモデルの宣言、出力検証/API保存失敗、daemon取消、worker/supervisorの復帰、失われた起動応答を確認する。SIFはCLI fixtureと実process groupでSHA、GPU選択env、取消、secret masking、出力回収を検証する。実SIF image、実SSH、GPU driver/Toolkitを含む結合は未確認。wheelから作ったremote zipappにも各runtime moduleを含める。
 
 親担当は`scripts/verify_worker.py`で、独立した実API/PostgreSQLとlocal durable workerの結合検証を完了している。対象はCPU training/inference、finetuningの種別と親モデル、cancel/retry/reconnect。結果は`artifacts/verification/2026-10-08/worker-integration.json`。Python testsでは、入力重みからのfine-tuningを別途確認している。実SSH・実GPUには接続していない。結合検証では開発用の独立DB/APIを使い、既存アプリへ接続しない。
 

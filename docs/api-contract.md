@@ -356,6 +356,7 @@ APIに届かない計算機で記録したRunを後から送る。Run IDとbatch
 - 1リクエストは1 transactionで、どれか1件でも失敗すれば何も登録しない。同じ`index`の再送は保存済みの結果（`RunOutputDeclaration {index,kind,modelVersionId,datasetVersionId,createdAt}`）を返し、二重に登録しない。保存済みの`index`に別の`kind`を送ると409 `output_declaration_mismatch`。Jobが終端になった後は、保存済みの`index`の再送だけを受け付け、新しい宣言は409 `conflict`。
 - 下流の自動実行: 宣言はRunの終了前に登録されるので、版の自動実行は学習Runの成功まで`pending`で待ち、成功で起動、失敗・キャンセルで`skipped`（`source_run_unsuccessful`）になる。Taskの出力モデルと同じModelへ宣言した場合、Task側の登録は`skipped`（`already_registered_by_run`）になり、下流は1回だけ起動する。
 - 記録は`run_output_declarations`（主キーはRunと`index`、不変）。
+- 出力ファイル数の上限: `artifacts`と`artifactsManifest`の行の合計は、workerの`MMT_WORKER_MAX_OUTPUT_FILES`（既定10000、1〜1000000）まで。`result.json`は1MiB、`artifactsManifest`は1行4KiB（全体は上限×4KiB）まで、`mimeType`は255文字まで。`models`16件・`datasets`64件を超える`result.json`は、APIへ送る前にtarget側の検証で失敗する。上限はtarget側のrunnerが検査し、超えたJobはfailedになる（APIには届かない）。workerは出力を1本のtar streamで回収する（docs/worker.mdの「出力の一括転送」）。
 
 ### Job限定token
 
