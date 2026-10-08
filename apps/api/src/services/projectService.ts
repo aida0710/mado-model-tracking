@@ -1,10 +1,23 @@
-import type { ArtifactBackend, Experiment, Project, ProjectRole, User } from '@mmt/contracts';
+import type {
+  ArtifactBackend,
+  Experiment,
+  Project,
+  ProjectMember,
+  ProjectRole,
+} from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
+import { removesLastProjectAdmin } from '../domain/projectAdminInvariant.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
-import { findUser, listMembers } from '../repositories/identityRepository.js';
+import {
+  findDirectRole,
+  findMember,
+  findUser,
+  listMembers,
+  lockProjectAdminGrants,
+} from '../repositories/identityRepository.js';
 import { requireProject, requireScope } from './accessService.js';
 import {
   auditActor,
@@ -23,9 +36,9 @@ export class ProjectService {
     requireScope(principal, 'read');
     return rows<Project>(
       this.database,
-      `SELECT p.*,COALESCE(m.role,'admin') AS role FROM projects p
-      LEFT JOIN project_members m ON m.project_id=p.id AND m.user_id=$1
-      WHERE (m.role IS NOT NULL OR $2) AND ($3::uuid IS NULL OR p.id=$3) ORDER BY p.created_at DESC`,
+      `SELECT p.*,COALESCE(e.role,'admin') AS role FROM projects p
+      LEFT JOIN effective_project_roles e ON e.project_id=p.id AND e.user_id=$1
+      WHERE (e.role IS NOT NULL OR $2) AND ($3::uuid IS NULL OR p.id=$3) ORDER BY p.created_at DESC`,
       [
         principal.user.id,
         principal.method === 'session' && principal.user.isAdmin,
@@ -81,16 +94,17 @@ export class ProjectService {
     });
   }
 
-  async members(principal: Principal, projectId: string): Promise<(User & { role: string })[]> {
+  async members(principal: Principal, projectId: string): Promise<ProjectMember[]> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
     return listMembers(this.database, projectId);
   }
 
+  // Sets the direct grant only; group bindings are managed by ProjectGroupBindingService.
   async setMember(
     principal: Principal,
     membership: { projectId: string; userId: string; role: ProjectRole },
     request: RequestMetadata = NO_REQUEST_METADATA,
-  ): Promise<User & { role: ProjectRole }> {
+  ): Promise<ProjectMember> {
     const { projectId, userId, role } = membership;
     const draft: AuditEventDraft = {
       ...auditActor(principal),
@@ -104,23 +118,12 @@ export class ProjectService {
     return recordDenial(this.database, draft, () =>
       transaction(this.database, async (connection) => {
         await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
-        // Serialize membership edits so the last administrator cannot be removed concurrently.
-        await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+        const adminGrants = await lockProjectAdminGrants(connection, projectId);
         const user = await findUser(connection, userId);
         if (!user) notFound('User');
-        const previous = await first<{ role: ProjectRole }>(
-          connection,
-          'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2',
-          [projectId, userId],
-        );
-        if (previous?.role === 'admin' && role !== 'admin') {
-          const administrators = await rows<{ userId: string }>(
-            connection,
-            "SELECT user_id FROM project_members WHERE project_id=$1 AND role='admin'",
-            [projectId],
-          );
-          if (administrators.length <= 1) conflict('最後のProject管理者は権限を下げられません');
-        }
+        const previousRole = await findDirectRole(connection, { projectId, userId });
+        if (removesLastProjectAdmin(adminGrants, { kind: 'member', userId, role }))
+          conflict('最後のProject管理者は権限を下げられません');
         await connection.query(
           'INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(project_id,user_id) DO UPDATE SET role=EXCLUDED.role',
           [projectId, userId, role],
@@ -128,9 +131,46 @@ export class ProjectService {
         await writeAuditEvent(connection, {
           ...draft,
           outcome: 'success',
-          details: { userId, previousRole: previous?.role ?? null, role },
+          details: { userId, previousRole, role },
         });
-        return { ...user, role };
+        return (await findMember(connection, { projectId, userId }))!;
+      }),
+    );
+  }
+
+  // Removes the direct grant. A user who also holds a bound group keeps that role.
+  async removeMember(
+    principal: Principal,
+    membership: { projectId: string; userId: string },
+    request: RequestMetadata = NO_REQUEST_METADATA,
+  ): Promise<void> {
+    const { projectId, userId } = membership;
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'project.member.delete',
+      resourceType: 'project_member',
+      resourceId: userId,
+      projectId,
+      details: { userId },
+    };
+    await recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
+        const adminGrants = await lockProjectAdminGrants(connection, projectId);
+        const previousRole = await findDirectRole(connection, { projectId, userId });
+        if (!previousRole) notFound('Projectメンバー');
+        if (removesLastProjectAdmin(adminGrants, { kind: 'member', userId, role: null }))
+          conflict('最後のProject管理者は外せません');
+        await connection.query('DELETE FROM project_members WHERE project_id=$1 AND user_id=$2', [
+          projectId,
+          userId,
+        ]);
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: { userId, previousRole },
+        });
       }),
     );
   }

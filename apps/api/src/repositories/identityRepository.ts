@@ -1,4 +1,5 @@
-import type { User } from '@mmt/contracts';
+import type { ProjectMember, ProjectRole, User, UserSearchResult } from '@mmt/contracts';
+import type { ProjectAdminGrants } from '../domain/projectAdminInvariant.js';
 import { first, rows, type Connection } from '../db/database.js';
 
 // auth_sources lists the login methods the user holds; development logins hold neither.
@@ -280,7 +281,7 @@ export async function tokenIdentity(
     connection,
     `UPDATE api_tokens t SET last_used_at=now() FROM users u
     WHERE t.token_hash=$1 AND t.user_id=u.id AND u.status='active' AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>now())
-    AND (t.project_id IS NULL OR EXISTS(SELECT 1 FROM project_members m WHERE m.project_id=t.project_id AND m.user_id=t.user_id))
+    AND (t.project_id IS NULL OR EXISTS(SELECT 1 FROM effective_project_roles e WHERE e.project_id=t.project_id AND e.user_id=t.user_id))
     RETURNING ${userColumns},t.id AS token_id,t.project_id,t.scopes`,
     [tokenHash],
   );
@@ -289,13 +290,126 @@ export async function tokenIdentity(
   return { user, token: { id: tokenId, projectId, scopes } };
 }
 
+// Everyone with an effective role: direct members and users who hold a bound group.
 export async function listMembers(
   connection: Connection,
   projectId: string,
-): Promise<(User & { role: string })[]> {
-  return rows(
+): Promise<ProjectMember[]> {
+  const members = await rows<MemberRow>(
     connection,
-    `SELECT ${userColumns},m.role FROM project_members m JOIN users u ON u.id=m.user_id WHERE project_id=$1 ORDER BY u.email`,
+    `${memberSelect} WHERE e.project_id=$1 ORDER BY u.email,u.id`,
     [projectId],
   );
+  return members.map(toProjectMember);
+}
+
+export async function findMember(
+  connection: Connection,
+  member: { projectId: string; userId: string },
+): Promise<ProjectMember | undefined> {
+  const found = await first<MemberRow>(
+    connection,
+    `${memberSelect} WHERE e.project_id=$1 AND e.user_id=$2`,
+    [member.projectId, member.userId],
+  );
+  return found && toProjectMember(found);
+}
+
+type MemberRow = User & Omit<ProjectMember, 'user'>;
+
+const memberSelect = `SELECT ${userColumns},e.role,m.role AS direct_role,
+  COALESCE((SELECT json_agg(json_build_object('group',b.group_name,'role',b.role) ORDER BY b.group_name)
+    FROM project_group_bindings b JOIN user_groups g ON g.group_name=b.group_name
+    WHERE b.project_id=e.project_id AND g.user_id=e.user_id),'[]'::json) AS groups
+  FROM effective_project_roles e JOIN users u ON u.id=e.user_id
+  LEFT JOIN project_members m ON m.project_id=e.project_id AND m.user_id=e.user_id`;
+
+function toProjectMember({ role, directRole, groups, ...user }: MemberRow): ProjectMember {
+  return { user, role, directRole, groups };
+}
+
+export async function findDirectRole(
+  connection: Connection,
+  member: { projectId: string; userId: string },
+): Promise<ProjectRole | null> {
+  const membership = await first<{ role: ProjectRole }>(
+    connection,
+    'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2',
+    [member.projectId, member.userId],
+  );
+  return membership?.role ?? null;
+}
+
+// Locks the Project row first so every change that can remove an admin grant serializes.
+export async function lockProjectAdminGrants(
+  connection: Connection,
+  projectId: string,
+): Promise<ProjectAdminGrants> {
+  await connection.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+  const directAdmins = await rows<{ userId: string }>(
+    connection,
+    "SELECT user_id FROM project_members WHERE project_id=$1 AND role='admin' ORDER BY user_id",
+    [projectId],
+  );
+  const adminGroups = await rows<{ groupName: string }>(
+    connection,
+    "SELECT group_name FROM project_group_bindings WHERE project_id=$1 AND role='admin' ORDER BY group_name",
+    [projectId],
+  );
+  return {
+    directAdminUserIds: directAdmins.map((admin) => admin.userId),
+    adminGroupNames: adminGroups.map((group) => group.groupName),
+  };
+}
+
+// Holds the rows a user's effective role is computed from until the transaction ends, so a
+// membership change or a group sync cannot revoke access in the middle of a write.
+// Binding changes are already excluded by the caller's share lock on the Project row.
+export async function lockProjectRoleSources(
+  connection: Connection,
+  member: { projectId: string; userId: string },
+): Promise<void> {
+  await connection.query(
+    'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2 FOR SHARE',
+    [member.projectId, member.userId],
+  );
+  await connection.query('SELECT group_name FROM user_groups WHERE user_id=$1 FOR SHARE', [
+    member.userId,
+  ]);
+}
+
+export async function holdsAnyProjectAdminRole(
+  connection: Connection,
+  member: { userId: string; projectId: string | null },
+): Promise<boolean> {
+  const role = await first(
+    connection,
+    "SELECT 1 FROM effective_project_roles WHERE user_id=$1 AND role='admin' AND ($2::uuid IS NULL OR project_id=$2) LIMIT 1",
+    [member.userId, member.projectId],
+  );
+  return !!role;
+}
+
+// Prefix match on email, username, and display name, ignoring case. Disabled users are omitted
+// because they cannot be given access.
+export async function searchActiveUsers(
+  connection: Connection,
+  search: { query: string; limit: number },
+): Promise<UserSearchResult[]> {
+  const pattern = `${search.query.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+  return rows<UserSearchResult>(
+    connection,
+    `SELECT id,email,display_name FROM users WHERE status='active'
+    AND (email ILIKE $1 OR username ILIKE $1 OR display_name ILIKE $1)
+    ORDER BY lower(email),id LIMIT $2`,
+    [pattern, search.limit],
+  );
+}
+
+export async function listKnownGroupNames(connection: Connection): Promise<string[]> {
+  const groups = await rows<{ groupName: string }>(
+    connection,
+    'SELECT DISTINCT group_name FROM user_groups ORDER BY group_name',
+  );
+  return groups.map((group) => group.groupName);
 }

@@ -1,16 +1,20 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
+import type { ProjectGroupBindingService } from '../services/projectGroupBindingService.js';
 import type { ProjectService } from '../services/projectService.js';
 import {
+  groupNameSchema,
   namedEntitySchema,
   projectCreateSchema,
   projectPatchSchema,
-  roleSchema,
+  roleAssignmentSchema,
 } from '../domain/validation.js';
-import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
+import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 
-export function projectRoutes(projects: ProjectService): Hono<ApiEnvironment> {
+export function projectRoutes(
+  projects: ProjectService,
+  groupBindings: ProjectGroupBindingService,
+): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/', async (context) =>
     context.json({ items: await projects.list(principal(context)) }),
@@ -30,22 +34,60 @@ export function projectRoutes(projects: ProjectService): Hono<ApiEnvironment> {
       ),
     ),
   );
-  routes.get('/:p/members', async (context) => {
-    const members = await projects.members(principal(context), uuidParam(context, 'p'));
-    return context.json({ items: members.map(({ role, ...user }) => ({ user, role })) });
-  });
+  routes.get('/:p/members', async (context) =>
+    context.json({ items: await projects.members(principal(context), uuidParam(context, 'p')) }),
+  );
   routes.put('/:p/members/:userId', async (context) => {
-    const input = await jsonBody(context, z.strictObject({ role: roleSchema }));
-    const { role, ...user } = await projects.setMember(
+    const input = await jsonBody(context, roleAssignmentSchema);
+    return context.json(
+      await projects.setMember(
+        principal(context),
+        {
+          projectId: uuidParam(context, 'p'),
+          userId: uuidParam(context, 'userId'),
+          role: input.role,
+        },
+        requestMetadata(context),
+      ),
+    );
+  });
+  routes.delete('/:p/members/:userId', async (context) => {
+    await projects.removeMember(
+      principal(context),
+      { projectId: uuidParam(context, 'p'), userId: uuidParam(context, 'userId') },
+      requestMetadata(context),
+    );
+    return context.body(null, 204);
+  });
+  routes.get('/:p/group-bindings', async (context) =>
+    context.json({
+      items: await groupBindings.list(principal(context), uuidParam(context, 'p')),
+    }),
+  );
+  routes.put('/:p/group-bindings/:group', async (context) => {
+    const input = await jsonBody(context, roleAssignmentSchema);
+    return context.json(
+      await groupBindings.set(
+        principal(context),
+        {
+          projectId: uuidParam(context, 'p'),
+          group: parse(groupNameSchema, context.req.param('group')),
+          role: input.role,
+        },
+        requestMetadata(context),
+      ),
+    );
+  });
+  routes.delete('/:p/group-bindings/:group', async (context) => {
+    await groupBindings.delete(
       principal(context),
       {
         projectId: uuidParam(context, 'p'),
-        userId: uuidParam(context, 'userId'),
-        role: input.role,
+        group: parse(groupNameSchema, context.req.param('group')),
       },
       requestMetadata(context),
     );
-    return context.json({ user, role });
+    return context.body(null, 204);
   });
   routes.get('/:p/experiments', async (context) =>
     context.json({

@@ -1,7 +1,7 @@
 import type { Principal } from '../../auth/principal.js';
 import { first, type Connection } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
-import { userColumns } from '../../repositories/identityRepository.js';
+import { lockProjectRoleSources, userColumns } from '../../repositories/identityRepository.js';
 import { isJobTokenActive } from '../../repositories/jobTokenRepository.js';
 import { requireProject } from '../../services/accessService.js';
 import type { ArtifactAccess } from './artifactTypes.js';
@@ -35,10 +35,7 @@ export async function requireArtifactProject(
   const identity: Principal = { ...access.principal, user, token };
   if (options.lock) {
     await connection.query('SELECT id FROM projects WHERE id=$1 FOR SHARE', [access.projectId]);
-    await connection.query(
-      'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2 FOR SHARE',
-      [access.projectId, user.id],
-    );
+    await lockProjectRoleSources(connection, { projectId: access.projectId, userId: user.id });
   }
   await requireProject(connection, identity, {
     projectId: access.projectId,

@@ -37,7 +37,7 @@ migration 010はsessionに`auth_method`を必須で追加します。migration�
 
 ## 監査ログ
 
-認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
+認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`、`project.member.delete`）、SSO groupへのProject権限の付与（`project.group_binding.set`、`project.group_binding.delete`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
 
 Project adminは設定画面の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
 
@@ -130,7 +130,29 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 
 開発Webはport5182でLANから接続できます。`/api`はloopbackのAPI4182へproxyします。Authentikのcallbackは`MMT_PUBLIC_URL`の固定URLを使うので、SSOで使うURLはProviderにも完全一致で登録します。
 
-初回に管理者がloginしProjectを作成します。メンバー（`OIDC_ALLOWED_GROUPS`のgroupに入っている人）は一度SSOでloginするとユーザーIDが作られ、Projectの設定からそのIDでviewer/editor/adminを付けられます。API tokenは発行時のscopeに加え、その所有者の現在のProject membershipを確認します。
+初回に管理者がloginしProjectを作成します。メンバー（`OIDC_ALLOWED_GROUPS`のgroupに入っている人）は一度SSOでloginするとユーザーIDが作られ、Projectの設定からviewer/editor/adminを付けられます。人ごとに付ける代わりに、AuthentikのgroupへProjectのroleを付けることもできます（次の節）。API tokenは発行時のscopeに加え、その所有者の現在のProject権限を確認します。
+
+### 権限の決まり方
+
+権限は2段です。
+
+| 段 | 決め方 | 変える場所 |
+|---|---|---|
+| 全体role（全体管理者か否か） | `OIDC_ROLE_MAPPING_JSON`（と`OIDC_ADMIN_GROUP`）の対応表。loginのたびに同期 | API serverの環境変数とAuthentikのgroup |
+| Project role（viewer/editor/admin） | 直接付与とgroup bindingのうち強い方 | Projectの設定画面（Project admin） |
+
+- 直接付与はユーザー1人に付けるrole（`project_members`）、group bindingはAuthentikのgroup名に付けるrole（`project_group_bindings`）です。どちらもProject adminが設定し、監査ログに`project.member.set`・`project.member.delete`・`project.group_binding.set`・`project.group_binding.delete`として残ります。
+- 実効roleは、直接付与と、その人が入っているgroupのbindingのうち最も強いroleです。直接viewer＋group editorならeditorです。判定はすべてDBのview `effective_project_roles`で行い、画面・native API・MLflow互換API・API token・Job tokenで同じ結果になります。Job tokenはRunの作成者の実効roleで判定します。
+- 直接付与を外しても、group bindingのroleは残ります。メンバー一覧の`directRole`と`groups`で、どこから付いたroleかを確認できます。
+- 全体管理者はbrowser sessionならどのProjectもadminとして操作できます。API tokenでは全体管理者でもProject roleが必要です。
+- Projectには、直接付与のadminかadminのgroup bindingが常に1つ以上必要です。最後の1つを外す・下げる操作は409になります。adminのgroup bindingは、そのgroupに入っている人がまだいなくても数えます（そのgroupの人は次のloginで反映されます）。
+
+### Authentik側のgroupの運用
+
+- ProjectごとにAuthentikのgroupを作り（例: `mmt-proj-asr-editors`）、Projectの設定でそのgroupにroleを付けます。group名は大文字小文字・空白も含めて完全一致です。
+- ID tokenの`groups`はすべて`user_groups`へ保存するので、bindingに使うgroupを`OIDC_ALLOWED_GROUPS`に入れる必要はありません。ただし、そのgroupの人も許可groupのどれかに入っていないとloginできません。
+- groupの所属はloginのときに`user_groups`へ同期します。Authentikでgroupに入れた人は、次のloginから権限が付きます。外した人は、次のloginで権限が外れ、そのgroupの権限だけで使っていたProject限定API tokenも401になります（tokenは失効させないので、groupに戻せば再び使えます）。loginしないまま使い続けているsessionとtokenは、次のloginまで元のgroupのままです。すぐ止めたい場合はProjectの設定で直接付与・bindingを外すか、tokenを失効させます。
+- Projectの設定画面のgroup候補（`GET /auth/groups`）には、一度でも誰かのloginで同期されたgroup名だけが出ます。まだ誰もloginしていないgroupは名前を直接入力します。
 
 ## Artifacts
 
