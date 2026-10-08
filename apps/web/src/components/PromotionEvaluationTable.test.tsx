@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { PROMOTION_FIRST_RELEASE_REASON, type PromotionEvaluation } from '@mmt/contracts';
 import { PromotionEvaluationTable } from './PromotionEvaluationTable';
-import { promotionDecisionLabels, promotionTextTemplates } from '../i18n/promotion';
+import {
+  promotionCriterionReasonLabels,
+  promotionDecisionLabels,
+  promotionTextTemplates,
+} from '../i18n/promotion';
 import { text } from '../i18n/catalog';
 
 const passed: PromotionEvaluation = {
@@ -107,7 +111,33 @@ describe('判定履歴の表示', () => {
     ]);
     expect(html).toContain(promotionDecisionLabels.failed);
     expect(html).toContain(text.promotionCriterionInsufficient);
-    expect(html).toContain('candidate_metric_missing');
+    expect(html).toContain(promotionCriterionReasonLabels.candidate_metric_missing);
+    expect(html).not.toContain('candidate_metric_missing');
+  });
+
+  it('基準版なしで合格した基準は、緑の「満たす」ではなく比較なしと理由を日本語で表示する', () => {
+    const html = render([
+      {
+        ...passed,
+        baselineVersionId: null,
+        baselineRunId: null,
+        reason: PROMOTION_FIRST_RELEASE_REASON,
+        criteriaResults: [
+          {
+            ...passed.criteriaResults[0]!,
+            baseline: null,
+            baselineStatus: 'missing',
+            observed: null,
+            outcome: 'passed',
+            reason: 'baseline_missing',
+          },
+        ],
+      },
+    ]);
+    expect(html).toContain(text.promotionCriterionNotCompared);
+    expect(html).not.toContain(text.promotionCriterionPassed);
+    expect(html).toContain(promotionCriterionReasonLabels.baseline_missing);
+    expect(html).not.toContain('baseline_missing');
   });
 
   it('再判定の行は何回目かを表示する', () => {

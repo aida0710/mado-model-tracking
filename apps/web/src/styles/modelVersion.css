@@ -35,3 +35,7 @@
 .delta-sign {
   white-space: nowrap;
 }
+/* Metric columns can be many; the Run name keeps a readable width and the table scrolls instead. */
+.evaluation-run-name {
+  min-width: 160px;
+}

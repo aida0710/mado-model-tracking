@@ -36,6 +36,17 @@ describe('評価metricの並び', () => {
     expect(orderMetricKeys(runs, ['wer', 'bleu'])).toEqual(['wer', 'bleu', 'cer', 'loss']);
   });
 
+  it('workerのsystem.*は評価の指標ではないので並べない（summaryMetricsで指定したときだけ残す）', () => {
+    const runs = [
+      evaluationRun({
+        id: 'a',
+        latestMetrics: { wer: 1, 'system.cpu.percent': 3, 'system/cpu_utilization_percentage': 4, 'system.memory.used_bytes': 5 },
+      }),
+    ];
+    expect(orderMetricKeys(runs, [])).toEqual(['wer']);
+    expect(orderMetricKeys(runs, ['system.memory.used_bytes'])).toEqual(['system.memory.used_bytes', 'wer']);
+  });
+
   it('summaryMetricsはRunを作ったruleのものだけを、重複なくrule順に集める', () => {
     const rules = [
       { id: 'rule-1', summaryMetrics: ['wer', 'cer'] },

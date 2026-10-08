@@ -35,11 +35,11 @@ function OriginBadge({ run, ruleName }: { run: AutomatedRunSummary; ruleName: st
 function MetricSummaryTable({
   projectId,
   summary,
-  baselineAlias,
+  baselineLabel,
 }: {
   projectId: string;
   summary: EvaluationSummary;
-  baselineAlias: string | null;
+  baselineLabel: string | null;
 }) {
   const runLink = (value: MetricValueAt | null) =>
     value ? (
@@ -49,11 +49,11 @@ function MetricSummaryTable({
     ) : (
       '—'
     );
-  const baselineColumns: TableColumn<MetricSummaryRow>[] = baselineAlias
+  const baselineColumns: TableColumn<MetricSummaryRow>[] = baselineLabel
     ? [
         {
           key: 'baseline',
-          label: modelsTextTemplates.baselineValue(baselineAlias),
+          label: modelsTextTemplates.baselineValue(baselineLabel),
           className: 'mono',
           render: (row) => runLink(row.baseline),
         },
@@ -100,13 +100,13 @@ export function EvaluationResultsTable({
   runs,
   rules,
   summary,
-  baselineAlias,
+  baselineLabel,
 }: {
   projectId: string;
   runs: AutomatedRunSummary[];
   rules: ModelAutomationRule[];
   summary: EvaluationSummary;
-  baselineAlias: string | null;
+  baselineLabel: string | null;
 }) {
   const ruleName = (run: AutomatedRunSummary) =>
     rules.find((rule) => rule.id === run.ruleId)?.name ?? null;
@@ -120,7 +120,7 @@ export function EvaluationResultsTable({
     <>
       <h3>{text.evaluationSummary}</h3>
       <p className="muted">{text.evaluationSummaryHint}</p>
-      <MetricSummaryTable projectId={projectId} summary={summary} baselineAlias={baselineAlias} />
+      <MetricSummaryTable projectId={projectId} summary={summary} baselineLabel={baselineLabel} />
       <h3>{text.evaluationRuns}</h3>
       <DataTable
         items={runs}
@@ -130,6 +130,7 @@ export function EvaluationResultsTable({
           {
             key: 'name',
             label: text.name,
+            className: 'evaluation-run-name',
             render: (run) => <Link to={`/projects/${projectId}/runs/${run.id}`}>{run.name}</Link>,
           },
           {

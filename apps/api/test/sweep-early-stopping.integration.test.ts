@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Run, WorkerJob } from '@mmt/contracts';
+import type { JobListItem, Run, WorkerJob } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import { sweepFixture } from './sweepFixtures.js';
 
@@ -76,6 +76,23 @@ describe.skipIf(!testDatabaseUrl)('Sweepの早期打ち切り（独立PostgreSQL
       objectiveValue: 0.5,
       objectiveStep: 2,
     });
+
+    // The Jobs list tells the early stop from a cancel by a person and names the Run and Task.
+    const jobs = await entity<{ items: JobListItem[] }>(
+      await request(harness.app, `${fixture.basePath}/jobs`, { cookie: fixture.viewer.cookie }),
+      200,
+    );
+    const jobOf = (trialIndex: number) =>
+      jobs.items.find((job) => job.runId === trials[trialIndex]!.runId)!;
+    expect(jobOf(1)).toMatchObject({
+      status: 'canceled',
+      sweepEarlyStopped: true,
+      runName: byTrial(1).run.name,
+      runKind: byTrial(1).run.kind,
+      taskId: byTrial(1).run.taskId,
+    });
+    expect(jobOf(1).taskName).toEqual(expect.any(String));
+    expect(jobOf(0).sweepEarlyStopped).toBe(false);
 
     // A second tick does not stop the same trials again or stop the leader.
     await harness.sweepScheduler.tickAll();

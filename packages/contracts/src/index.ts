@@ -428,6 +428,18 @@ export interface Job {
   // Derived: claimed/running with no heartbeat for 60 seconds. Display only; status is unchanged.
   heartbeatStale: boolean;
 }
+/**
+ * A row of GET /projects/:p/jobs: the Job with the names of its Run and Task, so the list reads
+ * without opening each Run. sweepEarlyStopped tells a Sweep's early stop (Run tag
+ * mmt.sweepEarlyStopped) from a cancel by a person; both end as canceled.
+ */
+export interface JobListItem extends Job {
+  runName: string;
+  runKind: RunKind;
+  taskId: string | null;
+  taskName: string | null;
+  sweepEarlyStopped: boolean;
+}
 export type WorkerPresenceStatus = 'online' | 'offline';
 export interface WorkerPresence {
   projectId: string;

@@ -20,6 +20,7 @@ export function TaskFields({ values, catalog, targets, onChange, isEditing = fal
   const code = catalog.codeVersions.find((item) => item.id === values.codeVersionId);
   const target = targets.find((item) => item.id === values.targetId);
   const compatibleCodes = catalog.codeVersions.filter((item) => isCodeCompatible(item, kind, model));
+  const hasGpus = (target?.gpuIds.length ?? 0) > 0;
   const fields: FormField[] = [
     { name: 'name', label: launchOnly ? text.runName : text.name, required: true },
     { name: 'description', label: text.description, type: 'textarea', visible: () => !launchOnly },
@@ -34,13 +35,20 @@ export function TaskFields({ values, catalog, targets, onChange, isEditing = fal
     { name: 'inputDatasetVersionIds', label: text.inputDatasets, type: 'multiselect', options: options.datasets },
     { name: 'targetId', label: text.target, type: 'select', required: launchOnly,
       options: withEmptyOption(targets.filter((item) => code && isTargetCompatible(item, code)).map((item) => ({ value: item.id, label: item.name }))) },
+    // A target without GPUs gets a note in place of an empty list (rendered between the field groups).
     { name: 'gpuIds', label: text.gpuIds, type: 'multiselect',
-      options: target?.gpuIds.map((id) => ({ value: id, label: id })) ?? [] },
+      options: target?.gpuIds.map((id) => ({ value: id, label: id })) ?? [], visible: () => hasGpus },
     { name: 'parameters', label: launchOnly ? text.taskParameterOverrides : text.parametersJson, type: 'textarea' },
     { name: 'tags', label: text.tagsJson, type: 'textarea', visible: () => !launchOnly },
   ];
+  const gpuIndex = fields.findIndex((field) => field.name === 'gpuIds');
   return <>
-    <FormFields fields={fields} values={values} onChange={onChange} />
+    <FormFields fields={fields.slice(0, gpuIndex)} values={values} onChange={onChange} />
+    {!hasGpus && <div className="field">
+      <span>{text.gpuIds}</span>
+      <p className="muted field-note">{target ? text.gpuNoneOnTarget : text.gpuSelectTargetFirst}</p>
+    </div>}
+    <FormFields fields={fields.slice(gpuIndex)} values={values} onChange={onChange} />
     {!launchOnly && hasOutputModel(kind) &&
       <TaskOutputModelFields values={values} catalog={catalog} code={code} onChange={onChange} />}
   </>;

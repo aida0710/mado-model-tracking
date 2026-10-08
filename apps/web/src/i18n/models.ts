@@ -19,6 +19,8 @@ export const modelsText = {
   // Model version page: training Run → version → inference/evaluation Runs.
   modelVersionNotFound: 'モデル版が見つかりません',
   modelVersionOpenPage: '版の詳細画面を開く',
+  modelVersionArtifactOpen: 'Artifactsで開く',
+  modelVersionWeightsArtifact: '重みのArtifact',
   modelVersionSummary: '概要',
   modelVersionLineage: '学習Run → 版 → 推論・評価Run',
   modelVersionLineageTruncated: '新しい順に最大20件の推論・評価Runを表示しています。',
@@ -57,7 +59,7 @@ export const modelAliasSourceLabels: Record<ModelAliasEventSource, string> = {
   web: 'Web',
   api: 'API',
   mlflow: 'MLflow',
-  promotion_policy: '昇格ポリシー',
+  promotion_policy: '昇格policy',
   version_deleted: '版の削除',
   model_deleted: 'モデルの削除',
 };

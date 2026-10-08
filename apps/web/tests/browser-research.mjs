@@ -177,7 +177,7 @@ async function checkRunMedia(page) {
 
 async function checkDescriptionAndComments(page) {
   step('Run detail: description from mlflow.note.content and comments');
-  await openTab(page, 'Details');
+  await openTab(page, '詳細');
   const description = page.locator('section.run-description .markdown-view');
   await description.getByRole('heading', { name: '学習の説明' }).waitFor();
   await description.getByText('MLflow の set-tag から追記').waitFor();

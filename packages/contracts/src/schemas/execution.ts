@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import type { ComputeTarget, Job, WorkerPresence } from '../index.js';
-import { idSchema, jobStatusSchema, timestampSchema } from './primitives.js';
+import type { ComputeTarget, Job, JobListItem, WorkerPresence } from '../index.js';
+import { idSchema, jobStatusSchema, runKindSchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
 import type { Expect, MutuallyAssignable } from './typeAssertions.js';
 
@@ -49,6 +49,16 @@ export const jobSchema = namedContractSchema(
     heartbeatStale: z.boolean(),
   }),
 );
+export const jobListItemSchema = namedContractSchema(
+  'JobListItem',
+  jobSchema.extend({
+    runName: z.string(),
+    runKind: runKindSchema,
+    taskId: idSchema.nullable(),
+    taskName: z.string().nullable(),
+    sweepEarlyStopped: z.boolean(),
+  }),
+);
 export const workerPresenceSchema = namedContractSchema(
   'WorkerPresence',
   z.strictObject({
@@ -71,6 +81,7 @@ type _ComputeTarget = Expect<
   MutuallyAssignable<z.infer<typeof computeTargetSchema>, ComputeTarget>
 >;
 type _Job = Expect<MutuallyAssignable<z.infer<typeof jobSchema>, Job>>;
+type _JobListItem = Expect<MutuallyAssignable<z.infer<typeof jobListItemSchema>, JobListItem>>;
 type _WorkerPresence = Expect<
   MutuallyAssignable<z.infer<typeof workerPresenceSchema>, WorkerPresence>
 >;

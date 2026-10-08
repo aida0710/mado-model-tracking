@@ -5,6 +5,8 @@ import { RegistryLayout } from './RegistryLayout';
 import { Empty, ErrorNotice, Resource } from './Feedback';
 import { DetailsList, JsonDetails } from './JsonDetails';
 import { ModelAliasHistory } from './ModelAliasHistory';
+import { ModelVersionArtifactLink } from './ModelVersionArtifactLink';
+import { RunNameLink } from './RunNameLink';
 import type { ModelAliasHistoryState } from '../hooks/useModelAliasHistory';
 import { formatDate } from '../lib/format';
 import { modelVersionPath } from '../lib/modelVersionPath';
@@ -154,9 +156,7 @@ export function ModelRegistryPanel({
                           label: text.sourceRun,
                           render: (version) =>
                             version.sourceRunId ? (
-                              <Link to={`${base}/runs/${version.sourceRunId}`}>
-                                {version.sourceRunId}
-                              </Link>
+                              <RunNameLink projectId={projectId} runId={version.sourceRunId} />
                             ) : (
                               '—'
                             ),
@@ -183,23 +183,33 @@ export function ModelRegistryPanel({
                             [text.version, registry.selectedVersion.version],
                             [
                               text.parents,
-                              registry.selectedVersion.parentModelVersionIds.map((id) => (
-                                <Link
-                                  key={id}
-                                  className="version-link mono"
-                                  to={`${base}/models?version=${id}`}
-                                >
-                                  {id}
-                                </Link>
-                              )),
+                              registry.selectedVersion.parentModelVersionIds.length
+                                ? registry.selectedVersion.parentModelVersionIds.map((id) => (
+                                    <Link
+                                      key={id}
+                                      className="version-link mono"
+                                      to={`${base}/models?version=${id}`}
+                                    >
+                                      {versionLabel(id)}
+                                    </Link>
+                                  ))
+                                : null,
                             ],
                             [
                               text.weightsUri,
-                              <span className="mono break-word">
-                                {registry.selectedVersion.weightsUri}
-                              </span>,
+                              registry.selectedVersion.weightsUri ? (
+                                <span className="mono break-word">
+                                  {registry.selectedVersion.weightsUri}
+                                </span>
+                              ) : null,
                             ],
-                            [text.artifactId, registry.selectedVersion.artifactId],
+                            [
+                              text.modelVersionWeightsArtifact,
+                              <ModelVersionArtifactLink
+                                projectId={projectId}
+                                version={registry.selectedVersion}
+                              />,
+                            ],
                             [
                               text.defaultCode,
                               registry.selectedVersion.defaultCodeVersionId ? (

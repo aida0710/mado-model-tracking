@@ -23,7 +23,7 @@ export function TaskOutputModelFields({ values, catalog, code, onChange }: {
     { name: 'outputModelEnabled', label: text.outputModelEnabled, type: 'checkbox' },
     { name: 'outputModelTarget', label: text.outputModelTarget, type: 'select', visible: isEnabled,
       options: [{ value: 'existing', label: text.outputModelExisting }, { value: 'create', label: text.outputModelCreate }] },
-    { name: 'outputModelId', label: text.models, type: 'select', required: true,
+    { name: 'outputModelId', label: text.outputModelModel, type: 'select', required: true,
       options: withEmptyOption(models.map((model) => ({ value: model.id, label: `${model.name} · ${model.family}` }))),
       visible: (current) => isEnabled(current) && !isCreating(current) },
     { name: 'outputModelName', label: text.outputModelName, required: true,

@@ -1,4 +1,5 @@
 import type { AutomatedRunSummary, ModelAutomationRule } from '@mmt/contracts';
+import { isSystemMetricKey } from './systemMetricKeys';
 
 type EvaluationRun = Pick<
   AutomatedRunSummary,
@@ -76,14 +77,20 @@ export function collectSummaryMetrics(
   ];
 }
 
-/** Summary metrics first in their given order, then every other metric name alphabetically. */
+/**
+ * Summary metrics first in their given order, then every other metric name alphabetically. The
+ * worker's system metrics (system.cpu.percent, …) describe the machine, not the evaluation, so they
+ * are left out unless a rule names them as summary metrics.
+ */
 export function orderMetricKeys(
   runs: readonly Pick<EvaluationRun, 'latestMetrics'>[],
   summaryMetrics: readonly string[],
 ): string[] {
   const prioritized = new Set(summaryMetrics);
   const others = new Set(
-    runs.flatMap((run) => Object.keys(run.latestMetrics)).filter((key) => !prioritized.has(key)),
+    runs
+      .flatMap((run) => Object.keys(run.latestMetrics))
+      .filter((key) => !prioritized.has(key) && !isSystemMetricKey(key)),
   );
   return [...summaryMetrics, ...[...others].sort()];
 }

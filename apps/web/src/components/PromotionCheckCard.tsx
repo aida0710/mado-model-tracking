@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { ModelVersionDetail, PromotionEvaluation, PromotionPolicy } from '@mmt/contracts';
 import type { usePromotionChoices } from '../hooks/usePromotionChoices';
-import { currentDecisionsForAlias } from '../lib/promotionEvidence';
+import { currentDecisionsForAlias, hasBaselineMoved } from '../lib/promotionEvidence';
 import { PromotionDialog } from '../dialogs/PromotionDialog';
 import { CriterionResults, DecisionBadge } from './PromotionEvaluationTable';
 import { ErrorNotice, Resource } from './Feedback';
 import { text } from '../i18n/catalog';
+import { promotionTextTemplates } from '../i18n/promotion';
 
 // Notes on a pass that an autoPromote policy did not turn into an alias change.
 const automaticPromotionNotes: Partial<Record<NonNullable<PromotionEvaluation['reason']>, string>> =
@@ -35,11 +36,13 @@ function latestDecision(
 export function PromotionCheckCard({
   projectId,
   detail,
+  versionLabel,
   choices,
   onPromoted,
 }: {
   projectId: string;
   detail: ModelVersionDetail;
+  versionLabel: (versionId: string) => string;
   choices: ReturnType<typeof usePromotionChoices>;
   onPromoted: () => void;
 }) {
@@ -59,6 +62,11 @@ export function PromotionCheckCard({
                 const note = decision?.reason
                   ? automaticPromotionNotes[decision.reason]
                   : undefined;
+                const baselineMoved =
+                  decision?.decision === 'passed' &&
+                  !isCurrent &&
+                  hasBaselineMoved(decision, { policy, aliases: detail.model.aliases });
+                const currentBaselineId = detail.model.aliases[policy.baselineAlias];
                 return (
                   <li key={policy.id} className="promotion-check">
                     <div className="section-heading">
@@ -72,7 +80,9 @@ export function PromotionCheckCard({
                             setPromoting({
                               alias: policy.targetAlias,
                               evaluationId:
-                                decision?.decision === 'passed' ? decision.id : undefined,
+                                decision?.decision === 'passed' && !baselineMoved
+                                  ? decision.id
+                                  : undefined,
                             })
                           }
                         >
@@ -87,6 +97,19 @@ export function PromotionCheckCard({
                           <div className="muted">{text.promotionCheckPromotedAutomatically}</div>
                         )}
                         {note && <div className="muted">{note}</div>}
+                        {baselineMoved && (
+                          <div className="notice" role="status">
+                            <span>
+                              {text.promotionCheckBaselineMoved}{' '}
+                              {promotionTextTemplates.baselineMovedDetail(
+                                decision.baselineVersionId
+                                  ? versionLabel(decision.baselineVersionId)
+                                  : null,
+                                currentBaselineId ? versionLabel(currentBaselineId) : null,
+                              )}
+                            </span>
+                          </div>
+                        )}
                         <CriterionResults results={decision.criteriaResults} />
                       </>
                     ) : (

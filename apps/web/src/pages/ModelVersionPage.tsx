@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react';
 import type {
   ModelAutomationExecutionPage,
   ModelAutomationRule,
+  ModelVersion,
   ModelVersionDetail,
   Run,
 } from '@mmt/contracts';
@@ -11,6 +12,9 @@ import { useProject } from '../hooks/useProject';
 import { useModelVersionDetail } from '../hooks/useModelVersionDetail';
 import { useModelVersionEvaluations } from '../hooks/useModelVersionEvaluations';
 import { useEvaluationComparison } from '../hooks/useEvaluationComparison';
+import { useEvaluationBaseline, type EvaluationBaseline } from '../hooks/useEvaluationBaseline';
+import { useQuery } from '../hooks/useQuery';
+import { registryApi } from '../api/registry';
 import { usePromotionChoices } from '../hooks/usePromotionChoices';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorNotice, Resource } from '../components/Feedback';
@@ -24,6 +28,7 @@ import { CommentThread } from '../components/comments/CommentThread';
 import { collectSummaryMetrics, summarizeEvaluations } from '../lib/evaluationSummary';
 import { modelVersionPath } from '../lib/modelVersionPath';
 import { text } from '../i18n/catalog';
+import { evaluationTextTemplates } from '../i18n/evaluation';
 
 /**
  * One model version from training to results: where it came from, what automation ran on it,
@@ -34,18 +39,28 @@ export function ModelVersionPage() {
   const { project, canEdit } = useProject();
   const { modelId = '', versionId = '' } = useParams();
   const { detail, sourceRun, rules, executions } = useModelVersionDetail(project.id, versionId);
-  const evaluations = useModelVersionEvaluations(project.id, detail.value);
+  // Every version of the Model: the version numbers to show and the baselines to choose from.
+  const versions = useQuery(`${project.id}:model-versions:${modelId}`, (signal) =>
+    registryApi.modelVersions(project.id, modelId, signal),
+  );
+  const baseline = useEvaluationBaseline({
+    aliases: detail.value?.model.aliases ?? {},
+    candidateVersionId: versionId,
+    versions: versions.value ?? [],
+  });
+  const evaluations = useModelVersionEvaluations(project.id, detail.value, baseline.versionId);
   // Loaded here rather than in their panels so that the reload button refreshes them too: an
   // evaluation that ends after the page opened changes both the comparison and the decisions.
   const evaluationComparison = useEvaluationComparison({
     projectId: project.id,
     modelId,
     candidateVersionId: versionId,
-    aliases: detail.value?.model.aliases ?? {},
+    baseline: baseline.choice,
   });
   const promotionChoices = usePromotionChoices(project.id, modelId, versionId);
   const reloadAll = () => {
     detail.reload();
+    versions.reload();
     sourceRun.reload();
     executions.reload();
     evaluations.results.reload();
@@ -84,6 +99,8 @@ export function ModelVersionPage() {
             detail={value}
             sourceRun={sourceRun.value}
             rules={rules.value ?? []}
+            versions={versions.value ?? []}
+            selectedBaseline={baseline}
             executions={executions}
             evaluations={evaluations}
             evaluationComparison={evaluationComparison}
@@ -102,6 +119,8 @@ function ModelVersionContent({
   detail,
   sourceRun,
   rules,
+  versions,
+  selectedBaseline,
   executions,
   evaluations,
   evaluationComparison,
@@ -113,6 +132,8 @@ function ModelVersionContent({
   detail: ModelVersionDetail;
   sourceRun: Run | undefined;
   rules: ModelAutomationRule[];
+  versions: ModelVersion[];
+  selectedBaseline: EvaluationBaseline;
   executions: QueryState<ModelAutomationExecutionPage>;
   evaluations: ReturnType<typeof useModelVersionEvaluations>;
   evaluationComparison: ReturnType<typeof useEvaluationComparison>;
@@ -128,7 +149,17 @@ function ModelVersionContent({
     baselineRuns: baseline.results.value?.items ?? [],
     summaryMetrics: collectSummaryMetrics(evaluationRuns, rules),
   });
-  const versionLabel = (id: string) => (id === detail.version.id ? detail.version.version : id);
+  // Versions are named by number everywhere on the page; a version not loaded yet keeps its id.
+  const versionLabel = (id: string) =>
+    evaluationTextTemplates.versionLabel(
+      (id === detail.version.id ? detail.version : versions.find((version) => version.id === id))
+        ?.version ?? id,
+    );
+  const baselineLabel = !selectedBaseline.choice
+    ? null
+    : selectedBaseline.choice.kind === 'alias'
+      ? selectedBaseline.choice.alias
+      : versionLabel(selectedBaseline.choice.versionId);
   return (
     <>
       <ModelVersionSummary
@@ -149,7 +180,7 @@ function ModelVersionContent({
                 runs={evaluationRuns}
                 rules={rules}
                 summary={summary}
-                baselineAlias={baseline.versionId ? baseline.alias : null}
+                baselineLabel={baseline.versionId ? baselineLabel : null}
               />
               {page.nextCursor && <p className="muted">{text.evaluationResultsTruncated}</p>}
             </>
@@ -159,12 +190,17 @@ function ModelVersionContent({
       <EvaluationComparisonPanel
         projectId={projectId}
         model={detail.model}
+        candidateVersionId={detail.version.id}
+        versions={versions}
+        versionLabel={versionLabel}
+        baseline={selectedBaseline}
         evaluationComparison={evaluationComparison}
       />
       {canPromote && (
         <PromotionCheckCard
           projectId={projectId}
           detail={detail}
+          versionLabel={versionLabel}
           choices={promotionChoices}
           onPromoted={onPromoted}
         />

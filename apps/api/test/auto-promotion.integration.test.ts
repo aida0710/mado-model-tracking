@@ -166,7 +166,7 @@ describe.skipIf(!testDatabaseUrl)('合格時のalias自動切替と保護alias�
       actor: { userId: fixture.administrator.userId, tokenId: null },
     });
     expect(event!.reason).toContain('Accuracy gate');
-    expect(event!.reason).toContain('accuracy(absolute)=0.9≥0.8');
+    expect(event!.reason).toContain('accuracy=0.9 ≥ 0.8');
 
     const second = await evaluatedVersion(fixture, { rule, version: '2', accuracy: 0.95 });
     expect(second.decision).toMatchObject({
