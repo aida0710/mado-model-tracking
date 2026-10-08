@@ -60,8 +60,8 @@ describe.skipIf(!testDatabaseUrl)('全体管理者のユーザー管理（独立
     );
     const userId = user.rows[0]!.id;
     await harness.database.query(
-      `INSERT INTO user_oidc_identities(issuer,subject,user_id,email_at_login,email_verified)
-      VALUES('https://idp.example.invalid',$1,$2,$1,true)`,
+      `INSERT INTO user_oidc_identities(issuer,subject,user_id,email_at_login,email_verified,groups_synced_at)
+      VALUES('https://idp.example.invalid',$1,$2,$1,true,now())`,
       [email, userId],
     );
     await harness.database.query(

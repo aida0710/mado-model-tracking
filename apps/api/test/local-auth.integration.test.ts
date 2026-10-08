@@ -8,7 +8,7 @@ import { argon2idPasswordHasher } from '../src/auth/passwordHasher.js';
 import { hashSecret } from '../src/auth/secrets.js';
 import { bootstrapAdministrator } from '../src/scripts/bootstrapAdmin.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
-import { startMockOidcProvider } from './mockOidcProvider.js';
+import { startMockOidcProvider, TEST_SESSION_ENCRYPTION_KEY } from './mockOidcProvider.js';
 
 const PASSWORD = 'correct horse battery staple';
 const NEW_PASSWORD = 'a different long passphrase';
@@ -27,6 +27,7 @@ describe.skipIf(!testDatabaseUrl)('ローカルアカウントとAUTH_MODE（独
       OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
       OIDC_CLIENT_SECRET: 'mock-client-secret',
       OIDC_ALLOW_INSECURE_HTTP: 'true',
+      MMT_SESSION_ENCRYPTION_KEY: TEST_SESSION_ENCRYPTION_KEY,
     });
     return createApplication({ config, database: harness.database, stores: harness.stores }).app;
   }

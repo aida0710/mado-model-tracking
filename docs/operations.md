@@ -64,9 +64,12 @@ Project adminは設定画面の「監査ログ」で自分のProjectの記録を
 |---|---|
 | Redirect URI | `https://tracking.example.com/api/auth/callback`（完全一致） |
 | Issuer | application単位のURL（例: `https://sso.example.com/application/o/model-tracking/`） |
-| Scope | `openid profile email`（`OIDC_SCOPES`と同じにする） |
+| Scope | `openid profile email offline_access`（`OIDC_SCOPES`と同じにする。`offline_access`は下の「sessionの再確認」） |
+| Back-channel logout URI | `https://tracking.example.com/api/auth/oidc/backchannel-logout` |
 
-AuthentikではApplicationとOAuth2/OpenID Providerを作ります。client secretはAPI serverにだけ設定します。ID tokenに`email`、`email_verified`、`name`、`groups`（group名の配列）を出すscope mappingが必要です。Providerの設定方法は[Authentik公式資料](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)を参照してください。
+AuthentikではApplicationとOAuth2/OpenID Providerを作ります。client secretはAPI serverにだけ設定します。ID tokenと**UserInfo**に`email`、`email_verified`、`name`、`groups`（group名の配列）を出すscope mappingが必要です。UserInfoに`groups`が無いと、次の再確認でどのgroupにも入っていないと判定され、全員のsessionが切れます。Providerの設定方法は[Authentik公式資料](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)を参照してください。
+
+refresh tokenを発行させるため、Providerのscope mappingに`offline_access`（Authentik標準の「authentik default OAuth Mapping: OpenID 'offline_access'」）を加え、`OIDC_SCOPES`にも`offline_access`を入れます。Authentikで有効にできない場合は`offline_access`を外したままでも動きますが、access tokenの期限（Authentikの既定は5分。Providerの「Access token validity」）ごとに再ログインが必要になります。
 
 アプリはstate、nonce、PKCE、ID tokenの署名・issuer・audienceを検証します。OIDC開始時に短命のHttpOnly cookieを発行し、callbackは同じbrowserからだけ受け付けます。
 
@@ -83,11 +86,15 @@ OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
 OIDC_CLIENT_ID=<providerのclient ID>
 OIDC_CLIENT_SECRET=<secret>
 OIDC_LABEL=Authentik
-OIDC_SCOPES=openid profile email
+OIDC_SCOPES=openid profile email offline_access
 OIDC_AUTO_LINK_VERIFIED_EMAIL=false
 OIDC_ALLOWED_GROUPS=mmt-users,mmt-admins
 OIDC_ROLE_MAPPING_JSON={"mmt-admins":"admin","mmt-users":"user"}
 OIDC_DEFAULT_ROLE=user
+# openssl rand -base64 32 で作る。MMT_STORAGE_SECRET_KEYとは別の値にする
+MMT_SESSION_ENCRYPTION_KEY=<base64の32 byte>
+OIDC_RECHECK_SECONDS=60
+OIDC_TOKEN_SYNC_MAX_AGE_SECONDS=604800
 ```
 
 | 設定 | 意味 |
@@ -97,18 +104,23 @@ OIDC_DEFAULT_ROLE=user
 | `OIDC_DEFAULT_ROLE` | 対応表のどのgroupにも入っていない許可ユーザーの全体role。既定`user` |
 | `OIDC_ADMIN_GROUP` | `{"<group>":"admin"}`の省略形（以前からの設定）。対応表と両方指定して、adminのgroupが食い違うと起動しません。どちらも無ければ`mmt-admins`をadminとします |
 | `OIDC_AUTO_LINK_VERIFIED_EMAIL` | 同じemailのLocal Userへ自動連携するか。既定`false` |
-| `OIDC_SCOPES` | 要求するscope。既定`openid profile email`。`openid`が無いと起動しません |
+| `OIDC_SCOPES` | 要求するscope。既定`openid profile email`。`openid`が無いと起動しません。refresh tokenを使うには`offline_access`を足します |
+| `MMT_SESSION_ENCRYPTION_KEY` | SSO sessionに保存するaccess/refresh tokenの暗号鍵（base64の32 byte、AES-256-GCM）。`oidc`/`hybrid`で必須で、無いか形式が違うと起動しません |
+| `OIDC_RECHECK_SECONDS` | SSO sessionをUserInfoで確かめ直す間隔（秒）。既定`60` |
+| `OIDC_TOKEN_SYNC_MAX_AGE_SECONDS` | SSOユーザーのAPI tokenを使える、最後のgroup同期からの期限（秒）。既定`604800`（7日）。60未満は起動時エラー |
 
 対応表に書いたgroupも`OIDC_ALLOWED_GROUPS`に入れてください。許可groupに無いgroupだけを持つ人は、対応表に関係なくloginできません。
 
 以前の版から更新するときは、`OIDC_ALLOWED_GROUPS`を足してから再起動してください（無いとAPIが起動しません）。`OIDC_ADMIN_GROUP`だけの設定は、そのまま同じ全体管理者の判定になります。
 
+migration 042を含む版へ更新するときは、先に`MMT_SESSION_ENCRYPTION_KEY`を`.env`へ足します（無いとAPIが起動しません）。042はtokenを持たない既存のSSO sessionを失効させるので、SSOの利用者は更新後に一度ログインし直します。Local sessionはそのまま使えます。鍵を変えると、保存済みのtokenを復号できないSSO sessionは次の再確認で失効し、再ログインになります。
+
 ### Userと全体roleの同期規則
 
 - 初回SSOでUserをJIT作成します。self-signupの画面はありません。
 - `OIDC_ALLOWED_GROUPS`のどのgroupにも入っていない人は拒否し、Userも作りません。
-- loginのたびに、全体管理者かどうか（`users.is_admin`）を対応表から同期します。複数groupに該当すれば強い方（`admin`）になります。
-- loginのたびに、その人のgroupを`user_groups`へ保存し直します。ProjectのSSO group bindingはこの表を使います。
+- loginとsessionの再確認のたびに、全体管理者かどうか（`users.is_admin`）を対応表から同期します。複数groupに該当すれば強い方（`admin`）になります。
+- loginとsessionの再確認のたびに、その人のgroupを`user_groups`へ保存し直します。ProjectのSSO group bindingはこの表を使います。
 - 同期で有効な全体管理者（Local Adminを含む）が0人になる場合は、そのloginを拒否し、`is_admin`を残します。
 - 既存Local Userへのemail自動連携は既定で無効で、同じemailでも別のUserになります。有効にした場合も`email_verified=true`かつemail一致（大文字小文字を区別しない）で、まだSSOと結び付いていないLocal Userが1人だけのときに限ります。全体管理者やどこかのProject adminであるLocal Userは自動連携しません。
 - `email_verified`がtrueでないloginは拒否します。
@@ -117,9 +129,41 @@ OIDC_DEFAULT_ROLE=user
 
 Role同期を使う環境では、SSO Userの全体roleを画面から一時的に変えても次回ログインでAuthentik側の状態へ戻ります。恒久変更はAuthentik groupで行います。
 
-groupの判定と全体roleの同期はloginのときにだけ行います。Authentik側でgroupから外しても、loginしているsessionは期限（`AUTH_SESSION_ABSOLUTE_SECONDS`、既定12時間）まで元の権限のままです。
+Web sessionはHttpOnly/SameSite=Lax cookieで、期限は上の`AUTH_SESSION_*`に従います。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを失効させます。Authentik全体のsession logoutとSCIMは提供しません。
 
-Web sessionはHttpOnly/SameSite=Lax cookieで、期限は上の`AUTH_SESSION_*`に従います。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを失効させます。Authentik全体のsession logout、SCIM、back-channel logoutは提供しません。
+### sessionの再確認とback-channel logout
+
+Authentikでgroupから外した人の権限を、loginを待たずに止める仕組みです（Madoと同じ構成）。
+
+- SSOのlogin時に、Authentikのaccess tokenとrefresh tokenを`MMT_SESSION_ENCRYPTION_KEY`で暗号化してsessionへ保存します（`sessions.access_token_enc`・`refresh_token_enc`）。平文では保存しません。sessionを失効させるとtokenも消します。
+- SSO sessionの要求ごとに、最後の確認から`OIDC_RECHECK_SECONDS`（既定60秒）が過ぎているか、access tokenの期限が切れていれば、UserInfoで現在のgroupを確かめます。access tokenが切れていればrefresh tokenで更新してから聞きます。同じsessionへ同時に来た要求は1回の確認を待ち合わせます。
+- 結果はloginと同じ規則で反映します（上の「Userと全体roleの同期規則」）。
+  - 許可groupに入ったまま: `user_groups`と`is_admin`を更新して続けます。全体roleやProject roleの変化ではsessionを切りません（Project権限は`effective_project_roles`で次の要求から変わります）。
+  - 許可groupから外れた（ほかの拒否理由も同じ）: その人のSSO identityの**全session**を失効させ、`user_groups`を空にし、API tokenも止めます（下の「SSOユーザーのAPI token」）。
+  - Authentikがtokenを拒否した（401、`invalid_grant`。Authentikでlogoutした、Userを無効にした、refresh tokenが失効した）: そのsessionを失効させます。
+  - refresh tokenが無く（`offline_access`無し）access tokenが切れた: そのsessionを失効させ、再ログインを求めます。
+  - Authentikに届かない（接続できない、5xx）: **503 `oidc_unavailable`**を返し、sessionは残します。未確認の権限では通しません。復旧すれば同じsessionで続けられます。
+- Local sessionとAPI tokenの要求ではAuthentikを呼びません。
+- 失効させた記録は監査ログの`auth.oidc.recheck`（`outcome=denied`、`details.reason`・`details.scope`（`session`か`identity`）・`details.revokedSessions`）と、標準エラー出力の1行JSON（`{"event":"oidc_session_revoked",...}`）に残ります。Authentikに届かなかったときは`{"event":"oidc_session_check_failed",...}`を出します。
+
+| `auth.oidc.recheck`の`reason` | 意味 |
+|---|---|
+| `group_not_allowed` | 許可groupから外れた。identityの全sessionを失効 |
+| `idp_session_revoked` | Authentikがaccess/refresh tokenを拒否した |
+| `reauthentication_required` | refresh tokenが無いままaccess tokenが切れた、tokenを持たない旧session、鍵の変更でtokenを復号できない |
+| `last_admin`・`user_disabled`ほか | loginの拒否理由と同じ（上の切り分け表） |
+
+Back-channel logout: AuthentikのProviderに上の「Back-channel logout URI」を登録すると、AuthentikでUserやsessionを終了した時点で、アプリのsessionも失効します。アプリはlogout tokenの署名（ProviderのJWKS）・issuer・audience（`OIDC_CLIENT_ID`）・発行時刻（10分以内）・`events`・`jti`を検証し、`nonce`を含むものは拒否します。`sub`があればそのidentityの全session、`sid`だけならそのAuthentik sessionで作ったsessionを失効させます。同じ`jti`の再送は400 `logout_token_replayed`です。記録は監査ログの`auth.oidc.backchannel_logout`（`details.subject`・`details.sid`・`details.revokedSessions`）です。
+
+### SSOユーザーのAPI tokenの同期期限
+
+group同期はブラウザのloginかsessionの再確認でしか起きません。API tokenだけを使い続けると、Authentikでgroupから外しても気付けないため、SSO identityを持つUserのAPI tokenは**最後のgroup同期から`OIDC_TOKEN_SYNC_MAX_AGE_SECONDS`（既定7日）まで**しか使えません。期限を過ぎたtokenは401 `identity_sync_required`になります（tokenは失効させません）。
+
+- SDKだけを使う研究者のtokenは、ブラウザで7日間ログインしないと止まります。**ブラウザで一度ログインすれば、同じtokenがそのまま使えるようになります。**
+- 長期に動くworker・自動実行・CIは、人のtokenではなくService Account（上の「workerホストへworkerを導入する」の1.）のtokenを使います。Service Accountはこの期限の対象外です。
+- 自動実行のrule・自動昇格のpolicyの所有者（実行するUser）も、Projectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService AccountでRoleがadmin）。人が所有したままだと、その人が7日ログインしないと自動実行が401で止まります。
+- emailで自動連携したLocal UserもSSO identityを持つので対象です。ローカルアカウントでログインしてもgroupは同期されないため、SSOで一度ログインします。
+- `AUTH_MODE=local`へ切り替えた後も、SSO identityを持つUserのtokenは期限で止まります。
 
 ### SSOで入れないときの切り分け
 
@@ -149,7 +193,7 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 
 | 段 | 決め方 | 変える場所 |
 |---|---|---|
-| 全体role（全体管理者か否か） | `OIDC_ROLE_MAPPING_JSON`（と`OIDC_ADMIN_GROUP`）の対応表。loginのたびに同期 | API serverの環境変数とAuthentikのgroup |
+| 全体role（全体管理者か否か） | `OIDC_ROLE_MAPPING_JSON`（と`OIDC_ADMIN_GROUP`）の対応表。loginとsessionの再確認のたびに同期 | API serverの環境変数とAuthentikのgroup |
 | Project role（viewer/editor/admin） | 直接付与とgroup bindingのうち強い方 | Projectの設定画面（Project admin） |
 
 - 直接付与はユーザー1人に付けるrole（`project_members`）、group bindingはAuthentikのgroup名に付けるrole（`project_group_bindings`）です。どちらもProject adminが設定し、監査ログに`project.member.set`・`project.member.delete`・`project.group_binding.set`・`project.group_binding.delete`として残ります。
@@ -162,7 +206,7 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 
 - ProjectごとにAuthentikのgroupを作り（例: `mmt-proj-asr-editors`）、Projectの設定でそのgroupにroleを付けます。group名は大文字小文字・空白も含めて完全一致です。
 - ID tokenの`groups`はすべて`user_groups`へ保存するので、bindingに使うgroupを`OIDC_ALLOWED_GROUPS`に入れる必要はありません。ただし、そのgroupの人も許可groupのどれかに入っていないとloginできません。
-- groupの所属はloginのときに`user_groups`へ同期します。Authentikでgroupに入れた人は、次のloginから権限が付きます。外した人は、次のloginで権限が外れ、そのgroupの権限だけで使っていたProject限定API tokenも401になります（tokenは失効させないので、groupに戻せば再び使えます）。loginしないまま使い続けているsessionとtokenは、次のloginまで元のgroupのままです。すぐ止めたい場合はProjectの設定で直接付与・bindingを外すか、tokenを失効させます。
+- groupの所属はloginとsessionの再確認（既定60秒ごと）で`user_groups`へ同期します。Authentikでgroupに入れた人は、使用中のsessionでも1分ほどで権限が付きます。外した人は1分ほどで権限が外れ、そのgroupの権限だけで使っていたProject限定API tokenも401になります（tokenは失効させないので、groupに戻せば再び使えます）。ブラウザを使わずAPI tokenだけを使っている人は、次の同期まで元のgroupのままです（同期が7日より古いtokenは止まります。上の「SSOユーザーのAPI tokenの同期期限」）。すぐ止めたい場合はProjectの設定で直接付与・bindingを外すか、tokenを失効させます。
 - Projectの設定画面のgroup候補（`GET /auth/groups`）には、一度でも誰かのloginで同期されたgroup名だけが出ます。まだ誰もloginしていないgroupは名前を直接入力します。
 
 ## Artifacts

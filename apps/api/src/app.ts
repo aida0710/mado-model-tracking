@@ -142,6 +142,8 @@ export interface ApplicationOptions {
   repositoryReader?: RepositoryReader;
   /** Senders by channel kind; defaults to Slack and webhook over HTTP. */
   notificationSenders?: NotificationSenders;
+  /** Time source of the SSO session recheck and token sync checks; tests move it forward. */
+  clock?: () => Date;
 }
 
 // Registry JSON and code uploads are bounded separately from streamed artifact bodies.
@@ -171,7 +173,7 @@ export function createApplication(options: ApplicationOptions) {
     secretKey: config.storageSecretKey,
     environmentBackends: describeEnvironmentBackends(options.environment ?? process.env),
   });
-  const auth = new AuthService(database, config);
+  const auth = new AuthService(database, config, { clock: options.clock });
   const audit = new AuditService(database);
   // A disabled backend keeps serving its Artifacts but cannot be chosen for a Project.
   const projects = new ProjectService(database, () => stores.writableBackends());

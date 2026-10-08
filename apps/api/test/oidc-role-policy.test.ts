@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config.js';
+import { TEST_SESSION_ENCRYPTION_KEY } from './mockOidcProvider.js';
 import { removesLastGlobalAdmin } from '../src/domain/globalAdminInvariant.js';
 import {
   createOidcRolePolicy,
@@ -129,6 +130,7 @@ describe('OIDCの起動設定', () => {
     OIDC_ISSUER_URL: 'https://sso.example.test/application/o/mmt/',
     OIDC_CLIENT_ID: 'mmt',
     OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
+    MMT_SESSION_ENCRYPTION_KEY: TEST_SESSION_ENCRYPTION_KEY,
   };
 
   it('oidcとhybridはOIDC_ALLOWED_GROUPSが無いと起動しない。localは読まない', () => {

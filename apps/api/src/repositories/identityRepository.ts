@@ -182,6 +182,34 @@ export async function replaceUserGroups(
   );
 }
 
+// Marks a successful group sync of the identity; API tokens of its user stay usable from here on.
+export async function recordOidcGroupSync(
+  connection: Connection,
+  identity: { issuer: string; subject: string },
+): Promise<void> {
+  await connection.query(
+    'UPDATE user_oidc_identities SET groups_synced_at=now() WHERE issuer=$1 AND subject=$2',
+    [identity.issuer, identity.subject],
+  );
+}
+
+/**
+ * The IdP refused the identity (for example it left the allowed groups). Its groups are removed so
+ * Project group bindings stop at once, and the missing sync time stops the user's API tokens.
+ */
+export async function withdrawOidcIdentityAccess(
+  connection: Connection,
+  identity: { issuer: string; subject: string; userId: string },
+): Promise<void> {
+  await connection.query(
+    'UPDATE user_oidc_identities SET groups_synced_at=NULL WHERE issuer=$1 AND subject=$2',
+    [identity.issuer, identity.subject],
+  );
+  await connection.query("DELETE FROM user_groups WHERE user_id=$1 AND source='oidc'", [
+    identity.userId,
+  ]);
+}
+
 export async function findLocalCredentialByUsername(
   connection: Connection,
   username: string,
@@ -273,33 +301,53 @@ export async function upsertLocalAdministrator(
 // Recording every use would write a row on each request, so last_used_at advances at most this often.
 export const TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS = 5 * 60;
 
+export interface TokenIdentity {
+  user: User;
+  token: { id: string; projectId: string | null; scopes: string[] };
+  // The owner has an SSO identity whose groups were not synced recently enough; the token must not be used.
+  isIdentitySyncStale: boolean;
+}
+
+/**
+ * A token of a user with an SSO identity is only as current as the user's last group sync, which
+ * happens at browser login and session recheck. When none of the user's identities synced after
+ * `syncedAfter`, the token is reported stale. Service Accounts have no SSO identity.
+ */
 export async function tokenIdentity(
   connection: Connection,
-  tokenHash: string,
-): Promise<
-  { user: User; token: { id: string; projectId: string | null; scopes: string[] } } | undefined
-> {
+  lookup: { tokenHash: string; syncedAfter: Date },
+): Promise<TokenIdentity | undefined> {
   const identity = await first<
-    User & { tokenId: string; projectId: string | null; scopes: string[]; usageIsStale: boolean }
+    User & {
+      tokenId: string;
+      projectId: string | null;
+      scopes: string[];
+      usageIsStale: boolean;
+      isIdentitySyncStale: boolean;
+    }
   >(
     connection,
     `SELECT ${userColumns},t.id AS token_id,t.project_id,t.scopes,
-    (t.last_used_at IS NULL OR t.last_used_at<now()-make_interval(secs=>$2)) AS usage_is_stale
+    (t.last_used_at IS NULL OR t.last_used_at<now()-make_interval(secs=>$2)) AS usage_is_stale,
+    (u.kind='human' AND EXISTS(SELECT 1 FROM user_oidc_identities i WHERE i.user_id=u.id)
+      AND NOT EXISTS(SELECT 1 FROM user_oidc_identities i WHERE i.user_id=u.id AND i.groups_synced_at>$3))
+      AS is_identity_sync_stale
     FROM api_tokens t JOIN users u ON u.id=t.user_id
     WHERE t.token_hash=$1 AND u.status='active' AND t.revoked_at IS NULL AND (t.expires_at IS NULL OR t.expires_at>now())
     AND (t.project_id IS NULL OR EXISTS(SELECT 1 FROM effective_project_roles e WHERE e.project_id=t.project_id AND e.user_id=t.user_id))`,
-    [tokenHash, TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS],
+    [lookup.tokenHash, TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS, lookup.syncedAfter],
   );
   if (!identity) return undefined;
-  const { tokenId, projectId, scopes, usageIsStale, ...user } = identity;
+  const { tokenId, projectId, scopes, usageIsStale, isIdentitySyncStale, ...user } = identity;
+  // A stale token is refused, so its use is not recorded.
   // The condition is repeated so concurrent requests write the timestamp only once.
-  if (usageIsStale)
+  if (usageIsStale && !isIdentitySyncStale)
     await connection.query(
       `UPDATE api_tokens SET last_used_at=now() WHERE id=$1
       AND (last_used_at IS NULL OR last_used_at<now()-make_interval(secs=>$2))`,
       [tokenId, TOKEN_LAST_USED_WRITE_INTERVAL_SECONDS],
     );
-  return { user, token: { id: tokenId, projectId, scopes } };
+  return { user, token: { id: tokenId, projectId, scopes }, isIdentitySyncStale };
 }
 
 // Everyone with an effective role: direct members and users who hold a bound group.

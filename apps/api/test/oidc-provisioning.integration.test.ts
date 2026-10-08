@@ -6,7 +6,11 @@ import { transaction } from '../src/db/database.js';
 import type { ApiEnvironment } from '../src/http/request.js';
 import { OidcLoginDeniedError, syncOidcIdentity } from '../src/services/oidcProvisioning.js';
 import { createHarness, request, testDatabaseUrl, type Harness } from './harness.js';
-import { startMockOidcProvider, type MockOidcClaims } from './mockOidcProvider.js';
+import {
+  startMockOidcProvider,
+  type MockOidcClaims,
+  TEST_SESSION_ENCRYPTION_KEY,
+} from './mockOidcProvider.js';
 
 const ROLE_MAPPING = '{"mmt-admins":"admin","mmt-users":"user"}';
 
@@ -22,6 +26,7 @@ describe.skipIf(!testDatabaseUrl)('SSO groupの許可判定と全体roleの同�
       OIDC_CLIENT_ID: 'mmt-test',
       OIDC_CLIENT_SECRET: 'mock-client-secret',
       OIDC_ALLOW_INSECURE_HTTP: 'true',
+      MMT_SESSION_ENCRYPTION_KEY: TEST_SESSION_ENCRYPTION_KEY,
       OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
       OIDC_ROLE_MAPPING_JSON: ROLE_MAPPING,
       ...settings,
@@ -269,6 +274,7 @@ describe.skipIf(!testDatabaseUrl)('SSO groupの許可判定と全体roleの同�
       OIDC_ALLOW_INSECURE_HTTP: 'true',
       OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
       OIDC_ROLE_MAPPING_JSON: ROLE_MAPPING,
+      MMT_SESSION_ENCRYPTION_KEY: TEST_SESSION_ENCRYPTION_KEY,
     });
     const claims = {
       issuer: provider.issuer,

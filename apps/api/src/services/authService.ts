@@ -4,10 +4,16 @@ import type { ApiConfig } from '../config.js';
 import { first, transaction, type Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { hashSecret, randomSecret } from '../auth/secrets.js';
-import { tokenIdentity, upsertIdentity } from '../repositories/identityRepository.js';
+import {
+  tokenIdentity,
+  upsertIdentity,
+  withdrawOidcIdentityAccess,
+} from '../repositories/identityRepository.js';
 import {
   createSession,
   findActiveSession,
+  newSessionToken,
+  revokeOidcIdentitySessions,
   revokeSession,
 } from '../repositories/sessionRepository.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
@@ -18,6 +24,13 @@ import { argon2idPasswordHasher } from '../auth/passwordHasher.js';
 import { loginAudit } from '../auth/authAuditEvents.js';
 import { LocalAuthService } from './localAuthService.js';
 import { OidcLoginDeniedError, provisionOidcLogin, type OidcClaims } from './oidcProvisioning.js';
+import {
+  encryptSessionTokens,
+  OidcSessionVerifier,
+  sessionTokensFromResponse,
+  type SessionTokens,
+} from './oidcSessionVerifier.js';
+import { OidcBackchannelLogout } from './oidcBackchannelLogout.js';
 
 // Short login lifetime bounds replay exposure of an unfinished OIDC login.
 export const LOGIN_LIFETIME_SECONDS = 10 * 60;
@@ -27,33 +40,53 @@ export interface SessionLogin {
   session: string;
 }
 
+// What the code exchange yields besides the claims: the tokens the session keeps for rechecks.
+interface OidcLoginResult {
+  claims: OidcClaims;
+  tokens: SessionTokens;
+  sid: string | null;
+}
+
+export interface AuthServiceOptions {
+  // Tests move it forward to pass the recheck interval and token lifetimes without waiting.
+  clock?: () => Date;
+}
+
 export class AuthService {
   private provider: Promise<oidc.Configuration> | undefined;
   // One limiter per process: local login, OIDC start, and password checks share its buckets.
   private readonly rateLimiter = new AuthRateLimiter();
   readonly local: LocalAuthService;
+  private readonly clock: () => Date;
+  // Null when OIDC is off; then no session has IdP tokens and nothing is rechecked.
+  private readonly sessionVerifier: OidcSessionVerifier | null;
+  private readonly backchannel: OidcBackchannelLogout | null;
   constructor(
     private readonly database: Database,
     readonly config: ApiConfig,
+    options: AuthServiceOptions = {},
   ) {
+    this.clock = options.clock ?? (() => new Date());
     this.local = new LocalAuthService({
       database,
       config,
       rateLimiter: this.rateLimiter,
       passwordHasher: argon2idPasswordHasher,
     });
+    const provider = () => this.oidcProvider();
+    this.sessionVerifier = config.oidc
+      ? new OidcSessionVerifier({ database, settings: config.oidc, provider, clock: this.clock })
+      : null;
+    this.backchannel = config.oidc
+      ? new OidcBackchannelLogout({ database, settings: config.oidc, provider, clock: this.clock })
+      : null;
   }
 
   async authenticate(credentials: {
     bearer?: string;
     session?: string;
   }): Promise<Principal | null> {
-    if (credentials.bearer) {
-      const identity = await tokenIdentity(this.database, hashSecret(credentials.bearer));
-      if (!identity)
-        throw new DomainError(401, 'API tokenが無効または失効しています', 'invalid_token');
-      return { ...identity, method: 'token' };
-    }
+    if (credentials.bearer) return this.authenticateApiToken(credentials.bearer);
     if (!credentials.session) return null;
     const session = await findActiveSession(
       this.database,
@@ -61,8 +94,46 @@ export class AuthService {
       this.config.session.idleSeconds,
     );
     if (!session) return null;
-    const { user, ...context } = session;
-    return { user, method: 'session', token: null, session: context };
+    // An SSO session without OIDC configured cannot be confirmed, so it is not accepted.
+    if (session.authMethod === 'oidc' && !this.sessionVerifier) return null;
+    const verdict = this.sessionVerifier ? await this.sessionVerifier.verify(session) : 'current';
+    if (verdict === 'revoked') return null;
+    // The recheck may have changed the user's global role, so the user is read again.
+    const current =
+      verdict === 'rechecked'
+        ? await findActiveSession(
+            this.database,
+            credentials.session,
+            this.config.session.idleSeconds,
+          )
+        : session;
+    if (!current) return null;
+    const { user, tokenHash, authMethod, mustChangePassword } = current;
+    return {
+      user,
+      method: 'session',
+      token: null,
+      session: { tokenHash, authMethod, mustChangePassword },
+    };
+  }
+
+  private async authenticateApiToken(bearer: string): Promise<Principal> {
+    const syncedAfter = new Date(
+      this.clock().getTime() - this.config.oidcTokenSyncMaxAgeSeconds * 1000,
+    );
+    const identity = await tokenIdentity(this.database, {
+      tokenHash: hashSecret(bearer),
+      syncedAfter,
+    });
+    if (!identity)
+      throw new DomainError(401, 'API tokenが無効または失効しています', 'invalid_token');
+    if (identity.isIdentitySyncStale)
+      throw new DomainError(
+        401,
+        'SSOのgroupが長く確認されていないため、このtokenは止まっています。ブラウザで一度ログインしてください',
+        'identity_sync_required',
+      );
+    return { user: identity.user, token: identity.token, method: 'token' };
   }
 
   async developmentLogin(
@@ -157,33 +228,40 @@ export class AuthService {
         'invalid_oidc_state',
       );
     // Consuming the state is atomic. A mismatch cannot consume another browser's login.
-    const login = await first<{ verifier: string; nonce: string }>(
+    const pending = await first<{ verifier: string; nonce: string }>(
       this.database,
       `DELETE FROM oidc_states WHERE state_hash=$1 AND binding_hash=$2 AND expires_at>now() RETURNING verifier,nonce`,
       [hashSecret(state), hashSecret(binding)],
     );
-    if (!login)
+    if (!pending)
       throw new DomainError(401, 'Loginが失効したか、ブラウザが一致しません', 'invalid_oidc_state');
     const provider = await this.oidcProvider();
-    let claims: OidcClaims;
+    let login: OidcLoginResult;
     try {
       const tokens = await oidc.authorizationCodeGrant(provider, callbackUrl, {
-        pkceCodeVerifier: login.verifier,
+        pkceCodeVerifier: pending.verifier,
         expectedState: state,
-        expectedNonce: login.nonce,
+        expectedNonce: pending.nonce,
         idTokenExpected: true,
       });
       const idToken = tokens.claims();
       if (!idToken?.sub) throw new Error('Subject is required');
       const email = typeof idToken.email === 'string' ? idToken.email : '';
-      claims = {
-        issuer: this.config.oidc!.issuer,
-        subject: idToken.sub,
-        email,
-        // An unverified email is neither stored nor used for linking; provisioning refuses it.
-        emailVerified: email !== '' && idToken.email_verified === true,
-        displayName: typeof idToken.name === 'string' && idToken.name ? idToken.name : email,
-        groups: Array.isArray(idToken.groups) ? idToken.groups : [],
+      login = {
+        claims: {
+          issuer: this.config.oidc!.issuer,
+          subject: idToken.sub,
+          email,
+          // An unverified email is neither stored nor used for linking; provisioning refuses it.
+          emailVerified: email !== '' && idToken.email_verified === true,
+          displayName: typeof idToken.name === 'string' && idToken.name ? idToken.name : email,
+          groups: Array.isArray(idToken.groups) ? idToken.groups : [],
+        },
+        tokens: sessionTokensFromResponse(tokens, {
+          now: this.clock(),
+          previousRefreshToken: null,
+        }),
+        sid: typeof idToken.sid === 'string' && idToken.sid ? idToken.sid : null,
       };
     } catch (error) {
       // Provider responses may contain codes or tokens, so never expose its exception.
@@ -197,19 +275,20 @@ export class AuthService {
       throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
     }
     try {
-      return await this.provisionSession(claims, metadata);
+      return await this.provisionSession(login, metadata);
     } catch (error) {
       if (!(error instanceof OidcLoginDeniedError)) throw error;
-      await this.recordOidcDenial(error, claims, metadata);
+      await this.recordOidcDenial(error, login.claims, metadata);
       throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
     }
   }
 
   private async provisionSession(
-    claims: OidcClaims,
+    { claims, tokens, sid }: OidcLoginResult,
     metadata: RequestMetadata,
   ): Promise<SessionLogin> {
     const settings = this.config.oidc!;
+    const sessionToken = newSessionToken();
     return transaction(this.database, async (connection) => {
       const user = await provisionOidcLogin(connection, {
         claims,
@@ -223,6 +302,16 @@ export class AuthService {
         userId: user.id,
         authMethod: 'oidc',
         absoluteSeconds: this.config.session.absoluteSeconds,
+        token: sessionToken,
+        oidc: {
+          binding: { issuer: claims.issuer, subject: claims.subject, sid },
+          tokens: encryptSessionTokens({
+            key: settings.sessionEncryptionKey,
+            tokenHash: sessionToken.tokenHash,
+            tokens,
+          }),
+          checkedAt: this.clock(),
+        },
       });
       await writeAuditEvent(connection, {
         ...loginAudit('oidc', metadata),
@@ -237,6 +326,8 @@ export class AuthService {
 
   // The provisioning transaction rolled back, so the denial is recorded on its own.
   // The audit row names the SSO account so operators can tell who was refused.
+  // A known identity that the IdP no longer allows also loses its other sessions and groups,
+  // the same as when a session recheck finds it removed from the allowed groups.
   private async recordOidcDenial(
     denial: OidcLoginDeniedError,
     claims: OidcClaims,
@@ -245,15 +336,27 @@ export class AuthService {
     console.error(
       JSON.stringify({ event: 'oidc_login_denied', reason: denial.reason, userId: denial.userId }),
     );
-    await writeAuditEvent(this.database, {
-      actorType: 'system',
-      action: 'auth.oidc.denied',
-      outcome: 'denied',
-      resourceType: 'user',
-      resourceId: denial.userId,
-      details: { reason: denial.reason, subject: claims.subject, email: claims.email },
-      ...metadata,
+    await transaction(this.database, async (connection) => {
+      if (denial.reason === 'group_not_allowed' && denial.userId) {
+        const identity = { issuer: claims.issuer, subject: claims.subject, userId: denial.userId };
+        await revokeOidcIdentitySessions(connection, identity);
+        await withdrawOidcIdentityAccess(connection, identity);
+      }
+      await writeAuditEvent(connection, {
+        actorType: 'system',
+        action: 'auth.oidc.denied',
+        outcome: 'denied',
+        resourceType: 'user',
+        resourceId: denial.userId,
+        details: { reason: denial.reason, subject: claims.subject, email: claims.email },
+        ...metadata,
+      });
     });
+  }
+
+  async backchannelLogout(logoutToken: string, metadata: RequestMetadata): Promise<void> {
+    if (!this.backchannel) throw new DomainError(404, 'OIDC loginは無効です', 'oidc_disabled');
+    await this.backchannel.logout(logoutToken, metadata);
   }
 
   async logout(
