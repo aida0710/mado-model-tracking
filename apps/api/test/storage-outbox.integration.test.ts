@@ -125,6 +125,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactとplugin outbox（独立PostgreSQL�
       },
       read: harness.stores.read,
       remove,
+      multipart: () => null,
     };
     const { app } = createApplication({
       config: harness.config,

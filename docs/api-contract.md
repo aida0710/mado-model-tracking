@@ -164,9 +164,23 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
   - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
 - workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
 
+## 再開可能なArtifact upload
+
+単一PUTは失敗すると全量を送り直すので、大きなArtifactはupload sessionで分割して送る。API経由の独自sessionで、S3ではmultipart upload、filesystemでは`<ARTIFACT_FILESYSTEM_ROOT>/.uploads/<uploadId>/<n>.part`にpartを置く。presigned URLでの直接転送は今回作らない。
+
+- 権限はeditor＋`artifacts:write`。sessionを使える（一覧・取得・part・complete・abort）のは作成したUserが同じ認証情報（sessionまたは同じAPI token）で呼ぶときだけで、それ以外は403 `upload_forbidden`。
+- `POST /projects/:p/artifact-uploads` ({path,runId?,mimeType?,expectedSize,expectedSha256?,partSize?}) → 201 ArtifactUpload。保存先はProjectの`artifactBackend`。`partSize`は既定16MiB、5MiB〜5GiB（範囲外は422 `invalid_part_size`）。part数`ceil(expectedSize/partSize)`は10000以下（超えると422 `too_many_parts`）。`expectedSize`が`MMT_ARTIFACT_MAX_BYTES`を超えると413 `artifact_too_large`。削除済みRunは409 `run_deleted`。期限（`expiresAt`）は作成から7日。
+- `GET /projects/:p/artifact-uploads?status=` → `{items:ArtifactUpload[]}`。自分のsessionだけを返す。
+- `GET /projects/:p/artifact-uploads/:u` → ArtifactUploadDetail（`receivedParts:{partNumber,size,sha256,receivedAt}[]`）。再開時は欠けたpartだけを送る。
+- `PUT /projects/:p/artifact-uploads/:u/parts/:n` (raw body) → ArtifactUploadPart。part番号は1〜`partCount`。最後以外のpartは`partSize`、最後は残りのbyte数ちょうどで、`Content-Length`が一致しなければ422 `part_size_mismatch`。任意の`X-Part-SHA256`（hex）が一致しなければ422 `part_checksum_mismatch`。どちらもpartを受け取り済みにしない。同じ番号の再送は上書きする。`open`以外は409 `upload_not_open`、期限切れは409 `upload_expired`。
+- `POST /projects/:p/artifact-uploads/:u/complete` → 202 ArtifactUpload（`status:'verifying'`）。全partが揃っていなければ409 `upload_incomplete`、削除済みRunは409 `run_deleted`。`verifying`・`completed`のsessionへの再送は現在の状態を202で返す。
+- `DELETE /projects/:p/artifact-uploads/:u` → ArtifactUpload（`status:'aborted'`）。受け取ったpartを捨てる。`open`以外（abort済み・期限切れを除く）は409 `upload_not_open`。
+- `status`は`open`→`verifying`→`completed`、または`aborted`/`expired`/`failed`。API内のfinalizerがpartを連結し、組み立てたobjectを1回streamingで読んで全体のsize・SHA-256を計算する。`expectedSha256`と違えば`failed`（`error:'sha256_mismatch'`）で、Artifactもblobも残さない。検証中にRunが削除されたら`failed`（`run_deleted`）。成功すると`completed`で、登録したArtifactのidはupload idと同じ（`artifactId`）。completeを何度送ってもArtifactは1件。finalizerはleaseを持ち、APIが途中で止まってもleaseの失効後に別のprocessが続きから完了させる。
+- 期限切れの`open` sessionは定期処理で`expired`にし、保存先のmultipart uploadをabortする。sessionの無い7日以上前の未完了multipart uploadと、24時間更新の無いfilesystemの書きかけstagingも消す。
+
 ## Platform保存API（親担当）
 
-`@mmt/platform`は`createArtifactStoresFromEnv(env?)` → `ArtifactStores`をexportする。`stores.backends():ArtifactBackend[]`、`stores.put({backend,key,body:Readable,mimeType})` → `{size,sha256}`、`stores.read({backend,key,range?:string})` → `{body:Readable,size,totalSize,contentRange?:string,status:200|206}`。`stores.remove({backend,key})`。keyはprojectId/artifactId配下の不変ID。登録DB失敗時は書いたblobをcleanup。streamingでGBファイルを全量メモリへ載せない。`.env`設定は`ARTIFACT_FILESYSTEM_ROOT`、`S3_BUCKET`, `S3_ENDPOINT?`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`。FSは常時available、S3は必要設定がある場合available。
+`@mmt/platform`は`createArtifactStoresFromEnv(env?)` → `ArtifactStores`をexportする。`stores.backends():ArtifactBackend[]`、`stores.put({backend,key,body:Readable,mimeType})` → `{size,sha256}`、`stores.read({backend,key,range?:string})` → `{body:Readable,size,totalSize,contentRange?:string,status:200|206}`。`stores.remove({backend,key})`。`stores.multipart(backend)`は再開可能uploadに対応する保存先で`createMultipart`／`putPart`（宣言sizeと任意のpart SHA-256を検証）／`completeMultipart`（S3は最後以外5MiB以上）／`abortMultipart`／`listIncompleteUploads`／`removeAbandonedStaging`を返し、未対応ならnull。S3の単一`put()`は送信元の失敗時にAbortMultipartUploadの完了を待ってからrejectする。keyはprojectId/artifactId配下の不変ID。登録DB失敗時は書いたblobをcleanup。streamingでGBファイルを全量メモリへ載せない。`.env`設定は`ARTIFACT_FILESYSTEM_ROOT`、`S3_BUCKET`, `S3_ENDPOINT?`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`。FSは常時available、S3は必要設定がある場合available。
 
 `createPluginClient({baseUrl,token})` → `manifest()`, `searchDatasets(query)`, `metrics()` → `{prometheus:string}`, `sendEvent(event)`。HTTP POST `/datasets/search`、`/events`、GET `/manifest`。deadlineとvalidation必須。専用pluginはprivate networkで管理者が設定する。任意ユーザーがURLを指定できない。
 

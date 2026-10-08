@@ -25,6 +25,7 @@ export type {
   MetricValueStatus,
 } from './evaluation.js';
 export { DEFAULT_BASELINE_ALIAS } from './evaluation.js';
+export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, ArtifactUploadPart, ArtifactUploadStatus } from './artifactUploads.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
