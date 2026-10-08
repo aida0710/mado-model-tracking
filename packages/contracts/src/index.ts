@@ -77,6 +77,14 @@ export {
 } from './metricSeries.js';
 export type { RunResumeEvent, RunResumeEventPage, RunResumeRequest, RunResumeResult, RunResumeSource, RunSegment } from './runResume.js';
 export { RUN_RESUME_REASON_MAX_LENGTH } from './runResume.js';
+export type { ArtifactPresence, ArtifactPresenceCheck, ArtifactPresenceItem, SyncBatch, SyncBatchCounts, SyncBatchResult, SyncBatchStatus, SyncRunCreate, SyncTerminalStatus } from './runSync.js';
+export {
+  SYNC_ARTIFACT_CHECK_MAX_ITEMS,
+  SYNC_BATCH_MAX_LOGS,
+  SYNC_BATCH_MAX_METRICS,
+  SYNC_CLOCK_SKEW_SECONDS,
+  SYNC_ORIGIN_MAX_LENGTH,
+} from './runSync.js';
 export type {
   Sweep,
   SweepCancel,
@@ -168,6 +176,8 @@ export interface Run {
   startedAt: string | null;
   endedAt: string | null;
   error: string | null;
+  // Label of the machine an offline-synced Run came from; null for Runs created online.
+  syncOrigin?: string | null;
 }
 export interface Model {
   id: string;

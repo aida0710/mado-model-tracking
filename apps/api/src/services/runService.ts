@@ -100,6 +100,8 @@ export class RunService {
   async insertRun(
     connection: Connection,
     registration: {
+      // Chosen by an offline client so a resend finds the same Run; the database picks one otherwise.
+      id?: string;
       projectId: string;
       createdBy: string;
       input: RunCreate;
@@ -138,8 +140,8 @@ export class RunService {
     const snapshot = code ? createExecutionSnapshot(code, mode) : null;
     return (await first<Run>(
       connection,
-      `INSERT INTO runs(project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision,upstream_dataset_version_ids)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING ${runColumns}`,
+      `INSERT INTO runs(id,project_id,experiment_id,name,kind,parameters,tags,model_version_id,code_version_id,input_dataset_version_ids,parent_run_id,environment,created_by,execution_mode,execution_snapshot,task_id,task_revision,upstream_dataset_version_ids)
+      VALUES(COALESCE($18::uuid,gen_random_uuid()),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING ${runColumns}`,
       [
         projectId,
         input.experimentId,
@@ -158,6 +160,7 @@ export class RunService {
         registration.task?.id ?? null,
         registration.task?.revision ?? null,
         registration.upstreamDatasetVersionIds ?? [],
+        registration.id ?? null,
       ],
     ))!;
   }
