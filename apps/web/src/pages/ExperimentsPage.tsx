@@ -7,6 +7,9 @@ import { useProject } from '../hooks/useProject';
 import { useQuery } from '../hooks/useQuery';
 import { useRunSearch } from '../hooks/useRunSearch';
 import { useMutation } from '../hooks/useMutation';
+import { useAuth } from '../hooks/useAuth';
+import { useRunListSavedView } from '../hooks/useRunListSavedView';
+import { ChartPanelLayoutSourceContext } from '../hooks/useChartPanelLayout';
 import { PageHeader } from '../components/PageHeader';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { FormDialog } from '../components/FormDialog';
@@ -15,42 +18,50 @@ import { RunToolbar } from '../components/runs/RunToolbar';
 import { RunTable } from '../components/runs/RunTable';
 import { RunSelectionBar } from '../components/runs/RunSelectionBar';
 import { RunPagination } from '../components/runs/RunPagination';
+import { SavedViewsMenu } from '../components/runs/SavedViewsMenu';
 import { getRunColumnNames } from '../components/runs/runColumnNames';
 import { RunListCharts } from '../components/charts/RunListCharts';
 import { RunDialog } from '../dialogs/RunDialog';
 import { getFieldValue } from '../lib/formValues';
 import { downloadBlob } from '../lib/fileDownload';
 import { runSortOrderBy, toRunSearchConditions } from '../lib/runFilter';
+import { getRunChartKeys } from '../lib/runChartKeys';
+import {
+  defaultRunColumns,
+  metricColumn,
+  parameterColumn,
+  RUN_BASE_COLUMNS,
+  RUN_DESCRIPTION_COLUMN,
+  tagColumn,
+  toggleColumn,
+} from '../lib/runColumns';
+import {
+  CHARTS_OPEN,
+  readRunListConditions,
+  RUN_LIST_PARAMS,
+  savedViewUrl,
+} from '../lib/runListUrl';
 import { text } from '../i18n/catalog';
 
 // A compact page keeps wide parameter and metric columns usable on a laptop.
 const RUNS_PER_PAGE = 25;
-// Two of each keep the initial comparison readable before the user picks more columns.
-const DEFAULT_METRIC_COLUMNS = 2;
-const DEFAULT_PARAMETER_COLUMNS = 2;
-const baseColumnNames = ['status', 'created', 'duration', 'user', 'kind'] as const;
 // URL parameter holding the cursors that led to the shown page, oldest first. Cursors are
 // base64url, so a comma never appears inside one.
 const CURSOR_HISTORY_PARAM = 'cursors';
 const CURSOR_SEPARATOR = ',';
-// URL parameter that keeps the chart area open across reloads and shared links.
-const CHARTS_PARAM = 'charts';
-const CHARTS_OPEN = '1';
 
 export function ExperimentsPage() {
   const { project, canEdit } = useProject();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const experimentId = params.get('experiment') ?? '';
-  const searchText = params.get('q') ?? '';
-  const status = params.get('status') ?? '';
-  const sort = params.get('sort') ?? 'newest';
-  const isChartsOpen = params.get(CHARTS_PARAM) === CHARTS_OPEN;
+  const listConditions = readRunListConditions(params);
+  const { experimentId, searchText, status, sort } = listConditions;
+  const isChartsOpen = params.get(RUN_LIST_PARAMS.charts) === CHARTS_OPEN;
   const cursorHistory = (params.get(CURSOR_HISTORY_PARAM) ?? '')
     .split(CURSOR_SEPARATOR)
     .filter(Boolean);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({});
   const [dialog, setDialog] = useState<'experiment' | 'run' | 'tag' | null>(null);
   const mutation = useMutation();
   const csvExport = useMutation();
@@ -83,17 +94,24 @@ export function ExperimentsPage() {
   const experiment = experiments.value?.find((item) => item.id === experimentId);
   const shownRuns = runs.value?.items ?? [];
   const { metricNames, parameterNames } = getRunColumnNames(shownRuns);
-  const defaultColumns = new Set([
-    'selection',
-    'name',
-    'status',
-    'created',
-    'duration',
-    'user',
-    ...metricNames.slice(0, DEFAULT_METRIC_COLUMNS).map((name) => `metrics.${name}`),
-    ...parameterNames.slice(0, DEFAULT_PARAMETER_COLUMNS).map((name) => `params.${name}`),
-  ]);
-  const isColumnVisible = (name: string) => columnVisibility[name] ?? defaultColumns.has(name);
+  const savedView = useRunListSavedView({
+    projectId: project.id,
+    conditions: listConditions,
+    defaultColumns: defaultRunColumns(metricNames, parameterNames),
+  });
+  const { columns } = savedView;
+  // Columns of a saved view stay selectable even when no Run on this page has them.
+  const columnNames = [
+    ...new Set([
+      ...RUN_BASE_COLUMNS,
+      RUN_DESCRIPTION_COLUMN,
+      ...metricNames.map(metricColumn),
+      ...parameterNames.map(parameterColumn),
+      ...getRunChartKeys(shownRuns).tagKeys.map(tagColumn),
+      ...columns.map((column) => column.key),
+    ]),
+  ];
+  const isColumnVisible = (name: string) => columns.some((column) => column.key === name);
   // Any change of conditions starts again from the first page; a cursor belongs to one search.
   function updateParams(updates: Record<string, string>) {
     setParams((previous) => {
@@ -102,7 +120,7 @@ export function ExperimentsPage() {
         if (value) next.set(key, value);
         else next.delete(key);
       }
-      if (!(CURSOR_HISTORY_PARAM in updates) && !(CHARTS_PARAM in updates))
+      if (!(CURSOR_HISTORY_PARAM in updates) && !(RUN_LIST_PARAMS.charts in updates))
         next.delete(CURSOR_HISTORY_PARAM);
       return next;
     });
@@ -156,23 +174,35 @@ export function ExperimentsPage() {
             {text.lineage}
           </Link>
         </div>
+        <SavedViewsMenu
+          projectId={project.id}
+          actor={{ userId: user.id, role: project.role }}
+          views={savedView.views}
+          activeView={savedView.activeView}
+          hasUnsavedChanges={savedView.isChanged}
+          readCurrentState={savedView.readCurrentState}
+          viewUrl={(viewId) => savedViewUrl(window.location.origin, project.id, viewId)}
+          onOpen={savedView.openView}
+          onSaved={savedView.finishSave}
+          onDeleted={() => savedView.openView(null)}
+        />
+        {savedView.notice && (
+          <p className="notice" role="status">
+            {savedView.notice}
+          </p>
+        )}
+        <ErrorNotice message={savedView.openError} />
         <RunToolbar
           searchText={searchText}
           status={status}
           sort={sort}
           metricNames={metricNames}
-          columnNames={[
-            ...baseColumnNames,
-            ...metricNames.map((name) => `metrics.${name}`),
-            ...parameterNames.map((name) => `params.${name}`),
-          ]}
+          columnNames={columnNames}
           isColumnVisible={isColumnVisible}
           onSearch={(value) => updateParams({ q: value })}
           onStatusChange={(value) => updateParams({ status: value })}
           onSortChange={(value) => updateParams({ sort: value })}
-          onColumnToggle={(name) =>
-            setColumnVisibility((current) => ({ ...current, [name]: !isColumnVisible(name) }))
-          }
+          onColumnToggle={(name) => savedView.setColumns(toggleColumn(columns, name))}
           exportingCsv={csvExport.pending}
           onExportCsv={() => void exportSearchCsv()}
         />
@@ -181,19 +211,21 @@ export function ExperimentsPage() {
             type="button"
             className="button small"
             aria-expanded={isChartsOpen}
-            onClick={() => updateParams({ [CHARTS_PARAM]: isChartsOpen ? '' : CHARTS_OPEN })}
+            onClick={() => updateParams({ [RUN_LIST_PARAMS.charts]: isChartsOpen ? '' : CHARTS_OPEN })}
           >
             <ChartLine size={14} />
             {isChartsOpen ? text.hideCharts : text.showCharts}
           </button>
         </div>
         {isChartsOpen && (
-          <RunListCharts
-            projectId={project.id}
-            conditions={searchConditions}
-            selectedIds={selectedIds}
-            pageRuns={shownRuns}
-          />
+          <ChartPanelLayoutSourceContext.Provider value={savedView.chartLayoutSource}>
+            <RunListCharts
+              projectId={project.id}
+              conditions={searchConditions}
+              selectedIds={selectedIds}
+              pageRuns={shownRuns}
+            />
+          </ChartPanelLayoutSourceContext.Provider>
         )}
         <ErrorNotice message={mutation.error} />
         <ErrorNotice message={csvExport.error} />
@@ -215,9 +247,8 @@ export function ExperimentsPage() {
               <RunTable
                 projectId={project.id}
                 runs={page.items}
-                metricNames={metricNames}
-                parameterNames={parameterNames}
-                isColumnVisible={isColumnVisible}
+                columns={columns}
+                onColumnsChange={savedView.setColumns}
                 selectedIds={selectedIds}
                 onSelectedIdsChange={setSelectedIds}
               />
