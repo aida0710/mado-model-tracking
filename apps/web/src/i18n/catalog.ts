@@ -7,6 +7,7 @@ import { workbenchText } from './workbench';
 import { evaluationText } from './evaluation';
 import { projectAccessText } from './projectAccess';
 import { promotionText } from './promotion';
+import { uploadsText, uploadsTextTemplates } from './uploads';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -31,6 +32,7 @@ export const lineageRelationLabels: Record<string, string> = {
 // Text that embeds values. Kept apart from `text` so every `text` entry stays a plain string.
 export const textTemplates = {
   ...runsTextTemplates,
+  ...uploadsTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -46,6 +48,7 @@ export const text = {
   ...computeText,
   ...runsText,
   ...projectAccessText,
+  ...uploadsText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
@@ -138,9 +141,7 @@ export const text = {
   noLogs: 'ログはまだありません',
   noArtifacts: 'Artifactはまだありません',
   download: 'ダウンロード',
-  upload: 'アップロード',
   artifactPath: '保存パス',
-  chooseFile: 'ファイル',
   uploadArtifact: 'Artifactをアップロード',
   size: 'Size',
   digest: 'Digest',

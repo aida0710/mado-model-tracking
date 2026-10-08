@@ -18,6 +18,7 @@ import './styles/workbench.css';
 import './styles/admin.css';
 import './styles/projectAccess.css';
 import './styles/promotion.css';
+import './styles/uploads.css';
 
 // Keep the existing route tree while enabling blocked SPA navigation.
 const router = createBrowserRouter([{
