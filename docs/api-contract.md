@@ -51,6 +51,21 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `PATCH /projects/:p/plugins/:id` (name?,baseUrl?,tokenEnv?,enabled?) → PluginConnection。変更も全体管理者に限定する。接続設定を変えると保存済みmanifestを消し、再確認を要求する。確認中に設定が変わった場合は古いmanifestを保存しない。無効pluginへはoutboxを送らず、再び有効にすると配信を再開する。
 - `POST /projects/:p/plugins/:id/datasets/import` ({dataset:PluginDataset}) → DatasetVersion。`POST /projects/:p/plugins/:id/events/retry` → `{queued:number}`。`GET /projects/:p/plugins/:id/metrics` → `{prometheus:string}`（storage:metrics対応pluginのみ）。event outboxはRun状態のtransactionと一緒に保存し、plugin障害でRunを失敗させない。
 
+## メトリクス系列（間引き・x軸・Runグループ）
+
+長い学習や多数のRunを重ねた図のために、サーバーで間引いた系列を返す。型は`packages/contracts/src/metricSeries.ts`と`chartPanels.ts`（`ChartXAxis`、`RunGroupBy`）。`GET /projects/:p/runs/:r/metrics`（全点）とMLflowの`get-history`は互換のため変えない。
+
+- `POST /projects/:p/metrics/series` body `MetricSeriesRequest` {runIds（1〜200、重複不可）, keys（1〜50、重複不可、各250文字まで）, xAxis, maxPoints?（既定1000、最大5000）, xRange?:{min,max}} → `MetricSeriesResponse` {series:[{runId, key, points:[{x, step, value, min, max, count}], sampled, totalPoints, nanCount, droppedPoints}]}。seriesはrunIdsの順×keysの順に全組を返し、値の無い組はpointsが空。
+- 間引き: 1系列の点数（xRange内でxのある点。NaNを含む）が`maxPoints`以下なら記録した点をそのまま返す（`min=max=value`、`count=1`、`sampled=false`）。超えたら、xRangeがあればその範囲、無ければその系列のxの最小〜最大を`maxPoints`個の等幅bucketに分け（xが上端と等しい点は最後のbucket）、bucketごとに`value`=平均、`min`/`max`=最小・最大、`x`=点のxの平均、`step`=最後のstep、`count`=点数を返す（`sampled=true`）。集約はSQLの`width_bucket`で行い、全点をAPIへ運ばない。スパイクはmin/maxに残る。xRangeで拡大すると、その範囲だけを細かいbucketに分ける。
+- NaNと±Infinity（MLflowが保存できる値）はどの点の集約にも含めず、件数を`nanCount`で返す。bucketの点が全部NaNならそのbucketは点にしない。
+- x軸`xAxis.kind`: `step`はstep、`relative_time`はRunの`startedAt`（無ければそのRunの全keyで最初の点）からの秒、`wall_time`はepochミリ秒、`metric`は同じRun・同じstepの`xAxis.metricKey`の値（同じstepに複数あれば最後のtimestamp）。`metricKey`は`metric`のときだけ必須で、他のkindに付けると422。`metric`でxが無い（そのstepに値が無い、またはNaN）点は落とし、件数を`droppedPoints`で返す。
+- `POST /projects/:p/metrics/groups` body `MetricGroupsRequest` {runIds?（1〜1000）| search?（`RunSearchRequest`から`limit`と`cursor`を除いたもの）, groupBy:{kind:'tag'|'param'|'experiment', key?}, keys, xAxis, maxPoints?, xRange?} → `MetricGroupsResponse` {groups:[{groupKey, label, runIds, series:[{key, points:[{x, mean, min, max, stddev, runCount}]}]}]}。runIdsとsearchはどちらか1つ。searchは`POST /runs/search`と同じ検索（activeなRunだけ）を全ページ読み、一致が1000件を超えたら422 `too_many_runs`。
+- グループ: `tag`と`param`は`key`の値ごと（paramは実行parametersとSDKの記録値の合成で記録値が優先、run searchと同じ）、`experiment`はExperimentごと（groupKeyはExperiment ID、labelは名前）。`key`はtag/paramで必須、experimentでは不可。値の無いRun（と値が文字どおり`(none)`のRun）は`(none)`グループ。並びはlabel順（数値として読める値は数の順）で`(none)`が最後。グループ数が50を超えたら422 `too_many_groups`。
+- グループの集約: keyごとに全Runで共通のbucket境界（xRangeか全Runのxの範囲を`maxPoints`等分。点数が少なくても常にbucket）を使い、Runごとにbucketの平均（とxの平均）を出してから、Run間で`mean`、`min`/`max`（Run平均の最小・最大）、`stddev`（母標準偏差、1 Runなら0）、`runCount`を返す。点数の多いRunが平均を支配しない。bucketに有限の値の無いRunは数えない。`x`はRunごとのxの平均の平均。
+- 上限: 応答の点数（seriesはrunIds×keys×maxPoints、groupsはグループ数×keys×maxPoints）が100万を超える要求は422（seriesは`invalid_request`、groupsは`too_many_points`）。1 requestのSQLは系列ごとではなく`run_id=ANY`・`name=ANY`でまとめ、REPEATABLE READの読み取り専用transactionで`statement_timeout`10秒。超えたら503 `series_query_timeout`。
+- 権限: viewer以上と`read` scope（tokenのProject制限も確認）。runIdsに他ProjectのRunや存在しないRunが混じれば404 `not_found`（どちらか区別しない）。入力の誤り（上限、重複、xAxisとmetricKeyの組み合わせ、`xRange.min>=max`、runIdsとsearchの両方・どちらも無し）は422 `invalid_request`。Job限定tokenはこのendpointを許可していない。
+- MLflowの`ajax-api/2.0/mlflow/metrics/get-history-bulk-interval`（MLflow UI用）は今回足さない。公式SDKは呼ばず、必要になれば同じserviceを呼ぶだけで足せる。
+
 ## Task・コード編集・テスト実行
 
 - `GET|POST /projects/:p/tasks`。POSTは`experimentId,name,description?,kind,codeVersionId,modelVersionId?,inputDatasetVersionIds?,parameters?,tags?,targetId?,gpuIds?`。参照は同じProjectに限定し、コードの実行種別・モデル系列・Runtime・GPUを検証する。
