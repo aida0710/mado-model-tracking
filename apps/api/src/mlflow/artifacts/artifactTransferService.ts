@@ -2,6 +2,7 @@ import { transaction, type Database } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
 import type { ArtifactService } from '../../services/artifactService.js';
 import type { CheckpointService } from '../../services/checkpointService.js';
+import { indexMlflowMediaArtifact } from '../../services/runMediaIndexer.js';
 import { requireArtifactOwner, requireArtifactProject } from './artifactAccess.js';
 import { listArtifactDirectory } from './artifactListing.js';
 import { nativeArtifactPath, validateArtifactOwner, validateArtifactPath } from './artifactPath.js';
@@ -75,13 +76,20 @@ export class ArtifactTransferService {
             throw new DomainError(409, 'Artifactのsource Runが変更されました', 'conflict');
           await requireNonconflictingArtifactPath(connection, upload);
           await replaceArtifactPath(connection, { ...upload, artifact, runId: authorized.runId });
-          if (upload.owner.kind === 'run')
+          if (upload.owner.kind === 'run') {
             await this.checkpoints?.recordMlflowArtifact(connection, {
               projectId: upload.projectId,
               runId: upload.owner.id,
               artifact,
               artifactPath: upload.path,
             });
+            await indexMlflowMediaArtifact(connection, {
+              projectId: upload.projectId,
+              runId: upload.owner.id,
+              artifactId: artifact.id,
+              path: upload.path,
+            });
+          }
           if (!capture) return;
           await saveLoggedModelMlmodel(connection, {
             projectId: upload.projectId,

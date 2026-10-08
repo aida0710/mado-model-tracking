@@ -14,7 +14,8 @@
     "test": "vitest run",
     "db:migrate": "npm run db:migrate -w @mmt/api",
     "db:seed": "npm run db:seed -w @mmt/api",
-    "openapi:generate": "tsx scripts/generate_openapi.ts"
+    "openapi:generate": "tsx scripts/generate_openapi.ts",
+    "backfill-run-media": "npm run backfill-run-media -w @mmt/api"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
