@@ -103,6 +103,15 @@ ModelVersion登録のtransaction内で、同じ系列の有効ruleを判定し�
 
 自動Runはruleの固定CodeVersion/設定を使い、`sourceRunId`を`parentRunId`へ関連付ける。`tags['automation.ruleId']`と`environment.automationRuleId`にrule ID、`environment.runtime`に固定runtimeを保存する。executionの`status`は登録時の結果（queued/failed/skipped）で、実行後も変わらない。`runStatus`と`jobStatus`で現在の実行状態を返し、Run/Jobを作らなかった場合はnullになる。
 
+## Runの説明文とコメント
+
+- `PUT /projects/:p/runs/:r/note` ({content}) → RunNote `{runId,content}`。editor＋`runs:write`。説明文（Markdown）は`runs.tags['mlflow.note.content']`（contractsの`RUN_NOTE_TAG`）に保存し、Runの型は変えない。nativeのGET RunのtagsとMLflowのget-runの`mlflow.note.content`は同じ値で、MLflowのset-tagで書いた値もそのまま読める。上限はMLflowのtag値と同じ8000文字（`RUN_NOTE_MAX_LENGTH`、UTF-16単位）で、超えると422。空文字はtagを消す。nativeのPATCH tags（4000文字）を通さず、Runを行lockして説明文のkeyだけを書くので、ほかのtagは残る。削除済みのRunは409 `run_deleted`、別ProjectのRunは404。説明文は実験結果ではないので、Job付きRunの終端後もこのAPIでは編集できる（MLflowのset-tagは終端後の書き込み規則に従う）。Job限定tokenは403 `job_token_forbidden`。監査`run.note.update`（resource_type `run`、detailsは文字数`length`だけで本文を入れない）。
+- Comment `{id,projectId,targetType:'run'|'model_version'|'report',targetId,parentCommentId,body:string|null,author:{id,displayName},createdAt,editedAt,deleted}`。返信は1段だけで、返信への返信は元のスレッドの先頭への返信として保存する（`parentCommentId`は常にスレッドの先頭）。本文は空白だけを除く1〜20000文字（`COMMENT_MAX_LENGTH`）。削除は論理削除で、削除済みは`body=null`・`deleted=true`のままスレッドの位置に残る。
+- `GET /projects/:p/comments?targetType=&targetId=&cursor=&limit=` → `{items:Comment[],nextCursor:string|null}`。viewer＋`read`。スレッド順（先頭のcreatedAt・id、各スレッドの返信はその直後にcreatedAt・id順）。limitは既定100、最大200。cursorは前ページ末尾のComment IDで、同じ対象のものでなければ404。対象が同じProjectに無ければ404（削除済みの対象のコメントは読める）。
+- `POST /projects/:p/comments` ({targetType,targetId,parentCommentId?,body}) → Comment（201）。editor。tokenのscopeは対象に応じて`run`/`report`=`runs:write`、`model_version`=`registry:write`。対象が別Project・存在しなければ404、削除済みのRun（`lifecycle_stage='deleted'`）・モデル版（MLflowで版またはModelを削除）なら409 `comment_target_deleted`。返信先が別の対象のコメントなら422 `comment_parent_mismatch`。未登録の対象種別（`report`はreports-apiが登録するまで）は422 `comment_target_unsupported`。
+- `PATCH /projects/:p/comments/:c` ({body}) → Comment。作成者（editor以上）だけで、他人は403 `comment_author_required`、削除済みは409 `comment_deleted`。`editedAt`を更新する。`DELETE /projects/:p/comments/:c` → 204。作成者（editor以上）かProject adminだけで、ほかは403 `comment_delete_forbidden`。削除済みへの再削除も204で、監査は増えない。編集・削除もtokenには対象種別のscopeを要求する。Job限定tokenは投稿・編集・削除とも403 `job_token_forbidden`。
+- 監査`comment.create`・`comment.update`・`comment.delete`（resource_type `comment`、resource_idはComment ID、detailsに`targetType`・`targetId`。createは`parentCommentId`、deleteは`byAuthor`も）。本文は入れない。
+
 ## 監査ログ
 
 認証・Project・token・権限などの操作を`audit_events`へ記録する。AuditEventは`{id,occurredAt,actorType:'user'|'token'|'system',actorUserId,actorTokenId,action,outcome:'success'|'denied'|'failed',resourceType,resourceId,projectId,details,ip,userAgent}`。成功の記録は業務と同じtransactionでINSERTし、業務がrollbackすれば記録も残らない。拒否・失敗の記録は業務のtransactionの外で書く。`details`へpassword・token・secretの値を入れない。`ip`はAPIが受けたsocketの接続元で、転送ヘッダーは信頼しない。
