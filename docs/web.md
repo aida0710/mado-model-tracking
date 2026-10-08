@@ -16,6 +16,7 @@
 | forms | ダイアログ、入力欄、ウィザード |
 | workbench | コード編集、ファイルツリー、Task、実行スナップショット |
 | admin | 設定のセクション、plugin検索、容量メトリクス |
+| uploads | Artifactのアップロードダイアログ、ドロップ領域、進み具合、途中のアップロード |
 
 - 新しいCSSは、そのclassが属する領域のファイルへ足します。`styles.css`のような何でも入るファイルを作り直しません。
 - 画面幅による上書き（`@media`）は、対象の領域ファイルの末尾にまとめます。
@@ -43,3 +44,13 @@
 ## 確認ダイアログ
 
 入力欄の無い確認は`components/ConfirmDialog.tsx`を使います。`fields={[]}`の`FormDialog`で代用しません。
+
+## Artifactのアップロード
+
+`dialogs/ArtifactUploadDialog.tsx`が[再開可能なArtifact upload](api-contract.md#再開可能なartifact-upload)を使います。`multiple`を付けると複数ファイル・フォルダ（`webkitdirectory`とdrag&drop）を受け付け、フォルダ内の相対pathを保存先フォルダの下に置きます。付けないと1ファイルだけで、Artifactができたら呼び出し側が閉じます（コード版の登録）。
+
+- 8MiB未満は従来の単一PUT、8MiB以上はupload sessionでpartに分けて送ります。進み具合を得るため、bodyはXMLHttpRequestで送ります（`api/artifactUploads.ts`）。
+- 同時に送るrequestはキュー全体で3本（`hooks/useArtifactUploadQueue.ts`の`MAX_CONCURRENT_REQUESTS`）。partごとに最大5回まで指数backoffで再試行し、それでも失敗したファイルは「失敗」で止まります。
+- 一時停止と再開はsessionを残し、再開時に`GET /artifact-uploads/:u`の受信済みpartとの差分だけを送ります。取消は`DELETE`でsessionを`aborted`にします。
+- 再読込に備え、localStorageに`{uploadId, projectId, runId, path, name, size, lastModified}`を残します（`lib/uploadResumeStore.ts`。保存できない環境でも送信はできます）。同じファイルを同じ保存パスで選び直すと続きから送ります。localStorageに無いサーバー側の`open` sessionは、受信済みpartのSHA-256が選んだファイルと一致したときだけ使います。
+- 送信中はダイアログを閉じられず、ページを離れるときは`beforeunload`で警告します。ダイアログはRunの取得が失敗しても消えないよう、`Resource`の外に置きます。

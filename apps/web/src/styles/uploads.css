@@ -1,0 +1,142 @@
+/* Artifact upload dialog: file and folder pickers, drop target, queue progress, resumable sessions. */
+.artifact-upload-form {
+  display: grid;
+  gap: 16px;
+}
+.upload-dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 22px;
+  border: 1px dashed var(--input-border);
+  background: var(--surface);
+}
+.upload-dropzone.dragging {
+  border-color: var(--teal);
+  background: var(--teal-tint);
+}
+.upload-dropzone p {
+  margin: 0;
+}
+.upload-pickers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.upload-pickers label.button {
+  cursor: pointer;
+}
+.upload-pickers label.button:focus-within {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+.upload-selection {
+  margin: 0;
+}
+.upload-queue,
+.upload-resumable {
+  border: 1px solid var(--border);
+}
+.upload-queue > header,
+.upload-resumable h3 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 14px;
+}
+.upload-queue > header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.upload-queue > header .button {
+  margin-left: auto;
+}
+.upload-queue ul,
+.upload-resumable ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow: auto;
+}
+.upload-queue-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.upload-queue-row:last-child,
+.upload-resumable li:last-child {
+  border-bottom: 0;
+}
+.upload-queue-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.upload-queue-title .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-status {
+  flex: none;
+  font-size: 12px;
+}
+.upload-status.failed {
+  color: var(--error);
+}
+.upload-status.completed {
+  color: var(--success);
+}
+.upload-queue-row progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--teal);
+}
+.upload-queue-row.failed progress {
+  accent-color: var(--error);
+}
+.upload-queue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 12px;
+}
+.upload-queue-error {
+  margin: 0;
+  color: var(--error);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.upload-queue-artifact,
+.upload-queue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.upload-queue-actions:empty {
+  display: none;
+}
+.upload-resumable > p {
+  margin: 10px 14px 0;
+  font-size: 12px;
+}
+.upload-resumable li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.upload-resumable li .button {
+  margin-left: auto;
+}

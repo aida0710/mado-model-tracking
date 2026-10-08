@@ -265,17 +265,6 @@ export function RunDetailPage() {
                 }}
               />
             )}
-            {dialog === 'upload' && (
-              <ArtifactUploadDialog
-                projectId={project.id}
-                runId={runId}
-                onClose={() => setDialog(null)}
-                onSaved={() => {
-                  setDialog(null);
-                  artifacts.reload();
-                }}
-              />
-            )}
             {dialog === 'launch' && (
               <LaunchDialog
                 existingRun={item}
@@ -289,6 +278,16 @@ export function RunDetailPage() {
           </>
         )}
       </Resource>
+      {/* Outside Resource: a failed Run poll must not unmount the dialog and stop its uploads. */}
+      {dialog === 'upload' && (
+        <ArtifactUploadDialog
+          projectId={project.id}
+          runId={runId}
+          multiple
+          onClose={() => setDialog(null)}
+          onSaved={() => artifacts.reload()}
+        />
+      )}
     </section>
   );
 }
