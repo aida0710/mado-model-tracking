@@ -2,14 +2,24 @@ import { serve } from '@hono/node-server';
 import { createApplication } from './app.js';
 import { loadConfig } from './config.js';
 import { createDatabase } from './db/database.js';
+import { applyIdleTimeout, serverTimeouts } from './http/serverTimeouts.js';
 
 const config = loadConfig();
 const database = createDatabase(config.databaseUrl);
 database.on('error', () => console.error(JSON.stringify({ event: 'database_pool_error' })));
 const { app, outbox } = createApplication({ config, database });
-const server = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (address) =>
-  console.log(`API listening on ${config.host}:${address.port}`),
+const timeouts = serverTimeouts(config);
+const server = serve(
+  {
+    fetch: app.fetch,
+    hostname: config.host,
+    port: config.port,
+    // Node's default 5-minute requestTimeout would cut long single-PUT artifact uploads.
+    serverOptions: timeouts.serverOptions,
+  },
+  (address) => console.log(`API listening on ${config.host}:${address.port}`),
 );
+applyIdleTimeout(server, timeouts);
 outbox.start();
 
 let isClosing = false;

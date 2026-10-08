@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Readable } from 'node:stream';
+import { pipeline, type Readable } from 'node:stream';
 import type { Artifact, ArtifactBackend } from '@mmt/contracts';
 import {
   ArtifactNotFoundError,
@@ -9,15 +9,29 @@ import {
 } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
+import { resolveArtifactMimeType } from '../domain/artifactMimeType.js';
 import { DomainError, notFound } from '../domain/errors.js';
 import { isRelativeFilePath } from '../domain/validation.js';
 import { findRun } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
+import {
+  ArtifactSizeLimit,
+  artifactTooLargeError,
+  assertDeclaredArtifactSize,
+} from './artifactSizeLimit.js';
+
+export interface ArtifactLimits {
+  maxBytes: number;
+}
+
+// Test doubles that build the service directly opt out of the limit; the app passes the configured one.
+const UNLIMITED: ArtifactLimits = { maxBytes: Number.POSITIVE_INFINITY };
 
 export class ArtifactService {
   constructor(
     private readonly database: Database,
     readonly stores: ArtifactStores,
+    private readonly limits: ArtifactLimits = UNLIMITED,
   ) {}
 
   async listProject(
@@ -66,7 +80,9 @@ export class ArtifactService {
     upload: {
       runId?: string;
       path: string;
-      mimeType: string;
+      mimeType?: string;
+      /** Content-Length from the request, when the client declared one. */
+      declaredBytes?: number;
       body: Readable;
       onStored?: (connection: Connection, artifact: Artifact) => Promise<void>;
     },
@@ -79,6 +95,7 @@ export class ArtifactService {
     if (!isRelativeFilePath(upload.path) || upload.path.length > 1024)
       throw new DomainError(422, 'Artifactには安全な相対パスが必要です', 'invalid_artifact_path');
     if (upload.runId) await findRun(this.database, { projectId, id: upload.runId });
+    assertDeclaredArtifactSize(upload.declaredBytes, this.limits.maxBytes);
     const project = (await first<{ artifactBackend: ArtifactBackend }>(
       this.database,
       'SELECT artifact_backend FROM projects WHERE id=$1',
@@ -89,11 +106,15 @@ export class ArtifactService {
     const id = randomUUID();
     const key = `${projectId}/${id}/content`;
     const reference = { backend: project.artifactBackend, key };
-    const mimeType = /^[\w!#$&^.+-]+\/[\w!#$&^.+-]+(?:;[^\r\n]*)?$/.test(upload.mimeType)
-      ? upload.mimeType
-      : 'application/octet-stream';
+    const mimeType = resolveArtifactMimeType({
+      path: upload.path,
+      declaredMimeType: upload.mimeType,
+    });
+    const sizeLimit = new ArtifactSizeLimit(this.limits.maxBytes);
+    // pipeline() destroys the request stream when the limit trips, so the rest is not read.
+    const limitedBody = pipeline(upload.body, sizeLimit, () => undefined);
     try {
-      const stored = await this.stores.put({ ...reference, body: upload.body, mimeType });
+      const stored = await this.stores.put({ ...reference, body: limitedBody, mimeType });
       return await transaction(this.database, async (connection) => {
         // Permission and run references are checked again after a potentially long streaming write.
         await requireProject(connection, principal, {
@@ -131,6 +152,8 @@ export class ArtifactService {
           JSON.stringify({ event: 'artifact_cleanup_failed', artifactId: id, projectId }),
         );
       }
+      // Stores may report the aborted pipeline as their own error instead of the limit's error.
+      if (sizeLimit.isExceeded) throw artifactTooLargeError(this.limits.maxBytes);
       if (error instanceof DomainError) throw error;
       throw new DomainError(503, 'Artifactの保存に失敗しました', 'artifact_save_failed');
     }
@@ -142,15 +165,17 @@ export class ArtifactService {
     download: { artifactId: string; range?: string },
   ): Promise<{ artifact: Artifact; content: ArtifactContent }> {
     const artifact = await this.getMetadata(principal, projectId, download.artifactId);
+    return { artifact, content: await this.readContent(artifact, download.range) };
+  }
+
+  /** Reads an Artifact already authorized through getMetadata; callers must not skip that check. */
+  async readContent(artifact: Artifact, range?: string): Promise<ArtifactContent> {
     try {
-      return {
-        artifact,
-        content: await this.stores.read({
-          backend: artifact.backend,
-          key: artifact.storageKey,
-          range: download.range,
-        }),
-      };
+      return await this.stores.read({
+        backend: artifact.backend,
+        key: artifact.storageKey,
+        range,
+      });
     } catch (error) {
       if (error instanceof ArtifactRangeError) throw error;
       if (error instanceof ArtifactNotFoundError)

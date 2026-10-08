@@ -18,6 +18,7 @@ const domainErrorCodes: Record<string, string> = {
   not_implemented: 'NOT_IMPLEMENTED',
   conflict: 'INVALID_STATE',
   body_too_large: 'REQUEST_LIMIT_EXCEEDED',
+  artifact_too_large: 'RESOURCE_EXHAUSTED',
 };
 
 export function isMlflowRequest(requestPath: string): boolean {

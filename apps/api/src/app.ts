@@ -72,7 +72,9 @@ export function createApplication(options: ApplicationOptions) {
   const runCompletion = new RunCompletionService([pluginOutboxCompletionHandler]);
   const runs = new RunService(database, runCompletion);
   const lineage = new LineageService(database);
-  const artifacts = new ArtifactService(database, stores);
+  const artifacts = new ArtifactService(database, stores, {
+    maxBytes: config.artifactMaxBytes,
+  });
   const targets = new TargetService(database, config);
   const jobs = new JobService({ database, runs, config, runCompletion });
   const tasks = new TaskService(database, runs, jobs);
