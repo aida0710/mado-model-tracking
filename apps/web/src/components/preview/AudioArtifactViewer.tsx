@@ -5,6 +5,7 @@ import { trackingApi } from '../../api/tracking';
 import { useArtifactMediaInfo } from '../../hooks/useArtifactMediaInfo';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useAudioPlayback, type LoopRange } from '../../hooks/useAudioPlayback';
+import { useServerAudioPreview, type ServerAudioPreviewState } from '../../hooks/useServerAudioPreview';
 import { summarizeAudioMedia, type AudioMediaSummary } from '../../lib/audioMediaSummary';
 import { SPECTROGRAM_MAX_FRAMES, type AudioChannelSelection, type SpectrogramScale } from '../../lib/audioAnalysis';
 import {
@@ -20,6 +21,7 @@ import {
 import { ErrorNotice, Loading } from '../Feedback';
 import { text } from '../../i18n/catalog';
 import { artifactsTextTemplates } from '../../i18n/artifacts';
+import { AudioPreviewOverview } from './AudioPreviewOverview';
 import { AudioSpectrogram } from './AudioSpectrogram';
 import { AudioWaveform } from './AudioWaveform';
 
@@ -44,6 +46,12 @@ function useDeviceColumns(element: HTMLElement | null): number {
   }, [element]);
   return columns;
 }
+
+const serverPreviewNotices: Record<Exclude<ServerAudioPreviewState['status'], 'ready'>, string> = {
+  none: text.audioAnalysisSkipped,
+  pending: text.audioServerPreviewPending,
+  failed: text.audioServerPreviewFailed,
+};
 
 function AudioMetaList({ summary }: { summary: AudioMediaSummary }) {
   return (
@@ -89,6 +97,8 @@ export function AudioArtifactViewer({
     view: columns > 0 ? { channel, range: visibleRange, columns, scale } : null,
   });
   const headerMediaInfo = useArtifactMediaInfo(artifact);
+  // Files over the browser's analysis limit use the waveform the preview worker generated.
+  const serverPreview = useServerAudioPreview(artifact, analysis.status === 'too_large');
 
   useEffect(() => {
     onAudioElement?.(audio);
@@ -117,7 +127,16 @@ export function AudioArtifactViewer({
     const headerSummary = summarizeAudioMedia(null, headerMediaInfo);
     return (
       <div className="audio-viewer">
-        <p className="notice">{text.audioAnalysisSkipped}</p>
+        {serverPreview.status === 'ready' ? (
+          <AudioPreviewOverview
+            waveform={serverPreview.waveform}
+            spectrogramUrl={serverPreview.spectrogramUrl}
+            currentTime={playback.currentTime}
+            onSeek={playback.seek}
+          />
+        ) : (
+          <p className="notice">{serverPreviewNotices[serverPreview.status]}</p>
+        )}
         {headerSummary && <AudioMetaList summary={headerSummary} />}
         {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement}
       </div>

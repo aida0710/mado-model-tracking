@@ -4,6 +4,7 @@ import { first, type Connection } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { isRelativeFilePath } from '../domain/validation.js';
 import { recordArtifactMediaInfo } from './artifactMediaInfoService.js';
+import { enqueueArtifactPreviews } from './artifactPreviewService.js';
 
 // Matches the MLflow artifact path index column.
 const MAX_ARTIFACT_PATH_LENGTH = 1024;
@@ -53,7 +54,8 @@ export interface ArtifactRegistrationOptions {
 /**
  * Registers bytes already written to storage. Single-request uploads and upload sessions both
  * end here, so they produce identical Artifacts, run the same compatibility hooks, and record
- * the same audio media info.
+ * the same audio media info. Previews are queued after the header probe; the preview worker
+ * fills media info only where the header probe left none.
  */
 export async function registerStoredArtifact(
   connection: Connection,
@@ -78,5 +80,6 @@ export async function registerStoredArtifact(
   ))!;
   await options.onStored?.(connection, artifact);
   await recordArtifactMediaInfo(connection, { artifact, stores: options.stores });
+  await enqueueArtifactPreviews(connection, artifact);
   return artifact;
 }

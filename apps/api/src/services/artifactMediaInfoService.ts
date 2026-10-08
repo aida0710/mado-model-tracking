@@ -18,7 +18,7 @@ const HEADER_PROBED_MIME_TYPES = new Set([
 const MEDIA_INFO_SAVEPOINT = 'artifact_media_info';
 const MEDIA_INFO_COLUMNS = `artifact_id,duration_seconds,sample_rate,channels,bits_per_sample,codec,source`;
 
-function isHeaderProbedMimeType(mimeType: string): boolean {
+export function isHeaderProbedMimeType(mimeType: string): boolean {
   const essence = mimeType.split(';')[0]!.trim().toLowerCase();
   return HEADER_PROBED_MIME_TYPES.has(essence);
 }

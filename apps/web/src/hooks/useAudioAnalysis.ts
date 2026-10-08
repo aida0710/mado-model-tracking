@@ -54,8 +54,9 @@ class StageError extends Error {
 
 /**
  * Fetches, decodes, and analyzes an audio Artifact for the visible view. Files over
- * AUDIO_ANALYSIS_MAX_BYTES are never fetched here (see lib/audioAnalysis.ts); the viewer plays them
- * through <audio> only. `view` null waits until the drawn width is known.
+ * AUDIO_ANALYSIS_MAX_BYTES are never fetched here (see lib/audioAnalysis.ts); the viewer streams
+ * them through <audio> and draws the server's previews (useServerAudioPreview) instead. `view` null
+ * waits until the drawn width is known.
  */
 export function useAudioAnalysis({
   url,

@@ -1,5 +1,6 @@
 import { accessText } from './access';
 import { artifactsText } from './artifacts';
+import { artifactPreviewsText } from './artifactPreviews';
 import { modelsText } from './models';
 import { computeText } from './compute';
 import { runsText, runsTextTemplates } from './runs';
@@ -45,6 +46,7 @@ export const text = {
   ...workbenchText,
   ...accessText,
   ...artifactsText,
+  ...artifactPreviewsText,
   ...modelsText,
   ...evaluationText,
   ...promotionText,
