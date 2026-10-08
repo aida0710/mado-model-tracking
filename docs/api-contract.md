@@ -192,6 +192,16 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
 - `status`は`open`→`verifying`→`completed`、または`aborted`/`expired`/`failed`。API内のfinalizerがpartを連結し、組み立てたobjectを1回streamingで読んで全体のsize・SHA-256を計算する。`expectedSha256`と違えば`failed`（`error:'sha256_mismatch'`）で、Artifactもblobも残さない。検証中にRunが削除されたら`failed`（`run_deleted`）。成功すると`completed`で、登録したArtifactのidはupload idと同じ（`artifactId`）。completeを何度送ってもArtifactは1件。finalizerはleaseを持ち、APIが途中で止まってもleaseの失効後に別のprocessが続きから完了させる。
 - 期限切れの`open` sessionは定期処理で`expired`にし、保存先のmultipart uploadをabortする。sessionの無い7日以上前の未完了multipart uploadと、24時間更新の無いfilesystemの書きかけstagingも消す。
 
+## Artifactのmedia情報
+
+音声の長さ・sample rate・チャンネル数を、1件ずつdecodeせずに一覧や評価サンプル表へ出すため、登録時にヘッダーから求めて`artifact_media_info`に保存する。依存を増やさないためWAVとFLACのヘッダーだけを読む（ほかの形式はpreview workerのffprobeで後から足し、`source='ffprobe'`になる）。
+
+- 対象はmime typeが`audio/wav`・`audio/x-wav`・`audio/wave`・`audio/flac`・`audio/x-flac`のArtifact。native・MLflow・upload sessionのどの経路でも、登録のtransaction内で保存先から先頭64KiBをRangeで読む。WAVは`fmt `（`WAVE_FORMAT_EXTENSIBLE`はSubFormatとvalid bits）と`data` chunk、FLACは`fLaC`直後のSTREAMINFOを解析する。`data` chunkが先頭64KiBより後ろ、圧縮WAV、総サンプル数0のFLAC、壊れたヘッダーは保存しない（推測で埋めない）。`data`の宣言sizeがファイル末尾を超える場合は実際に残っているbyte数で長さを求める。
+- 読み込み・解析・保存の失敗はsavepointで戻し、Artifactの登録は成功させる（ログは`artifact_media_info_failed`）。この機能より前に登録したArtifactには無い。
+- `GET /projects/:p/artifacts/:a/media-info` → ArtifactMediaInfo `{artifactId,durationSeconds,sampleRate,channels,bitsPerSample:number|null,codec,source:'header'}`。viewer+`read`。media情報が無い、または別ProjectのArtifactは404 `not_found`。`codec`はffprobeの`codec_name`と同じ名前（`pcm_s16le`、`pcm_s24le`、`pcm_f32le`、`pcm_alaw`、`flac`など）。
+- `GET /projects/:p/artifact-media-info?artifactIds=<id>,<id>,…` → `{items:ArtifactMediaInfo[]}`。viewer+`read`。IDはカンマ区切りで重複を除き最大200件（`ARTIFACT_MEDIA_INFO_BATCH_LIMIT`）。超過・UUIDでない値は422 `invalid_request`。media情報が無いIDや別ProjectのIDは結果から除くだけでエラーにしない。
+- Webの音声viewerはdecode前でもmedia情報があれば長さ・sample rate・チャンネル数を表示し、decode結果が出たらそちらを正として置き換える。
+
 ## Platform保存API（親担当）
 
 `@mmt/platform`は`createArtifactStoresFromEnv(env?)` → `ArtifactStores`をexportする。`stores.backends():ArtifactBackend[]`、`stores.put({backend,key,body:Readable,mimeType})` → `{size,sha256}`、`stores.read({backend,key,range?:string})` → `{body:Readable,size,totalSize,contentRange?:string,status:200|206}`。`stores.remove({backend,key})`。`stores.multipart(backend)`は再開可能uploadに対応する保存先で`createMultipart`／`putPart`（宣言sizeと任意のpart SHA-256を検証）／`completeMultipart`（S3は最後以外5MiB以上）／`abortMultipart`／`listIncompleteUploads`／`removeAbandonedStaging`を返し、未対応ならnull。S3の単一`put()`は送信元の失敗時にAbortMultipartUploadの完了を待ってからrejectする。keyはprojectId/artifactId配下の不変ID。登録DB失敗時は書いたblobをcleanup。streamingでGBファイルを全量メモリへ載せない。`.env`設定は`ARTIFACT_FILESYSTEM_ROOT`、`S3_BUCKET`, `S3_ENDPOINT?`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`。FSは常時available、S3は必要設定がある場合available。

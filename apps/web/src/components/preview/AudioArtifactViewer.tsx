@@ -2,8 +2,10 @@ import { useEffect, useState, type PointerEvent } from 'react';
 import type { Artifact } from '@mmt/contracts';
 import { Pause, Play, Repeat, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { trackingApi } from '../../api/tracking';
+import { useArtifactMediaInfo } from '../../hooks/useArtifactMediaInfo';
 import { useAudioAnalysis } from '../../hooks/useAudioAnalysis';
 import { useAudioPlayback, type LoopRange } from '../../hooks/useAudioPlayback';
+import { summarizeAudioMedia, type AudioMediaSummary } from '../../lib/audioMediaSummary';
 import { SPECTROGRAM_MAX_FRAMES, type AudioChannelSelection, type SpectrogramScale } from '../../lib/audioAnalysis';
 import {
   ZOOM_STEP,
@@ -43,6 +45,22 @@ function useDeviceColumns(element: HTMLElement | null): number {
   return columns;
 }
 
+function AudioMetaList({ summary }: { summary: AudioMediaSummary }) {
+  return (
+    <dl className="audio-meta">
+      <dt>{text.audioSampleRate}</dt>
+      <dd className="mono">
+        {artifactsTextTemplates.audioSampleRateValue(summary.sampleRate)}
+        {!summary.sampleRateFromFile && <small> {text.audioSampleRateDecoded}</small>}
+      </dd>
+      <dt>{text.audioDuration}</dt>
+      <dd className="mono">{formatAudioTime(summary.durationSeconds)}</dd>
+      <dt>{text.audioChannels}</dt>
+      <dd className="mono">{summary.channelCount}</dd>
+    </dl>
+  );
+}
+
 export function AudioArtifactViewer({
   artifact,
   onPlay,
@@ -70,6 +88,7 @@ export function AudioArtifactViewer({
     sizeBytes: artifact.size,
     view: columns > 0 ? { channel, range: visibleRange, columns, scale } : null,
   });
+  const headerMediaInfo = useArtifactMediaInfo(artifact);
 
   useEffect(() => {
     onAudioElement?.(audio);
@@ -94,16 +113,21 @@ export function AudioArtifactViewer({
     />
   );
 
-  if (analysis.status === 'too_large')
+  if (analysis.status === 'too_large') {
+    const headerSummary = summarizeAudioMedia(null, headerMediaInfo);
     return (
       <div className="audio-viewer">
         <p className="notice">{text.audioAnalysisSkipped}</p>
+        {headerSummary && <AudioMetaList summary={headerSummary} />}
         {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement}
       </div>
     );
+  }
 
   const info = analysis.status === 'ready' ? analysis.info : null;
   const duration = info?.durationSeconds ?? 0;
+  // Until decoding finishes, the stored header values fill the listed properties and total time.
+  const summary = summarizeAudioMedia(info, headerMediaInfo);
   const range = visibleRange ?? { startSeconds: 0, endSeconds: duration };
   const timeAtPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -127,7 +151,7 @@ export function AudioArtifactViewer({
           {playback.playing ? <Pause size={14} /> : <Play size={14} />}
         </button>
         <span className="mono audio-time">
-          {formatAudioTime(playback.currentTime)} / {formatAudioTime(duration)}
+          {formatAudioTime(playback.currentTime)} / {formatAudioTime(summary?.durationSeconds ?? 0)}
         </span>
         <button type="button" className="button small" onClick={() => zoom(ZOOM_STEP)} disabled={!info} aria-label={text.audioZoomIn}>
           <ZoomIn size={14} />
@@ -264,19 +288,7 @@ export function AudioArtifactViewer({
           }}
         />
       )}
-      {info && (
-        <dl className="audio-meta">
-          <dt>{text.audioSampleRate}</dt>
-          <dd className="mono">
-            {artifactsTextTemplates.audioSampleRateValue(info.sampleRate)}
-            {!info.sampleRateFromFile && <small> {text.audioSampleRateDecoded}</small>}
-          </dd>
-          <dt>{text.audioDuration}</dt>
-          <dd className="mono">{formatAudioTime(info.durationSeconds)}</dd>
-          <dt>{text.audioChannels}</dt>
-          <dd className="mono">{info.channelCount}</dd>
-        </dl>
-      )}
+      {summary && <AudioMetaList summary={summary} />}
       {mediaError ? <ErrorNotice message={text.audioPlaybackError} retry={retry} /> : audioElement}
       <p className="muted audio-hint">{text.audioTimelineHint}</p>
     </div>

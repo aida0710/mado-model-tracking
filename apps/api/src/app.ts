@@ -20,6 +20,7 @@ import { mlflowModelRoutes } from './mlflow/models/index.js';
 import { mlflowArtifactRoutes } from './mlflow/artifacts/index.js';
 import { AuthService } from './services/authService.js';
 import { ArtifactService } from './services/artifactService.js';
+import { ArtifactMediaInfoService } from './services/artifactMediaInfoService.js';
 import { ArtifactUploadService } from './services/artifactUploadService.js';
 import { ArtifactUploadFinalizer } from './services/artifactUploadFinalizer.js';
 import { ArtifactUploadSweeper } from './services/artifactUploadSweeper.js';
@@ -64,6 +65,7 @@ import { runSearchRoutes } from './routes/runSearchRoutes.js';
 import { taskRoutes } from './routes/taskRoutes.js';
 import { repositoryRoutes } from './routes/repositoryRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
+import { artifactMediaInfoRoutes } from './routes/artifactMediaInfoRoutes.js';
 import { artifactUploadRoutes, PART_SHA256_HEADER } from './routes/artifactUploadRoutes.js';
 import {
   jobRoutes,
@@ -114,6 +116,7 @@ export function createApplication(options: ApplicationOptions) {
     maxBytes: config.artifactMaxBytes,
   });
   const artifactUploadFinalizer = new ArtifactUploadFinalizer({ database, stores });
+  const artifactMediaInfo = new ArtifactMediaInfoService(database);
   const artifactUploadSweeper = new ArtifactUploadSweeper({ database, stores });
   const targets = new TargetService(database, config);
   const jobTokens = new JobTokenService(database);
@@ -243,6 +246,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', repositoryRoutes(repositories));
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', artifactUploadRoutes(artifactUploads));
+  app.route('/api/projects', artifactMediaInfoRoutes(artifactMediaInfo));
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/projects', evaluationRoutes(evaluation));
@@ -280,6 +284,7 @@ export function createApplication(options: ApplicationOptions) {
       lineage,
       artifacts,
       artifactUploads,
+      artifactMediaInfo,
       targets,
       jobs,
       worker,
