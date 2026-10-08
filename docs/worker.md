@@ -106,6 +106,8 @@ export MMT_API_TOKEN
 python/.venv/bin/mado-tracking-worker
 ```
 
+常駐させる場合は、手動の `export` と `read -rsp` の代わりに `mado-tracking-worker install`（systemd user/system unit）を使う。手順は [operations.md](operations.md) の「workerホストへworkerを導入する」。`install`・`upgrade`・`status`・`doctor` のサブコマンドが増えたが、引数なしと `--once` は従来どおりworkerの実行（`run`）になる。containerでは `MMT_API_TOKEN_FILE` に置いたtoken fileを `MMT_API_TOKEN` として読む（`MMT_API_TOKEN` が既にあればそちらを使う）。
+
 `MMT_WORKER_ID`とstate directoryは再起動後も同じものを使う。同じdirectoryのworkerを2つ起動すると後の起動を拒否する。`MMT_WORKER_TARGET_IDS`はカンマ区切り。省略した場合は、tokenとAPI設定で許可されたtargetが対象になる。
 
 通常のworkerは`WorkerSettings.parallel_jobs=2`で最大2Jobを並行して監視・実行する。claimには現在監視中のJob IDsを`activeJobIds`として送る。APIは未監視の未完了Jobを同じleaseで返し、全件を監視中なら次のJobをclaimする。targetの`maxConcurrentJobs`とGPU予約による制限も適用される。
@@ -185,6 +187,7 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_PARAMETERS_FILE`, `MMT_PARAMETERS_JSON` | parametersのJSON |
 | `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデル版ID |
 | `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONと版ID配列のJSON |
+| `MMT_UPSTREAM_RUN_ID`, `MMT_UPSTREAM_RUN_FILE` | 上流Run（`run.parentRunId`）のIDと`upstream-run.json`のpath。上流が無いJobには付かない |
 | `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報。tokenはJob限定token |
 | `MMT_PROJECT_ID`, `MMT_EXPERIMENT_ID`, `MMT_RUN_ID`, `MMT_JOB_ID` | 実行対象のID |
 | `MMT_JOB_KIND` | 実行するRunのkind。CodeVersionの環境変数より優先する |
@@ -193,6 +196,21 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 Python runtimeでも、SDKを使わずに`MMT_OUTPUTS_DIR`へファイルと`result.json`を書けば、コンテナと同じ検証で回収してRun Artifactの`container/<path>`へ保存する（形式と上限は次節）。何も書かなければ従来どおり回収しない。ファイルがあるのに`result.json`が無い、または宣言と合わない場合はJobをfailedにする。
 
 Python runtimeでは、モデル重みやdatasetの実体をコード側がArtifact APIや登録URIから読む。コンテナでは、workerが重みを実行前に取得する。DatasetVersionはどちらもmetadataとURIを渡す方式。実行コードへ渡す環境変数はCodeVersionの設定とSDK設定に限り、workerの無関係なシークレットは継承しない。
+
+### 上流RunのArtifactsを取得する
+
+自動実行の連鎖で起動した評価Jobは、上流（推論）Runの出力を`MMT_UPSTREAM_RUN_ID`で知る。`upstream-run.json`は`{runId, outputDatasetVersionIds?, outputModelVersionIds?}`で、WorkerJobから分かる項目だけを書く（上流のkindは入らない）。host pythonではworkspace直下、コンテナでは`/mmt/context/upstream-run.json`に置く。DatasetVersionの記述子は従来どおり`dataset-versions.json`に入る。
+
+上流RunのArtifacts（生成したWAVや予測jsonlなど）は、SDKでpath構成を保ったまま取得できる。Job限定tokenはProject内のRunを読める。
+
+```python
+from mado_tracking import download_upstream_artifacts, upstream_run_id
+
+if upstream_run_id() is not None:
+    wavs = download_upstream_artifacts("upstream", prefix="wav/")  # upstream/wav/... に保存
+```
+
+上流が無いJobでは`upstream_run_id()`はNone、2つの関数は空の配列を返し、APIを呼ばない。同じpathに複数の版があれば最新の版を取る。`..`や絶対パスを含むArtifact pathがあれば、何も書かずに`ConfigurationError`にする。保存は一時ファイルからのrenameなので、途中で失敗しても壊れたファイルは残らない。Rangeでの再開は未対応（全体を取り直す）。
 
 ## コンテナの入力と出力は標準pathを使う
 

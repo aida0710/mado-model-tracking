@@ -14,7 +14,6 @@ import type {
 import type { CreateRun, UpdateRun } from './inputs';
 import {
   ARTIFACT_CONTENT_UNAVAILABLE_CODE,
-  ARTIFACT_TOO_LARGE_CODE,
   encodeId,
   invalidResponseError,
   jsonRequest,
@@ -23,19 +22,6 @@ import {
   RequestError,
   requestItems,
 } from './http';
-
-const HTTP_PAYLOAD_TOO_LARGE = 413;
-
-// A front proxy can reject before the API and reply with HTML, so the status decides the code.
-async function withArtifactSizeMessage<T>(upload: Promise<T>): Promise<T> {
-  try {
-    return await upload;
-  } catch (error) {
-    if (error instanceof RequestError && error.status === HTTP_PAYLOAD_TOO_LARGE)
-      throw new RequestError({ status: error.status, code: ARTIFACT_TOO_LARGE_CODE });
-    throw error;
-  }
-}
 
 const artifactContentPath = (projectId: string, artifactId: string) =>
   `${projectPath(projectId)}/artifacts/${encodeId(artifactId)}/content`;
@@ -158,18 +144,6 @@ export const trackingApi = {
     signal?: AbortSignal,
   ) => (await projectArtifactPage(projectId, query, signal)).items,
   projectArtifactPage,
-  uploadArtifact: (projectId: string, runId: string | null, path: string, file: File) =>
-    withArtifactSizeMessage(
-      request<Artifact>(
-        `${runId ? runPath(projectId, runId) : projectPath(projectId)}/artifacts?${new URLSearchParams({ path })}`,
-        {
-          method: 'PUT',
-          body: file,
-          // The API infers the type from the path when the browser leaves File.type empty.
-          headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        },
-      ),
-    ),
   artifactUrl: (projectId: string, artifactId: string) =>
     `/api${artifactContentPath(projectId, artifactId)}`,
   artifactText: async (projectId: string, artifactId: string, signal?: AbortSignal) => {

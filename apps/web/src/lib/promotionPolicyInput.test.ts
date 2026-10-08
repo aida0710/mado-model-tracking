@@ -23,6 +23,8 @@ const evaluationRule: ModelAutomationRule = {
   enabled: true,
   modelFamilies: ['Qwen3'],
   kind: 'evaluation',
+  trigger: 'model_registered',
+  upstreamRuleId: null,
   experimentId: 'experiment',
   codeVersionId: 'code-v1',
   targetId: 'target',

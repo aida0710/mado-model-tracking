@@ -202,6 +202,7 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - `GET /projects/:p/runs/:r/resume-events` → `{items:RunResumeEvent[],segments:RunSegment[]}`。viewer＋`read`。RunResumeEvent `{id,runId,resumedAt,previousStatus,previousEndedAt,maxStepAtResume,source:'native'|'mlflow'|'sync',actorUserId,reason}`を`resumedAt`順に返す。`maxStepAtResume`は再開時点の全metricの最大step（metricが無ければnull）。RunSegment `{startedAt,endedAt|null,endStatus|null,firstStep|null}`: 最初の区間は`startedAt`〜最初のイベントの`previousEndedAt`、以降は`resumedAt`〜次のイベントの`previousEndedAt`（最後は現在の`endedAt`。実行中はnull）。`firstStep`は直前のイベントの`maxStepAtResume+1`で、最初の区間とmetricの無かった区間はnull。開始前のRunは`segments:[]`。
 - MLflow: Jobの無い終端Runへの`runs/update` `status=RUNNING`（`start_run(run_id=)`。SDK 3.0.0と3.17.0はどちらも前回の`end_time`を付けて送る）は同じ再開として扱い、`source='mlflow'`のイベントを入れ、`end_time`を消し`error`もNULLにする。Job付きRunは従来どおり状態を変えず、イベントも入れない。runningへのRUNNINGもイベントを入れない。
 - `run_resume_events`は追記専用（UPDATE/DELETEはtriggerで拒否）。再開したRunが再び終端になると、終端handler（出力登録、保留自動実行など）は新しい終端遷移として再び呼ばれる。
+
 ## Sweeps
 
 - 型は`packages/contracts/src/sweeps.ts`（Sweep、SweepTrial、SweepCreate、SweepPatch、SweepCancel）。探索空間・aggregation・hyperbandの意味は[Sweep](sweeps.md)。
@@ -303,6 +304,7 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - 監査: `storage.backend.create`／`storage.backend.update`（変更した項目名）／`storage.backend.test`（`ok`と失敗した段階）／`storage.settings.update`（新旧の既定）。detailsにsecret、access key id、CAの本文を入れない。403・409は`denied`として記録する。
 - DB由来のsecretを現在の鍵で復号できない保存先は起動時に`storage_backend_unavailable`をログへ出し（名前と理由だけ）、その保存先のArtifactは503 `artifact_read_failed`になる。
 - `scripts/verify_s3_artifacts.ts`は`MMT_VERIFY_S3_BACKEND=<名前>`でDB上のS3保存先を検証する（`MMT_DATABASE_URL`と`MMT_STORAGE_SECRET_KEY`が必要。結果に値を出さない）。
+
 ## Artifactのmedia情報
 
 音声の長さ・sample rate・チャンネル数を、1件ずつdecodeせずに一覧や評価サンプル表へ出すため、登録時にヘッダーから求めて`artifact_media_info`に保存する。依存を増やさないためWAVとFLACのヘッダーだけを読む（ほかの形式はpreview workerのffprobeで後から足し、`source='ffprobe'`になる）。

@@ -37,12 +37,10 @@ export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comment
 export type { ProjectGroupBinding, ProjectMember, ProjectMemberGroupRole, UserSearchResult } from './projectAccess.js';
 export type {
   PromotionCriterion,
-  PromotionCriterionOutcome,
-  PromotionCriterionReason,
-export type {
-  PromotionCriterion,
   PromotionCriterionDirection,
   PromotionCriterionMode,
+  PromotionCriterionOutcome,
+  PromotionCriterionReason,
   PromotionCriterionResult,
   PromotionDecision,
   PromotionEvaluation,
@@ -52,11 +50,6 @@ export type {
   PromotionPolicy,
   PromotionPolicyCreate,
   PromotionPolicyPatch,
-} from './promotion.js';
-export { PROMOTION_CRITERIA_MAX } from './promotion.js';
-  PromotionMissingBaseline,
-  PromotionPolicy,
-  PromotionPolicyCreate,
 } from './promotion.js';
 export { PROMOTION_CRITERIA_MAX, PROMOTION_FIRST_RELEASE_REASON } from './promotion.js';
 export type { StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';

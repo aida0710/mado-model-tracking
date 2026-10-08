@@ -221,6 +221,9 @@ export class JobService {
           parentRunId: previousRun.id,
           environment: previousRun.environment,
         },
+        // A retried chained evaluation keeps the reference set apart from the upstream outputs,
+        // so promotion and baseline comparison still match it against the rule's inputs.
+        upstreamDatasetVersionIds: previousRun.upstreamDatasetVersionIds,
       });
       const job = await this.insertJob(connection, {
         run,

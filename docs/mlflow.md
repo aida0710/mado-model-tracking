@@ -56,6 +56,31 @@ SDKが表示するRunリンクはMLflow標準UIの形式です。画面での確
 
 Runの説明文はMLflowと同じ`mlflow.note.content` tagに保存します。MLflowの`set_tag("mlflow.note.content", ...)`・標準UIのDescriptionと、nativeの`PUT /api/projects/:p/runs/:r/note`は同じ値を読み書きし、別の保存場所はありません。上限はMLflowのtag値と同じ8000文字で、nativeで空文字を保存するとtagを削除します。JobのRunが終わった後は、MLflowのset-tag・delete-tagが`INVALID_STATE`で拒否されます。nativeの説明文APIは説明文を実験結果として扱わないため、終了後もeditorが編集できます。終了後に説明文を直す場合はnative APIを使ってください。Job限定token（`mmtj_`）ではnativeの説明文APIは403 `job_token_forbidden`です。Webの説明文の画面はまだありません。
 
+### 終わったRunに続きを記録する
+
+MLflowの`start_run(run_id=...)`で、終わったRun（中断・失敗を含む）を開き直して続きを記録できます。本アプリはこれを「Runの再開」として記録し、いつ再開したかが残ります。
+
+```python
+import mlflow
+
+with mlflow.start_run(run_id="RUN_ID"):
+    mlflow.log_metric("train.loss", 0.25, step=301)
+```
+
+SDK 3.0.0と3.17.0は、開き直すときに`runs/update`へ`status=RUNNING`と前回の`end_time`を送ります。サーバーはRunをrunningへ戻し、終了時刻とerrorを消して、再開イベントを1件残します。`with`を抜けるとSDKが改めて`FINISHED`と終了時刻を送ります。続きのstepは、`MlflowClient.get_metric_history()`か、nativeの再開APIが返す`lastSteps`で決めてください。
+
+| | MLflow `start_run(run_id=)` | native `POST /api/projects/:p/runs/:r/resume` |
+|---|---|---|
+| 対象 | Jobの無い終わったRun | Jobの無い終わったRun |
+| 再開イベント | `source=mlflow`で1件 | `source=native`で1件（`reason`を付けられる） |
+| 実行中のRun | 何もしない（イベントなし） | `resumed:false`（イベントなし） |
+| Job付きRun | 状態を変えない（イベントなし。SDKは手元のcontextだけ開く） | 409 `run_finalized` |
+| 続きのstep | metric履歴から決める | 応答の`lastSteps`（keyごとの最大step） |
+
+再開の一覧と区間（最初の開始から各再開までの区切り）は`GET /api/projects/:p/runs/:r/resume-events`で読めます。
+
+Job付きRunは、終了後に記録を足すと`INVALID_STATE`になり、再開もできません。Jobの学習を途中から続けるときは、checkpointから新しいRunとして再開してください（Jobのcheckpoint再開）。
+
 ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデル版が参照するArtifactは保持します。
 
 ### 大きいファイルのmultipart upload
@@ -211,6 +236,8 @@ JobのRunに追加したSDKのparamsは記録用の`recordedParameters`へ保存
 | Tracing（`search_traces`、`@mlflow.trace`） | 未対応 | `search_traces`は404 `ENDPOINT_NOT_FOUND`の`MlflowException`になる。`@mlflow.trace`を付けた関数は結果を返し、Runも正常に終わる。traceの送信失敗はSDKが警告のログを出すだけ |
 
 `mlflow.models.evaluate`（回帰）とsklearn autologは、どちらの版でもTracingのAPI（`/api/2.0/mlflow/traces`・`/api/3.0/mlflow/traces`）を呼びませんでした。Tracingを使うコードを動かした場合も、上の表のとおり学習・評価は止まりません。
+
+MLflow UIが図の間引きに使う`ajax-api/2.0/mlflow/metrics/get-history-bulk-interval`は実装していません。公式SDKはこのAPIを呼びません。同じ目的にはnativeの`POST /api/projects/:p/metrics/series`（等幅bucketの平均・min・max、x軸 step / relative_time / wall_time / metric）を使います。`get-history`の頁送りは変えていません。
 
 ## 検証する
 

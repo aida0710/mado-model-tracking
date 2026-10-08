@@ -46,6 +46,7 @@ export const promotionText = {
   promotionCriterionResults: '基準ごとの結果',
   promotionCriterionPassed: '満たす',
   promotionCriterionFailed: '満たさない',
+  promotionCriterionInsufficient: '判定できない',
   promotionFirstRelease: '初回合格（基準なし）',
   promotionReevaluate: '再判定',
   promotionLoadMore: 'さらに読み込む',

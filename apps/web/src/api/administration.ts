@@ -24,14 +24,6 @@ export const administrationApi = {
   createProject: (body: CreateProject) => request<Project>('/projects', jsonRequest('POST', body)),
   updateProject: (id: string, body: { description?: string; artifactBackend?: ArtifactBackend }) =>
     request<Project>(projectPath(id), jsonRequest('PATCH', body)),
-  backends: (signal?: AbortSignal) => requestItems<ArtifactBackend>('/storage/backends', signal),
-  members: (id: string, signal?: AbortSignal) =>
-    requestItems<ProjectMember>(`${projectPath(id)}/members`, signal),
-  saveMember: (projectId: string, userId: string, role: ProjectRole) =>
-    request<unknown>(
-      `${projectPath(projectId)}/members/${encodeId(userId)}`,
-      jsonRequest('PUT', { role }),
-    ),
   tokens: (signal?: AbortSignal) => requestItems<TokenSummary>('/tokens', signal),
   createToken: (body: CreateToken) =>
     request<{ token: string; item: TokenSummary }>('/tokens', jsonRequest('POST', body)),

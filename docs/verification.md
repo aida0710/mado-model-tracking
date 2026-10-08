@@ -210,3 +210,29 @@ node tests/browser-artifacts.mjs
 ```
 
 WAV mono 16kHz・FLAC stereo 48kHz・MP3の波形とスペクトログラム（440Hz・1760Hzのbin位置、mel 80帯域）、クリックでのseek、ドラッグでのループ、64MiB超は再生だけになること、デコード失敗と再試行を確かめます。評価サンプル表（[評価サンプルの推奨形式](evaluation.md#評価サンプルの推奨形式)）ではページング、差分、`preload="none"`、壊れた行、別Projectの参照の拒否を、2つのRunの同じpathの聴き比べでは同じ位置からの切替を確認し、ライト/ダークの画像を保存します。fixtureは`apps/web/tests/fixtures/audio/`にあり、生成コマンドはスクリプト冒頭にあります。
+
+## Artifactのアップロード（進み具合・取消・再開）をブラウザで確認する
+
+スクリプトは`mmt_test`の一時schemaを使う独立したAPI（47080）を自分で起動します。WebはViteを47081で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47080 npx vite --port 47081 --strictPort --host 127.0.0.1) &
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/artifacts-web \
+npx tsx apps/web/tests/browser-artifact-upload.mjs
+```
+
+200MiBのファイルの送信中にネットワークを切り（Playwrightの`setOffline`）、失敗で止まったあと再読込して同じファイルを選び直すと、受信済みでないpartだけが送られてsha256が一致すること、一時停止→再開で受信済みのpartを送り直さないこと、取消でsessionが`aborted`になりArtifactが増えないこと、フォルダのuploadで相対pathが保存先フォルダの下に保たれること、送信中の再読込で`beforeunload`の警告が出ること、viewerにはアップロードのボタンが出ないことを確かめます。
+
+## 全体管理画面の保存先を確認する
+
+保存先APIはブラウザ内でmockし、`/admin`の「ストレージ」タブで、保存先の作成（v2は422の表示）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→新規プロジェクトの初期選択→全体管理者以外の拒否表示、を確かめます。
+
+```bash
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_WEB_URL=http://127.0.0.1:<Webのport> \
+MMT_VERIFY_OUTPUT=artifacts/verification/<日付>/storage-web \
+node apps/web/tests/browser-admin-storage.mjs
+```

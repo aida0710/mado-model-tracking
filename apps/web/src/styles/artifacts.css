@@ -31,10 +31,6 @@
   font-size: 11px;
   line-height: 1.6;
 }
-.artifact-upload-result {
-  margin: 22px;
-  overflow-wrap: anywhere;
-}
 @media (max-width: 800px) {
   .artifact-layout {
     grid-template-columns: minmax(0, 1fr);

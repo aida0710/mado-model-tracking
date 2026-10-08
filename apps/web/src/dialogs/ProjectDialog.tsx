@@ -26,32 +26,6 @@ export function ProjectDialog({
           defaultBackend={choices.defaultBackend}
           onClose={onClose}
           onSaved={onSaved}
-          submitLabel={text.create}
-          fields={[
-            { name: 'name', label: text.name, required: true },
-            { name: 'description', label: text.description, type: 'textarea' },
-            {
-              name: 'artifactBackend',
-              label: text.storage,
-              type: 'select',
-              defaultValue: items[0],
-              options: items.map((backend) => ({
-                value: backend,
-                label: backend === 'filesystem' || backend === 's3' ? text[backend] : backend,
-              })),
-              required: true,
-            },
-          ]}
-          onSubmit={(values) =>
-            administrationApi.createProject({
-              name: getFieldValue(values, 'name'),
-              description: getOptionalValue(values, 'description'),
-              artifactBackend: getFieldValue(
-                values,
-                'artifactBackend',
-              ) as Project['artifactBackend'],
-            })
-          }
         />
       )}
     </QueryDialog>

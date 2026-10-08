@@ -165,7 +165,6 @@ export function createApplication(options: ApplicationOptions) {
     stores,
     onRegistered: mlflowMultipartUploads.mapRegisteredArtifact,
   });
-  const artifactUploadFinalizer = new ArtifactUploadFinalizer({ database, stores });
   const artifactMediaInfo = new ArtifactMediaInfoService(database);
   const artifactUploadSweeper = new ArtifactUploadSweeper({ database, stores });
   const targets = new TargetService(database, config);
@@ -192,7 +191,6 @@ export function createApplication(options: ApplicationOptions) {
   terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));
   const sweeps = new SweepService(database, jobs, sweepController);
   const sweepScheduler = new SweepScheduler(database, sweepController);
-  const worker = new WorkerService({ database, jobs, config, runCompletion });
   const outputDeclarations = new RunOutputDeclarationService(registry);
   const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
   const tokens = new TokenService(database);
@@ -335,8 +333,6 @@ export function createApplication(options: ApplicationOptions) {
       multipart: config.mlflowMultipart.uploadsEnabled ? mlflowMultipartUploads : undefined,
     }),
   );
-  app.get('/api/storage/backends', (context) => {
-  app.route('/api/mlflow/projects/:p', mlflowArtifactRoutes({ database, artifacts }));
   app.route('/api/admin', storageBackendRoutes(storageBackends));
   app.get('/api/storage/backends', async (context) => {
     requireScope(principal(context), 'read');

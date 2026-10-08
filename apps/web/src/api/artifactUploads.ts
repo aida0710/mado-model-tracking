@@ -123,7 +123,7 @@ export const artifactUploadsApi = {
     request<ArtifactUpload>(`${uploadPath(projectId, uploadId)}/complete`, { method: 'POST', signal }),
   abort: (projectId: string, uploadId: string) =>
     request<ArtifactUpload>(uploadPath(projectId, uploadId), { method: 'DELETE' }),
-  /** The single PUT of api/tracking.ts uploadArtifact, sent with progress for small files. */
+  /** The single PUT of `PUT .../artifacts?path=`, sent with progress for small files. */
   putSingle: (
     { projectId, runId, path, file }: { projectId: string; runId: string | null; path: string; file: File },
     options: TransferOptions,

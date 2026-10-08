@@ -45,20 +45,6 @@ export function ProjectSettings() {
                   onChange={(event) => setDescription(event.target.value)}
                 />
               </div>
-              <div className="field">
-                <label htmlFor="project-artifact-backend">{text.storage}</label>
-                <select
-                  id="project-artifact-backend"
-                  value={backend}
-                  onChange={(event) => setBackend(event.target.value as ArtifactBackend)}
-                >
-                  {items.map((item) => (
-                    <option key={item} value={item}>
-                      {item === 'filesystem' || item === 's3' ? text[item] : item}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <StorageBackendPicker
                 name="project-artifact-backend"
                 choices={choices.items}

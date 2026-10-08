@@ -43,11 +43,6 @@ export interface ModelAutomationExecution {
   pipelineRootExecutionId: string | null;
   attempt: number;
   source: 'automatic' | 'manual';
-  createdAt: string;
-}
-
-// POST /projects/:p/automation-rules/:id/executions takes a version, or an upstream Run for a
-// rule whose trigger is 'upstream_run_finished'.
   // The Project admin who applied the rule by hand; null for automatic executions.
   requestedBy: string | null;
   createdAt: string;

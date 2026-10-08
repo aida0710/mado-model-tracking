@@ -10,6 +10,7 @@ const passed: PromotionEvaluation = {
   id: 'evaluation-1',
   projectId: 'project',
   policyId: 'policy',
+  modelId: 'model',
   candidateVersionId: 'version-2',
   candidateRunId: 'run-candidate-0001',
   baselineVersionId: 'version-1',
@@ -23,8 +24,10 @@ const passed: PromotionEvaluation = {
       threshold: -0.01,
       candidate: 0.1,
       baseline: 0.12,
-      value: -0.02,
-      passed: true,
+      candidateStatus: 'present',
+      baselineStatus: 'present',
+      observed: -0.02,
+      outcome: 'passed',
       reason: null,
     },
   ],
@@ -85,7 +88,7 @@ describe('判定履歴の表示', () => {
     expect(html).not.toContain('/runs/run-baseline');
   });
 
-  it('不合格の基準は「満たさない」と理由を表示する', () => {
+  it('判定できない基準は「判定できない」と理由を表示する', () => {
     const html = render([
       {
         ...passed,
@@ -94,16 +97,17 @@ describe('判定履歴の表示', () => {
           {
             ...passed.criteriaResults[0]!,
             candidate: null,
-            value: null,
-            passed: false,
-            reason: 'metric_missing',
+            candidateStatus: 'missing',
+            observed: null,
+            outcome: 'insufficient',
+            reason: 'candidate_metric_missing',
           },
         ],
       },
     ]);
     expect(html).toContain(promotionDecisionLabels.failed);
-    expect(html).toContain(text.promotionCriterionFailed);
-    expect(html).toContain('metric_missing');
+    expect(html).toContain(text.promotionCriterionInsufficient);
+    expect(html).toContain('candidate_metric_missing');
   });
 
   it('再判定の行は何回目かを表示する', () => {

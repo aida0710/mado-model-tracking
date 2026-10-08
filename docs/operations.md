@@ -174,11 +174,34 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - headerの受信は常に60秒以内です（slowloris対策）。
 - 前段proxyには、request全体のtimeoutを設けず、無通信のtimeoutをAPIと同じ120秒程度にし、bodyをbufferせずstreamでAPIへ渡す設定が必要です。同梱の`deploy/nginx.conf`は`client_max_body_size 0`、`proxy_request_buffering off`、`client_body_timeout 120s`、`proxy_send_timeout 120s`、`proxy_read_timeout 3600s`です。
 - 開発用Web（Vite、port5182）もMLflowの`MLFLOW_TRACKING_URI`としてuploadの経路になるため、Viteのdev/preview serverのrequestTimeoutを0にしています。検証で別のAPIを指すときは`MMT_WEB_API_PROXY_TARGET`でproxy先を変えられます（既定`http://127.0.0.1:4182`）。
+- `MMT_MLFLOW_MULTIPART_UPLOADS`（既定true）は、MLflow SDKのmultipart upload（`mpu/create`→partのPUT→`complete`）を受け付けるかです。falseにするとserver-infoが`multipart_uploads_enabled: false`を返し、`mpu/*`は501を返してSDKを1回のPUTへ戻します。開いているsessionは、falseにした後も登録まで進みます。
+- `MMT_UPLOAD_FINALIZE_WAIT_MS`（既定100000）は、MLflowの`mpu/complete`がArtifactの検証・登録を待つ時間です。SDKの既定timeout（120秒）より短くしています。超えると503を返しますが、検証は続き、終われば一覧に出ます。数十GBのファイルを扱う環境では、SDK側の`MLFLOW_HTTP_REQUEST_TIMEOUT`と合わせて大きくします。
+- `MMT_MLFLOW_MULTIPART_DOWNLOADS`（既定false）は変えないでください。presigned URLでの取得は作っていないので、trueにするとMLflow 3.17以降のSDKのdownloadが失敗します。
+- MLflowのpartのURLは、リクエストのHostと`X-Forwarded-Proto`から組み立てます。前段proxyは`Host`を書き換えず、TLSを終端するなら`X-Forwarded-Proto`を渡してください（同梱の`deploy/nginx.conf`はどちらも設定済み）。
 
 ### 配信
 
 - `GET /projects/:p/artifacts/:a/content`は`ETag: "sha256-<hex>"`と`Cache-Control: private, max-age=31536000, immutable`を返します。`If-None-Match`が一致すれば304、`If-Range`が一致しなければRangeを無視して200です。MLflow経路のdownloadはpathの付け替えがあるため`no-store`のままです（ETagは同じ形式）。
 - upload時のContent-Typeが空か`application/octet-stream`なら、拡張子からMIMEを推定します（wav、flac、mp3、ogg、opus、m4a、aac、webm、mp4、mov、png、jpg、webp、avif、gif、csv、tsv、jsonl、txt、npy、parquet）。HTML・SVG・XML・JSは推定しません。既存のArtifactのMIMEは書き換えません。
+
+### Artifact保存先の全体設定
+
+- 保存先は全体管理者が `/admin/storage-backends`（画面は storage-backend-admin-web の /admin）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4。v2 は第4波から）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
+- 環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）由来の `filesystem` と `s3` は従来どおり使え、画面では読み取り専用で表示される。DB へは写さない。
+- secret を持つ S3 保存先を作るには `MMT_STORAGE_SECRET_KEY`（base64 の 32 byte）を API の環境に設定する。生成例: `openssl rand -base64 32`。値は `.env` だけに置き、worklog やチケットへ書かない。
+- **鍵を変えると、保存済みの secret は復号できなくなる。** 起動時に `storage_backend_unavailable`（名前と理由だけ）がログに出て、その保存先の Artifact は 503 になる。鍵を変えたら、各 S3 保存先の secret を PATCH で入れ直す（鍵の自動ローテーションは未実装）。
+- 新しい保存先は、作成後に「接続テスト」（put/get/range/delete を `mmt-connection-test/<uuid>/` で実施）で確かめてから既定にする。
+- 既定の保存先（`/admin/storage-settings`）は新規Projectの作成フォームの初期選択だけを変える。既存Projectの保存先は Project 設定で個別に変える。既存Artifactは保存時の保存先から読み続ける。
+- 保存先をやめるときは `enabled:false` にする（既存Artifactは読めるが、新規保存は拒否）。既定のままでは無効にできないので、先に既定を切り替える。Artifact が参照している保存先の種類・bucket・endpoint・prefix・rootPath は変えられない（409）。
+- DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。
+- API プロセスが複数ある構成では、設定変更は変更を受けたプロセスで即時に効き、他のプロセスは未知の保存先名を読んだときに読み直す。有効/無効や part size の変更を全プロセスへ確実に反映するには API を再起動する。
+
+### 音声Artifactのmedia情報
+
+- WAV（`audio/wav`・`audio/x-wav`・`audio/wave`）と FLAC（`audio/flac`・`audio/x-flac`）の Artifact は、登録時に保存先から先頭 64KiB を Range で読み、長さ・sample rate・チャンネル数・bit 数・codec を `artifact_media_info` に保存する（migration 029）。ffmpeg などの追加依存は無い。
+- 読み込みや解析に失敗しても Artifact の登録は成功する。API ログに `{"event":"artifact_media_info_failed","artifactId":…,"projectId":…,"name":…}` が出る。保存先の場所や SQL の詳細は出さない。多発する場合は、保存先の Range 読み込み（S3 の GetObject Range、filesystem の読み取り権限）を確認する。
+- この機能より前に登録した Artifact には media 情報が無い（API は 404、Web は decode 後の値だけを表示）。必要になったら、`mime_type` が上記で `artifact_media_info` に行の無い Artifact を対象に、同じ `recordArtifactMediaInfo` を呼ぶ一括処理を後から足す（今回は作っていない）。
+- MP3・Ogg・m4a などは第4波 server-preview-derivatives の ffprobe（`source='ffprobe'`）で扱う。
 
 ## SSH/GPU worker
 
@@ -189,6 +212,67 @@ workerにはProject限定のService Account tokenを渡します。`read`、`wor
 GPU予約はこのアプリ内のJob間で排他にします。ほかのSSH shellや別schedulerが同じGPUを使うことまでは防げません。共有GPUではアプリ専用のGPU一覧・作業directoryを設定してください。
 
 worker identityとstate directoryは再起動後も保持します。APIやSSHの応答が失われても、実行状態を確認するまで同じJobを二重起動しません。状態未確認のJobのGPUを自動解放しません。停止要求後はworkerから終了が報告されてから再実行します。
+
+## workerホストへworkerを導入する
+
+APIサーバーはworkerホストへSSHしない（decisions.md）。導入・更新・状態確認は、workerホスト上で `mado-tracking-worker` CLI を使う。常駐はsystemdが正、Docker composeは補助。
+
+### 1. tokenを用意する
+
+Project限定のservice tokenを、scope `read`・`worker:execute`・`artifacts:write` で発行する（`POST /tokens`、kind=`service`）。
+第4波（auth-service-accounts）以降は、人に紐付かないService Accountのkeyを使う（期限上限365日）。予定どおりに入ったら、この節の発行手順をService Accountの画面・APIに置き換える。
+
+### 2. venvへ入れてinstallする（user unit）
+
+```bash
+python3 -m venv ~/.local/share/mado-tracking-worker/venv
+~/.local/share/mado-tracking-worker/venv/bin/pip install 'mado-tracking[telemetry]'   # 社内配布先かwheelのpath
+~/.local/share/mado-tracking-worker/venv/bin/mado-tracking-worker install \
+  --api-url https://tracking.example.internal \
+  --worker-id gpu-host-1 \
+  --target-ids "<target-uuid>"
+# tokenは端末なら非表示の入力、パイプなら標準入力、または --token-file で渡す。引数には書かない
+loginctl enable-linger "$USER"   # ログアウト後も動かす場合
+```
+
+installがすること:
+- `~/.config/mado-tracking-worker/<worker-id>.env` を mode 600 で書く（API URL、worker ID、target、state directory、token）。
+- `~/.config/systemd/user/mado-tracking-worker@.service` を書き、`systemctl --user daemon-reload` → `enable --now mado-tracking-worker@<worker-id>.service`。
+- state directoryの既定は、手で起動していたworkerと同じ `~/.local/state/mado-tracking-worker/<sha256(worker-id)の先頭16桁>`。手動起動から移るときも実行中Jobのjournalを引き継ぐ。別の場所なら `--state-dir`。
+- worker IDは英数字・`.`・`_`・`-`の64文字まで（systemdのinstance名とファイル名に使うため）。
+
+system unitにする場合は root で `--systemd-system --service-user <account>`。env fileは `/etc/mado-tracking-worker/<id>.env`（root、600）、stateは `/var/lib/mado-tracking-worker/<id>`（service userの所有、700）。手で置く場合の雛形は `deploy/worker/mado-tracking-worker@.service` と `deploy/worker/worker.env.example`。
+
+unitは `Restart=on-failure`、`KillMode=process`。worker自身の再起動・停止・upgradeでは、detachされた実行中Jobを止めない（再起動後のworkerがjournalから回収する）。Jobを止めるのはcancel APIだけ。
+
+### 3. 確かめる
+
+```bash
+mado-tracking-worker doctor --worker-id gpu-host-1 [--ssh-key <targetのsshKeyPath>] [--known-hosts <knownHostsPath>]
+mado-tracking-worker status --worker-id gpu-host-1     # unit状態、worker lock、保持中Job。止まっていれば終了コード3
+journalctl --user -u mado-tracking-worker@gpu-host-1 -f
+```
+
+doctorは、env fileとstate directoryのmode、APIへの到達（`/api/health`）、tokenのscope（`GET /api/auth/token`。Job tokenは不可）、`~/.ssh`・秘密鍵（group/otherの権限なし）・known_hosts（group/other書き込み不可）を確かめる。errorがあれば終了コード1。Compute画面の「Workers」に版とホスト名が出ることも確認する。
+
+### 4. 更新する
+
+```bash
+mado-tracking-worker upgrade --worker-id gpu-host-1 --version 0.2.0
+# 配布先がPyPI形式でなければ --package-spec /path/to/mado_tracking-0.2.0-py3-none-any.whl
+```
+
+unitのExecStartにあるvenvへ `pip install --upgrade` してから `systemctl restart`。実行中Jobとjournalはそのまま。unitが止まっているのに別のworkerがstate directoryのlockを持っている（手で起動したworkerが残っている）場合は、何もせず止まる。pipが失敗したら再起動しない。
+
+### Docker composeで動かす（補助）
+
+SSH targetだけを使うworkerは `docker compose --profile worker up -d worker` でも動かせる。
+- token: `MMT_WORKER_TOKEN_FILE`（既定 `./var/worker-token`）をDocker secretとして `/run/secrets/mmt_worker_token` に渡す。
+- 鍵とknown_hosts: `MMT_WORKER_SSH_DIR`（既定 `./var/worker-ssh`）を `/home/worker/.ssh` にread-onlyでmountする。targetの `sshKeyPath`・`knownHostsPath` はcontainer内のpathで登録する。鍵の所有者に合わせて `MMT_WORKER_UID`/`MMT_WORKER_GID` でbuildする。
+- state: volume `worker-state`。消すと実行中Jobを回収できなくなる。
+- `MMT_WORKER_ID`（既定 `compose-worker-1`）、`MMT_WORKER_API_URL`（既定 `http://api:4182`）、`MMT_WORKER_TARGET_IDS`。
+- local executorのJobはcontainerと一緒に止まるため、composeでは使わない。
+- 確認は `docker compose --profile worker run --rm worker doctor`。
 
 ## Run終端の後処理が失敗したとき
 

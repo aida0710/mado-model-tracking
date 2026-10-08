@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   PROMOTION_FIRST_RELEASE_REASON,
+  type PromotionCriterionOutcome,
   type PromotionCriterionResult,
   type PromotionDecision,
   type PromotionEvaluation,
@@ -43,10 +44,23 @@ function DecisionBadge({ evaluation }: { evaluation: PromotionEvaluation }) {
   );
 }
 
+const criterionOutcomeClass: Record<PromotionCriterionOutcome, string> = {
+  passed: 'promotion-criterion-passed',
+  failed: 'promotion-criterion-failed',
+  insufficient: 'promotion-criterion-failed',
+};
+const criterionOutcomeLabel: Record<PromotionCriterionOutcome, string> = {
+  passed: text.promotionCriterionPassed,
+  failed: text.promotionCriterionFailed,
+  insufficient: text.promotionCriterionInsufficient,
+};
+
 function formatComparedValue(result: PromotionCriterionResult): string {
-  if (result.mode === 'relative_delta') return formatRelativeDelta(result.value);
-  if (result.mode === 'delta') return formatDelta(result.value);
-  return formatMetricValue(result.value, 'present', { notFinite: text.metricNotFinite });
+  if (result.mode === 'relative_delta') return formatRelativeDelta(result.observed);
+  if (result.mode === 'delta') return formatDelta(result.observed);
+  return formatMetricValue(result.observed, result.candidateStatus, {
+    notFinite: text.metricNotFinite,
+  });
 }
 
 function CriterionResults({ results }: { results: PromotionCriterionResult[] }) {
@@ -54,10 +68,8 @@ function CriterionResults({ results }: { results: PromotionCriterionResult[] }) 
     <ul className="promotion-criterion-results">
       {results.map((result, index) => (
         <li key={`${result.metric}-${index}`}>
-          <span
-            className={result.passed ? 'promotion-criterion-passed' : 'promotion-criterion-failed'}
-          >
-            {result.passed ? text.promotionCriterionPassed : text.promotionCriterionFailed}
+          <span className={criterionOutcomeClass[result.outcome]}>
+            {criterionOutcomeLabel[result.outcome]}
           </span>{' '}
           <span className="mono">{summarizeCriterion(result)}</span>
           {' : '}
@@ -66,10 +78,15 @@ function CriterionResults({ results }: { results: PromotionCriterionResult[] }) 
             <span className="muted">
               {' '}
               ({text.metricCandidate}{' '}
-              {formatMetricValue(result.candidate, 'present', { notFinite: text.metricNotFinite })}
+              {formatMetricValue(result.candidate, result.candidateStatus, {
+                notFinite: text.metricNotFinite,
+              })}
               {' / '}
               {text.metricBaseline}{' '}
-              {formatMetricValue(result.baseline, 'present', { notFinite: text.metricNotFinite })})
+              {formatMetricValue(result.baseline, result.baselineStatus, {
+                notFinite: text.metricNotFinite,
+              })}
+              )
             </span>
           )}
           {result.reason && <span className="muted mono"> {result.reason}</span>}

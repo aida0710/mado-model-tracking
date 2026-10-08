@@ -359,6 +359,30 @@ describe.skipIf(!testDatabaseUrl)('自動実行の多段連鎖と既存版への
     expect(executions[1]!.pipelineRootExecutionId).toBe(original!.id);
   });
 
+  it('連鎖で起動した評価Runを手動retryしても、上流の出力は正解セットと分けて引き継ぐ', async () => {
+    const fixture = await chainFixture();
+    const { inference, evaluation } = await inferenceAndEvaluationRules(fixture);
+    await registerModel(fixture);
+    const [upstream] = await storedExecutions(fixture, inference.id);
+    const output = await runJob(fixture, {
+      runId: upstream!.runId!,
+      status: 'finished',
+      output: 'predictions',
+    });
+    const [chained] = await storedExecutions(fixture, evaluation.id);
+    await runJob(fixture, { runId: chained!.runId!, status: 'failed' });
+    const retried = await entity<{ run: Run; job: Job }>(
+      await request(harness.app, `${fixture.basePath}/jobs/${chained!.jobId}/retry`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+      }),
+    );
+
+    const original = await getRun(fixture, chained!.runId!);
+    expect(retried.run.upstreamDatasetVersionIds).toEqual([output!.id]);
+    expect(retried.run.inputDatasetVersionIds).toEqual(original.inputDatasetVersionIds);
+  });
+
   it('予約tag拒否の前にautomation.ruleIdを付けた手動Runが成功しても、評価ruleは起動しない', async () => {
     const fixture = await chainFixture();
     const { inference, evaluation } = await inferenceAndEvaluationRules(fixture);

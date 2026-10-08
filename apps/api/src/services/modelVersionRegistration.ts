@@ -147,10 +147,11 @@ async function requireRunCreatorRegistryAccess(
   connection: Connection,
   member: { projectId: string; userId: string },
 ): Promise<void> {
-  // The system actor does not inherit a global administrator's session-only access.
+  // The system actor does not inherit a global administrator's session-only access. Group
+  // bindings count like direct grants, as they do for every other authorization decision.
   const membership = await first(
     connection,
-    "SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2 AND role IN ('editor','admin')",
+    "SELECT 1 FROM effective_project_roles WHERE project_id=$1 AND user_id=$2 AND role IN ('editor','admin')",
     [member.projectId, member.userId],
   );
   if (!membership)

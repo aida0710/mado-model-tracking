@@ -19,6 +19,7 @@ function execution(
     pipelineRootExecutionId: overrides.id,
     attempt: 1,
     source: 'automatic',
+    requestedBy: null,
     createdAt: '2026-10-08T00:00:00Z',
     ...overrides,
   };

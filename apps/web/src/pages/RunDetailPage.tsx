@@ -266,18 +266,6 @@ export function RunDetailPage() {
                 }}
               />
             )}
-            {dialog === 'upload' && (
-              <ArtifactUploadDialog
-                projectId={project.id}
-                runId={runId}
-                onClose={() => setDialog(null)}
-                onSaved={() => {
-                  setDialog(null);
-                  artifacts.reload();
-                  setArtifactRevision((value) => value + 1);
-                }}
-              />
-            )}
             {dialog === 'launch' && (
               <LaunchDialog
                 existingRun={item}
@@ -298,7 +286,10 @@ export function RunDetailPage() {
           runId={runId}
           multiple
           onClose={() => setDialog(null)}
-          onSaved={() => artifacts.reload()}
+          onSaved={() => {
+            artifacts.reload();
+            setArtifactRevision((value) => value + 1);
+          }}
         />
       )}
     </section>

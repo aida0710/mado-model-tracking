@@ -22,6 +22,8 @@ python/.venv/bin/python python/examples/inference.py --offline --weights python/
 
 配布wheelにも例を含める。インストール後の場所は`<venv>/share/mado-tracking/examples/`。APIとつなぐSDK例は`sdk.py`、コード登録とジョブ投入は`register_job.py`を使う。SSH host key、scope、停止・復帰とAPI契約の詳細は、リポジトリの`docs/worker.md`を参照する。
 
+連鎖で起動した評価Jobのコードは、上流（推論）RunのArtifactsを`download_upstream_artifacts(destination, prefix=None)`でpathを保ったまま取得できる。上流RunのIDは`upstream_run_id()`（環境変数`MMT_UPSTREAM_RUN_ID`。上流が無ければNone）、一覧は`list_upstream_artifacts(prefix=None)`。
+
 Gitのコード版は、固定commitのファイルを残して編集・追加・削除を適用する。`register_code`と`create_code_version`は`test_entrypoint`を受け取り、既定値は空の配列。通常実行は`entrypoint`、テスト実行は保存済みの`test_entrypoint`を使う。
 
 ```python
