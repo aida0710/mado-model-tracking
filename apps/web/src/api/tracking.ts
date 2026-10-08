@@ -8,14 +8,18 @@ import type {
   LogEntry,
   MetricPoint,
   Run,
+  RunComparison,
+  RunComparisonRequest,
   RunSearchPage,
   RunSearchRequest,
 } from '@mmt/contracts';
+import { RUN_EXPORT_TRUNCATED_HEADER } from '@mmt/contracts';
 import type { CreateRun, UpdateRun } from './inputs';
 import {
   ARTIFACT_CONTENT_UNAVAILABLE_CODE,
   encodeId,
   invalidResponseError,
+  NETWORK_ERROR_CODE,
   jsonRequest,
   projectPath,
   request,
@@ -90,6 +94,64 @@ function projectArtifactPage(
     signal,
   );
 }
+export interface RunSearchCsv {
+  blob: Blob;
+  fileName: string;
+  /** More Runs matched than the export limit; the file ends with a notice line. */
+  truncated: boolean;
+}
+
+// Used when Content-Disposition is missing or unreadable.
+const FALLBACK_EXPORT_FILE_NAME = 'runs.csv';
+
+function attachmentFileName(disposition: string | null): string {
+  const encoded = disposition?.match(/filename\*=UTF-8''([^;]+)/)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // A malformed escape falls through to the ASCII name.
+    }
+  }
+  return disposition?.match(/filename="([^"]+)"/)?.[1] ?? FALLBACK_EXPORT_FILE_NAME;
+}
+
+/** The search CSV is a POST, so it is read as a blob instead of followed as a link. */
+async function exportRunSearchCsv(
+  projectId: string,
+  search: RunSearchRequest,
+  signal?: AbortSignal,
+): Promise<RunSearchCsv> {
+  let response: Response;
+  try {
+    response = await fetch(`/api${projectPath(projectId)}/runs/search/export.csv`, {
+      ...jsonRequest('POST', search),
+      credentials: 'include',
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw new RequestError({ status: 0, code: NETWORK_ERROR_CODE });
+  }
+  // Same error shape as request() in http.ts, which only reads JSON bodies.
+  if (!response.ok) {
+    const apiError = (await response.json().catch(() => null)) as {
+      error?: unknown;
+      code?: unknown;
+    } | null;
+    throw new RequestError({
+      status: response.status,
+      code: typeof apiError?.code === 'string' ? apiError.code : undefined,
+      serverMessage: typeof apiError?.error === 'string' ? apiError.error : undefined,
+    });
+  }
+  return {
+    blob: await response.blob(),
+    fileName: attachmentFileName(response.headers.get('Content-Disposition')),
+    truncated: response.headers.get(RUN_EXPORT_TRUNCATED_HEADER) === 'true',
+  };
+}
+
 export const trackingApi = {
   experiments: (projectId: string, signal?: AbortSignal) =>
     requestItems<Experiment>(`${projectPath(projectId)}/experiments`, signal),
@@ -103,6 +165,25 @@ export const trackingApi = {
     if (!Array.isArray(page.items)) throw invalidResponseError();
     return page;
   },
+  exportRunSearchCsv,
+  compareRuns: async (projectId: string, body: RunComparisonRequest, signal?: AbortSignal) => {
+    const comparison = await request<RunComparison>(`${projectPath(projectId)}/runs/compare`, {
+      ...jsonRequest('POST', body),
+      signal,
+    });
+    if (!Array.isArray(comparison.runs) || !Array.isArray(comparison.rows))
+      throw invalidResponseError();
+    return comparison;
+  },
+  /** A GET link the browser downloads with the session cookie. */
+  runComparisonCsvUrl: (
+    projectId: string,
+    comparison: { runIds: string[]; baselineRunId: string | null },
+  ) =>
+    `/api${projectPath(projectId)}/runs/compare.csv?${searchParams({
+      runIds: comparison.runIds.join(','),
+      baselineRunId: comparison.baselineRunId ?? undefined,
+    })}`,
   run: (projectId: string, runId: string, signal?: AbortSignal) =>
     request<Run>(runPath(projectId, runId), { signal }),
   createRun: (projectId: string, body: CreateRun) =>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Columns3, Search } from 'lucide-react';
+import { Columns3, Download, Search } from 'lucide-react';
 import type { RunStatus } from '@mmt/contracts';
 import { ErrorNotice } from '../Feedback';
 import {
@@ -23,6 +23,8 @@ export function RunToolbar({
   onStatusChange,
   onSortChange,
   onColumnToggle,
+  exportingCsv,
+  onExportCsv,
 }: {
   searchText: string;
   status: string;
@@ -34,6 +36,9 @@ export function RunToolbar({
   onStatusChange: (status: string) => void;
   onSortChange: (sort: string) => void;
   onColumnToggle: (name: string) => void;
+  exportingCsv: boolean;
+  /** Exports every Run of the current search, not only the shown page. */
+  onExportCsv: () => void;
 }) {
   const [searchInput, setSearchInput] = useState(searchText);
   const [syntaxError, setSyntaxError] = useState<string | null>(null);
@@ -130,6 +135,15 @@ export function RunToolbar({
             ])}
           </select>
         </label>
+        <button
+          className="button small"
+          type="button"
+          disabled={exportingCsv}
+          onClick={onExportCsv}
+        >
+          <Download size={15} />
+          {exportingCsv ? text.exportingRunsCsv : text.exportRunsCsv}
+        </button>
       </div>
       <ErrorNotice message={syntaxError} />
     </>

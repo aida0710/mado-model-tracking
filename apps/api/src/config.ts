@@ -37,6 +37,8 @@ const DEFAULT_UPLOAD_IDLE_TIMEOUT_MS = 120_000;
 // MLflow's mpu/complete is synchronous. The wait stays below the SDK's default 120-second request
 // timeout so a slow verification answers 503 instead of the SDK giving up and aborting.
 const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
+// Rows of one CSV export (decisions.md); beyond this Excel use gets slow and the filter should narrow.
+const DEFAULT_CSV_EXPORT_MAX_ROWS = 50_000;
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -107,6 +109,7 @@ const environmentSchema = z.object({
     .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
   // base64 of 32 bytes. Without it, storage backends that need a secret cannot be created.
   MMT_STORAGE_SECRET_KEY: optionalSetting,
+  MMT_CSV_EXPORT_MAX_ROWS: z.coerce.number().int().positive().default(DEFAULT_CSV_EXPORT_MAX_ROWS),
 });
 
 export interface ApiConfig {
@@ -145,6 +148,8 @@ export interface ApiConfig {
   uploadFinalizeWaitMs: number;
   // Encrypts storage backend secrets in the DB; null when MMT_STORAGE_SECRET_KEY is unset.
   storageSecretKey: SecretKey | null;
+  // Rows of POST /runs/search/export.csv; further matches are cut and marked at the end.
+  csvExportMaxRows: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -259,5 +264,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     },
     uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
     storageSecretKey,
+    csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,
   };
 }
