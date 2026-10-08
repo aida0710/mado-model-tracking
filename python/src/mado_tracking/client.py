@@ -5,32 +5,58 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, BinaryIO
-from urllib.parse import quote
 
 import httpx
 
+from . import aliases, automation, evaluation, exports, service_accounts
+from .api_paths import path_id
 from .artifact_downloads import download_resumable_sync
 from .code_version import build_code_version_payload
+from .dataset_upload import upload_dataset_directory
 from .errors import ApiError, ConfigurationError
 from .execution_runtime import ExecutionRuntime
 from .execution_snapshot import ExecutionMode, validate_execution_mode
 from .experiment_tasks import ExperimentTasksClient
 from .http import REQUEST_TIMEOUT_SECONDS, request_sync
+from .pagination import iterate_cursor_pages
+from .run_search_request import build_run_search_body
 from .security import SecretMasker, secret_values
 from .settings import ApiSettings
+
+__all__ = ["Client", "path_id"]
 
 # Mirrors POST /projects/:p/runs/search: limit defaults to 100 and is capped at 500.
 RUN_SEARCH_DEFAULT_PAGE_SIZE = 100
 RUN_SEARCH_MAX_PAGE_SIZE = 500
 
 
-def path_id(identifier: str) -> str:
-    if not identifier:
-        raise ConfigurationError("An entity ID is required")
-    return quote(identifier, safe="")
-
-
 class Client(ExperimentTasksClient):
+    """Native API client. Feature operations live in their own modules and are bound here as methods.
+
+    Each bound function takes the Client as its first argument, so ``client.set_model_alias(...)``
+    and ``aliases.set_model_alias(client, ...)`` are the same call with the same documentation.
+    """
+
+    set_model_alias = aliases.set_model_alias
+    delete_model_alias = aliases.delete_model_alias
+    list_alias_events = aliases.list_alias_events
+    compare_to_baseline = evaluation.compare_to_baseline
+    create_promotion_policy = evaluation.create_promotion_policy
+    list_promotion_policies = evaluation.list_promotion_policies
+    list_promotion_evaluations = evaluation.list_promotion_evaluations
+    transfer_promotion_policy_owner = evaluation.transfer_promotion_policy_owner
+    create_automation_rule = automation.create_automation_rule
+    list_automation_executions = automation.list_automation_executions
+    apply_automation_rule = automation.apply_automation_rule
+    transfer_automation_rule_owner = automation.transfer_automation_rule_owner
+    compare_runs = exports.compare_runs
+    export_runs_csv = exports.export_runs_csv
+    export_comparison_csv = exports.export_comparison_csv
+    list_service_accounts = service_accounts.list_service_accounts
+    create_service_account = service_accounts.create_service_account
+    create_service_account_token = service_accounts.create_service_account_token
+    list_project_tokens = service_accounts.list_project_tokens
+
     def __init__(
         self,
         *,
@@ -129,45 +155,28 @@ class Client(ExperimentTasksClient):
         self,
         project_id: str,
         *,
-        filter: str | None = None,
-        order_by: Sequence[str] = (),
-        experiment_ids: Sequence[str] = (),
         page_size: int = RUN_SEARCH_DEFAULT_PAGE_SIZE,
+        **search: Any,
     ) -> Iterator[dict[str, Any]]:
         """Yield every matching Run summary, following ``nextCursor`` page by page.
 
+        ``search`` takes ``filter``, ``order_by``, ``experiment_ids``, ``kinds``, ``statuses``,
+        ``model_version_ids``, ``input_dataset_version_ids``, ``parent_run_id`` and ``name``.
         ``filter`` and ``order_by`` use MLflow search syntax, for example
         ``metrics.loss < 0.1 AND params.lr = '0.01'`` and ``metrics.loss ASC``.
         Pages are requested lazily, so stopping the iteration stops the requests.
         """
-        if isinstance(order_by, str) or isinstance(experiment_ids, str):
-            raise ConfigurationError("order_by and experiment_ids must be sequences of strings")
         if not 1 <= page_size <= RUN_SEARCH_MAX_PAGE_SIZE:
             raise ConfigurationError(f"page_size must be between 1 and {RUN_SEARCH_MAX_PAGE_SIZE}")
-        body: dict[str, Any] = {"limit": page_size}
-        if filter:
-            body["filter"] = filter
-        if order_by:
-            body["orderBy"] = list(order_by)
-        if experiment_ids:
-            body["experimentIds"] = list(experiment_ids)
-        visited_cursors: set[str] = set()
-        while True:
+        conditions = {**build_run_search_body(**search), "limit": page_size}
+        path = self.project_path(project_id, "runs/search")
+
+        def fetch_page(cursor: str | None) -> dict[str, Any]:
+            body = {**conditions, "cursor": cursor} if cursor else conditions
             # Search only reads, so a lost response can be retried without side effects.
-            page = self.request(
-                "POST", self.project_path(project_id, "runs/search"), json=body, retryable=True
-            )
-            items = page.get("items")
-            if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
-                raise ConfigurationError("Run search response must contain items")
-            yield from items
-            cursor = page.get("nextCursor")
-            if cursor is None:
-                return
-            if not isinstance(cursor, str) or not cursor or cursor in visited_cursors:
-                raise ConfigurationError("Run search returned an invalid or repeated pagination cursor")
-            visited_cursors.add(cursor)
-            body = {**body, "cursor": cursor}
+            return self.request("POST", path, json=body, retryable=True)
+
+        return iterate_cursor_pages(fetch_page, label="Run search")
 
     def start_run(
         self,
@@ -238,7 +247,7 @@ class Client(ExperimentTasksClient):
         )
 
     def find_model(self, project_id: str, *, name: str) -> dict[str, Any] | None:
-        models = self._list_items(project_id, "models", params={"name": name})
+        models = self.list_project_items(project_id, "models", params={"name": name})
         return models[0] if models else None
 
     def ensure_model(
@@ -273,9 +282,10 @@ class Client(ExperimentTasksClient):
         self,
         project_id: str,
         *,
-        version: str,
-        uri: str,
-        digest: str,
+        version: str | None = None,
+        uri: str | None = None,
+        digest: str | None = None,
+        files: str | os.PathLike[str] | None = None,
         dataset_id: str | None = None,
         name: str | None = None,
         namespace: str = "default",
@@ -286,15 +296,28 @@ class Client(ExperimentTasksClient):
         parent_dataset_version_ids: Sequence[str] = (),
         external_ref: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
-        if dataset_id is None:
-            if not name:
-                raise ConfigurationError("name is required to create a Dataset")
-            dataset = self.request(
-                "POST",
-                self.project_path(project_id, "datasets"),
-                json={"name": name, "namespace": namespace, "description": description},
+        """Register a DatasetVersion that refers to ``uri``, or upload the directory ``files``.
+
+        With ``files`` the directory is uploaded as Artifacts and the API computes the uri and
+        digest; unchanged files already in the Project are not sent again. Without ``files``,
+        ``version``, ``uri`` and ``digest`` are required.
+        """
+        if files is not None:
+            if uri is not None or digest is not None:
+                raise ConfigurationError("files replaces uri and digest; do not give them together")
+            if source_run_id is not None or parent_dataset_version_ids or external_ref:
+                raise ConfigurationError(
+                    "files does not support source_run_id, parent_dataset_version_ids or external_ref"
+                )
+        elif version is None or uri is None or digest is None:
+            raise ConfigurationError("version, uri and digest are required without files")
+        dataset_id = dataset_id or self._create_dataset(
+            project_id, name=name, namespace=namespace, description=description
+        )
+        if files is not None:
+            return upload_dataset_directory(
+                self, project_id, dataset_id, files, version=version, metadata=metadata, schema=schema
             )
-            dataset_id = dataset["id"]
         return self.request(
             "POST",
             self.project_path(project_id, f"datasets/{path_id(dataset_id)}/versions"),
@@ -309,6 +332,17 @@ class Client(ExperimentTasksClient):
                 "externalRef": dict(external_ref) if external_ref else None,
             },
         )
+
+    def _create_dataset(self, project_id: str, *, name: str | None, namespace: str, description: str) -> str:
+        if not name:
+            raise ConfigurationError("name is required to create a Dataset")
+        dataset = self.request(
+            "POST",
+            self.project_path(project_id, "datasets"),
+            json={"name": name, "namespace": namespace, "description": description},
+        )
+        dataset_id: str = dataset["id"]
+        return dataset_id
 
     def register_code(
         self,
@@ -388,46 +422,8 @@ class Client(ExperimentTasksClient):
             json=payload,
         )
 
-    def create_automation_rule(
-        self,
-        project_id: str,
-        *,
-        name: str,
-        model_families: Sequence[str],
-        kind: str,
-        experiment_id: str,
-        code_version_id: str,
-        target_id: str,
-        gpu_ids: Sequence[str] = (),
-        input_dataset_version_ids: Sequence[str] = (),
-        parameters: Mapping[str, Any] | None = None,
-        tags: Mapping[str, str] | None = None,
-        max_attempts: int = 1,
-        enabled: bool = True,
-    ) -> dict[str, Any]:
-        if kind not in {"inference", "evaluation"}:
-            raise ConfigurationError("Automation supports inference or evaluation")
-        return self.request(
-            "POST",
-            self.project_path(project_id, "automation-rules"),
-            json={
-                "name": name,
-                "enabled": enabled,
-                "modelFamilies": list(model_families),
-                "kind": kind,
-                "experimentId": experiment_id,
-                "codeVersionId": code_version_id,
-                "targetId": target_id,
-                "gpuIds": list(gpu_ids),
-                "inputDatasetVersionIds": list(input_dataset_version_ids),
-                "parameters": dict(parameters or {}),
-                "tags": dict(tags or {}),
-                "maxAttempts": max_attempts,
-            },
-        )
-
     def list_automation_rules(self, project_id: str) -> list[dict[str, Any]]:
-        return self._list_items(project_id, "automation-rules")
+        return self.list_project_items(project_id, "automation-rules")
 
     def set_automation_rule_enabled(self, project_id: str, rule_id: str, *, enabled: bool) -> dict[str, Any]:
         return self.request(
@@ -437,12 +433,10 @@ class Client(ExperimentTasksClient):
             retryable=True,
         )
 
-    def list_automation_executions(self, project_id: str) -> list[dict[str, Any]]:
-        return self._list_items(project_id, "automation-executions")
-
-    def _list_items(
+    def list_project_items(
         self, project_id: str, resource: str, *, params: Mapping[str, str] | None = None
     ) -> list[dict[str, Any]]:
+        """Items of a Project list endpoint that answers in one page ``{items}``."""
         payload = self.request("GET", self.project_path(project_id, resource), retryable=True, params=params)
         items = payload.get("items")
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):

@@ -258,9 +258,168 @@ def test_search_runs_rejects_repeated_cursor_and_invalid_page_size():
         ]
     )
     with client:
-        with pytest.raises(ConfigurationError, match="repeated pagination cursor"):
+        with pytest.raises(ConfigurationError, match="repeating pagination cursor"):
             list(client.search_runs("p"))
         with pytest.raises(ConfigurationError, match="page_size"):
             list(client.search_runs("p", page_size=501))
         with pytest.raises(ConfigurationError, match="sequences"):
             list(client.search_runs("p", order_by="metrics.loss ASC"))
+
+
+def test_search_runs_sends_the_native_conditions_with_api_field_names():
+    client, requests = run_search_server([{"items": [], "nextCursor": None}])
+    with client:
+        list(
+            client.search_runs(
+                "p",
+                kinds=["evaluation"],
+                statuses=["finished"],
+                model_version_ids=["version-1"],
+                input_dataset_version_ids=["reference"],
+                parent_run_id="inference-run",
+                name="wer",
+            )
+        )
+    assert requests == [
+        {
+            "kinds": ["evaluation"],
+            "statuses": ["finished"],
+            "modelVersionIds": ["version-1"],
+            "inputDatasetVersionIds": ["reference"],
+            "parentRunId": "inference-run",
+            "name": "wer",
+            "limit": 100,
+        }
+    ]
+
+
+CSV_BYTES = '﻿id,name,metrics.wer\r\nrun-1,"評価, 1",0.12\r\nrun-2,\'=cmd,0.10\r\n'.encode()
+
+
+class ChunkedCsv(httpx.SyncByteStream):
+    """Serves the CSV in small chunks, optionally dropping the connection part way through."""
+
+    def __init__(self, content: bytes, *, drop_after: int | None = None):
+        self.content = content
+        self.drop_after = drop_after
+
+    def __iter__(self):
+        limit = len(self.content) if self.drop_after is None else self.drop_after
+        for offset in range(0, limit, 16):
+            yield self.content[offset : min(offset + 16, limit)]
+        if self.drop_after is not None:
+            raise httpx.ReadError("connection dropped")
+
+
+def csv_server(responses):
+    requests = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content) if request.content else None
+        requests.append((request.method, request.url.path, dict(request.url.params), body))
+        return responses[len(requests) - 1]()
+
+    client = Client(
+        api_url="http://localhost", api_token="sdk-test-secret", transport=httpx.MockTransport(serve)
+    )
+    return client, requests
+
+
+def csv_response(**stream_options):
+    return lambda: httpx.Response(
+        200,
+        headers={"content-type": "text/csv; charset=utf-8"},
+        stream=ChunkedCsv(CSV_BYTES, **stream_options),
+    )
+
+
+def test_search_export_streams_the_csv_bytes_unchanged_into_the_file(tmp_path):
+    client, requests = csv_server([csv_response()])
+    destination = tmp_path / "exports/runs.csv"
+    with client:
+        saved = client.export_runs_csv(
+            "p", destination, filter="metrics.wer < 0.2", order_by=["metrics.wer ASC"], kinds=["evaluation"]
+        )
+    assert saved == destination
+    assert destination.read_bytes() == CSV_BYTES
+    assert requests == [
+        (
+            "POST",
+            "/api/projects/p/runs/search/export.csv",
+            {},
+            {"filter": "metrics.wer < 0.2", "orderBy": ["metrics.wer ASC"], "kinds": ["evaluation"]},
+        )
+    ]
+    assert sorted(path.name for path in destination.parent.iterdir()) == ["runs.csv"]
+
+
+def test_interrupted_export_starts_over_and_keeps_no_partial_bytes(tmp_path, monkeypatch):
+    monkeypatch.setattr("mado_tracking.exports.retry_delay", lambda *_arguments: 0)
+    client, requests = csv_server([csv_response(drop_after=40), csv_response()])
+    destination = tmp_path / "runs.csv"
+    with client:
+        client.export_runs_csv("p", destination)
+    assert destination.read_bytes() == CSV_BYTES
+    assert len(requests) == 2
+
+
+def test_export_that_keeps_failing_leaves_the_previous_file_untouched(tmp_path, monkeypatch):
+    monkeypatch.setattr("mado_tracking.exports.retry_delay", lambda *_arguments: 0)
+    client, _requests = csv_server([csv_response(drop_after=20)] * 4)
+    destination = tmp_path / "runs.csv"
+    destination.write_bytes(b"previous export")
+    with client, pytest.raises(ApiError, match="no file was written"):
+        client.export_runs_csv("p", destination)
+    assert destination.read_bytes() == b"previous export"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["runs.csv"]
+
+
+def test_refused_export_raises_the_api_error_without_creating_a_file(tmp_path):
+    client, requests = csv_server([lambda: httpx.Response(403, json={"error": "token has no read scope"})])
+    with client, pytest.raises(ApiError, match="read scope") as captured:
+        client.export_runs_csv("p", tmp_path / "runs.csv")
+    assert captured.value.status_code == 403
+    assert len(requests) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_comparison_csv_sends_run_ids_in_order_with_the_baseline(tmp_path):
+    client, requests = csv_server([csv_response()])
+    with client:
+        client.export_comparison_csv(
+            "p", tmp_path / "compare.csv", run_ids=["run-b", "run-a"], baseline_run_id="run-a"
+        )
+    assert requests == [
+        ("GET", "/api/projects/p/runs/compare.csv", {"runIds": "run-b,run-a", "baselineRunId": "run-a"}, None)
+    ]
+    assert (tmp_path / "compare.csv").read_bytes() == CSV_BYTES
+
+
+def test_compare_runs_sends_the_comparison_request_and_validates_it_first():
+    client, requests = csv_server([lambda: httpx.Response(200, json={"runs": [], "rows": []})])
+    with client:
+        comparison = client.compare_runs(
+            "p", ["run-b", "run-a"], baseline_run_id="run-a", metric_keys=["wer"], include_history=True
+        )
+        with pytest.raises(ConfigurationError, match="distinct"):
+            client.compare_runs("p", ["run-a"])
+        with pytest.raises(ConfigurationError, match="distinct"):
+            client.compare_runs("p", ["run-a", "run-a"])
+        with pytest.raises(ConfigurationError, match="distinct"):
+            client.compare_runs("p", [f"run-{index}" for index in range(51)])
+        with pytest.raises(ConfigurationError, match="baseline"):
+            client.compare_runs("p", ["run-a", "run-b"], baseline_run_id="run-c")
+    assert comparison == {"runs": [], "rows": []}
+    assert requests == [
+        (
+            "POST",
+            "/api/projects/p/runs/compare",
+            {},
+            {
+                "runIds": ["run-b", "run-a"],
+                "baselineRunId": "run-a",
+                "metricKeys": ["wer"],
+                "includeHistory": True,
+            },
+        )
+    ]
