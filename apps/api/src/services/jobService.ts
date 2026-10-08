@@ -21,6 +21,7 @@ import {
 } from '../repositories/registryRepository.js';
 import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { requireProject } from './accessService.js';
+import { JobTokenService } from './jobTokenService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 import { runColumns } from '../repositories/runListProjection.js';
@@ -30,16 +31,19 @@ export class JobService {
   private readonly runs: RunService;
   private readonly config: ApiConfig;
   private readonly runCompletion: RunCompletionService;
+  private readonly jobTokens: JobTokenService;
   constructor(options: {
     database: Database;
     runs: RunService;
     config: ApiConfig;
     runCompletion: RunCompletionService;
+    jobTokens?: JobTokenService;
   }) {
     this.database = options.database;
     this.runs = options.runs;
     this.config = options.config;
     this.runCompletion = options.runCompletion;
+    this.jobTokens = options.jobTokens ?? new JobTokenService(options.database);
   }
 
   async list(principal: Principal, projectId: string): Promise<Job[]> {
@@ -259,7 +263,8 @@ export class JobService {
       projectId: job.projectId,
       ids: run.inputDatasetVersionIds,
     });
-    return { job, run, target, codeVersion, modelVersion, inputDatasets };
+    const jobToken = await this.jobTokens.issueForWorker(connection, job);
+    return { job, run, target, codeVersion, modelVersion, inputDatasets, jobToken };
   }
 
   async reserveJob(

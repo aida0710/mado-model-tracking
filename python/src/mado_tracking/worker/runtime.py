@@ -127,7 +127,9 @@ class JobExecutor:
     ):
         self.job = job
         self.settings = settings
-        self.masker = SecretMasker([settings.api.token, *secret_values(job.code_version["environment"])])
+        self.masker = SecretMasker(
+            [settings.api.token, job.job_token or "", *secret_values(job.code_version["environment"])]
+        )
         self.transport = transport or self._create_transport()
         self.workspace: str | None = None
         self.runtime: str | None = None

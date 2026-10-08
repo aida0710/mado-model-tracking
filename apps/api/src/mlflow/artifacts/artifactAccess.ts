@@ -2,6 +2,7 @@ import type { Principal } from '../../auth/principal.js';
 import { first, type Connection } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
 import { userColumns } from '../../repositories/identityRepository.js';
+import { isJobTokenActive } from '../../repositories/jobTokenRepository.js';
 import { requireProject } from '../../services/accessService.js';
 import type { ArtifactAccess } from './artifactTypes.js';
 
@@ -18,7 +19,10 @@ export async function requireArtifactProject(
   );
   if (!user) throw new DomainError(401, 'Loginが無効です', 'authentication_required');
   let token = access.principal.token;
-  if (access.principal.method === 'token') {
+  if (token?.job) {
+    if (!(await isJobTokenActive(connection, { id: token.id, userId: user.id, lock: options.lock })))
+      throw new DomainError(401, 'Job tokenが無効または失効しています', 'invalid_token');
+  } else if (access.principal.method === 'token') {
     token =
       (await first<NonNullable<Principal['token']>>(
         connection,

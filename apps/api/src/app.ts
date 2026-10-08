@@ -10,6 +10,7 @@ import type { ApiConfig } from './config.js';
 import type { Database } from './db/database.js';
 import { DomainError } from './domain/errors.js';
 import { authentication } from './http/authMiddleware.js';
+import { jobTokenGuard } from './http/jobTokenGuard.js';
 import { isAllowedOrigin } from './http/originPolicy.js';
 import { principal, type ApiEnvironment } from './http/request.js';
 import { formatMlflowError, isMlflowArtifactUpload, isMlflowRequest } from './mlflow/errors.js';
@@ -31,6 +32,7 @@ import { ModelAutomationService } from './services/modelAutomationService.js';
 import { LineageService } from './services/lineageService.js';
 import { TargetService } from './services/targetService.js';
 import { JobService } from './services/jobService.js';
+import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
 import { TokenService } from './services/tokenService.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
@@ -77,7 +79,8 @@ export function createApplication(options: ApplicationOptions) {
     maxBytes: config.artifactMaxBytes,
   });
   const targets = new TargetService(database, config);
-  const jobs = new JobService({ database, runs, config, runCompletion });
+  const jobTokens = new JobTokenService(database);
+  const jobs = new JobService({ database, runs, config, runCompletion, jobTokens });
   const tasks = new TaskService(database, runs, jobs);
   const gitRepositories = new GitRepositoryReader({ ssh: config.repositorySsh });
   const repositories = new RepositoryFilesService(
@@ -166,7 +169,8 @@ export function createApplication(options: ApplicationOptions) {
     }
     await next();
   });
-  app.use('/api/*', authentication(auth));
+  app.use('/api/*', authentication(auth, jobTokens));
+  app.use('/api/*', jobTokenGuard(database));
   const health = async () => {
     try {
       await database.query('SELECT 1');
@@ -218,6 +222,7 @@ export function createApplication(options: ApplicationOptions) {
       jobs,
       worker,
       tokens,
+      jobTokens,
       plugins,
     },
   };

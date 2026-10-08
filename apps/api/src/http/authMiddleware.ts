@@ -1,6 +1,8 @@
 import type { MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { AuthService } from '../services/authService.js';
+import type { JobTokenService } from '../services/jobTokenService.js';
+import { isJobToken } from '../auth/jobTokens.js';
 import { DomainError } from '../domain/errors.js';
 import type { ApiEnvironment } from './request.js';
 import { isAllowedOrigin, type OriginPolicy } from './originPolicy.js';
@@ -22,7 +24,11 @@ export function validateOrigin(origin: string | undefined, policy: OriginPolicy)
     throw new DomainError(403, 'リクエストのOriginが許可されていません', 'invalid_origin');
 }
 
-export function authentication(auth: AuthService): MiddlewareHandler<ApiEnvironment> {
+// Without jobTokens (test fixtures that mount only part of the API) Job tokens are rejected.
+export function authentication(
+  auth: AuthService,
+  jobTokens?: JobTokenService,
+): MiddlewareHandler<ApiEnvironment> {
   return async (context, next) => {
     const authorization = context.req.header('Authorization');
     let bearer: string | undefined;
@@ -32,7 +38,10 @@ export function authentication(auth: AuthService): MiddlewareHandler<ApiEnvironm
       bearer = match[1];
     }
     const session = getCookie(context, SESSION_COOKIE);
-    const identity = await auth.authenticate({ bearer, session });
+    const identity =
+      bearer && isJobToken(bearer)
+        ? await authenticateJobToken(jobTokens, bearer)
+        : await auth.authenticate({ bearer, session });
     context.set('principal', identity);
     if (session && !bearer && !['GET', 'HEAD', 'OPTIONS'].includes(context.req.method)) {
       validateOrigin(context.req.header('Origin'), auth.config);
@@ -48,4 +57,9 @@ export function authentication(auth: AuthService): MiddlewareHandler<ApiEnvironm
       );
     await next();
   };
+}
+
+function authenticateJobToken(jobTokens: JobTokenService | undefined, bearer: string) {
+  if (!jobTokens) throw new DomainError(401, 'Job tokenは使用できません', 'invalid_token');
+  return jobTokens.authenticate(bearer);
 }

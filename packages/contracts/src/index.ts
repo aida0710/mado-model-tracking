@@ -231,6 +231,9 @@ export interface WorkerJob {
   codeVersion: CodeVersion;
   modelVersion: ModelVersion | null;
   inputDatasets: DatasetVersion[];
+  // Token for the Job's code (mmtj_). Set only when this claim/resume issued a new one; null
+  // for a running Job, whose process keeps the token the worker saved earlier.
+  jobToken: string | null;
 }
 export interface TokenSummary {
   id: string;
