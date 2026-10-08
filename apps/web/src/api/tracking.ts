@@ -5,12 +5,15 @@ import type {
   LogEntry,
   MetricPoint,
   Run,
+  RunSearchPage,
+  RunSearchRequest,
 } from '@mmt/contracts';
 import type { CreateRun, UpdateRun } from './inputs';
 import {
   ARTIFACT_CONTENT_UNAVAILABLE_CODE,
   ARTIFACT_TOO_LARGE_CODE,
   encodeId,
+  invalidResponseError,
   jsonRequest,
   projectPath,
   request,
@@ -41,8 +44,14 @@ export const trackingApi = {
     requestItems<Experiment>(`${projectPath(projectId)}/experiments`, signal),
   createExperiment: (projectId: string, body: { name: string; description?: string }) =>
     request<Experiment>(`${projectPath(projectId)}/experiments`, jsonRequest('POST', body)),
-  runs: (projectId: string, query: Record<string, string>, signal?: AbortSignal) =>
-    requestItems<Run>(`${projectPath(projectId)}/runs?${new URLSearchParams(query)}`, signal),
+  searchRuns: async (projectId: string, body: RunSearchRequest, signal?: AbortSignal) => {
+    const page = await request<RunSearchPage>(`${projectPath(projectId)}/runs/search`, {
+      ...jsonRequest('POST', body),
+      signal,
+    });
+    if (!Array.isArray(page.items)) throw invalidResponseError();
+    return page;
+  },
   run: (projectId: string, runId: string, signal?: AbortSignal) =>
     request<Run>(runPath(projectId, runId), { signal }),
   createRun: (projectId: string, body: CreateRun) =>

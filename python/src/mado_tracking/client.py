@@ -18,6 +18,10 @@ from .http import REQUEST_TIMEOUT_SECONDS, request_sync
 from .security import SecretMasker, secret_values
 from .settings import ApiSettings
 
+# Mirrors POST /projects/:p/runs/search: limit defaults to 100 and is capped at 500.
+RUN_SEARCH_DEFAULT_PAGE_SIZE = 100
+RUN_SEARCH_MAX_PAGE_SIZE = 500
+
 
 def path_id(identifier: str) -> str:
     if not identifier:
@@ -119,6 +123,50 @@ class Client(ExperimentTasksClient):
 
         run = self.request("GET", self.project_path(project_id, f"runs/{path_id(run_id)}"), retryable=True)
         return Run(self, project_id, run, managed_by_worker=managed_by_worker)
+
+    def search_runs(
+        self,
+        project_id: str,
+        *,
+        filter: str | None = None,
+        order_by: Sequence[str] = (),
+        experiment_ids: Sequence[str] = (),
+        page_size: int = RUN_SEARCH_DEFAULT_PAGE_SIZE,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield every matching Run summary, following ``nextCursor`` page by page.
+
+        ``filter`` and ``order_by`` use MLflow search syntax, for example
+        ``metrics.loss < 0.1 AND params.lr = '0.01'`` and ``metrics.loss ASC``.
+        Pages are requested lazily, so stopping the iteration stops the requests.
+        """
+        if isinstance(order_by, str) or isinstance(experiment_ids, str):
+            raise ConfigurationError("order_by and experiment_ids must be sequences of strings")
+        if not 1 <= page_size <= RUN_SEARCH_MAX_PAGE_SIZE:
+            raise ConfigurationError(f"page_size must be between 1 and {RUN_SEARCH_MAX_PAGE_SIZE}")
+        body: dict[str, Any] = {"limit": page_size}
+        if filter:
+            body["filter"] = filter
+        if order_by:
+            body["orderBy"] = list(order_by)
+        if experiment_ids:
+            body["experimentIds"] = list(experiment_ids)
+        visited_cursors: set[str] = set()
+        while True:
+            # Search only reads, so a lost response can be retried without side effects.
+            page = self.request(
+                "POST", self.project_path(project_id, "runs/search"), json=body, retryable=True
+            )
+            items = page.get("items")
+            if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+                raise ConfigurationError("Run search response must contain items")
+            yield from items
+            cursor = page.get("nextCursor")
+            if cursor is None:
+                return
+            if not isinstance(cursor, str) or not cursor or cursor in visited_cursors:
+                raise ConfigurationError("Run search returned an invalid or repeated pagination cursor")
+            visited_cursors.add(cursor)
+            body = {**body, "cursor": cursor}
 
     def start_run(
         self,

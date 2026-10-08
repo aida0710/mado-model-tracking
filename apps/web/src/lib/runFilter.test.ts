@@ -1,56 +1,48 @@
 import { describe, expect, it } from 'vitest';
-import type { Run } from '@mmt/contracts';
-import { matchesRunFilter, parseRunFilter } from './runFilter';
+import {
+  findRunFilterSyntaxError,
+  metricRunSort,
+  runSortOrderBy,
+  toRunSearchConditions,
+} from './runFilter';
 
-const run = {
-  name: 'training-A',
-  latestMetrics: { 'val/loss': 0.09 },
-  parameters: { batch_size: 32, speaker: true },
-  tags: { note: 'A and B' },
-} as unknown as Run;
-describe('Runの絞り込み', () => {
-  it('数値・真偽値の条件をすべて満たすRunだけが一致する', () => {
-    expect(
-      matchesRunFilter(
-        run,
-        parseRunFilter(
-          'metrics.val/loss < 0.1 and params.batch_size = 32 and params.speaker = true',
-        ),
-      ),
-    ).toBe(true);
-    expect(matchesRunFilter(run, parseRunFilter('metrics.val/loss <= 0.01'))).toBe(false);
+describe('Run検索の入力', () => {
+  it('group.で始まる入力はfilterとしてAPIへ渡し、それ以外は名前検索にする', () => {
+    expect(toRunSearchConditions('  metrics.loss < 0.1 ')).toEqual({
+      filter: 'metrics.loss < 0.1',
+    });
+    expect(toRunSearchConditions("params.lr = '0.01'")).toEqual({ filter: "params.lr = '0.01'" });
+    expect(toRunSearchConditions('training-A')).toEqual({ name: 'training-A' });
+    expect(toRunSearchConditions('   ')).toEqual({});
   });
-  it('引用したタグの中のandを条件区切りとして扱わない', () => {
-    expect(
-      matchesRunFilter(run, parseRunFilter('tags.note = "A and B" and params.batch_size >= 16')),
-    ).toBe(true);
+
+  it('APIが受け付ける式は送信前の検査で拒否しない', () => {
+    for (const filter of [
+      "metrics.`val/loss` < 0.1 AND params.batch_size = '32'",
+      "tags.note = 'A and B' and params.lr != '0.1'",
+      'tags.none IS NULL AND tags.team IS NOT NULL',
+      "attributes.run_id IN ('a','b') AND datasets.name NOT IN ('x')",
+      'attributes.status = "RUNNING" AND tags.owner ILIKE \'ai%\'',
+      'metrics.score >= -1.5e-3',
+    ])
+      expect(findRunFilterSyntaxError(filter)).toBeNull();
   });
-  it('欠損したメトリクスを不一致にし、数値文字列を数値とみなさない', () => {
-    expect(matchesRunFilter(run, parseRunFilter('metrics.missing != 0'))).toBe(false);
-    expect(
-      matchesRunFilter(
-        { ...run, parameters: { batch_size: '32' } },
-        parseRunFilter('params.batch_size = 32'),
-      ),
-    ).toBe(false);
+
+  it('構文エラーを送信前に検出し、位置を示す', () => {
+    expect(findRunFilterSyntaxError('metrics.loss < nope')).toContain('16文字目');
+    expect(findRunFilterSyntaxError("tags.a = 'b' OR tags.a = 'c'")).toContain('14文字目');
+    expect(findRunFilterSyntaxError('metrics.loss <')).not.toBeNull();
+    expect(findRunFilterSyntaxError("params.lr = '0.1")).not.toBeNull();
+    expect(findRunFilterSyntaxError('tags.a IS MISSING')).not.toBeNull();
+    expect(findRunFilterSyntaxError("attributes.run_id IN 'a'")).not.toBeNull();
+    expect(findRunFilterSyntaxError('metrics.loss < 1;')).not.toBeNull();
   });
-  it('壊れた比較式を名前検索として黙って処理しない', () => {
-    expect(() => parseRunFilter('metrics.val/loss < nope')).toThrow();
-  });
-  it('実行設定を変更せずにSDKから記録したパラメータでも絞り込める', () => {
-    const recorded = { ...run, recordedParameters: { optimizer: 'adamw' } };
-    expect(matchesRunFilter(recorded, parseRunFilter('params.optimizer = "adamw"'))).toBe(true);
-    expect(recorded.parameters).toEqual(run.parameters);
-  });
-  it('SDKが同値の実行パラメータを記録しても数値と真偽値の比較を維持する', () => {
-    const recorded = {
-      ...run,
-      parameters: { batch_size: 32, speaker: true },
-      recordedParameters: { batch_size: '32', speaker: 'True' },
-    };
-    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size = 32'))).toBe(true);
-    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size >= 16'))).toBe(true);
-    expect(matchesRunFilter(recorded, parseRunFilter('params.speaker = true'))).toBe(true);
-    expect(matchesRunFilter(recorded, parseRunFilter('params.batch_size != 32'))).toBe(false);
+
+  it('並び順をAPIのorderByに変換し、記号を含むmetric名を引用する', () => {
+    expect(runSortOrderBy('newest')).toEqual([]);
+    expect(runSortOrderBy('name')).toEqual(['attributes.run_name ASC']);
+    expect(runSortOrderBy(metricRunSort('loss', 'asc'))).toEqual(['metrics.loss ASC']);
+    expect(runSortOrderBy(metricRunSort('val/loss', 'desc'))).toEqual(['metrics.`val/loss` DESC']);
+    expect(runSortOrderBy(metricRunSort('odd`name', 'asc'))).toEqual(['metrics.`odd``name` ASC']);
   });
 });

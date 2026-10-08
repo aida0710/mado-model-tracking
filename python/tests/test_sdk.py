@@ -205,3 +205,62 @@ def test_output_model_with_model_name_keeps_source_run_and_explicit_version():
     versions = [body for _, path, body, _ in calls if path.endswith("/versions")]
     assert "version" not in versions[0] and versions[1]["version"] == "7"
     assert all(version["sourceRunId"] == "run-one" for version in versions)
+
+
+def run_search_server(pages: list[dict]):
+    requests = []
+
+    def serve(request: httpx.Request) -> httpx.Response:
+        assert request.method == "POST" and request.url.path.endswith("/projects/p/runs/search")
+        body = json.loads(request.content)
+        requests.append(body)
+        return httpx.Response(200, json=pages[len(requests) - 1])
+
+    client = Client(
+        api_url="http://localhost", api_token="sdk-test-secret", transport=httpx.MockTransport(serve)
+    )
+    return client, requests
+
+
+def test_search_runs_follows_cursors_lazily_with_the_same_conditions():
+    client, requests = run_search_server(
+        [
+            {"items": [{"id": "run-3"}, {"id": "run-2"}], "nextCursor": "cursor-a"},
+            {"items": [{"id": "run-1"}], "nextCursor": None},
+        ]
+    )
+    with client:
+        runs = client.search_runs(
+            "p",
+            filter="metrics.loss < 0.1",
+            order_by=["metrics.loss ASC"],
+            experiment_ids=["e"],
+            page_size=2,
+        )
+        assert requests == []
+        assert next(runs)["id"] == "run-3"
+        assert len(requests) == 1
+        assert [run["id"] for run in runs] == ["run-2", "run-1"]
+    condition = {
+        "filter": "metrics.loss < 0.1",
+        "orderBy": ["metrics.loss ASC"],
+        "experimentIds": ["e"],
+        "limit": 2,
+    }
+    assert requests == [condition, {**condition, "cursor": "cursor-a"}]
+
+
+def test_search_runs_rejects_repeated_cursor_and_invalid_page_size():
+    client, _requests = run_search_server(
+        [
+            {"items": [{"id": "run-2"}], "nextCursor": "same"},
+            {"items": [{"id": "run-1"}], "nextCursor": "same"},
+        ]
+    )
+    with client:
+        with pytest.raises(ConfigurationError, match="repeated pagination cursor"):
+            list(client.search_runs("p"))
+        with pytest.raises(ConfigurationError, match="page_size"):
+            list(client.search_runs("p", page_size=501))
+        with pytest.raises(ConfigurationError, match="sequences"):
+            list(client.search_runs("p", order_by="metrics.loss ASC"))
