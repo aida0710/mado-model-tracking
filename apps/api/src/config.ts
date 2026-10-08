@@ -45,6 +45,9 @@ const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
 const DEFAULT_TOKEN_MAX_LIFETIME_DAYS = 365;
 // Rows of one CSV export (decisions.md); beyond this Excel use gets slow and the filter should narrow.
 const DEFAULT_CSV_EXPORT_MAX_ROWS = 50_000;
+// Snapshot data of one report revision (50 MiB): a few full-size chart and table blocks fit, while
+// a report that fixes everything should keep some blocks live instead.
+const DEFAULT_REPORT_SNAPSHOT_MAX_BYTES = 50 * 1024 * 1024;
 // An SSO session asks UserInfo for the current groups at most this often (decisions.md: 60 seconds),
 // so a user removed from a group loses access within about a minute even while active.
 const DEFAULT_OIDC_RECHECK_SECONDS = 60;
@@ -148,6 +151,11 @@ const environmentSchema = z.object({
     .min(1)
     .default(DEFAULT_CHECKPOINT_KEEP_COUNT),
   MMT_CSV_EXPORT_MAX_ROWS: z.coerce.number().int().positive().default(DEFAULT_CSV_EXPORT_MAX_ROWS),
+  MMT_REPORT_SNAPSHOT_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_REPORT_SNAPSHOT_MAX_BYTES),
   // Email notifications are sent only when both are set; the URL may hold the SMTP password.
   MMT_SMTP_URL: optionalSetting,
   MMT_SMTP_FROM: optionalSetting,
@@ -201,6 +209,8 @@ export interface ApiConfig {
   checkpointKeepCount: number;
   // Rows of POST /runs/search/export.csv; further matches are cut and marked at the end.
   csvExportMaxRows: number;
+  // Snapshot data of one report revision; a larger save is 413 report_snapshot_too_large.
+  reportSnapshotMaxBytes: number;
   // API tokens of users with an SSO identity need a group sync within this many seconds.
   oidcTokenSyncMaxAgeSeconds: number;
   // null leaves email channels saved but undeliverable (email_sender_unavailable).
@@ -335,6 +345,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
     checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
     csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,
+    reportSnapshotMaxBytes: settings.MMT_REPORT_SNAPSHOT_MAX_BYTES,
     oidcTokenSyncMaxAgeSeconds: settings.OIDC_TOKEN_SYNC_MAX_AGE_SECONDS,
     smtp: parseSmtpSettings({ url: settings.MMT_SMTP_URL, from: settings.MMT_SMTP_FROM }),
   };

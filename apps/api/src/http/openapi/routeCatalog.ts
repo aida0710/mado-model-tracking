@@ -99,6 +99,13 @@ import {
   savedViewPatchSchema,
 } from '../../domain/savedViewValidation.js';
 import {
+  reportCreateSchema,
+  reportListQuerySchema,
+  reportRestoreSchema,
+  reportRevisionQuerySchema,
+  reportUpdateSchema,
+} from '../../domain/reportBlocks.js';
+import {
   serviceAccountCreateSchema,
   serviceAccountTokenCreateSchema,
   serviceAccountUpdateSchema,
@@ -237,6 +244,20 @@ const ARTIFACTS_WRITE = projectEditor('artifacts:write');
 const ARTIFACTS_DELETE: RouteAccess = { kind: 'project', role: 'admin', scope: 'artifacts:write' };
 const JOBS_WRITE = projectEditor('jobs:write');
 const SERVICE_ACCOUNT_ADMIN = { ...PROJECT_ADMIN, sessionOnly: true };
+
+// Saving a revision captures its snapshot blocks through the series, analysis and media services.
+const REPORT_SNAPSHOT_ERRORS = [
+  ...routeError(413, 'report_snapshot_too_large'),
+  ...routeError(422, 'too_many_runs'),
+];
+const REPORT_CONTENT_ERRORS = routeError(
+  422,
+  'report_reference_invalid',
+  'report_saved_view_private',
+  'report_too_many_blocks',
+  'report_blocks_too_large',
+  'report_block_id_duplicate',
+);
 
 export const NATIVE_ROUTES: readonly NativeRoute[] = [
   // system
@@ -1991,6 +2012,100 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: { kind: 'project', role: 'viewer', scope: 'runs:write' },
     responses: { 204: null },
     errors: routeError(403, 'saved_view_owner_required'),
+  },
+
+  // reports
+  {
+    method: 'get',
+    path: '/api/projects/:p/reports',
+    tag: 'reports',
+    summary: 'レポート一覧（更新の新しい順）',
+    access: PROJECT_VIEWER,
+    query: reportListQuerySchema,
+    responses: { 200: contract.reportPageSchema },
+    errors: routeError(400, 'invalid_cursor'),
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/reports',
+    tag: 'reports',
+    summary: 'レポートを作成（版1。固定するブロックのデータを取り込む）',
+    access: RUNS_WRITE,
+    body: reportCreateSchema,
+    responses: { 201: contract.reportDetailSchema },
+    errors: [...REPORT_SNAPSHOT_ERRORS, ...REPORT_CONTENT_ERRORS],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/reports/:reportId',
+    tag: 'reports',
+    summary: 'レポートと版の内容（既定は現在の版）',
+    access: PROJECT_VIEWER,
+    query: reportRevisionQuerySchema,
+    responses: { 200: contract.reportDetailSchema },
+  },
+  {
+    method: 'put',
+    path: '/api/projects/:p/reports/:reportId',
+    tag: 'reports',
+    summary: 'レポートの新しい版を保存（baseRevisionが現在の版と違えば409）',
+    access: RUNS_WRITE,
+    body: reportUpdateSchema,
+    responses: { 200: contract.reportDetailSchema },
+    errors: [
+      ...routeError(409, 'report_revision_conflict', 'report_archived'),
+      ...REPORT_SNAPSHOT_ERRORS,
+      ...REPORT_CONTENT_ERRORS,
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/reports/:reportId/revisions',
+    tag: 'reports',
+    summary: 'レポートの版の履歴（新しい順）',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.reportRevisionListSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/reports/:reportId/snapshots',
+    tag: 'reports',
+    summary: '版の固定データ（作成時点で固定したブロック）',
+    access: PROJECT_VIEWER,
+    query: reportRevisionQuerySchema,
+    responses: { 200: contract.reportSnapshotListSchema },
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/reports/:reportId/restore',
+    tag: 'reports',
+    summary: '過去の版の内容で新しい版を作る',
+    access: RUNS_WRITE,
+    body: reportRestoreSchema,
+    responses: { 201: contract.reportDetailSchema },
+    errors: [
+      ...routeError(409, 'report_archived'),
+      ...REPORT_SNAPSHOT_ERRORS,
+      ...routeError(422, 'report_reference_invalid', 'report_saved_view_private'),
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/reports/:reportId/archive',
+    tag: 'reports',
+    summary: 'レポートをアーカイブ（作成者かProject admin）',
+    access: RUNS_WRITE,
+    responses: { 200: contract.reportSchema },
+    errors: routeError(403, 'report_owner_required'),
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/reports/:reportId/unarchive',
+    tag: 'reports',
+    summary: 'レポートのアーカイブを解除（作成者かProject admin）',
+    access: RUNS_WRITE,
+    responses: { 200: contract.reportSchema },
+    errors: routeError(403, 'report_owner_required'),
   },
 
   // sync (offline Runs)

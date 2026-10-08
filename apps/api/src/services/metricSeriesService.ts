@@ -35,9 +35,6 @@ import {
 import { requireProject } from './accessService.js';
 import type { RunSearchService } from './runSearchService.js';
 
-// The largest page run search serves; a search over 1000 Runs needs at most three pages.
-const SEARCH_PAGE_SIZE = 500;
-
 const seriesKey = (runId: string, name: string) => `${runId}\u0000${name}`;
 
 // Map.groupBy is ES2024, beyond the ES2023 library of this build.
@@ -119,7 +116,12 @@ export class MetricSeriesService {
     query: MetricGroupsQuery,
   ): Promise<MetricGroupsResponse> {
     await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
-    const runIds = query.runIds ?? (await this.searchRunIds(principal, projectId, query.search!));
+    const runIds =
+      query.runIds ??
+      (await this.runSearch.collectRunIds(principal, projectId, {
+        conditions: query.search!,
+        maxRuns: MAX_GROUPED_RUNS,
+      }));
     if (!runIds.length) return { groups: [] };
     return this.inSeriesSnapshot(async (connection) => {
       const values = await readRunGroupValues(connection, {
@@ -175,31 +177,6 @@ export class MetricSeriesService {
       );
       return { groups };
     });
-  }
-
-  private async searchRunIds(
-    principal: Principal,
-    projectId: string,
-    search: NonNullable<MetricGroupsQuery['search']>,
-  ): Promise<string[]> {
-    const runIds: string[] = [];
-    let cursor: string | null = null;
-    do {
-      const page = await this.runSearch.search(principal, projectId, {
-        ...search,
-        limit: SEARCH_PAGE_SIZE,
-        cursor,
-      });
-      runIds.push(...page.items.map((run) => run.id));
-      if (runIds.length > MAX_GROUPED_RUNS)
-        throw new DomainError(
-          422,
-          `検索に一致するRunが${MAX_GROUPED_RUNS}件を超えています。条件を絞ってください`,
-          'too_many_runs',
-        );
-      cursor = page.nextCursor;
-    } while (cursor);
-    return runIds;
   }
 
   private async inSeriesSnapshot<T>(read: (connection: PoolClient) => Promise<T>): Promise<T> {
