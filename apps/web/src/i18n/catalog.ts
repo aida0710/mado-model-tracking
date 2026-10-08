@@ -9,7 +9,7 @@ import { projectAccessText } from './projectAccess';
 import { promotionText } from './promotion';
 import { uploadsText, uploadsTextTemplates } from './uploads';
 import { storageText, storageTextTemplates } from './storage';
-import { adminText } from './admin';
+import { adminText, adminTextTemplates } from './admin';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -36,6 +36,7 @@ export const textTemplates = {
   ...runsTextTemplates,
   ...uploadsTextTemplates,
   ...storageTextTemplates,
+  ...adminTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,

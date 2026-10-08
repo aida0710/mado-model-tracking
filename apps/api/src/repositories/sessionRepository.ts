@@ -73,3 +73,11 @@ export async function revokeOtherSessions(
     [session.userId, session.keepTokenHash],
   );
 }
+
+// Used when an administrator disables a user or resets their password: every session ends now.
+export async function revokeAllForUser(connection: Connection, userId: string): Promise<void> {
+  await connection.query(
+    'UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL',
+    [userId],
+  );
+}
