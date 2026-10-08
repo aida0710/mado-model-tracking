@@ -1,0 +1,274 @@
+/* Run analysis panel: parallel coordinates, parameter importance and the param scatter plot. */
+.analysis-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.analysis-panel-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.analysis-panel-controls .chart-selector {
+  margin: 0;
+}
+.analysis-axis-menu {
+  border-left: 0;
+}
+.analysis-axis-menu > summary {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.analysis-axis-menu .popover {
+  left: 0;
+  right: auto;
+}
+.analysis-tab-panel {
+  padding-top: 8px;
+}
+.analysis-notice {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.parallel-chart-toolbar,
+.scatter-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.scatter-chart-controls .chart-selector {
+  margin: 0;
+}
+.parallel-chart-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.parallel-chart-hint {
+  color: var(--muted);
+}
+.parallel-chart-plot {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.parallel-chart-canvas,
+.parallel-chart-svg {
+  position: absolute;
+  inset: 0;
+}
+.parallel-line {
+  fill: none;
+  stroke-width: 1;
+}
+.parallel-line.selected {
+  stroke-width: 1.5;
+}
+.parallel-axis-line {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+.parallel-axis-tick,
+.parallel-missing-label {
+  fill: var(--muted);
+  font-size: 10px;
+  font-family: var(--mono);
+  /* A halo in the page color keeps labels readable over the lines. */
+  paint-order: stroke;
+  stroke: var(--background);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.parallel-missing-divider {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+.parallel-missing-marker {
+  fill: var(--surface);
+  stroke: var(--muted);
+}
+.parallel-axis-hit {
+  fill: transparent;
+  cursor: crosshair;
+  touch-action: none;
+}
+.parallel-brush {
+  fill: var(--teal);
+  fill-opacity: 0.25;
+  stroke: var(--teal);
+  pointer-events: none;
+}
+.parallel-axis-header {
+  position: absolute;
+  top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transform: translateX(-50%);
+  font-size: 11px;
+}
+.parallel-axis-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--mono);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.parallel-axis-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.parallel-axis-actions .icon-button {
+  width: 22px;
+  height: 22px;
+}
+.parallel-axis-log {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+}
+.parallel-color-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--muted);
+}
+.parallel-color-ramp {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  border-radius: 4px;
+}
+.parallel-color-missing {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9a9a96;
+}
+.analysis-selected-runs {
+  margin-top: 8px;
+  font-size: 12px;
+}
+.analysis-selected-runs ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.importance-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.importance-method {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.importance-method legend {
+  float: left;
+  margin-right: 8px;
+  padding: 0;
+  color: var(--muted);
+}
+.importance-method label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.analysis-sort-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.importance-bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 160px;
+}
+.importance-bar-track,
+.correlation-track {
+  position: relative;
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface);
+}
+.importance-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: #2a78d6;
+}
+.correlation-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.correlation-bar.positive {
+  border-radius: 0 4px 4px 0;
+  background: #2a78d6;
+}
+.correlation-bar.negative {
+  border-radius: 4px 0 0 4px;
+  background: #d03b3b;
+}
+.importance-value {
+  min-width: 56px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.importance-excluded {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.scatter-chart-canvas {
+  width: 100%;
+  min-width: 0;
+}
+.scatter-point {
+  cursor: pointer;
+  stroke: var(--background);
+  stroke-width: 1;
+}
+.scatter-tooltip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
