@@ -29,6 +29,7 @@ export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, Artifa
 export type { RunSearchPage, RunSearchRequest } from './runSearch.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
+export type { ContainerResultArtifact, ContainerResultDataset, ContainerResultMetric, ContainerResultModel, ContainerResultV2, RunOutputDeclaration, WorkerOutputDeclaration, WorkerOutputsRequest, WorkerOutputsResponse } from './workerOutputs.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';

@@ -44,6 +44,7 @@ import { TargetService } from './services/targetService.js';
 import { JobService } from './services/jobService.js';
 import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
+import { RunOutputDeclarationService } from './services/runOutputDeclarationService.js';
 import { TokenService } from './services/tokenService.js';
 import { EvaluationService } from './services/evaluationService.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
@@ -130,7 +131,8 @@ export function createApplication(options: ApplicationOptions) {
   // Output registration must run before the source-run handler releases pending automation.
   terminalHandlers.push(new OutputRegistrationHandler(registry));
   terminalHandlers.push(new AutomationSourceRunHandler(automation));
-  const worker = new WorkerService({ database, jobs, config, runCompletion });
+  const outputDeclarations = new RunOutputDeclarationService(registry);
+  const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
   const tokens = new TokenService(database);
   const evaluation = new EvaluationService(database);
   const plugins = new PluginService({

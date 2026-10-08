@@ -4,6 +4,7 @@ import type {
   LogEntry,
   MetricPoint,
   Run,
+  RunOutputDeclaration,
   WorkerJob,
   WorkerPresence,
 } from '@mmt/contracts';
@@ -18,6 +19,7 @@ import type {
   workerClaimSchema,
   workerResumeSchema,
 } from '../domain/validation.js';
+import type { WorkerOutputsInput } from '../domain/workerOutputValidation.js';
 import { jobColumns } from '../repositories/jobRepository.js';
 import { findRun } from '../repositories/registryRepository.js';
 import { appendLogs, appendMetrics } from '../repositories/telemetryRepository.js';
@@ -29,6 +31,7 @@ import {
 import { requireGlobalAdmin, requireProject, requireWorker } from './accessService.js';
 import type { JobService } from './jobService.js';
 import type { RunCompletionService } from './runCompletionService.js';
+import type { RunOutputDeclarationService } from './runOutputDeclarationService.js';
 import { runColumns } from '../repositories/runListProjection.js';
 
 // A busy target should not block claims for other targets in the same queue.
@@ -39,16 +42,19 @@ export class WorkerService {
   private readonly jobs: JobService;
   private readonly config: ApiConfig;
   private readonly runCompletion: RunCompletionService;
+  private readonly outputDeclarations: RunOutputDeclarationService;
   constructor(options: {
     database: Database;
     jobs: JobService;
     config: ApiConfig;
     runCompletion: RunCompletionService;
+    outputDeclarations: RunOutputDeclarationService;
   }) {
     this.database = options.database;
     this.jobs = options.jobs;
     this.config = options.config;
     this.runCompletion = options.runCompletion;
+    this.outputDeclarations = options.outputDeclarations;
   }
 
   async resume(
@@ -207,6 +213,29 @@ export class WorkerService {
       jobId,
       leaseId: request.leaseId,
       append: (connection, runId) => appendLogs(connection, runId, request.entries),
+    });
+  }
+
+  // Registering versions is a registry write, so the worker token needs registry:write as well.
+  async outputs(
+    principal: Principal,
+    jobId: string,
+    request: WorkerOutputsInput,
+  ): Promise<RunOutputDeclaration[]> {
+    return transaction(this.database, async (connection) => {
+      const job = await this.verifyLease(connection, principal, {
+        jobId,
+        leaseId: request.leaseId,
+      });
+      await requireProject(connection, principal, {
+        projectId: job.projectId,
+        role: 'editor',
+        scope: 'registry:write',
+      });
+      return this.outputDeclarations.register(connection, {
+        job,
+        declarations: request.declarations,
+      });
     });
   }
 

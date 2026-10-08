@@ -159,12 +159,25 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
 - `POST /worker/jobs/:id/heartbeat` ({leaseId,status?:'running'}) → `{cancelRequested:boolean}`。
 - `POST /worker/jobs/:id/metrics` ({leaseId,metrics:MetricPoint[]})、`POST .../logs` ({leaseId,entries:LogEntry[]})。
 - `POST /worker/jobs/:id/complete` ({leaseId,status:'finished'|'failed'|'canceled',exitCode?,error?})。同じleaseの再送は安全。古いleaseからの状態変更を拒否。
+- `POST /worker/jobs/:id/outputs` ({leaseId,declarations:WorkerOutputDeclaration[]}) → `{items:RunOutputDeclaration[]}`。コンテナが`result.json` version 2で宣言した出力モデル・出力Datasetを、JobのRunの出力として登録する。詳細は下の「出力の宣言」。
 - WorkerはAPI heartbeatと並行してSSH commandを実行する。切断してもremote processを二重起動しないためjob別workspaceのPID/statusファイルでattach・回収する。worker停止後のleaseは安易に再実行せず、同じworkerの復帰で再attachするか状態不明として扱う。再実行は明示操作。
 - 在籍登録: claim/resume の任意の`workerInfo`は`{version?:string,hostname?:string,parallelJobs?:int(1..1000)}`。表示用の自己申告で、認可には使わない。claim/resume/heartbeat の受付で`workers`（主キーは token ID と workerId）の`lastSeenAt`を更新する。claimは毎秒来るので、前回の記録から15秒（`WORKER_PRESENCE_WRITE_INTERVAL_SECONDS`）未満で内容（版、ホスト名、targetIds、parallelJobs）も変わらなければ書き込まない。workerInfoで省略した項目は前回の値を残す。120秒以上応答のなかった worker が戻ると`startedAt`を今に戻す。
 - `GET /projects/:p/workers` → `{items:WorkerPresence[]}`。viewer、API tokenは`read` scope。`GET /workers` → 全Projectの同じ形。全体管理者だけ。WorkerPresenceは`{projectId,tokenId,tokenName,workerId,version,hostname,targetIds:string[]|null,parallelJobs,startedAt,lastSeenAt,status:'online'|'offline',activeJobCount}`。`targetIds=null`は全targetを対象にする worker。`status`はDBの時刻で`lastSeenAt`から120秒（`WORKER_OFFLINE_SECONDS`）を超えると`offline`。`activeJobCount`はその worker の claimed/running Job数。最終応答の新しい順に最大1000件。
 - Job の`heartbeatStale:boolean`は派生値で、claimed/running かつ`heartbeatAt`から60秒（`JOB_HEARTBEAT_STALE_SECONDS`、heartbeat 5秒の12回分）を超えると true。表示だけに使い、Jobの状態変更、GPU予約の解放、別workerへの再claim、自動再実行はしない。
 - GPUなしのCPU実行はgpuIds=[]。実際のGPU計測はnvidia-smiで任意に採取。WorkerはAPI/ログへ鍵・token・シークレット値を出さない。
 - 環境: `MMT_API_URL`, `MMT_API_TOKEN`, `MMT_WORKER_ID`, `MMT_WORKER_TARGET_IDS`。SDKはstart_run、log_params/tags/metrics、log_artifact、register_model/dataset等を提供。例と実行する小さいtraining/inference scriptを同梱する。
+
+### 出力の宣言（result.json version 2）
+
+- `/mmt/outputs/result.json`のversion 2（`ContainerResultV2`）は、version 1の`version`・`complete`・`artifacts`・`metrics`に、`models:[{path,modelId?,metadata?}]`、`datasets:[{datasetId,uri?,path?,digest,schema?,metadata?}]`、`artifactsManifest?`を足す。`artifactsManifest`は出力ファイルの相対パスで、中身はJSON Lines（1行に1件の`{path,sha256,size,mimeType?}`）。`artifacts`に書ききれない数の出力を列挙するときに使い、各行は`artifacts`に足して扱う。`path`はすべて`/mmt/outputs`からの相対パスで、workerはそのファイルをRun Artifact`container/<path>`として保存する。
+- workerはArtifactの保存を終えてから、`complete`の前に`POST /worker/jobs/:id/outputs`を送る。`WorkerOutputDeclaration`は`{index,kind:'model',path,modelId?,metadata?}`か`{index,kind:'dataset',datasetId,uri?,path?,digest,schema?,metadata?}`。`index`はRun内で宣言を識別する0〜79の整数で、`models`を0から、続けて`datasets`を`models.length`からの通し番号にする。
+- 認可: Jobのleaseを検証し（古いleaseは409 `invalid_lease`）、worker tokenに`worker:execute`に加えて`registry:write`を要求する（無ければ403 `insufficient_scope`）。版はRunの作成者として登録し、作成者が現在もProjectのeditor以上であることを確かめる（失っていれば403 `project_forbidden`）。
+- 検証: `path`は同じJob（Run）で保存済みのArtifact`container/<path>`に限る（無ければ422 `output_artifact_not_found`、相対パスでなければ422 `invalid_request`）。モデルを宣言できるのはkindが`training`/`finetuning`のRunだけ（それ以外は422 `output_model_kind`）。Datasetはどのkindでもよい。`modelId`・`datasetId`は同じProjectに限る（別Projectや存在しなければ404）。宣言はRunごとにモデル16件・Dataset 64件まで（422 `output_declaration_limit`。リクエストを分けても合計で数える）。Datasetは`uri`と`path`のどちらか一方を指定する。
+- 登録先のModel: RunのTaskに出力モデル（`outputModel`）があればそれを優先する。`modelId`を省略した宣言はTaskのModelへ登録し（`createModel`なら作成する）、別のModelを指す宣言は422 `output_model_conflict`（どちらのModelにRunの出力があるか分からなくなるため）。Taskの設定が無いRunでは`modelId`が必須（422 `output_model_required`）。削除済みのModelは422 `model_deleted`。
+- 登録する版: モデルは整数で自動採番し、`sourceRunId`はRun、親版はRunのModelVersion、`artifactId`は`container/<path>`の最新の保存、`defaultCodeVersionId`はTaskの設定（無ければnull）、`metadata`は宣言の値。Datasetも整数で自動採番し（整数でない既存の版名は採番から除外）、`path`を指定した場合の`uri`は`mmt-artifact://runs/<RunのID>/container/<path>`。どちらもRunの`outputModelVersionIds`・`outputDatasetVersionIds`に入る。
+- 1リクエストは1 transactionで、どれか1件でも失敗すれば何も登録しない。同じ`index`の再送は保存済みの結果（`RunOutputDeclaration {index,kind,modelVersionId,datasetVersionId,createdAt}`）を返し、二重に登録しない。保存済みの`index`に別の`kind`を送ると409 `output_declaration_mismatch`。Jobが終端になった後は、保存済みの`index`の再送だけを受け付け、新しい宣言は409 `conflict`。
+- 下流の自動実行: 宣言はRunの終了前に登録されるので、版の自動実行は学習Runの成功まで`pending`で待ち、成功で起動、失敗・キャンセルで`skipped`（`source_run_unsuccessful`）になる。Taskの出力モデルと同じModelへ宣言した場合、Task側の登録は`skipped`（`already_registered_by_run`）になり、下流は1回だけ起動する。
+- 記録は`run_output_declarations`（主キーはRunと`index`、不変）。
 
 ### Job限定token
 
