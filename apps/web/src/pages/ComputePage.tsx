@@ -11,6 +11,7 @@ import { DataTable } from '../components/DataTable';
 import { WorkerPresenceTable } from '../components/WorkerPresenceTable';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
+import { TargetCheckPanel } from '../components/TargetCheckPanel';
 import { text } from '../i18n/catalog';
 import { runtimeLabels } from '../i18n/runtime';
 
@@ -19,6 +20,7 @@ export function ComputePage() {
   const { project } = useProject();
   const [showDialog, setShowDialog] = useState(false);
   const [editingTarget, setEditingTarget] = useState<ComputeTarget | undefined>();
+  const [checkedTargetId, setCheckedTargetId] = useState<string | null>(null);
   const mutation = useMutation();
   const targets = useQuery('compute-targets', executionApi.targets);
   const workers = useQuery(
@@ -26,6 +28,7 @@ export function ComputePage() {
     (signal) => executionApi.workers(project.id, signal),
     EXECUTION_POLL_MS,
   );
+  const checkedTarget = targets.value?.find((target) => target.id === checkedTargetId);
   return (
     <section className="page">
       <PageHeader
@@ -96,10 +99,17 @@ export function ComputePage() {
               },
               { key: 'edit', label: text.edit, render: (target) => user.isAdmin && <button className="button small"
                 data-testid={`target-edit-${target.id}`} onClick={() => { setEditingTarget(target); setShowDialog(true); }}>{text.editTarget}</button> },
+              ...(user.isAdmin
+                ? [{ key: 'check', label: text.targetCheck, render: (target: ComputeTarget) => <button className="button small"
+                  data-testid={`target-check-${target.id}`} onClick={() => setCheckedTargetId(target.id)}>{text.checkTarget}</button> }]
+                : []),
             ]}
           />
         )}
       </Resource>
+      {checkedTarget && (
+        <TargetCheckPanel key={checkedTarget.id} target={checkedTarget} onTargetSaved={targets.reload} />
+      )}
       <section className="settings-section">
         <div className="section-heading">
           <h2>{text.workers}</h2>

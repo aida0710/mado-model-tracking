@@ -293,6 +293,19 @@ PromotionEvaluation `{id,projectId,policyId,modelId,candidateVersionId,candidate
 - `upstream-run.json`は`{runId, outputDatasetVersionIds?, outputModelVersionIds?}`。WorkerJobから分かる事実だけを書き、分からない項目（上流のkindなど）は省く。`outputDatasetVersionIds`はこのRunの`upstreamDatasetVersionIds`（上流の出力のうち入力に取ったもの）、`outputModelVersionIds`は入力ModelVersionの`sourceRunId`が上流Runのときのその版。DatasetVersionの記述子は従来どおり`dataset-versions.json`に入る。
 - SDKの`upstream_run_id()`、`list_upstream_artifacts(prefix=None)`、`download_upstream_artifacts(destination, prefix=None)`は、Job限定tokenで`GET /projects/:p/runs/:upstream/artifacts?versions=latest&limit=500&prefix=&cursor=`と`GET /projects/:p/artifacts/:a/content`を呼ぶ（Job限定tokenはProject内のRunを読める）。`nextCursor`が無い古いAPIでは1回の応答を全件とみなし、prefixの絞り込みとpathごとの最新（先頭）の選択をSDK側でも行う。保存は一時ファイル→renameで、空・`.`・`..`の区間、先頭`/`、`\`を含むpathがあれば何も書かずに拒否する。
 
+### targetの接続確認（target checks）
+
+API serverはSSH鍵を持たないので、Compute targetの接続確認はそのtargetを担当するworkerが自分の鍵で行う。型はcontractsの`targetChecks.ts`。
+
+- TargetCheck `{id,targetId,requestedBy,status:'queued'|'claimed'|'finished'|'failed',workerId,result:TargetCheckResult|null,failureReason:'no_worker'|'claim_timeout'|null,createdAt,claimedAt,finishedAt}`。leaseとworker tokenは返さない。
+- TargetCheckResult `{version:1,items:TargetCheckItem[],gpus:TargetCheckGpu[]|null,runtimeKinds:ExecutionRuntimeKind[],workDirectoryFreeBytes:int|null}`。TargetCheckItem `{name,status:'ok'|'ng'|'unavailable'|'skipped',code,detail}`。`name`は`connection`・`python`・`venv`・`pip`・`git`・`docker`・`apptainer`・`singularity`・`gpu`・`work_directory`・`api`。`ok`だけが`code=null`。`unavailable`は任意の道具（gitやDocker）が無いこと、`ng`はそのままではJobが失敗すること。`detail`は200文字以下の1行（版やパス）。TargetCheckGpuは`nvidia-smi --query-gpu=index,uuid,name,memory.total`の行`{index,uuid,name,memoryTotalMiB}`で、nvidia-smiが無い・失敗したときは`gpus=null`（値を推測で埋めない）。`runtimeKinds`は確認に通ったRuntimeで、候補として示すだけでtargetは変えない。
+- `POST /targets/:id/checks` → TargetCheck（201、`status=queued`）。全体管理者（session、またはProject制限の無い`admin` scope token）だけ。同じtargetにqueued/claimedの確認があれば409 `target_check_in_progress`。無いtargetは404。
+- `GET /targets/:id/checks` → `{items:TargetCheck[]}`。全体管理者だけ。新しい順に20件。
+- `POST /worker/target-checks/claim` ({workerId,targetIds:string[]}) → `{item:{check,leaseId,target:ComputeTarget}|null}`。worker token（`worker:execute`）。`targetIds`は必須で1件以上（`MMT_WORKER_TARGET_IDS`。省略や空は422）。含まれないtargetの確認は返さない。queuedを`SKIP LOCKED`で1件claimし、同じworker（token＋workerId）がclaim済みの確認があればそれを同じleaseで返す（応答が失われた再送で二重にclaimしない）。local executorが無効ならlocal targetは対象外。
+- `POST /worker/target-checks/:id/complete` ({leaseId,status:'finished'|'failed',result}) → TargetCheck。leaseとworker tokenが一致しなければ409 `invalid_lease`。同じstatusの再送は保存済みの確認を返す。違うstatusや期限切れ後は409 `target_check_finished`。resultは厳密なschemaで検証し（未知のfieldは422）、JSONで16KiB（`MAX_TARGET_CHECK_RESULT_BYTES`）を超えると422 `target_check_result_too_large`。targetの`sshKeyPath`・`knownHostsPath`、API token（`mmt_`/`mmtj_`）、秘密鍵のPEMを含む文字列は422 `target_check_secret_in_result`で保存しない。`failed`はworkerが確認を始められなかったとき（鍵ファイルが無いなど）。
+- 期限: queuedのまま5分（`TARGET_CHECK_QUEUE_TIMEOUT_SECONDS`）は`failed`・`no_worker`、claimから5分（`TARGET_CHECK_CLAIM_TIMEOUT_SECONDS`）報告が無ければ`failed`・`claim_timeout`。依頼・一覧・claimのときに判定する。
+- workerは`MMT_WORKER_TARGET_IDS`があるときだけ、Jobのclaimが空いた間に5秒間隔で確認をclaimし、Jobの監視と並行して確認する（docs/worker.md）。
+
 ## 再開可能なArtifact upload
 
 単一PUTは失敗すると全量を送り直すので、大きなArtifactはupload sessionで分割して送る。API経由の独自sessionで、S3ではmultipart upload、filesystemでは`<ARTIFACT_FILESYSTEM_ROOT>/.uploads/<uploadId>/<n>.part`にpartを置く。presigned URLでの直接転送は今回作らない。
