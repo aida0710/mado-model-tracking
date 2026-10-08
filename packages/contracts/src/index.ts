@@ -27,6 +27,7 @@ export type {
 export { DEFAULT_BASELINE_ALIAS } from './evaluation.js';
 export type { ArtifactUpload, ArtifactUploadCreate, ArtifactUploadDetail, ArtifactUploadPart, ArtifactUploadStatus } from './artifactUploads.js';
 export type { RunSearchPage, RunSearchRequest } from './runSearch.js';
+export type { ArtifactDirectoryEntry, ArtifactListVersions, ArtifactPage, ArtifactTree } from './artifactListing.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';

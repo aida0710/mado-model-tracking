@@ -1,5 +1,6 @@
 // Isolated browser-test API. This module is never imported by production code.
 import { createHash } from 'node:crypto';
+import { listProjectArtifacts, listRunArtifacts, runArtifactTree } from './artifactListingMock.mjs';
 export function createBrowserApi() {
   let sequence = 100;
   const id = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, '0')}`;
@@ -378,6 +379,17 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       return reply(experiment);
     }
     if (resource === 'runs') {
+      // Native search without filter parsing: enough for screens that list recent Runs.
+      if (key === 'search' && method === 'POST')
+        return reply({
+          items: state.runs.filter(
+            (run) =>
+              (!body.experimentIds?.length || body.experimentIds.includes(run.experimentId)) &&
+              (!body.statuses?.length || body.statuses.includes(run.status)) &&
+              (!body.name || run.name.toLowerCase().includes(body.name.toLowerCase())),
+          ),
+          nextCursor: null,
+        });
       if (!key && method === 'GET') {
         if (state.failRunList)
           return reply({ error: 'UI verification: database unavailable' }, 503);
@@ -413,9 +425,10 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         ]);
       if (subresource === 'logs')
         return list([{ timestamp: now, level: 'info', message: 'Browser test log' }]);
+      if (subresource === 'artifacts' && parts[3] === 'tree')
+        return reply(runArtifactTree(state.artifacts, key, url.searchParams));
       if (subresource === 'artifacts') {
-        if (method === 'GET')
-          return list(state.artifacts.filter((artifact) => artifact.runId === key));
+        if (method === 'GET') return reply(listRunArtifacts(state.artifacts, key, url.searchParams));
         const artifact = {
           id: id(),
           projectId: project.id,
@@ -437,15 +450,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (resource === 'artifacts' && !key && method === 'GET') {
       if (state.failProjectArtifacts)
         return reply({ error: 'UI verification: artifact catalog unavailable' }, 503);
-      return list(
-        state.artifacts
-          .filter(
-            (artifact) =>
-              !url.searchParams.get('query') ||
-              artifact.path.includes(url.searchParams.get('query')),
-          )
-          .slice(0, Number(url.searchParams.get('limit') ?? 100)),
-      );
+      return reply(listProjectArtifacts(state.artifacts, url.searchParams));
     }
     if (resource === 'artifacts' && method === 'PUT') {
       const created = {

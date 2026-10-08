@@ -1,0 +1,73 @@
+/* Run Artifact folder tree and the Project-wide Artifact catalog. */
+.artifact-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.artifact-breadcrumbs .breadcrumb-separator {
+  margin: 0 4px;
+}
+.artifact-tree-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.artifact-tree-entry svg {
+  flex: none;
+  color: var(--muted);
+}
+.artifact-tree-size {
+  white-space: nowrap;
+}
+/* Folders with thousands of files scroll inside the pane so the preview stays in view. */
+.artifact-tree .table-scroll,
+.artifact-catalog .artifact-layout .table-scroll {
+  max-height: 70vh;
+  overflow: auto;
+}
+.artifact-load-more {
+  margin-top: 12px;
+}
+.artifact-version-notice {
+  font-size: 12px;
+}
+.artifact-version-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.artifact-version-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+.artifact-version-list li.selected {
+  font-weight: 600;
+}
+.artifact-catalog-toolbar {
+  flex-wrap: wrap;
+}
+.artifact-catalog-toolbar .toolbar-select input[type='checkbox'] {
+  margin: 0;
+}
+/* The catalog table has more columns than the Run tree, so it takes the wider share. */
+.artifact-catalog .artifact-layout {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+@media (max-width: 800px) {
+  .artifact-catalog .artifact-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.artifact-browser > .artifact-preview,
+.artifact-catalog .artifact-layout > .artifact-preview {
+  align-self: start;
+}

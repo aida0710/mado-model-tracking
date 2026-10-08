@@ -135,7 +135,12 @@ async function setTheme(theme) {
   await page.reload();
 }
 async function openArtifact(path) {
-  await page.getByRole('button', { name: path, exact: true }).click();
+  // The Run Artifacts tab is a folder tree; from the root, open each folder down to the file.
+  const fileButton = page.getByRole('button', { name: path, exact: true });
+  if (!(await fileButton.isVisible()))
+    for (const folder of path.split('/').slice(0, -1))
+      await page.getByRole('button', { name: `フォルダ ${folder}`, exact: true }).click();
+  await fileButton.click();
   await page.locator('.artifact-preview h3', { hasText: path }).waitFor();
 }
 const viewer = () => page.locator('.artifact-preview .audio-viewer').first();

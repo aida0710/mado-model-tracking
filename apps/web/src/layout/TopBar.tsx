@@ -15,6 +15,7 @@ const screens = [
   'models',
   'codes',
   'datasets',
+  'artifacts',
   'lineage',
   'jobs',
   'compute',

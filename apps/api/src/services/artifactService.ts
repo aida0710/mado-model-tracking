@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pipeline, type Readable } from 'node:stream';
-import type { Artifact } from '@mmt/contracts';
+import type { Artifact, ArtifactPage, ArtifactTree } from '@mmt/contracts';
 import {
   ArtifactNotFoundError,
   ArtifactRangeError,
@@ -8,7 +8,7 @@ import {
   type ArtifactStores,
 } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Database } from '../db/database.js';
+import { first, transaction, type Database } from '../db/database.js';
 import { resolveArtifactMimeType } from '../domain/artifactMimeType.js';
 import { DomainError, notFound } from '../domain/errors.js';
 import { findRun } from '../repositories/registryRepository.js';
@@ -19,6 +19,13 @@ import {
   registerStoredArtifact,
   type ArtifactStoredHook,
 } from './artifactRegistration.js';
+import {
+  listProjectArtifacts,
+  listRunArtifacts,
+  runArtifactTree,
+  type ProjectArtifactQuery,
+  type RunArtifactQuery,
+} from './artifactListing.js';
 import {
   ArtifactSizeLimit,
   artifactTooLargeError,
@@ -39,19 +46,13 @@ export class ArtifactService {
     private readonly limits: ArtifactLimits = UNLIMITED,
   ) {}
 
-  async listProject(
-    principal: Principal,
-    projectId: string,
-    filter: { limit: number; query?: string },
-  ): Promise<Artifact[]> {
-    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
-    return rows(
-      this.database,
-      `SELECT * FROM artifacts WHERE project_id=$1
-       AND ($3::text IS NULL OR path ILIKE '%' || $3 || '%')
-       ORDER BY created_at DESC,id DESC LIMIT $2`,
-      [projectId, filter.limit, filter.query ?? null],
-    );
+  async listProject(principal: Principal, filter: ProjectArtifactQuery): Promise<ArtifactPage> {
+    await requireProject(this.database, principal, {
+      projectId: filter.projectId,
+      role: 'viewer',
+      scope: 'read',
+    });
+    return listProjectArtifacts(this.database, filter);
   }
 
   async getMetadata(
@@ -69,14 +70,29 @@ export class ArtifactService {
     return artifact;
   }
 
-  async list(principal: Principal, projectId: string, runId: string): Promise<Artifact[]> {
-    await requireProject(this.database, principal, { projectId, role: 'viewer', scope: 'read' });
-    await findRun(this.database, { projectId, id: runId });
-    return rows(
-      this.database,
-      'SELECT * FROM artifacts WHERE project_id=$1 AND run_id=$2 ORDER BY created_at DESC',
-      [projectId, runId],
-    );
+  async list(principal: Principal, query: RunArtifactQuery): Promise<ArtifactPage> {
+    await this.requireRunReader(principal, query);
+    return listRunArtifacts(this.database, query);
+  }
+
+  async tree(
+    principal: Principal,
+    location: { projectId: string; runId: string; prefix: string },
+  ): Promise<ArtifactTree> {
+    await this.requireRunReader(principal, location);
+    return runArtifactTree(this.database, location);
+  }
+
+  private async requireRunReader(
+    principal: Principal,
+    location: { projectId: string; runId: string },
+  ): Promise<void> {
+    await requireProject(this.database, principal, {
+      projectId: location.projectId,
+      role: 'viewer',
+      scope: 'read',
+    });
+    await findRun(this.database, { projectId: location.projectId, id: location.runId });
   }
 
   async upload(
