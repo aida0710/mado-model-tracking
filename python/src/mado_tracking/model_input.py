@@ -56,8 +56,7 @@ def download_input_model(
     try:
         with os.fdopen(descriptor, "wb") as output:
             if artifact_id:
-                for chunk in client.download_artifact(project_id, artifact_id):
-                    output.write(chunk)
+                client.download_artifact_to(project_id, artifact_id, output)
             else:
                 assert local_weights is not None
                 with local_weights.open("rb") as weights:

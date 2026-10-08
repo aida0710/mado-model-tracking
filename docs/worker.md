@@ -74,9 +74,23 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 `register_model()` / `register_dataset()`は通常の版登録、`register_output_model()` / `register_output_dataset()`はRunの出力登録。出力は`sourceRunId`と親の版IDを保存する。出力モデルは`training` / `finetuning`で登録できる。
 
-`register_model()` / `register_output_model()`は`model_name=`で既存のModelを名前で探して再利用し、無ければ作成する（`GET /projects/:p/models?name=`で探し、無ければPOST、同時作成で409になったら再GET）。既存Modelのfamilyが`family=`と違う場合は`ConfigurationError`になる。`version`を省略するとAPIが整数で採番する（1, 2, 3, …）。従来の`name=`も同じ動作の別名として受け付ける。出力モデルはRunの`outputModelVersionIds`に登録順で現れ、版を削除すると外れる。sourceRunがtraining/finetuning以外なら422 `output_model_kind`、削除済みRunなら422 `source_run_deleted`になる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。
+`register_model()` / `register_output_model()`は`model_name=`で既存のModelを名前で探して再利用し、無ければ作成する（`GET /projects/:p/models?name=`で探し、無ければPOST、同時作成で409になったら再GET）。既存Modelのfamilyが`family=`と違う場合は`ConfigurationError`になる。`version`を省略するとAPIが整数で採番する（1, 2, 3, …）。従来の`name=`も同じ動作の別名として受け付ける。出力モデルはRunの`outputModelVersionIds`に登録順で現れ、版を削除すると外れる。sourceRunがtraining/finetuning以外なら422 `output_model_kind`、削除済みRunなら422 `source_run_deleted`になる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。64MiB以上のファイルは次節のupload sessionで送る。
 
-`run.download_input_model("inputs/weights.json")`は、workerが渡したModelVersion metadataをRunの固定された`modelVersionId`とprojectへ照合してから、Artifactをstreamで取得する。ローカルの`file://` URIにも対応する。worker外で使う場合は`model_version=...`に登録済みModelVersionのmetadataを渡す。ダウンロード完了後にファイルを置き換え、通信失敗で部分的な重みを残さない。
+`run.download_input_model("inputs/weights.json")`は、workerが渡したModelVersion metadataをRunの固定された`modelVersionId`とprojectへ照合してから、Artifactをstreamで取得する。途中で接続が切れたら、受信済みのbyte位置からRangeで再開する（後述）。ローカルの`file://` URIにも対応する。worker外で使う場合は`model_version=...`に登録済みModelVersionのmetadataを渡す。ダウンロード完了後にファイルを置き換え、通信失敗で部分的な重みを残さない。
+
+### 大きなArtifactは再開可能なupload sessionで送る
+
+`run.log_artifact(path)`は、ファイルが`SESSION_UPLOAD_THRESHOLD_BYTES`（64MiB）以上なら`POST /projects/:p/artifact-uploads`のupload sessionで送る。64MiB未満のファイルとbinary streamは従来どおり1回のPUTで送る。`run.log_artifacts(directory, path="results")`はディレクトリ以下の全ファイルを相対pathのまま送り、ファイルごとに同じ基準で方式を選ぶ。symlinkのディレクトリには入らない。
+
+- 送る前にファイル全体と各partのSHA-256を計算し、sessionの`expectedSha256`と各partの`X-Part-SHA256`に入れる。partは既定16MiBで、part数が10000を超えるファイルではpartを大きくする。
+- partは4本並列で送り、partごとに通信失敗と5xxを再試行する。
+- sessionのidを`~/.cache/mado-tracking/uploads/<sha256>.json`（`XDG_CACHE_HOME`があればその下。mode 600）に残す。tokenは書かない。同じファイルを同じRun・pathへ送り直すと、APIの`receivedParts`と照合し、SHA-256が一致するpartは送らない。接続先・Run・path・part sizeのどれかが違う、またはsessionが期限切れ・abort・別の認証情報のものなら、新しいsessionを作る。
+- 全partを送ったらcompleteし、APIの検証（`verifying`→`completed`）を待ってから登録済みArtifactを返す。全体のSHA-256が合わず`failed`になった場合は`UploadSessionFailed`を投げ、状態ファイルを消す。送信中にファイルが変わったときも状態ファイルを消して`ConfigurationError`にする。
+- worker processが途中で止まった場合も、同じファイルで`log_artifact`を呼び直せば続きから送る。
+
+### Artifactのdownloadは切断後にRangeで再開する
+
+`client.download_artifact_to(project_id, artifact_id, stream)`は、seek可能なstreamへArtifactを書き、`{sha256, size}`を返す。`Accept-Encoding: identity`で取得し、接続が切れたら`Range: bytes=<受信済み>-`と`If-Range: <ETag>`で続きを要求する。content endpointのETagは`"sha256-<hex>"`で版を表す。途中で版が変わってAPIが200で全体を返した場合は、受信済みのbytesを捨てて最初から書き直す。最後に全体のSHA-256をETagと照合する。最初の要求がHTTPエラーになった場合は再試行せず、そのまま`ApiError`にする。再開は最大6回まで。`client.download_artifact()`のiteratorは従来どおり再開しない。
 
 ## workerを起動する
 
@@ -193,7 +207,9 @@ Python runtimeでは、モデル重みやdatasetの実体をコード側がArtif
 
 Artifact重みはworkerが認証済みAPIからstream取得し、targetへの転送後もSHA256とサイズを確認する。SIFも登録SHA256と実ファイルを照合する。途中でdownload/転送が失敗した入力からentrypointを起動しない。`file://`の重みはtarget側のregular fileからcopyする。HTTP(S)の重みはworker側の別clientで取得し、API tokenやCookieを転送せず、redirectを追わない。Datasetの外部URIにはworkerからアクセスしない。
 
-重みとArtifactのdownloadは、HTTPの`Content-Length`を圧縮された転送bodyのbytes数と照合する。保存ファイルのサイズとSHA256は展開後のbytesから計算する。`Content-Encoding`はidentity・gzip・deflateに対応し、gzip/deflateの末尾欠落やchecksum破損も拒否する。
+APIのArtifact（SIF、重み、source archive）は、SDKと同じRange再開で取得する。SIFや重みのstaging中に接続が切れても受信済みの位置から続け、全体のSHA-256をETagと照合してからtargetへ転送する。成果物と`.mmt/source.zip`などのRun Artifactは、64MiB以上ならupload sessionで送る。worker processが再起動しても、同じファイルなら続きから送る。
+
+外部URLの重みのdownloadは、HTTPの`Content-Length`を圧縮された転送bodyのbytes数と照合する。保存ファイルのサイズとSHA256は展開後のbytesから計算する。`Content-Encoding`はidentity・gzip・deflateに対応し、gzip/deflateの末尾欠落やchecksum破損も拒否する。外部URLの重みはRange再開の対象外。workerは、APIがArtifactを圧縮して返した場合も同じ照合で1回だけ取得する（再開はしない）。
 
 既存のcontext用envはコンテナ内のpathへ差し替える。追加envは`MMT_MODEL_FILE=/mmt/inputs/weights`、`MMT_INPUTS_DIR=/mmt/inputs`、`MMT_OUTPUTS_DIR=/mmt/outputs`、`MMT_RESULT_FILE=/mmt/outputs/result.json`。入力モデルが無い場合の`MMT_MODEL_FILE`は空。任意sourceのpathは`MMT_SOURCE_DIR`で渡す。
 

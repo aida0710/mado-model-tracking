@@ -83,13 +83,16 @@ async def request_async(
     *,
     masker: SecretMasker,
     retryable: bool = False,
+    content_factory: Callable[[], Any] | None = None,
     **options: Any,
 ) -> httpx.Response:
     attempts = DEFAULT_ATTEMPTS if retryable else 1
     for attempt in range(attempts):
         response = None
         try:
-            response = await client.request(method, path, **options)
+            # A streamed body is consumed by one attempt, so retries need a fresh one from the factory.
+            content = content_factory() if content_factory else options.pop("content", None)
+            response = await client.request(method, path, content=content, **options)
             if response.status_code not in RETRYABLE_STATUS or attempt == attempts - 1:
                 check_response(response, masker)
                 return response

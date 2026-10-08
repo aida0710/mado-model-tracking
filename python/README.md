@@ -18,6 +18,8 @@ python/.venv/bin/python python/examples/training.py --offline --output python/.v
 python/.venv/bin/python python/examples/inference.py --offline --weights python/.venv/weights.json --output python/.venv/predictions.json
 ```
 
+`run.log_artifact(path)`は64MiB以上のファイルを再開可能なupload sessionで送り、中断後に呼び直すと欠けたpartだけを送る。`run.log_artifacts(directory)`はディレクトリ以下をまとめて送る。`client.download_artifact_to(project_id, artifact_id, stream)`は切断後にRangeで再開し、全体のSHA-256を照合する。詳細は`docs/worker.md`の「大きなArtifactは再開可能なupload sessionで送る」を参照する。
+
 配布wheelにも例を含める。インストール後の場所は`<venv>/share/mado-tracking/examples/`。APIとつなぐSDK例は`sdk.py`、コード登録とジョブ投入は`register_job.py`を使う。SSH host key、scope、停止・復帰とAPI契約の詳細は、リポジトリの`docs/worker.md`を参照する。
 
 Gitのコード版は、固定commitのファイルを残して編集・追加・削除を適用する。`register_code`と`create_code_version`は`test_entrypoint`を受け取り、既定値は空の配列。通常実行は`entrypoint`、テスト実行は保存済みの`test_entrypoint`を使う。
