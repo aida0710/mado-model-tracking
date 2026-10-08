@@ -62,7 +62,7 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET /auth/token` → CurrentApiToken `{id,projectId,scopes,job}`。認証に使ったAPI token自身の情報（Job tokenは`job=true`）。sessionでは400 `api_token_required`、未認証は401。`mado-tracking-worker doctor`がworker tokenのscopeを確かめるために使う。
 - `GET|POST /projects/:p/plugins` (POST:name,baseUrl,tokenEnv,enabled?)。登録は全体管理者に限定し、plugin secretは環境変数参照。Project adminは登録済みのpluginを利用する。`POST /projects/:p/plugins/:id/check` → manifest。`POST /projects/:p/plugins/:id/datasets/search` ({query}) → `{items:PluginDataset[]}`。
 - `PATCH /projects/:p/plugins/:id` (name?,baseUrl?,tokenEnv?,enabled?) → PluginConnection。変更も全体管理者に限定する。接続設定を変えると保存済みmanifestを消し、再確認を要求する。確認中に設定が変わった場合は古いmanifestを保存しない。無効pluginへはoutboxを送らず、再び有効にすると配信を再開する。
-- `POST /projects/:p/plugins/:id/datasets/import` ({dataset:PluginDataset}) → DatasetVersion。`POST /projects/:p/plugins/:id/events/retry` → `{queued:number}`。`GET /projects/:p/plugins/:id/metrics` → `{prometheus:string}`（storage:metrics対応pluginのみ）。event outboxはRun状態のtransactionと一緒に保存し、plugin障害でRunを失敗させない。
+- `POST /projects/:p/plugins/:id/datasets/import` ({dataset:PluginDataset}) → DatasetVersion。`POST /projects/:p/plugins/:id/events/retry` → `{queued:number}`。`GET /projects/:p/plugins/:id/metrics` → `{prometheus:string}`（storage:metrics対応pluginのみ）。event outboxはRun状態のtransactionと一緒に保存し、plugin障害でRunを失敗させない。送信状況は`GET /projects/:p/plugins/:id/outbox`（「運用アラートとplugin送信状況」）。
 
 ## Runの比較とCSV出力
 
@@ -504,6 +504,22 @@ NotificationEvent（Webhookの本文、Slackとメールの元）`{schemaVersion
 - エラーは`x-mmt-error-codes`にstatusごとのcodeを並べる。認証・認可・入力検証・DB制約などの共通のエラーはrouteの種類から付け、routeに固有のものだけをcatalogに書く。JSON本文の上限の例外（sync batch 32MiB、DatasetVersionの作成128MiB）はrequestBodyの`x-mmt-max-body-bytes`。
 - 食い違いは`apps/api/test/openapi-coverage.test.ts`が検出する: appの全native route（`/api/mlflow/*`を除く。`/api/worker/*`は`worker` tag）とcatalogが一致する、この文書に書いたroute（`METHOD /path`）とエラー（statusの後にcodeを書いたもの）がcatalogにある、catalogに書いた固有のcodeがこの文書にある、`docs/openapi.json`が生成結果と同じ。`openapi-conformance.integration.test.ts`はruns・models・tasks/launch・automation-rules・artifact-uploadsの実応答を公開したschema（未知のfieldも拒否する）で検証する。routeを足す担当はcatalogへ1要素を足し、`npm run openapi:generate`を実行する。
 - native APIのRunの応答は、contractsのRun型に無い`lifecycleStage`・`mlflowManaged`・`mlflowUserId`も返す（`SELECT *`の列）。OpenAPIでは任意のfieldとして載せている。
+
+## 運用アラートとplugin送信状況
+
+型はcontractsの`operations.ts`。
+
+- 監視: API process内の`OperationsMonitor`が30秒ごとに判定する。複数のAPI processがあっても`pg_try_advisory_xact_lock`で1つだけが動き、`operations_alerts`の部分UNIQUE（`kind,subject_id` WHERE 未解消）でも重複を防ぐ。時刻はDBの時計で測る。閾値はdomainの定数（`domain/workerLiveness.ts`・`domain/operationsAlerts.ts`）。
+  - `job.heartbeat_stale`: `claimed`/`running`のJobで、heartbeatが60秒（`JOB_HEARTBEAT_STALE_SECONDS`）より古い。subjectIdはJob ID。Jobは失敗にしない（報告だけ）。
+  - `worker.offline`: workerの最終応答が120秒（`WORKER_OFFLINE_SECONDS`）より古い。subjectIdは`<token ID>:<worker ID>`。失効・期限切れのtokenのworkerと、7日（`WORKER_RETIRED_SECONDS`）以上応答の無いworkerは引退扱いで監視しない。
+  - `plugin.delivery_stalled`: 有効なpluginで、未送信（`pending`と`sending`）のeventのうち最古が900秒（`PLUGIN_STALL_SECONDS`）より古いか、1件でも試行が5回（`PLUGIN_STALL_ATTEMPTS`）以上。plugin単位で1件。subjectIdはplugin ID。
+- 解消: 条件が消えると`resolution='recovered'`、監視対象から外れる（Jobの終了、workerの引退・token失効、pluginの無効化）と`'inactive'`で閉じる。
+- 通知: アラートを開いたtransactionで、アラートの種別と同じNotificationEventTypeを`enqueueNotificationEvent`で積む。`job.heartbeat_stale`が`recovered`で閉じたときだけ`job.heartbeat_recovered`も積む（worker・pluginに復旧の種別は無い。Jobが途絶のまま終わった場合はRunの終端通知に任せる）。dedupe keyは`<種別>:<アラートID>`なので、同じ対象が再び途絶すると新しいアラートとして再び通知する。`run`はnullで、`details`は`alertId`とアラートの`detail`、`url`はRun詳細（Job）・Compute（worker）・Plugins（plugin）。Jobの通知はRunの`runKinds`・`experimentIds`条件に一致しうる。worker・pluginの通知はRun条件付きのruleには一致しない。
+
+OperationsAlert `{id,projectId,kind:'job.heartbeat_stale'|'worker.offline'|'plugin.delivery_stalled',subjectId,openedAt,resolvedAt:string|null,resolution:'recovered'|'inactive'|null,detail}`。`detail`は開いた時点のスカラー値（Job: `jobId,runId,runName,workerId,heartbeatAt`。worker: `workerId,hostname,tokenName,lastSeenAt,activeJobCount`。plugin: `pluginId,pluginName,undelivered,oldestPendingAt,maxAttempts,lastError`）。tokenの値・URL・相手の応答本文は入れない。
+
+- `GET /projects/:p/operations-alerts?state=open|all&limit=` → `{items:OperationsAlert[]}`。Project viewer以上（tokenは`read` scope）。新しい順。`state`は既定`open`（未解消だけ）、`all`は解消済みも含む。`limit`は既定50・最大200。
+- `GET /projects/:p/plugins/:id/outbox` → PluginOutboxSummary `{pending,sending,oldestPendingAt,maxAttempts,lastError,lastDeliveredAt,stalled}`。Project admin（tokenは`admin` scope。editor・viewerは403）。別Projectのpluginは404。無効なpluginも返す（`stalled`は常にfalse）。`oldestPendingAt`は`pending`の最古、`maxAttempts`は未送信eventの最多試行回数（無ければ0）、`lastError`は試行回数が最も多い未送信eventの失敗code（`plugin_delivery_failed`など。相手の応答は含めない）。`stalled`は監視と同じ判定。
 
 ## Platform保存API（親担当）
 

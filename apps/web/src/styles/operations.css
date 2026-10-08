@@ -1,0 +1,81 @@
+/* Operations alert badge in the header and the plugin delivery status. */
+.operations-alerts {
+  position: relative;
+}
+.operations-alert-button {
+  position: relative;
+}
+.topbar .operations-alert-button.has-alerts {
+  color: #ffb4bc;
+}
+.operations-alert-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--error);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 16px;
+  text-align: center;
+}
+.operations-alert-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px #0003;
+}
+.operations-alert-heading {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.operations-alert-empty,
+.operations-alert-popover > .notice {
+  margin: 0;
+  padding: 12px 14px;
+}
+.operations-alert-popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.operations-alert-popover li + li {
+  border-top: 1px solid var(--border);
+}
+.operations-alert-popover a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.operations-alert-popover a:hover,
+.operations-alert-popover a:focus-visible {
+  background: var(--surface-hover);
+  text-decoration: none;
+}
+.operations-alert-kind {
+  color: var(--error);
+  font-size: 11px;
+  font-weight: 650;
+}
+.operations-alert-time {
+  font-size: 11px;
+}
+.plugin-outbox {
+  margin: 16px 0;
+}

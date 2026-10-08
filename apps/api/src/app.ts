@@ -140,6 +140,9 @@ import { notificationRoutes } from './routes/notificationRoutes.js';
 import { SavedViewService } from './services/savedViewService.js';
 import { savedViewRoutes } from './routes/savedViewRoutes.js';
 import { openapiRoutes } from './routes/openapiRoutes.js';
+import { OperationsMonitor } from './services/operationsMonitor.js';
+import { OperationsAlertService } from './services/operationsAlertService.js';
+import { operationsRoutes } from './routes/operationsRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -284,6 +287,8 @@ export function createApplication(options: ApplicationOptions) {
   const commentTargets = createCommentTargetRegistry();
   const comments = new CommentService(database, commentTargets);
   const savedViews = new SavedViewService(database);
+  const operationsMonitor = new OperationsMonitor(database, { webOrigin: config.webOrigin });
+  const operationsAlerts = new OperationsAlertService(database);
   const app = new Hono<ApiEnvironment>();
   app.onError((error, context) => {
     if (isMlflowRequest(context.req.path)) {
@@ -419,6 +424,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', commentRoutes(comments));
   app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/projects', savedViewRoutes(savedViews));
+  app.route('/api/projects', operationsRoutes(operationsAlerts));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', targetCheckRoutes(targetChecks));
@@ -462,6 +468,7 @@ export function createApplication(options: ApplicationOptions) {
     artifactUploadSweeper,
     sweepScheduler,
     notificationDispatcher,
+    operationsMonitor,
     services: {
       auth,
       audit,
@@ -501,6 +508,7 @@ export function createApplication(options: ApplicationOptions) {
       sweeps,
       sweepController,
       notifications,
+      operationsAlerts,
     },
   };
 }

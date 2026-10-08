@@ -63,6 +63,15 @@ export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
       201,
     );
   });
+  routes.get('/:p/plugins/:id/outbox', async (context) =>
+    context.json(
+      await plugins.outboxSummary(
+        principal(context),
+        uuidParam(context, 'p'),
+        uuidParam(context, 'id'),
+      ),
+    ),
+  );
   routes.post('/:p/plugins/:id/events/retry', async (context) =>
     context.json(
       await plugins.retryEvents(

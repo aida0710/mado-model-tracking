@@ -363,6 +363,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (resource === 'promotion-policies' && method === 'GET') return list([]);
     if (resource === 'promotion-evaluations' && method === 'GET')
       return reply({ items: [], nextCursor: null });
+    if (resource === 'operations-alerts' && method === 'GET') return list([]);
     if (resource === 'members') {
       if (method === 'GET') return list([{ user, role: project.role }]);
       return reply({ ...user, role: body.role });
@@ -594,6 +595,16 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         return reply({ prometheus: state.prometheus });
       }
       if (subresource === 'events') return reply({ queued: 2 });
+      if (subresource === 'outbox')
+        return reply({
+          pending: 0,
+          sending: 0,
+          oldestPendingAt: null,
+          maxAttempts: 0,
+          lastError: null,
+          lastDeliveredAt: null,
+          stalled: false,
+        });
       if (subresource === 'datasets' && parts[3] === 'search')
         return list([
           {

@@ -11,6 +11,8 @@ import { DetailsList, JsonDetails } from './JsonDetails';
 import { PluginDialog } from '../dialogs/PluginDialog';
 import { Empty, ErrorNotice } from './Feedback';
 import { PluginStorageMetrics } from './PluginStorageMetrics';
+import { PluginOutboxStatus } from './PluginOutboxStatus';
+import { usePluginOutboxSummary } from '../hooks/usePluginOutboxSummary';
 import { text } from '../i18n/catalog';
 
 export function PluginPanel({
@@ -29,6 +31,8 @@ export function PluginPanel({
   useEffect(() => setManifest(plugin.manifest), [plugin.manifest]);
   const [success, setSuccess] = useState('');
   const mutation = useMutation();
+  const canManage = isProjectAdmin || user.isAdmin;
+  const outbox = usePluginOutboxSummary(project.id, canManage ? plugin.id : null);
   async function runPluginOperation(operation: () => Promise<void>) {
     setSuccess('');
     return mutation.run(operation);
@@ -60,6 +64,7 @@ export function PluginPanel({
                 void runPluginOperation(async () => {
                   const retried = await administrationApi.retryEvents(project.id, plugin.id);
                   setSuccess(`${text.queuedEvents}: ${retried.queued}`);
+                  outbox.reload();
                 })
               }
             >
@@ -83,6 +88,7 @@ export function PluginPanel({
             await administrationApi.updatePlugin(project.id, plugin.id, { enabled: !plugin.enabled }); onChanged();
           })}>{plugin.enabled ? text.disablePlugin : text.enablePlugin}</button>
       </div>}
+      {canManage && <PluginOutboxStatus summary={outbox} />}
       <details className="plugin-manifest"><summary>{text.manifest}</summary>
         {manifest ? <JsonDetails value={manifest} /> : <p className="muted">{text.manifestUnchecked}</p>}
       </details>

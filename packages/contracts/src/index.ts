@@ -539,3 +539,11 @@ export {
   SAVED_VIEW_NAME_MAX_LENGTH,
   SAVED_VIEW_STATE_MAX_BYTES,
 } from './savedViews.js';
+export type {
+  OperationsAlert,
+  OperationsAlertKind,
+  OperationsAlertResolution,
+  OperationsAlertState,
+  PluginOutboxSummary,
+} from './operations.js';
+export { OPERATIONS_ALERT_KINDS } from './operations.js';

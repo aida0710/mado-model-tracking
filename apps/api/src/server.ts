@@ -15,6 +15,7 @@ const {
   artifactUploadSweeper,
   sweepScheduler,
   notificationDispatcher,
+  operationsMonitor,
 } = createApplication({
   config,
   database,
@@ -27,6 +28,7 @@ const backgroundTasks = [
   artifactUploadSweeper,
   sweepScheduler,
   notificationDispatcher,
+  operationsMonitor,
 ];
 const timeouts = serverTimeouts(config);
 const server = serve(

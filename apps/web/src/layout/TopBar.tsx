@@ -8,6 +8,7 @@ import { useMutation } from '../hooks/useMutation';
 import { ErrorNotice } from '../components/Feedback';
 import { canManagePlugins, isGlobalAdmin } from '../lib/permissions';
 import { UserMenu } from '../components/UserMenu';
+import { OperationsAlertBadge } from '../components/OperationsAlertBadge';
 import { text } from '../i18n/catalog';
 
 const screens = [
@@ -62,6 +63,7 @@ export function TopBar({
           {isGlobalAdmin(auth.user) && <NavLink to={ADMIN_PATH}>{text.administration}</NavLink>}
         </nav>
         <div className="topbar-actions">
+          {projectId && <OperationsAlertBadge projectId={projectId} />}
           <button
             className="icon-button"
             onClick={theme.toggle}
