@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   promotionEvaluationQuerySchema,
   promotionPolicyCreateSchema,
+  promotionPolicyOwnerSchema,
   promotionPolicyPatchSchema,
   promotionPolicyQuerySchema,
 } from '../domain/promotionPolicyValidation.js';
@@ -37,6 +38,16 @@ export function promotionRoutes(promotion: PromotionService): Hono<ApiEnvironmen
       await promotion.setPolicyEnabled(
         principal(context),
         { projectId: uuidParam(context, 'p'), policyId: uuidParam(context, 'id'), enabled },
+        requestMetadata(context),
+      ),
+    );
+  });
+  routes.put('/:p/promotion-policies/:id/owner', async (context) => {
+    const { serviceAccountId } = await jsonBody(context, promotionPolicyOwnerSchema);
+    return context.json(
+      await promotion.transferPolicyOwner(
+        principal(context),
+        { projectId: uuidParam(context, 'p'), policyId: uuidParam(context, 'id'), serviceAccountId },
         requestMetadata(context),
       ),
     );

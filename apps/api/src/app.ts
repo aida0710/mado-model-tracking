@@ -108,6 +108,8 @@ import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { modelEvaluationRoutes } from './routes/modelEvaluationRoutes.js';
 import { promotionRoutes } from './routes/promotionRoutes.js';
+import { aliasProtectionRoutes } from './routes/aliasProtectionRoutes.js';
+import { AliasProtectionService } from './services/aliasProtectionService.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { runResumeRoutes } from './routes/runResumeRoutes.js';
 import { runSyncRoutes } from './routes/runSyncRoutes.js';
@@ -400,6 +402,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/projects', modelEvaluationRoutes(new ModelEvaluationService(database)));
   app.route('/api/projects', promotionRoutes(promotion));
+  app.route('/api/projects', aliasProtectionRoutes(new AliasProtectionService(database)));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', runResumeRoutes(runResumes));
   app.route('/api/projects', runSyncRoutes(runSync));

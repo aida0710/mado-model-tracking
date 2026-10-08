@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
-import { MAX_MODEL_ALIAS_REASON_LENGTH, registryApi } from '../api/registry';
+import { registryApi } from '../api/registry';
 import { useProject } from '../hooks/useProject';
 import { useRegistry } from '../hooks/useRegistry';
 import { useModelAliasHistory } from '../hooks/useModelAliasHistory';
@@ -12,6 +12,8 @@ import { ModelVersionDialog } from '../dialogs/ModelVersionDialog';
 import { ModelAutomationPanel } from '../components/ModelAutomationPanel';
 import { ModelRegistryPanel } from '../components/ModelRegistryPanel';
 import { PromotionPolicyPanel } from '../components/PromotionPolicyPanel';
+import { AliasProtectionSettings } from '../components/AliasProtectionSettings';
+import { PromotionDialog } from '../dialogs/PromotionDialog';
 import { Tabs } from '../components/Tabs';
 import { getFieldValue } from '../lib/formValues';
 import { text } from '../i18n/catalog';
@@ -20,7 +22,9 @@ import { modelsTextTemplates } from '../i18n/models';
 export function ModelsPage() {
   const { project, canEdit } = useProject();
   const [dialog, setDialog] = useState<'model' | 'version' | 'alias' | null>(null);
-  const [view, setView] = useState<'registry' | 'rules' | 'history' | 'promotion'>('registry');
+  const [view, setView] = useState<
+    'registry' | 'rules' | 'history' | 'promotion' | 'protections'
+  >('registry');
   const [aliasToRemove, setAliasToRemove] = useState<{ alias: string; version: string } | null>(
     null,
   );
@@ -64,6 +68,7 @@ export function ModelsPage() {
           { key: 'rules', label: text.automationRules },
           { key: 'history', label: text.automationHistory },
           { key: 'promotion', label: text.promotionPolicies },
+          { key: 'protections', label: text.aliasProtections },
         ]}
         selected={view}
         onSelect={(key) => setView(key as typeof view)}
@@ -72,6 +77,8 @@ export function ModelsPage() {
       <div id="model-tab-panel" role="tabpanel">
         {view === 'promotion' ? (
           <PromotionPolicyPanel initialModelId={registry.selected?.id ?? ''} />
+        ) : view === 'protections' ? (
+          <AliasProtectionSettings models={registry.list.value ?? []} />
         ) : view !== 'registry' ? (
           <ModelAutomationPanel view={view} initialFamily={registry.selected?.family} />
         ) : (
@@ -121,37 +128,11 @@ export function ModelsPage() {
         />
       )}
       {dialog === 'alias' && registry.selected && (
-        <FormDialog
-          title={text.assignAlias}
+        <PromotionDialog
+          model={registry.selected}
+          versions={registry.versions.value ?? []}
+          initial={{ versionId: registry.selectedVersion?.id }}
           onClose={() => setDialog(null)}
-          fields={[
-            { name: 'alias', label: text.alias, required: true },
-            {
-              name: 'version',
-              label: text.version,
-              type: 'select',
-              required: true,
-              defaultValue: registry.selectedVersion?.id,
-              options: (registry.versions.value ?? []).map((version) => ({
-                value: version.id,
-                label: version.version,
-              })),
-            },
-            {
-              name: 'reason',
-              label: text.aliasReason,
-              type: 'textarea',
-              placeholder: text.aliasReasonPlaceholder,
-              maxLength: MAX_MODEL_ALIAS_REASON_LENGTH,
-            },
-          ]}
-          onSubmit={(values) =>
-            registryApi.assignAlias(project.id, registry.selected!.id, {
-              alias: getFieldValue(values, 'alias'),
-              versionId: getFieldValue(values, 'version'),
-              reason: getFieldValue(values, 'reason').trim(),
-            })
-          }
           onSaved={() => {
             setDialog(null);
             reloadRegistryAndAliasHistory();

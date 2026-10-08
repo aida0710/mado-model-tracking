@@ -92,6 +92,7 @@ export function registryRoutes(
         alias: parse(nameSchema, context.req.param('alias')),
         versionId: assignment.versionId,
         reason: assignment.reason,
+        evaluationId: assignment.evaluationId,
       }),
     );
   });

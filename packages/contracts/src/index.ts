@@ -28,6 +28,7 @@ export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, T
 export type { RunOutputRegistration, TaskOutputModel } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';
 export type { ModelAliasEvent, ModelAliasEventPage, ModelAliasEventSource } from './modelAliases.js';
+export type { ModelAliasAssignment, ModelAliasProtection, ModelAliasProtectionInput, ModelAliasProtectionRole } from './modelAliases.js';
 export type {
   EvaluationComparison,
   EvaluationComparisonStatus,
@@ -67,6 +68,7 @@ export type {
   PromotionPolicyCreate,
   PromotionPolicyPatch,
 } from './promotion.js';
+export type { PromotionPolicyOwnerTransfer } from './promotion.js';
 export { PROMOTION_CRITERIA_MAX, PROMOTION_FIRST_RELEASE_REASON } from './promotion.js';
 export type { Account, AdminUser, AdminUserCreate, AdminUserPasswordReset, AdminUserPatch, AdminUserQuery, UserKind } from './adminUsers.js';
 export type { StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';

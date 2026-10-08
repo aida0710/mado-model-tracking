@@ -41,6 +41,7 @@ import {
   removeModelAliases,
 } from '../repositories/modelAliasRepository.js';
 import type { ModelAliasEventQuery } from '../domain/modelAliasValidation.js';
+import { manualAliasGuard } from './aliasProtectionService.js';
 
 // Browser sessions are the Web UI; API tokens are scripts and the SDK's native client.
 function nativeAliasSource(principal: Principal): ModelAliasEventSource {
@@ -131,7 +132,13 @@ export class RegistryService {
   async setAlias(
     principal: Principal,
     projectId: string,
-    registration: { modelId: string; alias: string; versionId: string; reason?: string },
+    registration: {
+      modelId: string;
+      alias: string;
+      versionId: string;
+      reason?: string;
+      evaluationId?: string;
+    },
   ): Promise<Model> {
     return transaction(this.database, async (connection) => {
       await this.requireWriteAccess(connection, principal, projectId);
@@ -153,6 +160,8 @@ export class RegistryService {
         actor: modelAliasActor(principal),
         source: nativeAliasSource(principal),
         reason: registration.reason,
+        evaluationId: registration.evaluationId,
+        guard: manualAliasGuard(principal, registration),
       });
       return (await first<Model>(connection, `${modelSelect} WHERE m.id=$1`, [
         registration.modelId,
@@ -178,6 +187,7 @@ export class RegistryService {
         actor: modelAliasActor(principal),
         source: nativeAliasSource(principal),
         reason: removal.reason,
+        guard: manualAliasGuard(principal),
       });
       if (!removed.length) notFound('Model alias');
     });

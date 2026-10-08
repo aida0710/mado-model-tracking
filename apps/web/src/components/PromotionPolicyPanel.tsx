@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
+import type { PromotionPolicy } from '@mmt/contracts';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
 import { useQuery } from '../hooks/useQuery';
@@ -6,8 +8,10 @@ import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
 import { usePromotionPolicies } from '../hooks/usePromotionPolicies';
 import { usePromotionEvaluations } from '../hooks/usePromotionEvaluations';
 import { automationApi } from '../api/automation';
+import { accessApi } from '../api/access';
 import { canManagePromotionPolicies, canReevaluatePromotion } from '../lib/permissions';
 import { PromotionPolicyDialog } from '../dialogs/PromotionPolicyDialog';
+import { PromotionOwnerDialog } from '../dialogs/PromotionOwnerDialog';
 import { PromotionPolicyTable } from './PromotionPolicyTable';
 import { PromotionEvaluationTable } from './PromotionEvaluationTable';
 import { QueryDialog } from './QueryDialog';
@@ -24,6 +28,11 @@ export function PromotionPolicyPanel({ initialModelId }: { initialModelId: strin
     automationApi.rules(project.id, signal),
   );
   const catalog = useExecutionCatalog(project.id);
+  // Only managers transfer owners, and listing Service Accounts is theirs too.
+  const serviceAccounts = useQuery(canManage ? `${project.id}:service-accounts` : null, (signal) =>
+    accessApi.serviceAccounts(project.id, signal),
+  );
+  const [transferring, setTransferring] = useState<PromotionPolicy | null>(null);
   // Without an explicit choice the history follows the first (newest) policy.
   const policyId = promotion.selectedPolicyId || promotion.policies.value?.[0]?.id || null;
   const evaluations = usePromotionEvaluations(project.id, policyId);
@@ -57,12 +66,14 @@ export function PromotionPolicyPanel({ initialModelId }: { initialModelId: strin
       <ErrorNotice message={promotion.error} />
       <ErrorNotice message={rules.error} retry={rules.reload} />
       <ErrorNotice message={catalog.error} retry={catalog.reload} />
+      <ErrorNotice message={serviceAccounts.error} retry={serviceAccounts.reload} />
       <Resource query={promotion.policies}>
         {(policies) => (
           <PromotionPolicyTable
             policies={policies}
             models={catalog.value?.models ?? []}
             rules={rules.value ?? []}
+            serviceAccounts={serviceAccounts.value ?? []}
             selectedPolicyId={policyId ?? ''}
             canManage={canManage}
             pending={promotion.pending}
@@ -70,6 +81,7 @@ export function PromotionPolicyPanel({ initialModelId }: { initialModelId: strin
             onSetEnabled={(id, enabled) => {
               void promotion.setEnabled(id, enabled);
             }}
+            onTransferOwner={setTransferring}
           />
         )}
       </Resource>
@@ -101,6 +113,18 @@ export function PromotionPolicyPanel({ initialModelId }: { initialModelId: strin
             </div>
           )}
         </>
+      )}
+      {canManage && transferring && (
+        <PromotionOwnerDialog
+          projectId={project.id}
+          policy={transferring}
+          serviceAccounts={serviceAccounts.value ?? []}
+          onClose={() => setTransferring(null)}
+          onSaved={() => {
+            setTransferring(null);
+            promotion.policies.reload();
+          }}
+        />
       )}
       {canManage && promotion.isCreating && (
         <QueryDialog

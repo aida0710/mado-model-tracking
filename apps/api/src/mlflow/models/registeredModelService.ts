@@ -20,6 +20,7 @@ import {
   modelAliasActor,
   removeModelAliases,
 } from '../../repositories/modelAliasRepository.js';
+import { mlflowAliasGuard } from '../../services/aliasProtectionService.js';
 
 export class RegisteredModelService {
   constructor(private readonly database: Database) {}
@@ -171,6 +172,7 @@ export class RegisteredModelService {
           modelId: model.id,
           actor: modelAliasActor(principal),
           source: 'model_deleted',
+          guard: mlflowAliasGuard,
         });
       },
     );
@@ -223,6 +225,7 @@ export class RegisteredModelService {
           versionId: version.id,
           actor: modelAliasActor(principal),
           source: 'mlflow',
+          guard: mlflowAliasGuard,
         });
         await this.touchMetadata(connection, model);
       },
@@ -243,6 +246,7 @@ export class RegisteredModelService {
           alias: reference.alias,
           actor: modelAliasActor(principal),
           source: 'mlflow',
+          guard: mlflowAliasGuard,
         });
         await this.touchMetadata(connection, model);
       },

@@ -1,4 +1,5 @@
 import type {
+  ModelAliasProtectionRole,
   PromotionCriterionDirection,
   PromotionCriterionMode,
   PromotionDecision,
@@ -59,6 +60,56 @@ export const promotionText = {
   promotionCriteriaRequired: '合否基準を1つ以上追加してください。',
   promotionCriterionMetricRequired: '合否基準のメトリクス名を入力してください。',
   promotionCriterionThresholdInvalid: '合否基準の閾値は有限の数値で入力してください。',
+  // Owner (run-as user) of a policy and its transfer to a Service Account.
+  promotionPolicyOwner: '実行ユーザー',
+  promotionPolicyOwnerCreator: '作成者',
+  promotionPolicyOwnerServiceAccount: 'Service Account',
+  promotionTransferOwner: '所有者を移管',
+  promotionTransferOwnerTarget: '移管先のService Account',
+  promotionTransferOwnerHint:
+    '作成者の記録は残ります。移管先は、このプロジェクトの有効なService Account（roleがadmin）から選びます。',
+  promotionTransferOwnerNoCandidates:
+    '移管できるService Accountがありません。先にプロジェクト設定でroleがadminのService Accountを作成してください。',
+  promotionTransferOwnerRequired: '移管先のService Accountを選択してください。',
+  // Promotion dialog (assigning an alias with its reason and evidence).
+  promote: '昇格',
+  promotionDialogTitle: 'aliasを設定（昇格）',
+  promotionEvidence: '根拠となる判定',
+  promotionEvidenceNone: '指定しない',
+  promotionEvidenceChoose: '判定を選択',
+  promotionEvidenceRequired: 'このaliasを変更するには、この版の合格判定を選択してください。',
+  promotionEvidenceEmpty: 'この版には、このaliasを対象にした合格判定がありません。',
+  promotionReasonRequired: '理由を入力してください。',
+  promotionReasonRequiredForFailed:
+    'この版はこのaliasの昇格判定で不合格です。昇格させる場合は理由を入力してください。',
+  promotionReasonRequiredForProtected: '保護aliasを合格判定なしで変更するには理由を入力してください。',
+  promotionAliasRequired: 'aliasを入力してください。',
+  promotionVersionRequired: '版を選択してください。',
+  promotionProtectedAlias: '保護alias',
+  // Promotion check card on the model version page.
+  promotionCheck: '昇格の判定',
+  promotionCheckEmpty: 'このモデルには昇格policyがありません。',
+  promotionCheckPending: '判定待ち',
+  promotionCheckCurrentAlias: '現在この版を指しています',
+  promotionCheckPromotedAutomatically: '自動昇格済み',
+  promotionCheckBaselineChanged: '判定中に基準aliasが変わったため、自動昇格しませんでした。',
+  promotionCheckPromotionDenied: 'aliasの変更が拒否されたため、自動昇格しませんでした。',
+  // Alias protections (Models page tab).
+  aliasProtections: '保護alias',
+  aliasProtectionsEmpty: '保護aliasはありません。',
+  aliasProtectionsHint:
+    '保護aliasは、必要なrole以上の利用者だけが変更できます。合格判定を必須にすると、その版の合格判定を根拠に指定したときだけ変更できます。MLflow互換APIからは変更できません。',
+  aliasProtectionAdd: '保護aliasを追加',
+  aliasProtectionEdit: '保護aliasを編集',
+  aliasProtectionRemove: '保護を解除',
+  aliasProtectionScope: '対象',
+  aliasProtectionScopeProject: 'プロジェクト全体',
+  aliasProtectionRequiredRole: '変更に必要なrole',
+  aliasProtectionRequirePassedEvaluation: '合格判定を必須にする',
+  aliasProtectionRequirePassedEvaluationColumn: '合格判定',
+  aliasProtectionRequired: '必須',
+  aliasProtectionNotRequired: '不要',
+  aliasProtectionUpdatedAt: '更新日時',
 } as const;
 
 export const promotionDecisionLabels: Record<PromotionDecision, string> = {
@@ -90,8 +141,24 @@ export const criterionThresholdMeaningLabels: Record<CriterionThresholdMeaning, 
   regression_allowed: 'この幅までの悪化を許容',
 };
 
+export const aliasProtectionRoleLabels: Record<ModelAliasProtectionRole, string> = {
+  editor: 'editor以上',
+  admin: 'adminのみ',
+};
+
 // Text that embeds values.
 export const promotionTextTemplates = {
+  protectedAliasNotice: (role: ModelAliasProtectionRole, requirePassedEvaluation: boolean) =>
+    `このaliasは保護されています（${aliasProtectionRoleLabels[role]}${
+      requirePassedEvaluation ? '・合格判定が必須' : ''
+    }）。`,
+  protectedAliasRoleMissing: (role: ModelAliasProtectionRole) =>
+    `このaliasの変更には${aliasProtectionRoleLabels[role]}の権限が必要です。`,
+  evidenceOption: (policyName: string, createdAt: string) => `${policyName}（${createdAt}）`,
+  transferOwnerConfirm: (policyName: string) =>
+    `「${policyName}」の判定と自動昇格を、選んだService Accountの権限で実行するように切り替えます。`,
+  removeAliasProtectionConfirm: (alias: string, scope: string) =>
+    `${scope}のalias「${alias}」の保護を解除します。解除後はeditor以上の利用者が理由なしで変更できます。`,
   criteriaTooMany: (max: number) => `合否基準は${max}件までです。`,
   criterionSubject: (metric: string, mode: PromotionCriterionMode) =>
     mode === 'absolute' ? metric : `${metric}の${promotionModeLabels[mode]}`,

@@ -20,6 +20,8 @@ const domainErrorCodes: Record<string, string> = {
   conflict: 'INVALID_STATE',
   body_too_large: 'REQUEST_LIMIT_EXCEEDED',
   artifact_too_large: 'RESOURCE_EXHAUSTED',
+  // A protected alias cannot be changed through MLflow (it carries no reason or promotion decision).
+  alias_protected: 'PERMISSION_DENIED',
 };
 
 export function isMlflowRequest(requestPath: string): boolean {

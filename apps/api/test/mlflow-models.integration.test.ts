@@ -1,3 +1,8 @@
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import type { AddressInfo } from 'node:net';
+import { promisify } from 'node:util';
+import { serve } from '@hono/node-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Code, CodeVersion, Project, Run } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
@@ -7,6 +12,10 @@ import {
   type ModelFixture,
   type VersionResponse,
 } from './mlflow-models-fixtures.js';
+import { mlflowSdkPythonPath } from './mlflow-sdk-fixtures.js';
+
+// 0 lets the OS choose; set it to keep the SDK test on an allowed port range.
+const SDK_TEST_HTTP_PORT = Number(process.env.MMT_TEST_HTTP_PORT ?? 0);
 
 describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registry', () => {
   let harness: Harness;
@@ -915,4 +924,113 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
       databaseQuery.mockRestore();
     }
   });
+  // Two registered versions with champion on version 1, protected Project-wide for admins.
+  async function protectedChampion(): Promise<void> {
+    await entity(await fixture.createRegistered(), 200);
+    for (const weights of ['first-weights', 'second-weights']) {
+      const logged = await fixture.readyModel({ weights });
+      await entity<VersionResponse>(await fixture.register(logged.model.info.model_id), 200);
+    }
+    await entity(
+      await request(fixture.app, `${fixture.registryEndpoint}/alias`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { name: 'Classifier', alias: 'champion', version: '1' },
+      }),
+      200,
+    );
+    await entity(
+      await request(harness.app, `${fixture.basePath}/alias-protections/champion`, {
+        method: 'PUT',
+        cookie: fixture.administrator.cookie,
+        body: { requiredRole: 'admin' },
+      }),
+      200,
+    );
+  }
+
+  async function championVersion(): Promise<string> {
+    return (
+      await harness.database.query<{ version: string }>(
+        "SELECT v.version FROM model_aliases a JOIN model_versions v ON v.id=a.version_id WHERE a.alias='champion'",
+      )
+    ).rows[0]!.version;
+  }
+
+  it('保護aliasはProject adminでもMLflow互換APIの設定・解除・版とModelの削除でPERMISSION_DENIEDになる', async () => {
+    await protectedChampion();
+    const attempts: [string, string, Record<string, string>][] = [
+      ['POST', `${fixture.registryEndpoint}/alias`, { name: 'Classifier', alias: 'champion', version: '2' }],
+      ['DELETE', `${fixture.registryEndpoint}/alias`, { name: 'Classifier', alias: 'champion' }],
+      ['DELETE', `${fixture.versionEndpoint}/delete`, { name: 'Classifier', version: '1' }],
+      ['DELETE', `${fixture.registryEndpoint}/delete`, { name: 'Classifier' }],
+    ];
+    for (const [method, endpoint, body] of attempts) {
+      const response = await request(harness.app, endpoint, {
+        method,
+        cookie: fixture.administrator.cookie,
+        body,
+      });
+      expect(response.status).toBe(403);
+      const error = (await response.json()) as { error_code: string; message: string };
+      expect(error.error_code).toBe('PERMISSION_DENIED');
+      expect(error.message).toContain('保護alias「champion」');
+    }
+    expect(await championVersion()).toBe('1');
+    // Unprotected aliases keep working through MLflow.
+    await entity(
+      await request(harness.app, `${fixture.registryEndpoint}/alias`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { name: 'Classifier', alias: 'challenger', version: '2' },
+      }),
+      200,
+    );
+  });
+
+  it.skipIf(!existsSync(mlflowSdkPythonPath))(
+    '公式SDKのset_registered_model_aliasで保護aliasを変えるとPERMISSION_DENIEDになる',
+    async () => {
+      await protectedChampion();
+      const minted = await entity<{ token: string }>(
+        await request(harness.app, '/api/tokens', {
+          method: 'POST',
+          cookie: fixture.administrator.cookie,
+          body: {
+            name: 'mlflow-sdk',
+            kind: 'personal',
+            projectId: fixture.project.id,
+            scopes: ['read', 'registry:write'],
+          },
+        }),
+      );
+      const server = serve({ fetch: harness.app.fetch, hostname: '127.0.0.1', port: SDK_TEST_HTTP_PORT });
+      await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+      try {
+        const { port } = server.address() as AddressInfo;
+        const script = [
+          'from mlflow import MlflowClient',
+          'from mlflow.exceptions import MlflowException',
+          'try:',
+          '    MlflowClient().set_registered_model_alias("Classifier", "champion", "2")',
+          '    print("ALLOWED")',
+          'except MlflowException as error:',
+          '    print(error.error_code)',
+        ].join('\n');
+        const result = await promisify(execFile)(mlflowSdkPythonPath, ['-c', script], {
+          env: {
+            ...process.env,
+            MLFLOW_TRACKING_URI: `http://127.0.0.1:${port}${fixture.base}`,
+            MLFLOW_TRACKING_TOKEN: minted.token,
+            MLFLOW_HTTP_REQUEST_MAX_RETRIES: '0',
+            MLFLOW_DISABLE_AGENT_HINT: '1',
+          },
+        });
+        expect(result.stdout.trim()).toBe('PERMISSION_DENIED');
+      } finally {
+        await new Promise((resolve) => server.close(resolve));
+      }
+      expect(await championVersion()).toBe('1');
+    },
+  );
 });

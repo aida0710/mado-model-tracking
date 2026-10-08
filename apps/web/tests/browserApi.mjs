@@ -358,6 +358,11 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (resource === 'automation-executions' && method === 'GET')
       return list(state.automationExecutions);
     if (resource === 'audit-events' && method === 'GET') return reply({ items: [], nextCursor: null });
+    // The promotion dialog reads these before an alias is set; the mock has none of them.
+    if (resource === 'alias-protections' && method === 'GET') return list([]);
+    if (resource === 'promotion-policies' && method === 'GET') return list([]);
+    if (resource === 'promotion-evaluations' && method === 'GET')
+      return reply({ items: [], nextCursor: null });
     if (resource === 'members') {
       if (method === 'GET') return list([{ user, role: project.role }]);
       return reply({ ...user, role: body.role });

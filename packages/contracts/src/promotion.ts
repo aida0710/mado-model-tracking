@@ -25,7 +25,9 @@ export type PromotionMissingBaseline = 'pass' | 'fail';
 /**
  * Judges evaluation Runs that the automation rule evaluationRuleId produced for modelId.
  * The reference set and evaluation CodeVersion are that rule's fixed inputs and code version.
- * Settings are immutable; only enabled can change. autoPromote is stored but not acted on yet.
+ * Settings are immutable; only enabled and the owner (runAsUserId) can change. With autoPromote a
+ * passed automatic decision moves targetAlias, but only while the baseline is still the version the
+ * decision compared against.
  */
 export interface PromotionPolicy {
   id: string;
@@ -40,7 +42,18 @@ export interface PromotionPolicy {
   missingBaseline: PromotionMissingBaseline;
   autoPromote: boolean;
   createdBy: string;
+  /**
+   * The user the policy acts as: its current Project admin authority is checked at each judgement,
+   * and it is the actor of automatic promotions. Starts as createdBy; a Project admin can move it
+   * to an active Service Account of the Project with the admin role.
+   */
+  runAsUserId: string;
   createdAt: string;
+}
+
+/** Body of PUT /projects/:p/promotion-policies/:id/owner. */
+export interface PromotionPolicyOwnerTransfer {
+  serviceAccountId: string;
 }
 
 export interface PromotionPolicyCreate {
@@ -63,8 +76,8 @@ export interface PromotionPolicyPatch {
 /**
  * passed / failed: every criterion could be judged (or the first release rule applied).
  * insufficient: a needed evaluation is missing, e.g. the baseline version has no evaluation by
- * the policy's rule. skipped: the policy could not judge (its creator lost Project admin, or the
- * judgement raised an error).
+ * the policy's rule. skipped: the policy could not judge (its run-as user lost Project admin, or
+ * the judgement raised an error).
  */
 export type PromotionDecision = 'passed' | 'failed' | 'insufficient' | 'skipped';
 
@@ -99,7 +112,10 @@ export interface PromotionCriterionResult extends PromotionCriterion {
 /**
  * Why the whole decision came out as it did: baseline_missing_first_promotion (passed because no
  * baseline version exists and missingBaseline='pass'), baseline_missing, criteria_failed,
- * candidate_not_evaluated, baseline_not_evaluated, creator_access_revoked, evaluation_error.
+ * candidate_not_evaluated, baseline_not_evaluated, creator_access_revoked (the run-as user is no
+ * longer Project admin), evaluation_error. On a passed decision of an autoPromote policy that did
+ * not promote: baseline_changed (the baseline or target alias moved after the judgement read it)
+ * or promotion_denied (the alias change was refused, e.g. by an alias protection).
  * null for an ordinary pass.
  */
 export type PromotionEvaluationReason =
@@ -109,7 +125,9 @@ export type PromotionEvaluationReason =
   | 'candidate_not_evaluated'
   | 'baseline_not_evaluated'
   | 'creator_access_revoked'
-  | 'evaluation_error';
+  | 'evaluation_error'
+  | 'baseline_changed'
+  | 'promotion_denied';
 
 /** Reason recorded on a passed evaluation that had no baseline because the alias was unset. */
 export const PROMOTION_FIRST_RELEASE_REASON: PromotionEvaluationReason = 'baseline_missing_first_promotion';
@@ -127,7 +145,7 @@ export interface PromotionEvaluation {
   decision: PromotionDecision;
   criteriaResults: PromotionCriterionResult[];
   reason: PromotionEvaluationReason | null;
-  /** Whether this decision moved targetAlias. Always false until automatic promotion exists. */
+  /** Whether this decision moved targetAlias (automatic promotion). aliasEventId is that change. */
   promoted: boolean;
   aliasEventId: string | null;
   sequence: number;

@@ -29,3 +29,43 @@ export interface ModelAliasEventPage {
   items: ModelAliasEvent[];
   nextCursor: string | null;
 }
+
+/** Body of PUT /projects/:p/models/:id/aliases/:alias. */
+export interface ModelAliasAssignment {
+  versionId: string;
+  reason?: string;
+  /**
+   * A passed promotion decision for this alias and version, recorded as the change's evidence.
+   * Required for an alias protected with requirePassedEvaluation.
+   */
+  evaluationId?: string;
+}
+
+/** The weakest current Project role that may change a protected alias by hand. */
+export type ModelAliasProtectionRole = 'editor' | 'admin';
+
+/**
+ * Restricts manual changes of an alias. modelId null protects the alias on every Model of the
+ * Project; when a Project-wide and a Model protection both match, the stricter setting of each
+ * applies. Changes through the MLflow-compatible API are always rejected (PERMISSION_DENIED)
+ * because they cannot carry a reason or a promotion decision.
+ */
+export interface ModelAliasProtection {
+  id: string;
+  projectId: string;
+  modelId: string | null;
+  alias: string;
+  requiredRole: ModelAliasProtectionRole;
+  /** A manual assignment must name a passed decision (evaluationId) for this alias and version. */
+  requirePassedEvaluation: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+/** Body of PUT /projects/:p/alias-protections/:alias?modelId=. */
+export interface ModelAliasProtectionInput {
+  requiredRole: ModelAliasProtectionRole;
+  requirePassedEvaluation?: boolean;
+}
