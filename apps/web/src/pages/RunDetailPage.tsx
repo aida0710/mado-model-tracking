@@ -46,8 +46,10 @@ export function RunDetailPage() {
     (signal) => trackingApi.logs(project.id, runId, signal),
     EXECUTION_POLL_MS,
   );
+  // The artifacts tab pages by folder itself; only the execution snapshot needs every file.
+  const [artifactRevision, setArtifactRevision] = useState(0);
   const artifacts = useQuery(
-    tab === 'artifacts' || tab === 'executionSnapshot' ? `${runId}:artifacts` : null,
+    tab === 'executionSnapshot' ? `${runId}:artifacts` : null,
     (signal) => trackingApi.artifacts(project.id, runId, signal),
     EXECUTION_POLL_MS,
   );
@@ -56,6 +58,7 @@ export function RunDetailPage() {
     metrics.reload();
     logs.reload();
     artifacts.reload();
+    setArtifactRevision((value) => value + 1);
   }
   const base = `/projects/${project.id}`;
   return (
@@ -156,9 +159,7 @@ export function RunDetailPage() {
                       </button>
                     </div>
                   )}
-                  <Resource query={artifacts}>
-                    {(files) => <RunArtifacts artifacts={files} />}
-                  </Resource>
+                  <RunArtifacts projectId={project.id} runId={runId} revision={artifactRevision} />
                 </>
               )}
               {tab === 'details' && (
@@ -273,6 +274,7 @@ export function RunDetailPage() {
                 onSaved={() => {
                   setDialog(null);
                   artifacts.reload();
+                  setArtifactRevision((value) => value + 1);
                 }}
               />
             )}

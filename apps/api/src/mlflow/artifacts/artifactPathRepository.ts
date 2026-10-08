@@ -1,6 +1,7 @@
 import type { Artifact } from '@mmt/contracts';
 import { first, rows, type Connection } from '../../db/database.js';
 import { DomainError, notFound } from '../../domain/errors.js';
+import { currentRunArtifactCondition } from '../../services/artifactListing.js';
 import { isSafeArtifactPath, nativeArtifactPath } from './artifactPath.js';
 import type { ArtifactAccess, ArtifactPathEntry } from './artifactTypes.js';
 
@@ -14,16 +15,12 @@ export async function listArtifactPaths(
   const parameters = [access.projectId, access.owner.kind, access.owner.id];
   if (access.owner.kind === 'model')
     return rows<ArtifactPathEntry>(connection, indexedSql, parameters);
-  // Native worker uploads have no MLflow mapping. Explicit mappings stay authoritative on retries.
-  // A single snapshot avoids dropping a file whose mapping commits between the two sources.
+  // One statement keeps a single snapshot, so a mapping committing meanwhile cannot drop a file.
   const artifacts = await rows<ArtifactPathEntry>(
     connection,
-    `WITH indexed AS (${indexedSql}), native AS (
-       SELECT DISTINCT ON (a.path) a.path,a.id AS artifact_id,a.size FROM artifacts a
-       WHERE a.project_id=$1 AND a.run_id=$3::uuid AND NOT EXISTS(SELECT 1 FROM indexed p WHERE p.path=a.path)
-       ORDER BY a.path,a.created_at DESC,a.id DESC
-     ) SELECT * FROM indexed UNION ALL SELECT * FROM native`,
-    parameters,
+    `SELECT a.path,a.id AS artifact_id,a.size FROM artifacts a
+     WHERE a.project_id=$1 AND a.run_id=$2::uuid AND ${currentRunArtifactCondition('a')}`,
+    [access.projectId, access.owner.id],
   );
   return artifacts.filter((artifact) => isSafeArtifactPath(artifact.path));
 }

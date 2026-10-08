@@ -25,6 +25,9 @@ const CodesPage = lazy(() =>
 const DatasetsPage = lazy(() =>
   import('./pages/DatasetsPage').then((module) => ({ default: module.DatasetsPage })),
 );
+const ArtifactsPage = lazy(() =>
+  import('./pages/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage })),
+);
 const LineagePage = lazy(() =>
   import('./pages/LineagePage').then((module) => ({ default: module.LineagePage })),
 );
@@ -64,6 +67,7 @@ export function App() {
             <Route path="models" element={<ModelsPage />} />
             <Route path="codes" element={<CodesPage />} />
             <Route path="datasets" element={<DatasetsPage />} />
+            <Route path="artifacts" element={<ArtifactsPage />} />
             <Route path="lineage" element={<LineagePage />} />
             <Route path="jobs" element={<JobsPage />} />
             <Route path="tasks" element={<TasksPage />} />

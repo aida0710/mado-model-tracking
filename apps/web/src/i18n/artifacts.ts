@@ -1,4 +1,4 @@
-// Artifact preview, size limit, audio viewer, evaluation samples, and Artifact comparison labels.
+// Artifact browser, preview, size limit, audio viewer, evaluation samples, and Artifact comparison labels.
 import type { EvaluationSampleErrorReason, ArtifactReferenceError } from '../lib/evaluationSamples';
 
 export const artifactsText = {
@@ -40,9 +40,42 @@ export const artifactsText = {
   compareCommonPaths: '共通の保存パス',
   compareNoCommonArtifacts: '選択したすべてのRunに共通する保存パスはありません',
   compareSwitchPlayback: '同じ位置から再生',
+  artifactRoot: 'ルート',
+  artifactUnnamed: '（名前なし）',
+  artifactDirectoryPath: 'フォルダの場所',
+  artifactName: '名前',
+  artifactFileCount: 'ファイル数',
+  artifactLoadMore: '続きを読み込む',
+  artifactDirectoriesTruncated: 'フォルダが多いため、一部だけを表示しています。',
+  artifactEmptyDirectory: 'このフォルダにはファイルがありません',
+  artifactSelectFile: 'ファイルを選ぶとプレビューを表示します',
+  artifactPreviousVersions: '以前の版',
+  artifactNoPreviousVersions: '以前の版はありません',
+  artifactShowLatest: '最新の版に戻る',
+  artifactShowingPreviousVersion: '以前の版を表示しています',
+  artifactCatalogDescription: 'プロジェクト内のすべてのArtifactを検索します。',
+  artifactCatalogSearch: '保存パスで検索',
+  artifactMimeType: '種類',
+  artifactMimeAll: 'すべての種類',
+  artifactMimeAudio: '音声',
+  artifactMimeImage: '画像',
+  artifactMimeVideo: '動画',
+  artifactMimeText: 'テキスト',
+  artifactMimeApplication: 'その他のファイル',
+  artifactRun: 'Run',
+  artifactAllRuns: 'すべてのRun',
+  artifactModelFilter: 'モデル',
+  artifactModelVersionFilter: 'モデル版',
+  artifactAllModels: 'すべてのモデル',
+  artifactIncludePreviousVersions: '以前の版も表示',
+  artifactNoCatalogResults: '条件に合うArtifactはありません',
+  artifactNoRun: 'Runなし',
 } as const;
 
 export const artifactsTextTemplates = {
+  artifactFolder: (name: string) => `フォルダ ${name}`,
+  artifactDirectorySummary: (fileCount: number, size: string) =>
+    `${fileCount.toLocaleString('ja-JP')}件 · ${size}`,
   audioChannelNumber: (channel: number) => `チャンネル${channel}`,
   audioSampleRateValue: (hertz: number) => `${hertz.toLocaleString('ja-JP')} Hz`,
   audioMaxFrequency: (hertz: number) => `${(hertz / 1000).toLocaleString('ja-JP', { maximumFractionDigits: 1 })} kHz`,

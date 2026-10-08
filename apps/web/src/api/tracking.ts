@@ -1,5 +1,8 @@
 import type {
   Artifact,
+  ArtifactListVersions,
+  ArtifactPage,
+  ArtifactTree,
   Experiment,
   LineageGraph,
   LogEntry,
@@ -39,6 +42,68 @@ const artifactContentPath = (projectId: string, artifactId: string) =>
 
 const runPath = (projectId: string, runId: string) =>
   `${projectPath(projectId)}/runs/${encodeId(runId)}`;
+
+export interface RunArtifactPageQuery {
+  prefix?: string;
+  /** Only files directly under prefix (the API's `delimiter=/`). */
+  directFilesOnly?: boolean;
+  versions?: ArtifactListVersions;
+  limit?: number;
+  cursor?: string;
+}
+
+export interface ProjectArtifactPageQuery {
+  limit: number;
+  query?: string;
+  /** `type/subtype` or `type/*`. */
+  mimeType?: string;
+  runId?: string;
+  modelVersionId?: string;
+  versions?: ArtifactListVersions;
+  cursor?: string;
+}
+
+/** Drops unset values so the API applies its own defaults. */
+function searchParams(values: Record<string, string | number | boolean | undefined>): string {
+  const entries = Object.entries(values).filter(
+    (entry): entry is [string, string | number | true] =>
+      entry[1] !== undefined && entry[1] !== '' && entry[1] !== false,
+  );
+  return new URLSearchParams(entries.map(([key, value]) => [key, String(value)])).toString();
+}
+
+async function requestArtifactPage(path: string, signal?: AbortSignal): Promise<ArtifactPage> {
+  const page = await request<ArtifactPage>(path, { signal });
+  if (!Array.isArray(page.items)) throw invalidResponseError();
+  return page;
+}
+
+function runArtifactPage(
+  projectId: string,
+  runId: string,
+  query: RunArtifactPageQuery,
+  signal?: AbortSignal,
+): Promise<ArtifactPage> {
+  const { directFilesOnly, ...rest } = query;
+  return requestArtifactPage(
+    `${runPath(projectId, runId)}/artifacts?${searchParams({
+      ...rest,
+      delimiter: directFilesOnly ? '/' : undefined,
+    })}`,
+    signal,
+  );
+}
+
+function projectArtifactPage(
+  projectId: string,
+  query: ProjectArtifactPageQuery,
+  signal?: AbortSignal,
+): Promise<ArtifactPage> {
+  return requestArtifactPage(
+    `${projectPath(projectId)}/artifacts?${searchParams({ ...query })}`,
+    signal,
+  );
+}
 export const trackingApi = {
   experiments: (projectId: string, signal?: AbortSignal) =>
     requestItems<Experiment>(`${projectPath(projectId)}/experiments`, signal),
@@ -62,17 +127,37 @@ export const trackingApi = {
     requestItems<MetricPoint>(`${runPath(projectId, runId)}/metrics`, signal),
   logs: (projectId: string, runId: string, signal?: AbortSignal) =>
     requestItems<LogEntry>(`${runPath(projectId, runId)}/logs`, signal),
-  artifacts: (projectId: string, runId: string, signal?: AbortSignal) =>
-    requestItems<Artifact>(`${runPath(projectId, runId)}/artifacts`, signal),
-  projectArtifacts: (
+  /** Every latest Artifact of a Run, following all pages. Browsers page with runArtifactPage. */
+  artifacts: async (projectId: string, runId: string, signal?: AbortSignal) => {
+    const items: Artifact[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await runArtifactPage(projectId, runId, { cursor }, signal);
+      items.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return items;
+  },
+  runArtifactPage,
+  runArtifactTree: async (
+    projectId: string,
+    runId: string,
+    prefix: string,
+    signal?: AbortSignal,
+  ) => {
+    const tree = await request<ArtifactTree>(
+      `${runPath(projectId, runId)}/artifacts/tree?${searchParams({ prefix })}`,
+      { signal },
+    );
+    if (!Array.isArray(tree.directories)) throw invalidResponseError();
+    return tree;
+  },
+  projectArtifacts: async (
     projectId: string,
     query: { limit: number; query?: string },
     signal?: AbortSignal,
-  ) =>
-    requestItems<Artifact>(
-      `${projectPath(projectId)}/artifacts?${new URLSearchParams({ limit: String(query.limit), ...(query.query ? { query: query.query } : {}) })}`,
-      signal,
-    ),
+  ) => (await projectArtifactPage(projectId, query, signal)).items,
+  projectArtifactPage,
   uploadArtifact: (projectId: string, runId: string | null, path: string, file: File) =>
     withArtifactSizeMessage(
       request<Artifact>(
