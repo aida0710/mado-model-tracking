@@ -32,6 +32,21 @@ export type { ArtifactDirectoryEntry, ArtifactListVersions, ArtifactPage, Artifa
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
 export type { ProjectGroupBinding, ProjectMember, ProjectMemberGroupRole, UserSearchResult } from './projectAccess.js';
+export type {
+  PromotionCriterion,
+  PromotionCriterionOutcome,
+  PromotionCriterionReason,
+  PromotionCriterionResult,
+  PromotionDecision,
+  PromotionEvaluation,
+  PromotionEvaluationPage,
+  PromotionEvaluationReason,
+  PromotionMissingBaseline,
+  PromotionPolicy,
+  PromotionPolicyCreate,
+  PromotionPolicyPatch,
+} from './promotion.js';
+export { PROMOTION_CRITERIA_MAX } from './promotion.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
