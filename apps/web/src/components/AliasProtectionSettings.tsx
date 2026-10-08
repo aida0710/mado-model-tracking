@@ -9,7 +9,7 @@ import { canManageAliasProtections } from '../lib/permissions';
 import { formatDate } from '../lib/format';
 import { getFieldValue } from '../lib/formValues';
 import { ConfirmDialog } from './ConfirmDialog';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { Resource } from './Feedback';
 import { FormDialog } from './FormDialog';
 import { aliasProtectionRoleLabels, promotionTextTemplates } from '../i18n/promotion';
@@ -46,30 +46,34 @@ export function AliasProtectionSettings({ models }: { models: Model[] }) {
       <p className="muted">{text.aliasProtectionsHint}</p>
       <Resource query={protections}>
         {(items) => (
-          <DataTable
-            items={items}
+          <ResponsiveTable
+            rows={items}
             rowKey={(protection) => protection.id}
             empty={text.aliasProtectionsEmpty}
             columns={[
               {
                 key: 'alias',
-                label: text.alias,
+                priority: 'primary',
+                header: text.alias,
                 className: 'mono',
                 render: (protection) => protection.alias,
               },
               {
                 key: 'scope',
-                label: text.aliasProtectionScope,
+                priority: 'primary',
+                header: text.aliasProtectionScope,
                 render: (protection) => scopeLabel(protection.modelId),
               },
               {
                 key: 'requiredRole',
-                label: text.aliasProtectionRequiredRole,
+                priority: 'secondary',
+                header: text.aliasProtectionRequiredRole,
                 render: (protection) => aliasProtectionRoleLabels[protection.requiredRole],
               },
               {
                 key: 'requirePassedEvaluation',
-                label: text.aliasProtectionRequirePassedEvaluationColumn,
+                priority: 'secondary',
+                header: text.aliasProtectionRequirePassedEvaluationColumn,
                 render: (protection) =>
                   protection.requirePassedEvaluation
                     ? text.aliasProtectionRequired
@@ -77,14 +81,16 @@ export function AliasProtectionSettings({ models }: { models: Model[] }) {
               },
               {
                 key: 'updatedAt',
-                label: text.aliasProtectionUpdatedAt,
+                priority: 'secondary',
+                header: text.aliasProtectionUpdatedAt,
                 render: (protection) => formatDate(protection.updatedAt),
               },
               ...(canManage
                 ? [
                     {
                       key: 'actions',
-                      label: text.details,
+                      priority: 'secondary' as const,
+                      header: text.details,
                       render: (protection: ModelAliasProtection) => (
                         <div className="access-actions">
                           <button className="button small" onClick={() => setEditing(protection)}>

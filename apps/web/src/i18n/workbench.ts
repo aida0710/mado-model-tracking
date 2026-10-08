@@ -43,6 +43,8 @@ export const workbenchText = {
   pinnedCommitError: 'Gitのcommitは40桁または64桁の完全なhashで指定してください。',
   gitUrlError: '認証情報を含まないHTTPSまたはSSHのGit URLを指定してください。',
   files: 'ファイル',
+  showFileList: 'ファイル一覧を開く',
+  hideFileList: 'ファイル一覧を閉じる',
   newFile: 'ファイルを追加',
   filePath: 'ファイルのパス',
   filePathPlaceholder: 'src/main.py',

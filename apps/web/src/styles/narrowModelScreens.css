@@ -1,0 +1,117 @@
+/*
+ * Models, model version, Tasks, Jobs, Lineage and Codes on narrow windows, plus the lineage zoom
+ * controls and the folded file list of the code workspace. Breakpoints: styles/breakpoints.css.
+ */
+.lineage-zoom-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.lineage-zoom-level {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.lineage-pan-hint {
+  margin-left: 8px;
+  font-size: 11px;
+}
+.lineage-viewport .graph-scroll {
+  cursor: grab;
+}
+.lineage-graph.narrow .graph-relations {
+  margin: 0 0 20px;
+}
+.file-list-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 40px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  text-align: start;
+}
+.file-list-toggle > span:first-of-type {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workspace-editor-grid.narrow {
+  grid-template-columns: minmax(0, 1fr);
+}
+.workspace-editor-grid.narrow .code-file-tree {
+  border-right: 0;
+  border-bottom: 1px solid var(--border);
+  max-height: 40vh;
+}
+
+/* Touch-sized controls: at least 40px tall on the screens and dialogs of this group. */
+@media (width < 900px) {
+  :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .lineage-page, .codes-page, .dialog.fullscreen-on-narrow)
+    :is(.button, .button.small, select, input:not([type='checkbox']):not([type='radio']), summary, .checkbox-field) {
+    min-height: 40px;
+  }
+  :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .lineage-page, .codes-page, .dialog.fullscreen-on-narrow)
+    .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .codes-page)
+    :is(td, dd, .version-detail, .snapshot-artifacts) :is(a, .link-button) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  .models-page .registry-detail .table-scroll + .table-scroll {
+    margin-top: 16px;
+  }
+  :is(.models-page, .model-version-page, .tasks-page, .jobs-page, .codes-page) summary {
+    display: flex;
+    align-items: center;
+  }
+  .code-file-tree button {
+    min-height: 40px;
+  }
+  /* The wide-table minimum would push the Job list past a phone width. */
+  .job-run-cell {
+    min-width: 0;
+  }
+  .section-heading {
+    flex-wrap: wrap;
+  }
+  .lineage-graph.narrow .graph-scroll {
+    max-height: 60vh;
+  }
+  .lineage-pan-hint {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (width < 640px) {
+  /* Time and level on one line, the message below with the full width. */
+  .log-entry {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 2px 10px;
+  }
+  .log-entry > :last-child {
+    grid-column: 1 / -1;
+  }
+  .chart-selector {
+    flex-wrap: wrap;
+  }
+  .chart-selector select {
+    flex: 1;
+    min-width: 0;
+  }
+  .task-actions,
+  .section-heading > div {
+    flex-wrap: wrap;
+  }
+}

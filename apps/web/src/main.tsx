@@ -17,6 +17,7 @@ import './styles/artifactBrowser.css';
 import './styles/audio.css';
 import './styles/forms.css';
 import './styles/workbench.css';
+import './styles/narrowModelScreens.css';
 import './styles/admin.css';
 import './styles/projectAccess.css';
 import './styles/promotion.css';

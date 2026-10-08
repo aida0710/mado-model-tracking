@@ -1,5 +1,5 @@
 import type { ModelAliasEvent } from '@mmt/contracts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { ErrorNotice } from './Feedback';
 import type { ModelAliasHistoryState } from '../hooks/useModelAliasHistory';
 import { formatDate } from '../lib/format';
@@ -21,33 +21,37 @@ export function ModelAliasHistory({ history }: { history: ModelAliasHistoryState
     <>
       <h3>{modelsText.aliasHistory}</h3>
       <ErrorNotice message={history.error} retry={history.reload} />
-      <DataTable
-        items={history.items}
+      <ResponsiveTable
+        rows={history.items}
         rowKey={(event) => event.id}
         empty={history.loading ? text.loading : modelsText.aliasHistoryEmpty}
         columns={[
           {
             key: 'createdAt',
-            label: modelsText.aliasChangedAt,
+            priority: 'primary',
+            header: modelsText.aliasChangedAt,
             render: (event) => formatDate(event.createdAt),
           },
-          { key: 'alias', label: text.alias, className: 'mono', render: (event) => event.alias },
+          { key: 'alias', priority: 'primary', header: text.alias, className: 'mono', render: (event) => event.alias },
           {
             key: 'versions',
-            label: modelsText.aliasVersionChange,
+            priority: 'primary',
+            header: modelsText.aliasVersionChange,
             className: 'mono',
             render: (event) =>
               `${versionLabel(event.previousVersion)} → ${versionLabel(event.version)}`,
           },
-          { key: 'actor', label: modelsText.aliasActor, render: actorLabel },
+          { key: 'actor', priority: 'secondary', header: modelsText.aliasActor, render: actorLabel },
           {
             key: 'source',
-            label: modelsText.aliasSource,
+            priority: 'secondary',
+            header: modelsText.aliasSource,
             render: (event) => modelAliasSourceLabels[event.source],
           },
           {
             key: 'reason',
-            label: modelsText.aliasReason,
+            priority: 'secondary',
+            header: modelsText.aliasReason,
             className: 'break-word',
             render: (event) => event.reason || '—',
           },

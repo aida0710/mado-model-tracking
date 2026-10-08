@@ -39,7 +39,7 @@ export function ModelsPage() {
     aliasHistory.reload();
   };
   return (
-    <section className="page">
+    <section className="page models-page">
       <PageHeader
         title={text.models}
         eyebrow={project.name}

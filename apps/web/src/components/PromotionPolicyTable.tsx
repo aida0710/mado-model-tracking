@@ -1,5 +1,5 @@
 import type { Model, ModelAutomationRule, PromotionPolicy, ServiceAccount } from '@mmt/contracts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { summarizeCriterion } from '../lib/promotionPolicyInput';
 import { text } from '../i18n/catalog';
 
@@ -37,15 +37,16 @@ export function PromotionPolicyTable({
   onTransferOwner: (policy: PromotionPolicy) => void;
 }) {
   return (
-    <DataTable
-      items={policies}
+    <ResponsiveTable
+      rows={policies}
       rowKey={(policy) => policy.id}
       selectedKey={selectedPolicyId}
       empty={text.promotionPoliciesEmpty}
       columns={[
         {
           key: 'name',
-          label: text.name,
+          priority: 'primary',
+          header: text.name,
           render: (policy) => (
             <button className="link-button" onClick={() => onSelect(policy.id)}>
               {policy.name}
@@ -54,7 +55,8 @@ export function PromotionPolicyTable({
         },
         {
           key: 'enabled',
-          label: text.status,
+          priority: 'primary',
+          header: text.status,
           render: (policy) => (
             <span className={policy.enabled ? 'automation-enabled' : 'muted'}>
               {policy.enabled ? text.enabled : text.disabled}
@@ -63,32 +65,37 @@ export function PromotionPolicyTable({
         },
         {
           key: 'model',
-          label: text.promotionModel,
+          priority: 'secondary',
+          header: text.promotionModel,
           render: (policy) =>
             models.find((model) => model.id === policy.modelId)?.name ?? policy.modelId,
         },
         {
           key: 'targetAlias',
-          label: text.promotionTargetAlias,
+          priority: 'secondary',
+          header: text.promotionTargetAlias,
           className: 'mono',
           render: (policy) => policy.targetAlias,
         },
         {
           key: 'baselineAlias',
-          label: text.baselineAlias,
+          priority: 'secondary',
+          header: text.baselineAlias,
           className: 'mono',
           render: (policy) => policy.baselineAlias,
         },
         {
           key: 'evaluationRule',
-          label: text.evaluationRule,
+          priority: 'secondary',
+          header: text.evaluationRule,
           render: (policy) =>
             rules.find((rule) => rule.id === policy.evaluationRuleId)?.name ??
             policy.evaluationRuleId,
         },
         {
           key: 'criteria',
-          label: text.promotionCriteria,
+          priority: 'secondary',
+          header: text.promotionCriteria,
           render: (policy) => (
             <ul className="promotion-criterion-results">
               {policy.criteria.map((criterion, index) => (
@@ -101,20 +108,23 @@ export function PromotionPolicyTable({
         },
         {
           key: 'autoPromote',
-          label: text.promotionAutoPromoteColumn,
+          priority: 'secondary',
+          header: text.promotionAutoPromoteColumn,
           render: (policy) =>
             policy.autoPromote ? text.promotionAutoPromoteOn : text.promotionAutoPromoteOff,
         },
         {
           key: 'owner',
-          label: text.promotionPolicyOwner,
+          priority: 'secondary',
+          header: text.promotionPolicyOwner,
           render: (policy) => ownerLabel(policy, serviceAccounts),
         },
         ...(canManage
           ? [
               {
                 key: 'actions',
-                label: text.details,
+                priority: 'secondary' as const,
+                header: text.details,
                 render: (policy: PromotionPolicy) => (
                   <div className="access-actions">
                     <button

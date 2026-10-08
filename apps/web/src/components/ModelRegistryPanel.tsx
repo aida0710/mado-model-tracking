@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { ModelRegistryState } from '../types/modelRegistry';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { RegistryLayout } from './RegistryLayout';
 import { Empty, ErrorNotice, Resource } from './Feedback';
 import { DetailsList, JsonDetails } from './JsonDetails';
@@ -37,14 +37,15 @@ export function ModelRegistryPanel({
       {(items) => (
         <RegistryLayout
           list={
-            <DataTable
-              items={items}
+            <ResponsiveTable
+              rows={items}
               rowKey={(item) => item.id}
               selectedKey={registry.selected?.id}
               columns={[
                 {
                   key: 'name',
-                  label: text.name,
+                  priority: 'primary',
+                  header: text.name,
                   render: (item) => (
                     <button className="link-button" onClick={() => registry.selectItem(item.id)}>
                       {item.name}
@@ -53,18 +54,21 @@ export function ModelRegistryPanel({
                 },
                 {
                   key: 'family',
-                  label: text.family,
+                  priority: 'secondary',
+                  header: text.family,
                   render: (item) => <span className="mono">{item.family}</span>,
                 },
                 {
                   key: 'version',
-                  label: text.latestVersion,
+                  priority: 'primary',
+                  header: text.latestVersion,
                   render: (item) => item.latestVersion ?? '—',
                   className: 'mono',
                 },
                 {
                   key: 'aliases',
-                  label: text.alias,
+                  priority: 'secondary',
+                  header: text.alias,
                   render: (item) => Object.keys(item.aliases).join(', ') || '—',
                 },
               ]}
@@ -91,20 +95,22 @@ export function ModelRegistryPanel({
                 )}
               </div>
               <p className="muted">{registry.selected.description}</p>
-              <DataTable
-                items={Object.entries(registry.selected.aliases)}
+              <ResponsiveTable
+                rows={Object.entries(registry.selected.aliases)}
                 rowKey={([alias]) => alias}
                 empty={text.aliasesEmpty}
                 columns={[
                   {
                     key: 'alias',
-                    label: text.alias,
+                    priority: 'primary',
+                    header: text.alias,
                     className: 'mono',
                     render: ([alias]) => alias,
                   },
                   {
                     key: 'version',
-                    label: text.version,
+                    priority: 'primary',
+                    header: text.version,
                     className: 'mono',
                     render: ([, versionId]) => versionLabel(versionId),
                   },
@@ -112,7 +118,8 @@ export function ModelRegistryPanel({
                     ? [
                         {
                           key: 'actions',
-                          label: '',
+                          priority: 'primary' as const,
+                          header: '',
                           render: ([alias, versionId]: [string, string]) => (
                             <button
                               className="button small"
@@ -131,14 +138,15 @@ export function ModelRegistryPanel({
               <Resource query={registry.versions}>
                 {(versions) => (
                   <>
-                    <DataTable
-                      items={versions}
+                    <ResponsiveTable
+                      rows={versions}
                       rowKey={(version) => version.id}
                       selectedKey={registry.selectedVersion?.id}
                       columns={[
                         {
                           key: 'version',
-                          label: text.version,
+                          priority: 'primary',
+                          header: text.version,
                           render: (version) => (
                             <Link
                               className="mono"
@@ -153,7 +161,8 @@ export function ModelRegistryPanel({
                         },
                         {
                           key: 'source',
-                          label: text.sourceRun,
+                          priority: 'primary',
+                          header: text.sourceRun,
                           render: (version) =>
                             version.sourceRunId ? (
                               <RunNameLink projectId={projectId} runId={version.sourceRunId} />
@@ -163,7 +172,8 @@ export function ModelRegistryPanel({
                         },
                         {
                           key: 'created',
-                          label: text.created,
+                          priority: 'secondary',
+                          header: text.created,
                           render: (version) => formatDate(version.createdAt),
                         },
                       ]}

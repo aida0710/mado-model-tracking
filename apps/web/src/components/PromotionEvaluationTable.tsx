@@ -6,7 +6,7 @@ import {
   type PromotionDecision,
   type PromotionEvaluation,
 } from '@mmt/contracts';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { formatDate } from '../lib/format';
 import { summarizeCriterion } from '../lib/promotionPolicyInput';
 import {
@@ -174,24 +174,27 @@ export function PromotionEvaluationTable({
   empty: string;
 }) {
   return (
-    <DataTable
-      items={evaluations}
+    <ResponsiveTable
+      rows={evaluations}
       rowKey={(evaluation) => evaluation.id}
       empty={empty}
       columns={[
         {
           key: 'createdAt',
-          label: text.promotionEvaluatedAt,
+          priority: 'primary',
+          header: text.promotionEvaluatedAt,
           render: (evaluation) => formatDate(evaluation.createdAt),
         },
         {
           key: 'decision',
-          label: text.promotionDecision,
+          priority: 'primary',
+          header: text.promotionDecision,
           render: (evaluation) => <DecisionBadge evaluation={evaluation} />,
         },
         {
           key: 'candidate',
-          label: text.promotionCandidateVersion,
+          priority: 'primary',
+          header: text.promotionCandidateVersion,
           render: (evaluation) => (
             <VersionLink
               projectId={projectId}
@@ -202,7 +205,8 @@ export function PromotionEvaluationTable({
         },
         {
           key: 'baseline',
-          label: text.baselineVersion,
+          priority: 'secondary',
+          header: text.baselineVersion,
           render: (evaluation) => (
             <VersionLink
               projectId={projectId}
@@ -213,7 +217,8 @@ export function PromotionEvaluationTable({
         },
         {
           key: 'runs',
-          label: text.promotionEvaluationRuns,
+          priority: 'secondary',
+          header: text.promotionEvaluationRuns,
           render: (evaluation) => (
             <>
               <RunLink
@@ -231,14 +236,16 @@ export function PromotionEvaluationTable({
         },
         {
           key: 'criteria',
-          label: text.promotionCriterionResults,
+          priority: 'secondary',
+          header: text.promotionCriterionResults,
           render: (evaluation) => <CriterionResults results={evaluation.criteriaResults} />,
         },
         ...(canReevaluate
           ? [
               {
                 key: 'actions',
-                label: text.details,
+                priority: 'secondary' as const,
+                header: text.details,
                 render: (evaluation: PromotionEvaluation) => (
                   <button
                     className="button small"

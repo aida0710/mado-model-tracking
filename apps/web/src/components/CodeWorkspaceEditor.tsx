@@ -1,8 +1,10 @@
-import { lazy, Suspense } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { lazy, Suspense, useState } from 'react';
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import type { useCodeWorkspace } from '../hooks/useCodeWorkspace';
 import type { CodeSample } from '../types/codeSample';
 import { CODE_SAMPLES } from '../lib/codeSamples';
+import { narrowerThan } from '../lib/breakpoints';
+import { useMediaQuery } from '../lib/useMediaQuery';
 import { CodeFileTree } from './CodeFileTree';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ErrorNotice } from './Feedback';
@@ -15,6 +17,11 @@ export function CodeWorkspaceEditor({ editor, isGit, disabled, sampleId, onSampl
   sampleId: CodeSample['id']; onSampleChange: (id: CodeSample['id']) => void;
   onApplySample: () => void;
 }) {
+  // Below --bp-md the file list folds away so that Monaco keeps the dialog's full width.
+  const isNarrow = useMediaQuery(narrowerThan('md'));
+  const [isFileListOpen, setFileListOpen] = useState(false);
+  const fileTree = <CodeFileTree paths={editor.paths} activePath={editor.activePath}
+    onSelect={(path) => { editor.selectPath(path); setFileListOpen(false); }} />;
   return (
     <section className="code-workspace" data-testid="code-workspace">
       <div className="workspace-toolbar">
@@ -46,10 +53,19 @@ export function CodeWorkspaceEditor({ editor, isGit, disabled, sampleId, onSampl
           disabled={disabled || !editor.activePath} onClick={editor.deleteFile}><Trash2 size={15} /></button>
       </div>
       {editor.paths.length ? (
-        <div className="workspace-editor-grid">
-          <CodeFileTree paths={editor.paths} activePath={editor.activePath} onSelect={editor.selectPath} />
+        <div className={isNarrow ? 'workspace-editor-grid narrow' : 'workspace-editor-grid'}>
+          {!isNarrow && fileTree}
           <div className="workspace-editor-pane">
-            <div className="editor-file-header mono" data-testid="active-file">{editor.activePath}</div>
+            {isNarrow ? (
+              <button type="button" className="editor-file-header file-list-toggle mono" data-testid="active-file"
+                aria-expanded={isFileListOpen} onClick={() => setFileListOpen((open) => !open)}
+                aria-label={`${isFileListOpen ? text.hideFileList : text.showFileList}: ${editor.activePath}`}>
+                {isFileListOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span>{editor.activePath}</span>
+                <span className="muted">{editor.paths.length}</span>
+              </button>
+            ) : <div className="editor-file-header mono" data-testid="active-file">{editor.activePath}</div>}
+            {isNarrow && isFileListOpen && fileTree}
             <div className="monaco-container" data-testid="monaco-editor">
               <ErrorBoundary><Suspense fallback={<p role="status">{text.loading}</p>}>
                 <MonacoCodeEditor path={editor.activePath} value={editor.workspace.files[editor.activePath] ?? ''}

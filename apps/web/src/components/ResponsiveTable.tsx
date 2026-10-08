@@ -21,6 +21,8 @@ export interface ResponsiveTableProps<T> {
   rowKey: (row: T) => string;
   /** A pointer shortcut; keep a link or button in a primary column for keyboard users. */
   onRowClick?: (row: T) => void;
+  /** The key of the row the screen has chosen (for example the one shown in a side panel). */
+  selectedKey?: string;
   /** Shown instead of the table when there are no rows. */
   empty?: ReactNode;
   /** Accessible name of the table when no heading names it. */
@@ -33,6 +35,10 @@ const INTERACTIVE_SELECTOR = 'a, button, input, select, textarea, label, summary
 function isFromCellControl(event: MouseEvent<HTMLElement>) {
   const control = (event.target as Element).closest(INTERACTIVE_SELECTOR);
   return control !== null && event.currentTarget.contains(control);
+}
+
+function rowClassName({ isClickable, isSelected }: { isClickable: boolean; isSelected: boolean }) {
+  return [isClickable && 'clickable-row', isSelected && 'selected'].filter(Boolean).join(' ') || undefined;
 }
 
 /**
@@ -50,6 +56,7 @@ export function ResponsiveTableView<T>({
   rows,
   rowKey,
   onRowClick,
+  selectedKey,
   empty,
   label,
   isNarrow,
@@ -90,7 +97,7 @@ export function ResponsiveTableView<T>({
             return [
               <tr
                 key={key}
-                className={onRowClick ? 'clickable-row' : undefined}
+                className={rowClassName({ isClickable: Boolean(onRowClick), isSelected: key === selectedKey })}
                 onClick={
                   onRowClick &&
                   ((event) => {

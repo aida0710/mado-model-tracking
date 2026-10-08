@@ -58,6 +58,20 @@ describe('ResponsiveTable', () => {
     expect(markup).not.toContain('aria-expanded');
   });
 
+  it('selectedKey の行だけに選択中の class を付ける', () => {
+    const markup = renderToStaticMarkup(
+      <ResponsiveTableView
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        isNarrow={false}
+        selectedKey="m2"
+      />,
+    );
+    expect(markup.match(/<tr class="selected">/g)).toHaveLength(1);
+    expect(markup.indexOf('class="selected"')).toBeGreaterThan(markup.indexOf('asr-small'));
+  });
+
   it('行が無いときは表の代わりに空の案内を出す', () => {
     const markup = renderToStaticMarkup(
       <ResponsiveTableView
