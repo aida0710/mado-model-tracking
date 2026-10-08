@@ -42,11 +42,12 @@ function mapColumns<T>(row: QueryResultRow): T {
   const entity: Record<string, unknown> = {};
   for (const [column, value] of Object.entries(row)) {
     const property = column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
-    // JSON values keep their original keys; only SQL columns are mapped.
+    // JSON values keep their original keys; only SQL columns are mapped. bigint columns arrive
+    // as strings; a NULL one (total_size of a reference DatasetVersion) stays null.
     entity[property] =
       value instanceof Date
         ? value.toISOString()
-        : ['size', 'run_count'].includes(column)
+        : ['size', 'run_count', 'total_size'].includes(column) && value !== null
           ? Number(value)
           : value;
   }

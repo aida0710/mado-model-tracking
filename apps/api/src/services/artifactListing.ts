@@ -163,7 +163,7 @@ export async function runArtifactTree(
 ): Promise<ArtifactTree> {
   const prefix = directoryPrefix(location.prefix);
   // Direct files group under '' and each subdirectory under its first path segment.
-  const groups = await rows<{ child: string; fileCount: string; totalSize: string }>(
+  const groups = await rows<ArtifactTreeGroup>(
     connection,
     `SELECT child,count(*) AS file_count,sum(size) AS total_size FROM (
        SELECT a.size,CASE WHEN strpos(substr(a.path,length($4)+1),'/')=0 THEN ''
@@ -180,6 +180,22 @@ export async function runArtifactTree(
       MAX_TREE_DIRECTORIES + 2,
     ],
   );
+  return artifactTreeFromGroups(prefix, groups);
+}
+
+/** A row per child of a tree level: '' for the files directly in it, else a directory name. */
+export interface ArtifactTreeGroup {
+  child: string;
+  fileCount: string;
+  totalSize: string;
+}
+
+/**
+ * Builds a tree level from groups in child order, fetched with a limit of MAX_TREE_DIRECTORIES + 2
+ * (the direct files plus one directory more than shown, to tell that the list was truncated).
+ * Dataset versions list their files with the same shape.
+ */
+export function artifactTreeFromGroups(prefix: string, groups: ArtifactTreeGroup[]): ArtifactTree {
   const files = groups.find((group) => group.child === '');
   const directories: ArtifactDirectoryEntry[] = groups
     .filter((group) => group.child !== '')

@@ -28,6 +28,7 @@ import { ArtifactUploadFinalizer } from './services/artifactUploadFinalizer.js';
 import { ArtifactUploadSweeper } from './services/artifactUploadSweeper.js';
 import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
+import { DatasetContentService } from './services/datasetContentService.js';
 import { RunService } from './services/runService.js';
 import { RunSearchService } from './services/runSearchService.js';
 import { MetricSeriesService } from './services/metricSeriesService.js';
@@ -116,6 +117,10 @@ export interface ApplicationOptions {
 const MAX_JSON_BODY_BYTES = 4 * 1024 * 1024;
 // Upload session parts are raw bytes up to the part size, not JSON.
 const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
+// A DatasetVersion lists up to MAX_DATASET_VERSION_FILES files of up to 1024-character paths
+// (about 1.1 KB each with the Artifact ID), so its creation request gets a larger JSON limit.
+const DATASET_VERSION_CREATE_PATH = /^\/api\/projects\/[^/]+\/datasets\/[^/]+\/versions$/;
+const MAX_DATASET_VERSION_BODY_BYTES = 128 * 1024 * 1024;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
@@ -270,8 +275,10 @@ export function createApplication(options: ApplicationOptions) {
       context.req.method === 'PUT' &&
       (context.req.path.endsWith('/artifacts') || ARTIFACT_UPLOAD_PART_PATH.test(context.req.path));
     if (!isNativeArtifactUpload && !isMlflowArtifactUpload(context.req)) {
+      const isDatasetVersionCreate =
+        context.req.method === 'POST' && DATASET_VERSION_CREATE_PATH.test(context.req.path);
       return bodyLimit({
-        maxSize: MAX_JSON_BODY_BYTES,
+        maxSize: isDatasetVersionCreate ? MAX_DATASET_VERSION_BODY_BYTES : MAX_JSON_BODY_BYTES,
         onError: () => {
           throw new DomainError(413, 'JSONの上限サイズを超えています', 'body_too_large');
         },
@@ -296,7 +303,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api', auditRoutes(audit));
   app.route('/api/projects', projectRoutes(projects, new ProjectGroupBindingService(database)));
   app.route('/api', userRoutes(new UserDirectoryService(database)));
-  app.route('/api/projects', registryRoutes(registry));
+  app.route('/api/projects', registryRoutes(registry, new DatasetContentService(database)));
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', runSearchRoutes(runSearch));

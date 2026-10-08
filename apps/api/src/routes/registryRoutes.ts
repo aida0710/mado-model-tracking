@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import type { z } from 'zod';
 import type { RegistryService } from '../services/registryService.js';
+import type { DatasetContentService } from '../services/datasetContentService.js';
 import {
   codeVersionSchema,
   datasetCreateSchema,
-  datasetVersionSchema,
   modelCreateSchema,
   modelVersionSchema,
   nameSchema,
@@ -15,6 +15,12 @@ import {
   modelAliasEventQuerySchema,
   modelAliasRemovalSchema,
 } from '../domain/modelAliasValidation.js';
+import {
+  artifactDigestQuerySchema,
+  datasetFileListQuerySchema,
+  datasetFileTreeQuerySchema,
+  datasetVersionRequestSchema,
+} from '../domain/datasetContentValidation.js';
 import {
   jsonBody,
   parse,
@@ -30,7 +36,18 @@ async function optionalJsonBody<T>(context: ApiContext, schema: z.ZodType<T>): P
   return jsonBody(context, schema);
 }
 
-export function registryRoutes(registry: RegistryService): Hono<ApiEnvironment> {
+function datasetVersionLocation(context: ApiContext) {
+  return {
+    projectId: uuidParam(context, 'p'),
+    datasetId: uuidParam(context, 'id'),
+    versionId: uuidParam(context, 'v'),
+  };
+}
+
+export function registryRoutes(
+  registry: RegistryService,
+  datasetContent: DatasetContentService,
+): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/:p/models', async (context) =>
     context.json({
@@ -152,9 +169,35 @@ export function registryRoutes(registry: RegistryService): Hono<ApiEnvironment> 
     context.json(
       await registry.createDatasetVersion(principal(context), uuidParam(context, 'p'), {
         datasetId: uuidParam(context, 'id'),
-        input: await jsonBody(context, datasetVersionSchema),
+        input: await jsonBody(context, datasetVersionRequestSchema),
       }),
       201,
+    ),
+  );
+  routes.get('/:p/datasets/:id/versions/:v/files', async (context) =>
+    context.json(
+      await datasetContent.listFiles(principal(context), {
+        ...datasetVersionLocation(context),
+        query: parse(datasetFileListQuerySchema, context.req.query()),
+      }),
+    ),
+  );
+  routes.get('/:p/datasets/:id/versions/:v/files/tree', async (context) =>
+    context.json(
+      await datasetContent.fileTree(principal(context), {
+        ...datasetVersionLocation(context),
+        ...parse(datasetFileTreeQuerySchema, context.req.query()),
+      }),
+    ),
+  );
+  // Registered with the registry so it precedes GET /:p/artifacts/:a, which would read
+  // `by-digest` as an Artifact ID.
+  routes.get('/:p/artifacts/by-digest', async (context) =>
+    context.json(
+      await datasetContent.findArtifactByDigest(principal(context), {
+        projectId: uuidParam(context, 'p'),
+        ...parse(artifactDigestQuerySchema, context.req.query()),
+      }),
     ),
   );
   return routes;
