@@ -97,7 +97,7 @@ flowchart LR
 - 学習/fine-tuningの出力モデルをSDKやMLflowで登録した場合も同じルールを適用し、生成元Runへ関連付けます。起動は学習Runの成功まで待ちます（次の節）。
 - 作成者の現在の管理者権限と参照先を確認します。重み指定なし、権限失効、無効な実行先などは履歴に理由を残します。
 - ルールごとの起動失敗はRun/Job作成を取り消して記録し、登録したモデルは保持します。
-- 推論と評価のルールはそれぞれ独立したJobです。同じモデルから起動します。
+- 推論と評価のルールはそれぞれ独立したJobです。評価に推論の出力を渡すときは、評価ルールを推論ルールの後段にします（「推論の後に評価を回す」の節）。
 
 ### 学習Run中に登録した版は学習の成功を待つ
 
@@ -114,15 +114,63 @@ SDKの`register_output_model`やMLflowの`log_model(registered_model_name=…)`�
 - 対象のルールは「学習Runが終わった時点で有効なルール」です。保留中に無効化したルールは起動せず、保留中に作ったルールは起動します。保留中の履歴には、その時点で有効なルールが表示されます。
 - 終了の通知を何度受けても（worker completeの再送、MLflowの`FINISHED→RUNNING→FINISHED`）、同じ版を2回起動しません。いったん失敗・期限切れで閉じた保留は、その後に学習Runが成功しても起動しません。
 - 期限切れの判定は、API内の点検処理が10分ごとに行います。状態がunknownのままのJobや、`end_run`されないMLflowのRunで保留が残り続けるのを防ぐためです。期限は7日（168時間）で、長い学習より長く取っています。複数のAPI processが動いていても、点検は1か所だけで実行します。
-- 期限切れや学習失敗で起動しなかった版を後から動かすには、「既存の版へ適用」（自動実行の連鎖の機能）で手動で適用します。
+- 期限切れや学習失敗で起動しなかった版を後から動かすには、「既存の版へ手動で適用する」の手順で適用します。
 
 履歴にはキュー登録の結果と現在のRun/Job状態を表示します。失敗や停止の後は、Jobs画面から通常の再実行を行えます。
+
+### 推論の後に評価を回す（ルールの連鎖）
+
+ルールの起動条件（`trigger`）は2種類です。
+
+| trigger | 起動するとき |
+|---|---|
+| `model_registered`（既定） | ModelVersionの登録（前節まで） |
+| `upstream_run_finished` | 上流に指定したルール（`upstreamRuleId`）が作ったRunが終わったとき |
+
+推論ルールAを作り、評価ルールBを「上流＝A」で作ると、版の登録でAの推論Runが動き、それが成功した時点でBの評価Runが起動します。種類（`kind`）は推論・評価に加えて`processing`（前処理・後処理）も選べます。
+
+```mermaid
+flowchart LR
+  model[ModelVersion登録] --> a[ルールA: 推論Run]
+  a -- finished＋出力Dataset --> b[ルールB: 評価Run]
+  a -- 出力なし --> s1[Bはskipped: upstream_outputs_missing]
+  a -- failed・canceled --> s2[Bはskipped: upstream_unsuccessful]
+```
+
+- 評価Runは推論と同じ版で作ります。入力DatasetVersionは、Bに固定した分（正解セット）と、推論Runが出力したDatasetVersionの両方です。推論の出力は`upstreamDatasetVersionIds`にも記録し、[評価結果の比較](evaluation.md)では正解セットだけで条件の一致を判定します。
+- 評価Runの親Runは推論Runです。workerは親Runを上流Runとしてコンテナへ渡します（`MMT_UPSTREAM_RUN_ID`と`upstream-run.json`。詳細は[worker手順](worker.md)）。
+- 推論の出力は、推論Runの実行中または`result.json`の回収時にDatasetVersion（`sourceRunId`＝推論Run）として登録します。出力のDatasetVersionが1件も無いまま推論Runが成功すると、評価は起動せず`upstream_outputs_missing`を記録します。
+- 上流は、そのRunを作った自動実行の記録（execution）で特定します。人が作ったRunは、`automation.ruleId` tagが付いていても連鎖しません。
+- 推論Runが失敗し、Jobs画面から再実行して成功した場合は、その再実行のRunを上流として評価を起動します。
+- 上流のルールを無効にすると、すでに動いている上流Runが成功しても下流は起動しません。下流のルールを無効にした場合も起動しません。
+- 連鎖は1段目（登録で起動するルール）を含めて5段までです。上流には同じProjectの有効なルールだけを指定できます。
+- 同じパイプラインのRunには、1段目のexecution IDを`automation.pipelineRoot` tagとして付けます。履歴では`pipelineRootExecutionId`でまとめて表示できます。
+
+### 既存の版へ手動で適用する
+
+Project管理者は、有効なルールを既存の版へ手動で適用できます。登録時にルールが無かった版、学習失敗や期限切れで起動しなかった版、基準版への再評価に使います。
+
+- 登録で起動するルールには版（`modelVersionId`）を、連鎖するルールには上流Run（`triggerRunId`）を指定します。上流Runは、そのルールの上流ルールが作ったRunで、成功していて出力DatasetVersionがあるものに限ります。
+- 同じルールと版の実行が待機中・実行中なら受け付けません（409）。終わっていれば、試行回数（`attempt`）を1つ増やして新しいRunを作ります。履歴には手動（`source: manual`）と実行した人を残し、監査ログに`automation.execution.manual`を記録します。
+- 手動で適用した推論Runが成功すると、後段の評価ルールは通常どおり連鎖します。
+
+### 評価コードを直したときの運用
+
+ルールの設定は不変です。評価コード（CodeVersion）を直したら、次の手順で評価をそろえます。
+
+1. 新しいCodeVersionで評価ルールを作ります。上流は従来と同じ推論ルールにします。
+2. 古い評価ルールを無効にします。
+3. 基準版（`production` aliasなど）の推論Runを指定して、新しい評価ルールを手動で適用します。推論はやり直さず、評価だけを新しいコードで回します。
+
+[評価結果の比較](evaluation.md)は評価コードの版が一致するRunどうしで行うため、基準版も新しいコードで評価しておかないと、新しい版の評価に比べる相手がいません。
+
 
 ## APIと実行確認
 
 - `GET/POST /api/projects/:p/automation-rules`
 - `PATCH /api/projects/:p/automation-rules/:id`、bodyは`{"enabled": false}`など
 - `GET /api/projects/:p/automation-executions`
+- `POST /api/projects/:p/automation-rules/:id/executions`、bodyは`{"modelVersionId": "…"}`または`{"triggerRunId": "…"}`
 - `GET /api/projects/:p/artifacts?limit=100&query=.sif`、Project単位の保存済みArtifact一覧
 - `GET /api/projects/:p/artifacts/:id`、保存済みArtifactのSHA256・sizeなど
 

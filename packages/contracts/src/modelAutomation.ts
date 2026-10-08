@@ -48,4 +48,10 @@ export interface ModelAutomationExecution {
 
 // POST /projects/:p/automation-rules/:id/executions takes a version, or an upstream Run for a
 // rule whose trigger is 'upstream_run_finished'.
+  // The Project admin who applied the rule by hand; null for automatic executions.
+  requestedBy: string | null;
+  createdAt: string;
+}
+
+/** POST /projects/:p/automation-rules/:id/executions: a version, or an upstream Run for chained rules. */
 export type CreateAutomationExecution = { modelVersionId: string } | { triggerRunId: string };

@@ -50,6 +50,7 @@ import { EvaluationService } from './services/evaluationService.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
 import { AutomationSourceRunHandler } from './services/automationSourceRunHandler.js';
+import { AutomationChainHandler } from './services/automationChainHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { RunNoteService } from './services/runNoteService.js';
 import { CommentService } from './services/commentService.js';
@@ -146,6 +147,7 @@ export function createApplication(options: ApplicationOptions) {
   // Output registration must run before the source-run handler releases pending automation.
   terminalHandlers.push(new OutputRegistrationHandler(registry));
   terminalHandlers.push(new AutomationSourceRunHandler(automation));
+  terminalHandlers.push(new AutomationChainHandler(automation));
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
   const evaluation = new EvaluationService(database);

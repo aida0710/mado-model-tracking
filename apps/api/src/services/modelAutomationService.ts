@@ -1,19 +1,37 @@
-import type { ModelAutomationExecution, ModelAutomationRule, ModelVersion } from '@mmt/contracts';
+import { randomUUID } from 'node:crypto';
+import type {
+  ModelAutomationExecution,
+  ModelAutomationRule,
+  ModelVersion,
+  Run,
+} from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { automationFailureMessage } from '../domain/automationFailure.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
-import { notFound } from '../domain/errors.js';
-import type { ModelAutomationRuleCreate } from '../domain/modelAutomationValidation.js';
-import { isTerminalStatus } from '../domain/runTransitions.js';
+import { DomainError, notFound } from '../domain/errors.js';
 import {
+  assertRuleTrigger,
+  type AutomationExecutionCreate,
+  type ModelAutomationRuleCreate,
+} from '../domain/modelAutomationValidation.js';
+import { isTerminalStatus } from '../domain/runTransitions.js';
+import type { RequestMetadata } from '../http/requestMetadata.js';
+import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
+import { writeAuditEvent } from '../repositories/auditRepository.js';
+import {
+  findAutomationExecution,
   hasAutomationCreatorAccess,
   insertAutomationEvent,
   insertAutomationExecution,
   listAutomationExecutions,
+  lockAutomationRule,
   lockExpiredAutomationEvents,
   lockPendingAutomationEvents,
+  lockRegistrationRules,
+  measureRuleChain,
   resolveAutomationEvent,
+  summarizeRuleAttempts,
   type PendingAutomationEvent,
 } from '../repositories/modelAutomationRepository.js';
 import {
@@ -29,6 +47,7 @@ import {
 } from '../repositories/runtimeArtifactRepository.js';
 import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import { requireProject } from './accessService.js';
+import { auditActor, recordDenial, type AuditEventDraft } from './auditService.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
@@ -44,6 +63,30 @@ const UNSUCCESSFUL_SOURCE_ERRORS = {
     'source_run_timeout: 学習Runの成功を期限内に確認できなかったか、学習Runが削除されたため起動しません',
 } as const;
 type UnsuccessfulSourceState = keyof typeof UNSUCCESSFUL_SOURCE_ERRORS;
+
+// A chain longer than this is far beyond inference → evaluation → report; the limit keeps a
+// mistaken setup from fanning out an unbounded number of Jobs from one model registration.
+export const MAX_AUTOMATION_CHAIN_DEPTH = 5;
+
+/**
+ * What started one execution of a rule. A first stage has no trigger Run; a chained stage receives
+ * the upstream Run, its output DatasetVersions, and the first-stage execution of the pipeline.
+ */
+export interface AutomationTrigger {
+  run: Pick<Run, 'id' | 'outputDatasetVersionIds'> | null;
+  pipelineRootExecutionId: string | null;
+  source: ModelAutomationExecution['source'];
+  attempt: number;
+  requestedBy: string | null;
+}
+
+const AUTOMATIC_REGISTRATION: AutomationTrigger = {
+  run: null,
+  pipelineRootExecutionId: null,
+  source: 'automatic',
+  attempt: 1,
+  requestedBy: null,
+};
 
 export class ModelAutomationService {
   constructor(
@@ -74,6 +117,9 @@ export class ModelAutomationService {
       await this.requireRuleAdmin(connection, principal, projectId);
       // Rule tags are copied onto every Run the rule starts, so they obey the Run tag rule.
       assertNoReservedRunTags(input.tags);
+      assertRuleTrigger(input);
+      if (input.upstreamRuleId !== null)
+        await this.assertUpstreamRule(connection, { projectId, ruleId: input.upstreamRuleId });
       await assertProjectReference(connection, {
         table: 'experiments',
         projectId,
@@ -101,8 +147,8 @@ export class ModelAutomationService {
       });
       return (await first<ModelAutomationRule>(
         connection,
-        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by,trigger,upstream_rule_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
         [
           projectId,
           input.name,
@@ -118,9 +164,40 @@ export class ModelAutomationService {
           JSON.stringify(input.tags),
           input.maxAttempts,
           principal.user.id,
+          input.trigger,
+          input.upstreamRuleId,
         ],
       ))!;
     });
+  }
+
+  // The upstream must be an enabled rule of the same Project, and the new rule must stay within
+  // the chain depth limit.
+  private async assertUpstreamRule(
+    connection: Connection,
+    upstream: { projectId: string; ruleId: string },
+  ): Promise<void> {
+    const rule = await lockAutomationRule(connection, {
+      projectId: upstream.projectId,
+      id: upstream.ruleId,
+      mode: 'share',
+    });
+    if (!rule) notFound('ModelAutomationRule');
+    if (!rule.enabled)
+      throw new DomainError(422, '上流のルールが無効です', 'upstream_rule_disabled');
+    const chain = await measureRuleChain(connection, {
+      projectId: upstream.projectId,
+      ruleId: upstream.ruleId,
+      maxDepth: MAX_AUTOMATION_CHAIN_DEPTH,
+    });
+    if (chain.hasCycle)
+      throw new DomainError(422, 'ルールの連鎖が循環しています', 'automation_chain_cycle');
+    if (chain.depth + 1 > MAX_AUTOMATION_CHAIN_DEPTH)
+      throw new DomainError(
+        422,
+        `ルールの連鎖は${MAX_AUTOMATION_CHAIN_DEPTH}段までです`,
+        'automation_chain_too_deep',
+      );
   }
 
   async toggleRule(
@@ -218,7 +295,7 @@ export class ModelAutomationService {
         projectId: event.projectId,
         id: event.modelVersionId,
       });
-      for (const rule of await this.lockEnabledRules(connection, model))
+      for (const rule of await lockRegistrationRules(connection, model))
         await insertAutomationExecution(connection, {
           projectId: model.projectId,
           ruleId: rule.id,
@@ -234,32 +311,30 @@ export class ModelAutomationService {
   }
 
   private async executeEnabledRules(connection: Connection, model: ModelVersion): Promise<void> {
-    for (const rule of await this.lockEnabledRules(connection, model))
-      await this.executeRule(connection, { rule, model });
+    for (const rule of await lockRegistrationRules(connection, model))
+      await this.executeRule(connection, { rule, model, trigger: AUTOMATIC_REGISTRATION });
   }
 
-  // FOR SHARE makes a concurrent enable/disable wait, so the rule set is the one at this moment.
-  private async lockEnabledRules(
+  /**
+   * Starts one rule for one version and records the outcome as an execution; shared by
+   * registrations, chained stages, and manual applications. Failures are recorded, not thrown, so
+   * the caller's other rules and the registration itself are kept. Returns the execution id.
+   */
+  async executeRule(
     connection: Connection,
-    model: ModelVersion,
-  ): Promise<ModelAutomationRule[]> {
-    return rows<ModelAutomationRule>(
-      connection,
-      `SELECT * FROM model_automation_rules WHERE project_id=$1 AND enabled AND $2=ANY(model_families)
-      ORDER BY created_at,id FOR SHARE`,
-      [model.projectId, model.family],
-    );
-  }
-
-  private async executeRule(
-    connection: Connection,
-    registration: { rule: ModelAutomationRule; model: ModelVersion },
-  ): Promise<void> {
-    const { rule, model } = registration;
+    start: { rule: ModelAutomationRule; model: ModelVersion; trigger: AutomationTrigger },
+  ): Promise<string> {
+    const { rule, model, trigger } = start;
     const execution = {
+      id: randomUUID(),
       projectId: model.projectId,
       ruleId: rule.id,
       modelVersionId: model.id,
+      triggerRunId: trigger.run?.id ?? null,
+      pipelineRootExecutionId: trigger.pipelineRootExecutionId,
+      attempt: trigger.attempt,
+      source: trigger.source,
+      requestedBy: trigger.requestedBy,
     };
     if (!(await hasAutomationCreatorAccess(connection, rule))) {
       await insertAutomationExecution(connection, {
@@ -267,7 +342,7 @@ export class ModelAutomationService {
         status: 'skipped',
         error: 'creator_access_revoked: ルール作成者の管理者権限が失効しています',
       });
-      return;
+      return execution.id;
     }
     if (!model.artifactId && !model.weightsUri) {
       await insertAutomationExecution(connection, {
@@ -275,8 +350,9 @@ export class ModelAutomationService {
         status: 'skipped',
         error: 'weights_required: モデルの重みが指定されていません',
       });
-      return;
+      return execution.id;
     }
+    const upstreamOutputIds = trigger.run?.outputDatasetVersionIds ?? [];
     await connection.query('SAVEPOINT automation_rule');
     try {
       if (model.artifactId)
@@ -293,12 +369,23 @@ export class ModelAutomationService {
           kind: rule.kind,
           modelVersionId: model.id,
           codeVersionId: rule.codeVersionId,
-          inputDatasetVersionIds: rule.inputDatasetVersionIds,
+          inputDatasetVersionIds: [
+            ...new Set([...rule.inputDatasetVersionIds, ...upstreamOutputIds]),
+          ],
           parameters: rule.parameters,
-          tags: { ...rule.tags, 'automation.ruleId': rule.id },
+          tags: {
+            ...rule.tags,
+            'automation.ruleId': rule.id,
+            ...(trigger.pipelineRootExecutionId
+              ? { 'automation.pipelineRoot': trigger.pipelineRootExecutionId }
+              : {}),
+          },
           environment: { automationRuleId: rule.id },
-          parentRunId: model.sourceRunId,
+          // A chained stage hangs under the upstream Run, which the worker hands to the container.
+          parentRunId: trigger.run?.id ?? model.sourceRunId,
         },
+        // Evaluation conditions are matched on the rule's fixed inputs only (the reference set).
+        upstreamDatasetVersionIds: upstreamOutputIds,
       });
       const job = await this.jobs.insertJob(connection, {
         run,
@@ -325,6 +412,139 @@ export class ModelAutomationService {
       });
     }
     await connection.query('RELEASE SAVEPOINT automation_rule');
+    return execution.id;
+  }
+
+  /**
+   * Applies a rule by hand to an existing version (registration rules) or to a finished upstream
+   * Run (chained rules), for example after fixing evaluation code in a new rule. Only Project
+   * admins may do this; the run is recorded as a new attempt with source 'manual'.
+   */
+  async applyRule(
+    principal: Principal,
+    projectId: string,
+    application: { ruleId: string; input: AutomationExecutionCreate; metadata: RequestMetadata },
+  ): Promise<ModelAutomationExecution> {
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...application.metadata,
+      action: 'automation.execution.manual',
+      resourceType: 'model_automation_rule',
+      resourceId: application.ruleId,
+      projectId,
+      details: { ...application.input },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await this.requireRuleAdmin(connection, principal, projectId);
+        const rule = await lockAutomationRule(connection, {
+          projectId,
+          id: application.ruleId,
+          mode: 'update',
+        });
+        if (!rule) notFound('ModelAutomationRule');
+        if (!rule.enabled)
+          throw new DomainError(422, '無効なルールは適用できません', 'automation_rule_disabled');
+        const target = await this.resolveManualTarget(connection, { rule, input: application.input });
+        if (!rule.modelFamilies.includes(target.model.family))
+          throw new DomainError(
+            422,
+            `ルールの対象にモデル系列${target.model.family}が含まれていません`,
+            'incompatible_model_family',
+          );
+        const attempts = await summarizeRuleAttempts(connection, {
+          ruleId: rule.id,
+          modelVersionId: target.model.id,
+        });
+        if (attempts.hasActive)
+          throw new DomainError(
+            409,
+            '同じルールとモデル版の実行が待機中または実行中です',
+            'automation_execution_active',
+          );
+        const executionId = await this.executeRule(connection, {
+          rule,
+          model: target.model,
+          trigger: {
+            run: target.triggerRun,
+            pipelineRootExecutionId: target.pipelineRootExecutionId,
+            source: 'manual',
+            attempt: attempts.maxAttempt + 1,
+            requestedBy: principal.user.id,
+          },
+        });
+        const execution = (await findAutomationExecution(connection, {
+          projectId,
+          id: executionId,
+        }))!;
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: {
+            ...draft.details,
+            executionId,
+            modelVersionId: target.model.id,
+            attempt: execution.attempt,
+            status: execution.status,
+          },
+        });
+        return execution;
+      }),
+    );
+  }
+
+  private async resolveManualTarget(
+    connection: Connection,
+    request: { rule: ModelAutomationRule; input: AutomationExecutionCreate },
+  ): Promise<{
+    model: ModelVersion;
+    triggerRun: Run | null;
+    pipelineRootExecutionId: string | null;
+  }> {
+    const { rule, input } = request;
+    if ('modelVersionId' in input) {
+      if (rule.trigger !== 'model_registered')
+        throw new DomainError(
+          422,
+          '連鎖するルールには上流RunのID（triggerRunId）を指定します',
+          'automation_trigger_mismatch',
+        );
+      const model = await findModelVersion(connection, {
+        projectId: rule.projectId,
+        id: input.modelVersionId,
+      });
+      return { model, triggerRun: null, pipelineRootExecutionId: null };
+    }
+    if (rule.trigger !== 'upstream_run_finished')
+      throw new DomainError(
+        422,
+        'モデル登録で起動するルールにはモデル版のID（modelVersionId）を指定します',
+        'automation_trigger_mismatch',
+      );
+    const run = await findRun(connection, { projectId: rule.projectId, id: input.triggerRunId });
+    if (run.status !== 'finished')
+      throw new DomainError(422, '上流Runが成功していません', 'upstream_run_not_finished');
+    const upstream = await findExecutionForRun(connection, {
+      projectId: rule.projectId,
+      runId: run.id,
+    });
+    if (!upstream || upstream.ruleId !== rule.upstreamRuleId)
+      throw new DomainError(
+        422,
+        '指定したRunはこのルールの上流ルールが作ったRunではありません',
+        'upstream_rule_mismatch',
+      );
+    if (run.outputDatasetVersionIds.length === 0)
+      throw new DomainError(
+        422,
+        '上流Runに出力DatasetVersionがありません',
+        'upstream_outputs_missing',
+      );
+    const model = await findModelVersion(connection, {
+      projectId: rule.projectId,
+      id: upstream.modelVersionId,
+    });
+    return { model, triggerRun: run, pipelineRootExecutionId: upstream.pipelineRootExecutionId };
   }
 
   private async requireRuleAdmin(
