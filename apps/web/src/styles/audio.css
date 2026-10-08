@@ -1,0 +1,187 @@
+/* Audio viewer (waveform, spectrogram, loop), evaluation sample tables, and Artifact comparison. */
+.audio-viewer {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+}
+.audio-viewer-toolbar,
+.evaluation-samples-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.audio-time {
+  min-width: 128px;
+}
+.audio-viewer-select,
+.evaluation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.audio-viewer-select select {
+  width: auto;
+  min-height: 28px;
+  padding: 2px 8px;
+}
+.audio-loop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 6px;
+  background: var(--teal-tint);
+  color: var(--teal-strong);
+}
+.audio-timeline {
+  position: relative;
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+.audio-timeline:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+.audio-waveform,
+.audio-spectrogram {
+  display: block;
+  width: 100%;
+}
+.audio-spectrogram {
+  image-rendering: auto;
+  border-top: 1px solid var(--border);
+}
+.audio-timeline-placeholder {
+  display: grid;
+  place-items: center;
+}
+.audio-frequency-label {
+  position: absolute;
+  right: 6px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 10px;
+  pointer-events: none;
+}
+.audio-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--error);
+  pointer-events: none;
+}
+.audio-loop-region {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--teal) 22%, transparent);
+  border-inline: 1px solid var(--teal);
+  pointer-events: none;
+}
+.audio-pan {
+  width: 100%;
+}
+.audio-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 2px 14px;
+  margin: 0;
+}
+.audio-meta dt {
+  color: var(--muted);
+}
+.audio-meta dd {
+  margin: 0;
+}
+.audio-viewer audio {
+  width: 100%;
+  margin: 0;
+}
+.audio-hint {
+  margin: 0;
+  font-size: 12px;
+}
+.evaluation-samples {
+  display: grid;
+  gap: 10px;
+}
+.evaluation-errors ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.evaluation-samples-table td {
+  vertical-align: middle;
+}
+.sample-text {
+  min-width: 160px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sample-error {
+  color: var(--error);
+}
+.sample-audio {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 300px;
+}
+.sample-audio audio {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  /* artifacts.css gives previewed audio a 16px margin, which would make every row tall. */
+  margin: 0;
+}
+.sample-audio .button {
+  flex: none;
+}
+.text-diff-delete {
+  background: var(--error-tint);
+  color: var(--error);
+  text-decoration: line-through;
+}
+.text-diff-insert {
+  background: var(--success-tint);
+  color: var(--success);
+}
+.evaluation-sample-detail > td {
+  background: var(--background);
+}
+.evaluation-pagination {
+  align-items: center;
+}
+.artifact-compare-stack {
+  display: grid;
+  gap: 14px;
+}
+.artifact-compare-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.artifact-compare-item.last-played {
+  border-color: var(--teal);
+}
+.artifact-compare-item > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.artifact-compare-item h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
