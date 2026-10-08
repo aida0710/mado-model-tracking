@@ -633,32 +633,6 @@ describe.skipIf(!testDatabaseUrl)('MLflow Artifact転送（隔離PostgreSQL）',
       expect(ranged.headers.get('Content-Type')).toBe(inferred);
     }
   });
-
-  it('multipart uploadのmpu/create・complete・abortは公式SDKがPUTへ戻る501を返す', async () => {
-    const fixture = await artifactFixture(harness);
-    // Copied from mlflow.exceptions._UnsupportedMultipartUploadException.MESSAGE on purpose:
-    // the SDK falls back to a plain PUT only when the message starts with this exact text.
-    const sdkFallbackMessage =
-      'Multipart upload is not supported for the current artifact repository';
-    const multipartUrl = (action: string) =>
-      `${fixture.mlflowPath}/api/2.0/mlflow-artifacts/mpu/${action}/${fixture.runRoot}/large.bin`;
-    for (const action of ['create', 'complete', 'abort']) {
-      const response = await request(harness.app, multipartUrl(action), {
-        method: 'POST',
-        cookie: fixture.editor.cookie,
-        body: { path: '/tmp/large.bin', num_parts: 2, upload_id: 'upload', parts: [] },
-      });
-      expect(response.status, action).toBe(501);
-      const error = (await response.json()) as { error_code: string; message: string };
-      expect(error.error_code).toBe('NOT_IMPLEMENTED');
-      expect(error.message.startsWith(sdkFallbackMessage)).toBe(true);
-    }
-    const anonymous = await request(harness.app, multipartUrl('create'), {
-      method: 'POST',
-      body: { path: '/tmp/large.bin', num_parts: 1 },
-    });
-    expect(anonymous.status).toBe(401);
-  });
 });
 
 /** A 16-bit mono PCM WAV with a canonical 44-byte header, so Range offsets match real files. */

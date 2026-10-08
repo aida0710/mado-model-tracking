@@ -2,8 +2,15 @@ import type { ArtifactUpload, ArtifactUploadPart } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
 import { notFound } from '../domain/errors.js';
 
-/** The session as stored, including the backend references and creator that clients never see. */
+/**
+ * The session as stored, including the backend references and creator that clients never see.
+ * expectedSize and partSize are null only while an MLflow session (ownerKind set) is not yet
+ * completed by the client; native sessions always have them.
+ */
 export interface ArtifactUploadRecord extends ArtifactUpload {
+  /** Set for MLflow multipart sessions: the Artifact path owner mapped on completion. */
+  ownerKind: 'run' | 'model' | null;
+  ownerId: string | null;
   storageKey: string;
   backendUploadId: string;
   createdByUserId: string;
@@ -16,7 +23,7 @@ export interface ArtifactUploadRecord extends ArtifactUpload {
 export const artifactUploadColumns = `id,project_id,run_id,path,backend,storage_key,mime_type,
   expected_size::float8 AS expected_size,expected_sha256,part_size::float8 AS part_size,part_count,
   status,backend_upload_id,created_by_user_id,created_by_token_id,created_by_job_token_id,artifact_id,
-  error,
+  error,owner_kind,owner_id,
   finalizer_attempts,expires_at,created_at,updated_at`;
 
 export async function findArtifactUpload(

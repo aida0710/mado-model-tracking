@@ -13,3 +13,9 @@ export function requestBodyStream(context: ApiContext): Readable {
   readable.on('error', () => undefined);
   return readable;
 }
+
+/** Content-Length of a raw upload; storage needs the size before reading the body. */
+export function declaredContentLength(context: ApiContext): number | undefined {
+  const header = context.req.header('Content-Length');
+  return header && /^\d+$/.test(header) ? Number(header) : undefined;
+}

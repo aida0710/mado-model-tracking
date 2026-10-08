@@ -58,7 +58,18 @@ Runの説明文はMLflowと同じ`mlflow.note.content` tagに保存します。M
 
 ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデル版が参照するArtifactは保持します。
 
-SDKの`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`は設定したままで使えます。multipart uploadには未対応のため、`mpu/create`・`complete`・`abort`は501 `NOT_IMPLEMENTED`を返します。SDKはこの応答を受けて、同じファイルを1回のストリーム転送でアップロードし直します。SDKはエラーmessageの先頭が自身の定数と一致するときだけ通常転送へ戻るので、サーバーはSDKと同じ英語の文言を返します。
+### 大きいファイルのmultipart upload
+
+大きいファイルは、MLflowのmultipart upload（`mpu/create`→partごとのPUT→`complete`）で分割して送れます。途中のpartが失敗しても、SDKはファイル全体ではなくそのpartだけを送り直します。
+
+- MLflow 3.17以降のSDKは`<tracking URI>/api/3.0/mlflow/server-info`を読み、`multipart_uploads_enabled`がtrueなら自動で使います。3.0〜3.16のSDKはserver-infoを読まないので、`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`を設定します。
+- 使うのは`MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE`（SDKの既定500MiB）以上のファイルで、partの大きさは`MLFLOW_MULTIPART_UPLOAD_CHUNK_SIZE`（既定10MiB）です。chunkは5MiB以上にしてください。最後以外のpartが5MiB未満だと、保存先がファイルシステムでも422で失敗します（S3と同じ規則にしています）。
+- part数の上限は10000です。200GiBのファイルなら、chunkを21MiB以上にします。
+- `complete`は、API側で全体のSHA-256を計算してArtifactを登録し終えるまで待ちます。待つのは`MMT_UPLOAD_FINALIZE_WAIT_MS`（既定100秒）までで、超えると503が返ります。そのときもAPIは検証を続け、終わればArtifactの一覧に表示されます。数十GBのファイルを送るときは、SDKの`MLFLOW_HTTP_REQUEST_TIMEOUT`（既定120秒）と`MMT_UPLOAD_FINALIZE_WAIT_MS`を大きくしてください。
+- partのPUTにはAPI tokenを付けません。`mpu/create`の応答に入るsession限定のupload token（`X-MMT-Upload-Token`）で認可します。tokenの期限はsessionと同じ7日です。
+- Job内のコードからも使えます。Job限定token（`mmtj_`）で作れるのは、そのJobのRunとLogged Modelのsessionだけです。
+- 運用でmultipartを止めるときは`MMT_MLFLOW_MULTIPART_UPLOADS=false`にします。server-infoはfalseを返し、`mpu/create`・`complete`・`abort`は501 `NOT_IMPLEMENTED`を返します。SDKはこの応答を受けて、同じファイルを1回のストリーム転送でアップロードし直します。SDKはエラーmessageの先頭が自身の定数と一致するときだけ通常転送へ戻るので、サーバーはSDKと同じ英語の文言を返します。空のファイルと、multipartに対応しない保存先でも同じ501を返します。
+- multipart download（presigned URLでの直接取得）は作っていません。`MMT_MLFLOW_MULTIPART_DOWNLOADS`は既定のfalseのままにしてください。trueにすると、3.17以降のSDKがpresigned URLの取得に失敗してdownloadが止まります。
 
 ## モデルと入力Datasetを記録する
 
@@ -187,6 +198,7 @@ JobのRunに追加したSDKのparamsは記録用の`recordedParameters`へ保存
 | --- | --- | --- |
 | Run・nested Run・params・metrics・tags | 対応 | 記録、paramsの上書き拒否、metric履歴、検索、削除と復元 |
 | Artifactの転送 | 対応 | 6MiB・空ファイル・日本語pathのアップロードとダウンロード、hashの一致 |
+| multipart upload（`mpu/*`） | 対応 | 3.17.0はserver-infoから自動で、3.0.0は`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`で、5MiBのchunk2個に分けて送信。両方のserver-infoのpath、downloadのhash一致 |
 | Logged Model・Model Registry・alias | 対応 | sklearnモデルの保存と読み込み、版の登録、`models:/名前@alias`の読み込み |
 | scikit-learn autolog | 対応 | params・metrics・入力Dataset・Logged Modelの自動記録 |
 | `mlflow.models.evaluate` | 対応 | RunとLogged Modelへのmetrics、`eval_results_table.json`の保存と一覧 |
@@ -211,7 +223,15 @@ uv pip install --python artifacts/verification/mlflow3-venv/bin/python \
 artifacts/verification/mlflow3-venv/bin/python scripts/verify_mlflow3.py
 ```
 
-multipart uploadの通常転送への切り替えも確かめる場合は、`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`と、検証用ファイルより小さい`MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE`（例: `1048576`）を付けて実行します。このとき検証は、しきい値を超えるArtifactのアップロード・ダウンロード結果と、`mpu/create`の501応答を確認します。
+検証は、`/server-info`と`/api/3.0/mlflow/server-info`の両方が`multipart_uploads_enabled: true`を返すことと、6MiBを少し超えるファイルの`log_artifact`がmultipart uploadを通ることを確かめます。検証中だけSDKの`MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE`を1MiB、`MLFLOW_MULTIPART_UPLOAD_CHUNK_SIZE`を5MiBにし、part PUTが2回で通常のPUTが無いこと、一覧のsizeとdownloadのSHA-256が一致することを見ます。3.0のSDKはserver-infoを読まないので、検証が`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`を付けます。
+
+開発用DBを使わずに確かめるときは、テスト専用DBで検証用APIを起動して`MMT_VERIFY_API_URL`で指定します。検証用APIはupload finalizerも動かし、`mpu`のrequestをmethod・path・statusだけ1行ずつ標準出力へ書きます。
+
+```bash
+MMT_VERIFY_API_PORT=47070 MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+  npx tsx scripts/serve_mlflow_verification.ts
+MMT_VERIFY_API_URL=http://127.0.0.1:47070 artifacts/verification/mlflow3-venv/bin/python scripts/verify_mlflow3.py
+```
 
 検証用Project・token・CPU target・自動実行ルールを作り、終了時にtokenを失効しルールを無効化します。Runとモデルは確認用に残します。結果は`artifacts/verification/<日付>/mlflow3/sdk-integration.json`へ保存します。
 

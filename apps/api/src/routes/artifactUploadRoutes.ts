@@ -3,15 +3,8 @@ import { z } from 'zod';
 import { MULTIPART_MAX_PART_COUNT } from '@mmt/platform';
 import type { ArtifactUploadService } from '../services/artifactUploadService.js';
 import { uuidSchema } from '../domain/validation.js';
-import { requestBodyStream } from '../http/requestBodyStream.js';
-import {
-  jsonBody,
-  parse,
-  principal,
-  uuidParam,
-  type ApiContext,
-  type ApiEnvironment,
-} from '../http/request.js';
+import { declaredContentLength, requestBodyStream } from '../http/requestBodyStream.js';
+import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 
 /** Optional lowercase hex SHA-256 of one part; a mismatch rejects the part without storing it. */
 export const PART_SHA256_HEADER = 'X-Part-SHA256';
@@ -32,11 +25,6 @@ const uploadListQuerySchema = z.object({
   status: z.enum(['open', 'verifying', 'completed', 'aborted', 'expired', 'failed']).optional(),
 });
 const partNumberSchema = z.coerce.number().int().min(1).max(MULTIPART_MAX_PART_COUNT);
-
-function declaredContentLength(context: ApiContext): number | undefined {
-  const header = context.req.header('Content-Length');
-  return header && /^\d+$/.test(header) ? Number(header) : undefined;
-}
 
 export function artifactUploadRoutes(uploads: ArtifactUploadService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();

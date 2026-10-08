@@ -3,6 +3,8 @@ import type { JobTokenBinding } from '../auth/principal.js';
 import type { Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { decodeArtifactLocation } from '../mlflow/artifacts/artifactPath.js';
+import { decodeMultipartDirectory } from '../mlflow/artifacts/multipartProtocol.js';
+import type { ArtifactLocation } from '../mlflow/artifacts/artifactTypes.js';
 import {
   findArtifactUploadRunId,
   findLoggedModelSourceRunId,
@@ -34,6 +36,7 @@ export interface JobTokenRule {
 const NATIVE = '/api/projects/:p';
 const MLFLOW = '/api/mlflow/projects/:p/api/2.0/mlflow';
 const MLFLOW_ARTIFACTS = '/api/mlflow/projects/:p/api/2.0/mlflow-artifacts/artifacts';
+const MLFLOW_MULTIPART = '/api/mlflow/projects/:p/api/2.0/mlflow-artifacts/mpu';
 
 function sameId(value: unknown, expected: string): boolean {
   return typeof value === 'string' && value.toLowerCase() === expected.toLowerCase();
@@ -69,10 +72,12 @@ const ownArtifactUpload = async (request: JobTokenRequest) =>
     }),
     request.job.runId,
   );
-const ownArtifactTransfer = async (request: JobTokenRequest) => {
+const ownArtifactLocation = (decode: (encodedPath: string) => ArtifactLocation) => async (
+  request: JobTokenRequest,
+) => {
   let location;
   try {
-    location = decodeArtifactLocation(request.params['*']!);
+    location = decode(request.params['*']!);
   } catch {
     return false;
   }
@@ -170,7 +175,18 @@ export const JOB_TOKEN_WRITE_RULES: readonly JobTokenRule[] = [
     route: `${MLFLOW}/logged-models/:model_id/params`,
     allows: ownLoggedModel,
   },
-  { methods: ['PUT'], route: `${MLFLOW_ARTIFACTS}/*`, allows: ownArtifactTransfer },
+  {
+    methods: ['PUT'],
+    route: `${MLFLOW_ARTIFACTS}/*`,
+    allows: ownArtifactLocation(decodeArtifactLocation),
+  },
+  // Part PUTs carry no Authorization (the part token is checked by the session), so only the
+  // session-opening and closing requests reach this guard.
+  ...['create', 'complete', 'abort'].map((action) => ({
+    methods: ['POST'],
+    route: `${MLFLOW_MULTIPART}/${action}/*`,
+    allows: ownArtifactLocation(decodeMultipartDirectory),
+  })),
 ];
 
 // Reads stay inside the token's Project; upstream Run artifacts are read this way.

@@ -11,7 +11,7 @@ import {
   requireNonconflictingArtifactPath,
 } from './artifactPathRepository.js';
 import type { ArtifactAccess, ArtifactFile, ArtifactUpload } from './artifactTypes.js';
-import { MlmodelCapture } from './mlmodelCapture.js';
+import { MlmodelCapture, saveLoggedModelMlmodel } from './mlmodelCapture.js';
 import { modelVersionArtifactManifest } from './modelVersionArtifactRepository.js';
 
 export class ArtifactTransferService {
@@ -73,16 +73,11 @@ export class ArtifactTransferService {
           await requireNonconflictingArtifactPath(connection, upload);
           await replaceArtifactPath(connection, { ...upload, artifact, runId: authorized.runId });
           if (!capture) return;
-          const metadata = capture.metadata();
-          await connection.query(
-            `UPDATE mlflow_logged_models SET metadata=CASE WHEN $3::jsonb IS NULL THEN metadata-'mlmodel'
-             ELSE jsonb_set(metadata,'{mlmodel}',$3::jsonb) END,updated_at=now() WHERE id=$1 AND project_id=$2`,
-            [
-              upload.owner.id,
-              upload.projectId,
-              metadata === null ? null : JSON.stringify(metadata),
-            ],
-          );
+          await saveLoggedModelMlmodel(connection, {
+            projectId: upload.projectId,
+            id: upload.owner.id,
+            metadata: capture.metadata(),
+          });
         },
       });
     } catch (error) {

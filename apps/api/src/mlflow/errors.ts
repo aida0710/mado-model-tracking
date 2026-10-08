@@ -1,6 +1,7 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ArtifactRangeError } from '@mmt/platform';
 import { DomainError } from '../domain/errors.js';
+import { MultipartUploadUnsupportedError } from './artifacts/multipartUnsupported.js';
 
 interface MlflowErrorResponse {
   status: ContentfulStatusCode;
@@ -25,14 +26,20 @@ export function isMlflowRequest(requestPath: string): boolean {
   return /^\/api\/mlflow\/projects\/[^/]+(?:\/|$)/.test(requestPath);
 }
 
+/** Raw Artifact bytes: single-PUT transfers and multipart part PUTs. */
 export function isMlflowArtifactUpload(request: { method: string; path: string }): boolean {
   return (
     request.method === 'PUT' &&
-    /^\/api\/mlflow\/projects\/[^/]+\/api\/2\.0\/mlflow-artifacts\/artifacts\/.+/.test(request.path)
+    /^\/api\/mlflow\/projects\/[^/]+\/api\/2\.0\/mlflow-artifacts\/(?:artifacts\/.+|mpu\/parts\/[^/]+\/[^/]+)$/.test(
+      request.path,
+    )
   );
 }
 
 export function formatMlflowError(error: Error): MlflowErrorResponse {
+  // DomainError has no 501 status; the SDK needs exactly this status and message to fall back.
+  if (error instanceof MultipartUploadUnsupportedError)
+    return { status: 501, body: { error_code: 'NOT_IMPLEMENTED', message: error.message } };
   if (error instanceof DomainError) {
     const statusCode = error.status;
     const fallbackCode =
