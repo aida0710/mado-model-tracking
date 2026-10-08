@@ -5,7 +5,7 @@ import type { Project } from '@mmt/contracts';
 import { useAuth } from '../hooks/useAuth';
 import { canCreateProject } from '../lib/permissions';
 import { formatDate } from '../lib/format';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { ProjectDialog } from '../dialogs/ProjectDialog';
 import { text } from '../i18n/catalog';
 
@@ -33,27 +33,35 @@ export function ProjectList({
       </div>
       {/* With no Project yet, the page around this section already explains what to do. */}
       {projects.length > 0 && (
-        <DataTable
-          items={projects}
+        <ResponsiveTable
+          rows={projects}
           rowKey={(project) => project.id}
           columns={[
             {
               key: 'name',
-              label: text.name,
+              header: text.name,
               render: (project) => (
                 <Link to={`/projects/${project.id}/experiments`}>{project.name}</Link>
               ),
+              priority: 'primary',
             },
-            { key: 'role', label: text.role, render: (project) => text[project.role] },
+            {
+              key: 'role',
+              header: text.role,
+              render: (project) => text[project.role],
+              priority: 'primary',
+            },
             {
               key: 'description',
-              label: text.description,
+              header: text.description,
               render: (project) => project.description,
+              priority: 'secondary',
             },
             {
               key: 'created',
-              label: text.created,
+              header: text.created,
               render: (project) => formatDate(project.createdAt),
+              priority: 'secondary',
             },
           ]}
         />

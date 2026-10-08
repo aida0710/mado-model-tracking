@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, Outlet, useParams } from 'react-router-dom';
 import { administrationApi } from '../api/administration';
 import { useAuth } from '../hooks/useAuth';
 import { useQuery } from '../hooks/useQuery';
@@ -9,10 +9,10 @@ import { ProjectList } from '../components/ProjectList';
 import { canCreateProject } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 import { TopBar } from './TopBar';
+import { ProjectBar } from './ProjectBar';
 
 export function AppShell() {
   const { projectId } = useParams();
-  const navigate = useNavigate();
   const auth = useAuth();
   const projects = useQuery('projects', administrationApi.projects);
   const userCanCreateProject = canCreateProject(auth.user);
@@ -28,24 +28,7 @@ export function AppShell() {
             return <Navigate replace to={`/projects/${items[0].id}/experiments`} />;
           return (
             <>
-              <div className="projectbar">
-                <label>
-                  <span>{text.project}</span>
-                  <select
-                    aria-label={text.project}
-                    value={project?.id ?? ''}
-                    onChange={(event) => navigate(`/projects/${event.target.value}/experiments`)}
-                  >
-                    {!project && <option value="">{text.none}</option>}
-                    {items.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <span className="project-role">{project ? text[project.role] : ''}</span>
-              </div>
+              {items.length > 0 && <ProjectBar projects={items} project={project} />}
               {project ? (
                 <ProjectContext.Provider
                   value={{ project, projects: items, reloadProjects: projects.reload }}

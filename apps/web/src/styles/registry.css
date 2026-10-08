@@ -200,7 +200,7 @@
 .graph-relations table {
   margin-top: 14px;
 }
-@media (max-width: 1200px) {
+@media (width < 1200px) {
   .registry-layout {
     grid-template-columns: minmax(250px, 34%) minmax(0, 1fr);
     gap: 20px;
@@ -209,7 +209,7 @@
     padding-left: 20px;
   }
 }
-@media (max-width: 800px) {
+@media (width < 900px) {
   .registry-layout,
   .details-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -221,7 +221,7 @@
     padding: 22px 0 0;
   }
 }
-@media (max-width: 480px) {
+@media (width < 640px) {
   .details-list > div {
     grid-template-columns: 112px minmax(0, 1fr);
   }

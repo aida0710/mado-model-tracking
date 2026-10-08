@@ -179,7 +179,7 @@
 }
 
 /* One panel per row on narrow screens; the stored placement is kept for wider ones. */
-@media (max-width: 900px) {
+@media (width < 900px) {
   .chart-panel-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-auto-rows: auto;

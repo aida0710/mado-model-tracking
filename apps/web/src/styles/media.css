@@ -162,7 +162,7 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
-@media (max-width: 900px) {
+@media (width < 900px) {
   .run-media-panel {
     grid-template-columns: 1fr;
   }
