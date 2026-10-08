@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any
+from typing import Any, BinaryIO
 from urllib.parse import quote
 
 import httpx
 
+from .artifact_downloads import download_resumable_sync
 from .code_version import build_code_version_payload
 from .errors import ApiError, ConfigurationError
 from .execution_runtime import ExecutionRuntime
@@ -466,6 +467,20 @@ class Client(ExperimentTasksClient):
                 "gpuIds": list(gpu_ids),
                 "maxAttempts": max_attempts,
             },
+        )
+
+    def download_artifact_to(
+        self, project_id: str, artifact_id: str, destination: BinaryIO
+    ) -> dict[str, Any]:
+        """Write an Artifact into a seekable stream, resuming with Range after an interruption.
+
+        Returns the received {sha256, size}; the sha256 is already checked against the version's ETag.
+        """
+        return download_resumable_sync(
+            self.http,
+            self.project_path(project_id, f"artifacts/{path_id(artifact_id)}/content"),
+            destination,
+            masker=self.masker,
         )
 
     def download_artifact(self, project_id: str, artifact_id: str) -> Iterator[bytes]:

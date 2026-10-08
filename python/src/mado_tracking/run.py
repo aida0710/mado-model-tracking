@@ -9,6 +9,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, BinaryIO, Literal, cast
 
+from .artifact_uploads import SESSION_UPLOAD_THRESHOLD_BYTES, UploadTarget, upload_file_sync
 from .client import path_id
 from .errors import ConfigurationError
 from .timestamps import utc_timestamp
@@ -127,17 +128,27 @@ class Run:
     def log_artifact(
         self, source: str | Path | BinaryIO, *, path: str | None = None, mime_type: str | None = None
     ) -> dict[str, Any]:
+        """Files of SESSION_UPLOAD_THRESHOLD_BYTES or more use a resumable upload session."""
         owns_stream = isinstance(source, (str, Path))
         source_path = Path(source) if isinstance(source, (str, Path)) else None
-        stream: BinaryIO
         if source_path is not None:
-            stream = source_path.open("rb")
             path = path or source_path.name
-        else:
-            stream = cast(BinaryIO, source)
         if not path:
             raise ConfigurationError("path is required for a binary stream")
         content_type = mime_type or mimetypes.guess_type(path)[0] or "application/octet-stream"
+        if source_path is not None and source_path.stat().st_size >= SESSION_UPLOAD_THRESHOLD_BYTES:
+            return upload_file_sync(
+                self.client,
+                target=UploadTarget(
+                    api_url=self.client.settings.url,
+                    project_id=self.project_id,
+                    run_id=self.id,
+                    path=path,
+                    mime_type=content_type,
+                ),
+                source=source_path,
+            )
+        stream = source_path.open("rb") if source_path is not None else cast(BinaryIO, source)
 
         def chunks() -> Iterator[bytes]:
             while chunk := stream.read(ARTIFACT_CHUNK_BYTES):
@@ -154,6 +165,16 @@ class Run:
         finally:
             if owns_stream:
                 stream.close()
+
+    def log_artifacts(self, directory: str | Path, *, path: str | None = None) -> list[dict[str, Any]]:
+        """Log every file under directory, keeping relative paths below the optional path prefix."""
+        root = Path(directory)
+        if not root.is_dir():
+            raise ConfigurationError("log_artifacts requires a directory")
+        prefix = path.strip("/") + "/" if path and path.strip("/") else ""
+        # rglob does not descend into symlinked directories, so the walk stays inside the tree.
+        files = sorted(file for file in root.rglob("*") if file.is_file())
+        return [self.log_artifact(file, path=prefix + file.relative_to(root).as_posix()) for file in files]
 
     def download_input_model(
         self, destination: str | Path, *, model_version: Mapping[str, Any] | None = None

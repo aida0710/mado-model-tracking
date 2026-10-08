@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from mado_tracking import Client
-from mado_tracking.errors import ConfigurationError
+from mado_tracking import Client, artifact_downloads
+from mado_tracking.errors import ApiError, ConfigurationError
 from mado_tracking.run import Run
 
 # Large chunks expose whole-file buffering while keeping this test inexpensive.
@@ -52,7 +52,10 @@ def test_input_artifact_is_streamed_privately_and_takes_priority_over_the_weight
     assert not list(tmp_path.glob(".input-model-*"))
 
 
-def test_interrupted_input_download_keeps_the_previous_file_and_removes_partial_bytes(tmp_path):
+def test_interrupted_input_download_keeps_the_previous_file_and_removes_partial_bytes(tmp_path, monkeypatch):
+    # Every resume attempt is interrupted too; skip the backoff between them.
+    monkeypatch.setattr(artifact_downloads, "retry_delay", lambda *_arguments: 0)
+
     class InterruptedStream(httpx.SyncByteStream):
         def __iter__(self):
             yield b"incomplete weights"
@@ -66,7 +69,7 @@ def test_interrupted_input_download_keeps_the_previous_file_and_removes_partial_
             api_token="model-test-secret",
             transport=httpx.MockTransport(lambda _request: httpx.Response(200, stream=InterruptedStream())),
         ) as client,
-        pytest.raises(httpx.ReadError, match="connection lost"),
+        pytest.raises(ApiError, match="kept failing"),
     ):
         input_run(client).download_input_model(destination, model_version=model_version())
     assert destination.read_bytes() == b"original" and not list(tmp_path.glob(".input-model-*"))
