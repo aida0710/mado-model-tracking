@@ -13,7 +13,7 @@ const sha256Schema = z
   .string()
   .regex(/^[0-9a-fA-F]{64}$/)
   .transform((digest) => digest.toLowerCase());
-const uploadCreateSchema = z.strictObject({
+export const uploadCreateSchema = z.strictObject({
   path: z.string().min(1).max(1024),
   runId: uuidSchema.optional(),
   mimeType: z.string().max(255).optional(),
@@ -21,7 +21,7 @@ const uploadCreateSchema = z.strictObject({
   expectedSha256: sha256Schema.optional(),
   partSize: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
 });
-const uploadListQuerySchema = z.object({
+export const uploadListQuerySchema = z.object({
   status: z.enum(['open', 'verifying', 'completed', 'aborted', 'expired', 'failed']).optional(),
 });
 const partNumberSchema = z.coerce.number().int().min(1).max(MULTIPART_MAX_PART_COUNT);

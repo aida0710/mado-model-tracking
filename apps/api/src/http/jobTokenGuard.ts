@@ -244,6 +244,17 @@ function matchingRules(method: string, path: string) {
   return matches;
 }
 
+/**
+ * Which rule list lets a Job token reach a route, for the OpenAPI document. The path may be a
+ * route template (`/api/projects/:p/runs/:r`): each `:name` segment matches one path segment.
+ * A match only opens the route; the rule's own check (for example "own Run") still applies.
+ */
+export function jobTokenAccessOf(method: string, path: string): 'write' | 'read' | null {
+  const rules = matchingRules(method, path).map(({ rule }) => rule);
+  if (rules.some((rule) => JOB_TOKEN_WRITE_RULES.includes(rule))) return 'write';
+  return rules.length > 0 ? 'read' : null;
+}
+
 function forbidden(): never {
   throw new DomainError(403, 'Job tokenではこの操作はできません', 'job_token_forbidden');
 }

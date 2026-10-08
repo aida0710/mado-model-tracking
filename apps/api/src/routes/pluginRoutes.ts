@@ -8,6 +8,9 @@ import {
 } from '../domain/validation.js';
 import { jsonBody, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 
+export const pluginDatasetSearchSchema = z.strictObject({ query: z.string().max(1000) });
+export const pluginDatasetImportSchema = z.strictObject({ dataset: pluginDatasetSchema });
+
 export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/:p/plugins', async (context) =>
@@ -42,7 +45,7 @@ export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
     ),
   );
   routes.post('/:p/plugins/:id/datasets/search', async (context) => {
-    const input = await jsonBody(context, z.strictObject({ query: z.string().max(1000) }));
+    const input = await jsonBody(context, pluginDatasetSearchSchema);
     return context.json(
       await plugins.search(principal(context), uuidParam(context, 'p'), {
         pluginId: uuidParam(context, 'id'),
@@ -51,7 +54,7 @@ export function pluginRoutes(plugins: PluginService): Hono<ApiEnvironment> {
     );
   });
   routes.post('/:p/plugins/:id/datasets/import', async (context) => {
-    const input = await jsonBody(context, z.strictObject({ dataset: pluginDatasetSchema }));
+    const input = await jsonBody(context, pluginDatasetImportSchema);
     return context.json(
       await plugins.importDataset(principal(context), uuidParam(context, 'p'), {
         pluginId: uuidParam(context, 'id'),

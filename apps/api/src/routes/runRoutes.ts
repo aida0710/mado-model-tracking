@@ -22,7 +22,7 @@ import {
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { runSearchSchema } from './runSearchRoutes.js';
 
-const runQuerySchema = z.strictObject({
+export const runQuerySchema = z.strictObject({
   experimentId: uuidSchema.optional(),
   status: runStatusSchema.optional(),
   q: z.string().max(200).optional(),
@@ -48,7 +48,7 @@ const BASELINE_NOT_COMPARED = {
   path: ['baselineRunId'],
 };
 
-const runComparisonSchema = z
+export const runComparisonSchema = z
   .strictObject({
     ...comparisonBaseSchema,
     metricKeys: z
@@ -61,7 +61,7 @@ const runComparisonSchema = z
   })
   .refine(baselineInRunIds, BASELINE_NOT_COMPARED);
 // A GET link carries the Run IDs comma-separated, as the Compare page URL does.
-const runComparisonCsvQuerySchema = z
+export const runComparisonCsvQuerySchema = z
   .strictObject({
     ...comparisonBaseSchema,
     runIds: z
