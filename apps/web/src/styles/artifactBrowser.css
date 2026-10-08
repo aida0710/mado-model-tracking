@@ -62,6 +62,21 @@
 .artifact-catalog-toolbar .toolbar-select input[type='checkbox'] {
   margin: 0;
 }
+/* Below --bp-sm each filter takes a full row, so long Run and model names stay readable. */
+@media (width < 640px) {
+  .artifact-catalog-toolbar .toolbar-select {
+    flex-basis: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--background);
+  }
+  .artifact-catalog-toolbar .toolbar-select > span {
+    min-width: 4.5em;
+  }
+  .artifact-catalog-toolbar .toolbar-select select {
+    flex: 1;
+    max-width: none;
+  }
+}
 /* The catalog table has more columns than the Run tree, so it takes the wider share. */
 .artifact-catalog .artifact-layout {
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
@@ -70,6 +85,24 @@
   .artifact-catalog .artifact-layout {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* One pane at a time below --bp-md: the list scrolls with the page instead of inside itself. */
+  .artifact-tree .table-scroll,
+  .artifact-catalog .artifact-layout .table-scroll {
+    max-height: none;
+  }
+  .artifact-tree-name {
+    min-width: 9em;
+  }
+  .artifact-breadcrumbs {
+    font-size: 13px;
+  }
+}
+.artifact-back-to-list {
+  justify-self: start;
+}
+.artifact-tree-download {
+  width: 1%;
+  text-align: center;
 }
 /* A dataset version's files sit in the narrow detail pane beside the dataset list, so the tree
    takes the full width and the preview follows below it. */

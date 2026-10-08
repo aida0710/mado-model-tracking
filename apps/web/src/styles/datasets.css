@@ -1,0 +1,9 @@
+/* Datasets page: the selected dataset's heading and its version actions. */
+@media (width < 640px) {
+  .datasets-page .section-heading {
+    flex-wrap: wrap;
+  }
+  .datasets-page .section-heading-actions {
+    flex-wrap: wrap;
+  }
+}

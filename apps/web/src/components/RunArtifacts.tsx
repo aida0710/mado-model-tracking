@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { Artifact } from '@mmt/contracts';
 import { ArtifactActionsMenu } from './ArtifactActionsMenu';
+import { ArtifactBackToListButton } from './ArtifactBackToListButton';
 import { ArtifactPreview } from './ArtifactPreview';
 import { ArtifactTree } from './ArtifactTree';
 import { ErrorNotice, Resource } from './Feedback';
+import { useArtifactBrowserPanes } from '../hooks/useArtifactBrowserPanes';
 import { useProject } from '../hooks/useProject';
 import { useArtifactVersions, useRunArtifacts } from '../hooks/useRunArtifacts';
 import { formatBytes, formatDate } from '../lib/format';
@@ -13,7 +15,10 @@ import { text } from '../i18n/catalog';
 // Kept in the URL so reloading or going back returns to the same folder.
 const PREFIX_PARAMETER = 'artifactPrefix';
 
-/** A Run's Artifacts as a folder tree on the left and the chosen file's preview on the right. */
+/**
+ * A Run's Artifacts as a folder tree on the left and the chosen file's preview on the right; on a
+ * narrow screen, the tree until a file is chosen and then that file's preview.
+ */
 export function RunArtifacts({
   projectId,
   runId,
@@ -30,8 +35,13 @@ export function RunArtifacts({
   const [deletions, setDeletions] = useState(0);
   const { tree, files } = useRunArtifacts({ projectId, runId, prefix }, revision + deletions);
   const [chosen, setChosen] = useState<Artifact>();
+  const { isNarrow, panes, containerRef, scrollBrowserIntoView } = useArtifactBrowserPanes(chosen !== undefined);
   // Like the earlier flat list, the first file of the open folder previews until one is chosen.
-  const selected = chosen ?? files.items[0];
+  const selected = chosen ?? (isNarrow ? undefined : files.items[0]);
+  function showFile(artifact: Artifact | undefined) {
+    setChosen(artifact);
+    scrollBrowserIntoView();
+  }
   function openDirectory(next: string) {
     setParams((previous) => {
       const updated = new URLSearchParams(previous);
@@ -41,38 +51,42 @@ export function RunArtifacts({
     });
   }
   return (
-    <div className="artifact-layout artifact-browser">
-      <div>
-        <Resource query={tree}>
-          {(level) => (
-            <ArtifactTree
-              tree={level}
-              files={files.items}
-              selectedArtifactId={selected?.id}
-              onOpenDirectory={openDirectory}
-              onSelectFile={setChosen}
-              hasMoreFiles={files.hasMore}
-              loadingFiles={files.loading}
-              onLoadMoreFiles={files.loadMore}
-            />
-          )}
-        </Resource>
-        <ErrorNotice message={files.error} retry={files.reload} />
-      </div>
-      {selected ? (
-        <ArtifactDetails
-          key={`${selected.id}:${deletions}`}
-          latest={selected}
-          onDeleted={() => {
-            setChosen(undefined);
-            setDeletions((count) => count + 1);
-          }}
-        />
-      ) : (
-        <section className="artifact-preview">
-          <p className="muted">{text.artifactSelectFile}</p>
-        </section>
+    <div ref={containerRef} className="artifact-layout artifact-browser touch-targets">
+      {panes.showList && (
+        <div>
+          <Resource query={tree}>
+            {(level) => (
+              <ArtifactTree
+                tree={level}
+                files={files.items}
+                selectedArtifactId={selected?.id}
+                onOpenDirectory={openDirectory}
+                onSelectFile={showFile}
+                hasMoreFiles={files.hasMore}
+                loadingFiles={files.loading}
+                onLoadMoreFiles={files.loadMore}
+              />
+            )}
+          </Resource>
+          <ErrorNotice message={files.error} retry={files.reload} />
+        </div>
       )}
+      {panes.showBackToList && <ArtifactBackToListButton onClick={() => showFile(undefined)} />}
+      {panes.showPreview &&
+        (selected ? (
+          <ArtifactDetails
+            key={`${selected.id}:${deletions}`}
+            latest={selected}
+            onDeleted={() => {
+              setChosen(undefined);
+              setDeletions((count) => count + 1);
+            }}
+          />
+        ) : (
+          <section className="artifact-preview">
+            <p className="muted">{text.artifactSelectFile}</p>
+          </section>
+        ))}
     </div>
   );
 }

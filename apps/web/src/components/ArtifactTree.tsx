@@ -1,6 +1,6 @@
 import type { Artifact, ArtifactTree as ArtifactTreeLevel } from '@mmt/contracts';
 import { Download, File, Folder } from 'lucide-react';
-import { DataTable } from './DataTable';
+import { ResponsiveTable } from './ResponsiveTable';
 import { trackingApi } from '../api/tracking';
 import {
   artifactBreadcrumbs,
@@ -56,15 +56,18 @@ export function ArtifactTree({
           </span>
         ))}
       </nav>
-      <DataTable<ArtifactBrowserRow>
-        items={rows}
+      <ResponsiveTable<ArtifactBrowserRow>
+        rows={rows}
         rowKey={(row) => row.key}
-        isSelected={(row) => row.kind === 'file' && row.artifact.id === selectedArtifactId}
+        selectedKey={
+          rows.find((row) => row.kind === 'file' && row.artifact.id === selectedArtifactId)?.key
+        }
         empty={loadingFiles ? text.loading : text.artifactEmptyDirectory}
         columns={[
           {
             key: 'name',
-            label: text.artifactName,
+            header: text.artifactName,
+            priority: 'primary',
             className: 'artifact-tree-name',
             render: (row) =>
               row.kind === 'directory' ? (
@@ -89,7 +92,8 @@ export function ArtifactTree({
           },
           {
             key: 'size',
-            label: text.size,
+            header: text.size,
+            priority: 'primary',
             className: 'mono artifact-tree-size',
             render: (row) =>
               row.kind === 'directory'
@@ -101,10 +105,13 @@ export function ArtifactTree({
           },
           {
             key: 'download',
-            label: text.download,
+            header: text.download,
+            priority: 'primary',
+            className: 'artifact-tree-download',
             render: (row) =>
               row.kind === 'file' && (
                 <a
+                  className="icon-button"
                   href={trackingApi.artifactUrl(row.artifact.projectId, row.artifact.id)}
                   download={row.artifact.path.split('/').pop()}
                   aria-label={`${text.download}: ${row.artifact.path}`}

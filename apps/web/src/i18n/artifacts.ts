@@ -71,6 +71,7 @@ export const artifactsText = {
   artifactIncludePreviousVersions: '以前の版も表示',
   artifactNoCatalogResults: '条件に合うArtifactはありません',
   artifactNoRun: 'Runなし',
+  artifactBackToList: 'ファイル一覧へ戻る',
 } as const;
 
 export const artifactsTextTemplates = {

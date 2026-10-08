@@ -58,7 +58,7 @@ export function ReportPage() {
   }
 
   return (
-    <section className="page report-page" data-testid="report-page">
+    <section className="page report-page touch-targets" data-testid="report-page">
       <Resource query={document}>
         {({ report, revision }) => {
           const isCurrent = revision.revision === report.currentRevision;

@@ -3,7 +3,7 @@ import type { RunMediaKeySummary } from '@mmt/contracts';
 import { useMediaLocation } from '../../hooks/useMediaLocation';
 import { useRunMedia } from '../../hooks/useRunMedia';
 import { groupMediaByStep, nearestStep } from '../../lib/mediaSteps';
-import { DataTable } from '../DataTable';
+import { ResponsiveTable } from '../ResponsiveTable';
 import { Empty, Resource } from '../Feedback';
 import { MediaGallery } from './MediaGallery';
 import { MediaStepSlider } from './MediaStepSlider';
@@ -21,28 +21,36 @@ function KeyList({
   onSelect: (key: string) => void;
 }) {
   return (
-    <DataTable
-      items={keys}
+    <ResponsiveTable
+      rows={keys}
       rowKey={(summary) => summary.key}
       selectedKey={selectedKey}
       columns={[
         {
           key: 'key',
-          label: text.mediaKey,
+          header: text.mediaKey,
+          priority: 'primary',
           render: (summary) => (
             <button type="button" className="link-button" onClick={() => onSelect(summary.key)}>
               {summary.key}
             </button>
           ),
         },
-        { key: 'kind', label: text.mediaKind, render: (summary) => mediaKindLabels[summary.kind] },
+        { key: 'kind', header: text.mediaKind, priority: 'primary', render: (summary) => mediaKindLabels[summary.kind] },
         {
           key: 'steps',
-          label: text.mediaStepRange,
+          header: text.mediaStepRange,
+          priority: 'secondary',
           className: 'mono',
           render: (summary) => textTemplates.mediaStepRangeValue(summary.minStep, summary.maxStep),
         },
-        { key: 'count', label: text.mediaCount, className: 'mono', render: (summary) => textTemplates.mediaItemCount(summary.count) },
+        {
+          key: 'count',
+          header: text.mediaCount,
+          priority: 'secondary',
+          className: 'mono',
+          render: (summary) => textTemplates.mediaItemCount(summary.count),
+        },
       ]}
     />
   );
@@ -67,7 +75,7 @@ export function RunMediaPanel({ projectId, runId }: RunMediaPanelProps) {
         keys.length === 0 || selectedKey === null ? (
           <Empty>{text.mediaNoKeys}</Empty>
         ) : (
-          <div className="run-media-panel">
+          <div className="run-media-panel touch-targets">
             <section aria-label={text.mediaKeys}>
               <KeyList keys={keys} selectedKey={selectedKey} onSelect={setKey} />
             </section>

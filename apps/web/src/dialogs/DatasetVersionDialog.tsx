@@ -147,7 +147,7 @@ function FolderVersionDialog({
   return (
     <Dialog title={title} onClose={onClose} busy={busy} wide>
       <form
-        className="artifact-upload-form"
+        className="artifact-upload-form touch-targets"
         onSubmit={(event) => {
           event.preventDefault();
           if (sources.length > 0 && !folder.hasStarted) start();

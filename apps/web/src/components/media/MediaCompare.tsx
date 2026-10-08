@@ -53,7 +53,7 @@ export function MediaCompare({ projectId, runIds }: MediaCompareProps) {
         const runLabels = Object.fromEntries(runs.map((run) => [run.id, run.name]));
         const recorded = recordedSteps.value ?? [];
         return (
-          <div className="media-compare">
+          <div className="media-compare touch-targets">
             {runIds.length > MEDIA_COMPARE_MAX_RUNS && (
               <p className="notice">{textTemplates.mediaCompareTooManyRuns(MEDIA_COMPARE_MAX_RUNS)}</p>
             )}

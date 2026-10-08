@@ -36,6 +36,8 @@ import './styles/reports.css';
 import './styles/savedViews.css';
 import './styles/comparison.css';
 import './styles/runList.css';
+import './styles/datasets.css';
+import './styles/touchTargets.css';
 
 // Keep the existing route tree while enabling blocked SPA navigation.
 const router = createBrowserRouter([{
