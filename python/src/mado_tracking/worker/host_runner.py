@@ -18,7 +18,7 @@ from ..execution_runtime import validate_runtime
 from ..execution_snapshot import resolve_runner_execution_snapshot
 from ..security import SecretMasker, secret_values
 from .container_layout import host_environment
-from .container_outputs import read_output_chunk, validate_results
+from .container_outputs import RESULT_FILENAME, read_output_chunk, validate_results
 from .host_execution import CommandExecution, ExecutionCanceled, terminate_owned_process_group
 from .host_state import is_same_process, process_identity, read_json, read_state, write_json
 from .job_execution import execute_registered_code
@@ -131,7 +131,7 @@ def serve(workspace: Path) -> None:
         status = "finished" if exit_code == 0 else "failed"
         if exit_code:
             failure = f"Entrypoint exited with status {exit_code}"
-        elif runtime["kind"] != "python":
+        else:
             state["results"] = validate_results(workspace / "outputs")
     except ExecutionCanceled:
         status = "canceled"
@@ -195,6 +195,12 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
     environment = {name: value for name, value in os.environ.items() if name in allowed_host_names}
     environment.update(specification["codeVersion"]["environment"])
     environment.update(specification["sdkEnvironment"])
+    # Python jobs use the same outputs contract as containers, so code without the SDK can hand
+    # files (for example Task output model weights) to the worker for upload.
+    outputs = workspace / "outputs"
+    if outputs.is_symlink():
+        raise ValueError("Output directory must not be a symlink")
+    outputs.mkdir(mode=0o700, exist_ok=True)
     environment.update(
         CUDA_VISIBLE_DEVICES=",".join(specification["gpuIds"]),
         PYTHONUNBUFFERED="1",
@@ -204,6 +210,8 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
         MMT_PARAMETERS_FILE=str(workspace / "parameters.json"),
         MMT_MODEL_VERSION_FILE=str(workspace / "model-version.json"),
         MMT_DATASET_VERSIONS_FILE=str(workspace / "dataset-versions.json"),
+        MMT_OUTPUTS_DIR=str(outputs),
+        MMT_RESULT_FILE=str(outputs / RESULT_FILENAME),
         MMT_PARAMETERS_JSON=json.dumps(specification["context"]["parameters"]),
         MMT_MODEL_VERSION_ID=str((specification["context"]["modelVersion"] or {}).get("id", "")),
         MMT_INPUT_DATASET_VERSION_IDS=json.dumps(

@@ -7,7 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 from urllib.parse import quote
 
-from .errors import ConfigurationError
+from .errors import ApiError, ConfigurationError
 from .execution_snapshot import ExecutionMode, validate_execution_mode
 
 # Match the server's integer revision so a mistaken launch fails before any side effect.
@@ -24,6 +24,37 @@ UNSET = _Unset()
 def _validate_revision(revision: int) -> None:
     if type(revision) is not int or not 1 <= revision <= MAX_TASK_REVISION:
         raise ConfigurationError("expected_revision must be a positive Task revision")
+
+
+def task_output_model(
+    *,
+    artifact_path: str,
+    model_id: str | None = None,
+    create_model: Mapping[str, str] | None = None,
+    version_template: str | None = None,
+    default_code_version_id: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a Task ``outputModel``: register ``artifact_path`` when a Run of the Task finishes.
+
+    Give either an existing ``model_id`` or ``create_model={"name": ..., "family": ...}``; a Model
+    with that name is reused, otherwise created. ``artifact_path`` is a file path in the Run's
+    Artifacts (worker outputs are uploaded under ``container/``).
+    """
+    if (model_id is None) == (create_model is None):
+        raise ConfigurationError("Specify exactly one of model_id and create_model")
+    if create_model is not None and set(create_model) != {"name", "family"}:
+        raise ConfigurationError("create_model requires exactly name and family")
+    output_model: dict[str, Any] = {
+        "modelId": model_id,
+        "createModel": dict(create_model) if create_model is not None else None,
+        "artifactPath": artifact_path,
+        "defaultCodeVersionId": default_code_version_id,
+        "metadata": dict(metadata or {}),
+    }
+    if version_template is not None:
+        output_model["versionTemplate"] = version_template
+    return output_model
 
 
 def _list_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -72,24 +103,25 @@ class ExperimentTasksClient(ABC):
         tags: Mapping[str, str] | None = None,
         target_id: str | None = None,
         gpu_ids: Sequence[str] = (),
+        output_model: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self.request(
-            "POST",
-            self.project_path(project_id, "tasks"),
-            json={
-                "experimentId": experiment_id,
-                "name": name,
-                "description": description,
-                "kind": kind,
-                "codeVersionId": code_version_id,
-                "modelVersionId": model_version_id,
-                "inputDatasetVersionIds": list(input_dataset_version_ids),
-                "parameters": dict(parameters or {}),
-                "tags": dict(tags or {}),
-                "targetId": target_id,
-                "gpuIds": list(gpu_ids),
-            },
-        )
+        """Create a Task. ``output_model`` comes from :func:`task_output_model`."""
+        payload: dict[str, Any] = {
+            "experimentId": experiment_id,
+            "name": name,
+            "description": description,
+            "kind": kind,
+            "codeVersionId": code_version_id,
+            "modelVersionId": model_version_id,
+            "inputDatasetVersionIds": list(input_dataset_version_ids),
+            "parameters": dict(parameters or {}),
+            "tags": dict(tags or {}),
+            "targetId": target_id,
+            "gpuIds": list(gpu_ids),
+        }
+        if output_model is not None:
+            payload["outputModel"] = dict(output_model)
+        return self.request("POST", self.project_path(project_id, "tasks"), json=payload)
 
     def update_task(
         self,
@@ -111,6 +143,7 @@ class ExperimentTasksClient(ABC):
             "tags",
             "targetId",
             "gpuIds",
+            "outputModel",
         }
         if set(changes) - allowed_fields:
             raise ConfigurationError("Task changes contain unknown or immutable fields")
@@ -173,3 +206,15 @@ class ExperimentTasksClient(ABC):
                 raise ConfigurationError("Task runs returned an invalid or repeated pagination cursor")
             visited_cursors.add(cursor)
             params = {"cursor": cursor}
+
+    def get_output_registration(self, project_id: str, run_id: str) -> dict[str, Any] | None:
+        """Return the Task-side output model registration of a Run, or None before it is recorded."""
+        if not run_id:
+            raise ConfigurationError("A Run ID is required")
+        path = self.project_path(project_id, f"runs/{quote(run_id, safe='')}/output-registration")
+        try:
+            return self.request("GET", path, retryable=True)
+        except ApiError as error:
+            if error.code == "output_registration_not_found":
+                return None
+            raise

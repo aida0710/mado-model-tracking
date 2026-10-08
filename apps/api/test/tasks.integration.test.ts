@@ -512,4 +512,116 @@ describe.skipIf(!testDatabaseUrl)('タスク・固定実行snapshot（独立Post
     expect(JSON.stringify(events)).not.toContain('fixture-only-setting');
     expect(JSON.stringify(events)).not.toContain('overlay');
   });
+
+  it('出力モデル設定はtraining/finetuningだけに許し、系列・参照・パス・予約tagを検証する', async () => {
+    const fixture = await workbenchFixture(harness);
+    const otherProject = await entity<{ id: string }>(
+      await request(harness.app, '/api/projects', {
+        method: 'POST',
+        cookie: fixture.administrator.cookie,
+        body: { name: 'Other output project' },
+      }),
+    );
+    const foreignModel = await entity<{ id: string }>(
+      await request(harness.app, `/api/projects/${otherProject.id}/models`, {
+        method: 'POST',
+        cookie: fixture.administrator.cookie,
+        body: { name: 'Foreign', family: 'qwen2' },
+      }),
+    );
+    const llamaModel = await entity<{ id: string }>(
+      await request(harness.app, `${fixture.basePath}/models`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { name: 'Llama output', family: 'llama' },
+      }),
+    );
+    const valid = { modelId: fixture.model.id, artifactPath: 'container/model.bin' };
+    const create = (body: Record<string, unknown>) =>
+      request(harness.app, `${fixture.basePath}/tasks`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { ...fixture.taskInput, ...body },
+      });
+    const rejected: [Record<string, unknown>, number, string][] = [
+      [{ kind: 'inference', outputModel: valid }, 422, 'output_model_kind'],
+      [{ outputModel: { ...valid, modelId: llamaModel.id } }, 422, 'incompatible_model_family'],
+      [
+        { outputModel: { ...valid, modelId: null, createModel: { name: 'New', family: 'llama' } } },
+        422,
+        'incompatible_model_family',
+      ],
+      [
+        {
+          outputModel: {
+            ...valid,
+            modelId: null,
+            createModel: { name: 'Llama output', family: 'qwen2' },
+          },
+        },
+        422,
+        'model_family_mismatch',
+      ],
+      [{ outputModel: { ...valid, modelId: foreignModel.id } }, 404, 'not_found'],
+      [{ tags: { 'mmt.source': 'user' }, outputModel: valid }, 422, 'reserved_tag'],
+      [{ tags: { 'automation.rule': 'x' } }, 422, 'reserved_tag'],
+    ];
+    for (const [body, status, code] of rejected) {
+      const response = await create(body);
+      expect([JSON.stringify(body), response.status]).toEqual([JSON.stringify(body), status]);
+      expect((await response.json()).code).toBe(code);
+    }
+    for (const outputModel of [
+      { ...valid, createModel: { name: 'Both', family: 'qwen2' } },
+      { artifactPath: 'model.bin' },
+      { ...valid, artifactPath: '/abs/model.bin' },
+      { ...valid, artifactPath: 'model/../secret.bin' },
+      { ...valid, artifactPath: 'model/' },
+      { ...valid, versionTemplate: 'fixed' },
+      { ...valid, versionTemplate: '{unknown}' },
+    ]) {
+      const response = await create({ outputModel });
+      expect([JSON.stringify(outputModel), response.status]).toEqual([
+        JSON.stringify(outputModel),
+        422,
+      ]);
+      expect((await response.json()).code).toBe('invalid_request');
+    }
+    const created = await entity<ExperimentTask>(
+      await create({
+        kind: 'finetuning',
+        outputModel: {
+          modelId: null,
+          createModel: { name: 'Created later', family: 'qwen2' },
+          artifactPath: 'container/model.bin',
+          versionTemplate: 'ft-{runId}',
+        },
+      }),
+    );
+    expect(created.outputModel).toEqual({
+      modelId: null,
+      createModel: { name: 'Created later', family: 'qwen2' },
+      artifactPath: 'container/model.bin',
+      versionTemplate: 'ft-{runId}',
+      defaultCodeVersionId: null,
+      metadata: {},
+    });
+    const kindChange = await request(harness.app, `${fixture.basePath}/tasks/${created.id}`, {
+      method: 'PATCH',
+      cookie: fixture.editor.cookie,
+      body: { expectedRevision: 1, kind: 'inference' },
+    });
+    expect(kindChange.status).toBe(422);
+    expect((await kindChange.json()).code).toBe('output_model_kind');
+    const cleared = await entity<ExperimentTask>(
+      await request(harness.app, `${fixture.basePath}/tasks/${created.id}`, {
+        method: 'PATCH',
+        cookie: fixture.editor.cookie,
+        body: { expectedRevision: 1, kind: 'inference', outputModel: null },
+      }),
+      200,
+    );
+    expect(cleared).toMatchObject({ kind: 'inference', outputModel: null, revision: 2 });
+    expect(fixture.task.outputModel).toBeNull();
+  });
 });

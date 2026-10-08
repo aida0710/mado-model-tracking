@@ -163,6 +163,9 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報 |
 | `MMT_PROJECT_ID`, `MMT_EXPERIMENT_ID`, `MMT_RUN_ID`, `MMT_JOB_ID` | 実行対象のID |
 | `MMT_JOB_KIND` | 実行するRunのkind。CodeVersionの環境変数より優先する |
+| `MMT_OUTPUTS_DIR`, `MMT_RESULT_FILE` | 出力ディレクトリ（workspaceの`outputs`）と`result.json`のpath。コンテナと同じ形式で回収する |
+
+Python runtimeでも、SDKを使わずに`MMT_OUTPUTS_DIR`へファイルと`result.json`を書けば、コンテナと同じ検証で回収してRun Artifactの`container/<path>`へ保存する（形式と上限は次節）。何も書かなければ従来どおり回収しない。ファイルがあるのに`result.json`が無い、または宣言と合わない場合はJobをfailedにする。
 
 Python runtimeでは、モデル重みやdatasetの実体をコード側がArtifact APIや登録URIから読む。コンテナでは、workerが重みを実行前に取得する。DatasetVersionはどちらもmetadataとURIを渡す方式。実行コードへ渡す環境変数はCodeVersionの設定とSDK設定に限り、workerの無関係なシークレットは継承しない。
 
@@ -196,9 +199,38 @@ SDKをimage内に入れた場合は従来のAPIを使える。SDKなしimageは�
 }
 ```
 
-`path`はoutputs内の相対パス、`size`はbyte数。metricsは有限の数値で、`step`は非負の整数。省略したstepは0、timestampは回収時のUTC時刻になる。宣言した全fileのSHA256/size、未宣言file、symlink/hardlink/特殊file、絶対パスや`..`、`.partial`/`.tmp`を検査する。結果は128 files、1000 metrics、manifestは1MiBまで。出力ディレクトリが空ならmanifestは不要。
+`path`はoutputs内の相対パス、`size`はbyte数。metricsは有限の数値で、`step`は非負の整数。省略したstepは0、timestampは回収時のUTC時刻になる。宣言した全fileのSHA256/size、未宣言file、symlink/hardlink/特殊file、絶対パスや`..`、`.partial`/`.tmp`を検査する。結果は128 files、1000 metrics、manifestは1MiBまで（Python runtimeの出力も同じ上限。ファイル数の上限は第5波のcontainer-outputs-v2-workerで緩める予定）。出力ディレクトリが空ならmanifestは不要。
 
-entrypointが成功し、daemon/processが停止した後だけ結果を回収する。workerはfileを再びstream取得してSHA256を確認し、Run Artifactの`container/<path>`へ保存する。metricsはlease付きworker APIへ送り、全保存を確認してからJobをcompleteする。結果検証やAPIの永久失敗はJobをfailedにする。cancel/nonzero exitの出力を成功結果として登録しない。ModelVersion/DatasetVersionの登録はSDKまたはAPIで明示する。
+entrypointが成功し、daemon/processが停止した後だけ結果を回収する。workerはfileを再びstream取得してSHA256を確認し、Run Artifactの`container/<path>`へ保存する。metricsはlease付きworker APIへ送り、全保存を確認してからJobをcompleteする。結果検証やAPIの永久失敗はJobをfailedにする。cancel/nonzero exitの出力を成功結果として登録しない。ModelVersion/DatasetVersionの登録はSDKまたはAPIで明示するか、Taskの出力設定（次節）で行う。
+
+### Taskの出力設定で学習済みモデルを登録する
+
+training/finetuningのTaskに`outputModel`を保存すると、そのTaskから起動したRunが`finished`になったとき、APIが`artifactPath`のArtifactを版として登録する。学習コードにSDKの登録処理は要らない。
+
+| 項目 | 内容 |
+|---|---|
+| 登録先 | `modelId`（既存Model）か`createModel:{name,family}`（同じ名前があれば再利用、無ければ作成）。系列はTaskのCodeVersionの対応系列から選ぶ |
+| `artifactPath` | Run Artifactのファイルpath。`MMT_OUTPUTS_DIR/model/weights.bin`なら`container/model/weights.bin`。同じpathが複数あれば最新 |
+| 版名 | 省略時は整数の自動採番。`versionTemplate`は`{runId}`・`{runName}`・`{taskRevision}`を使える |
+| 親版・source | 親版はRunの入力モデル版（finetuningの元）、sourceRunはそのRun |
+| 二重登録 | 学習コードが同じModelへSDKやMLflowで登録済みなら、Task側は`skipped`（`already_registered_by_run`）で版は1件。下流の自動推論も1回だけ。別のModelへの登録はTask側を妨げない |
+| 失敗 | Artifactが無い、Runの作成者が編集権限を失った、などは`failed`と理由を記録し、Runは`finished`のまま |
+| 対象外 | failed/canceledのRun、テスト実行 |
+
+結果は`GET /projects/:p/runs/:r/output-registration`、SDKでは`client.get_output_registration(project_id, run_id)`（記録前は`None`）で確認する。Taskの作成・更新では`mado_tracking.experiment_tasks.task_output_model(...)`で`output_model`を組み立てる。
+
+```python
+from mado_tracking.experiment_tasks import task_output_model
+
+client.create_task(
+    project_id, experiment_id=experiment_id, name="finetune", kind="finetuning",
+    code_version_id=code_version_id, model_version_id=base_version_id, target_id=target_id,
+    output_model=task_output_model(
+        artifact_path="container/model/weights.bin",
+        create_model={"name": "qwen2-finetuned", "family": "qwen2"},
+    ),
+)
+```
 
 各fileとmetricsの保存成功はjournalへ残す。復帰時は未保存項目から再開する。APIが保存した後に応答が失われた場合は再送され得るため、Artifactを含めて少なくとも1回送る方式になる。
 

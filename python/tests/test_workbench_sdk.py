@@ -7,6 +7,7 @@ import pytest
 from test_container_sdk import recording_sdk
 
 from mado_tracking import ApiError, Client, ConfigurationError
+from mado_tracking.experiment_tasks import task_output_model
 
 
 def test_code_version_sdk_keeps_the_pinned_commit_overlay_deletions_and_test_command():
@@ -248,3 +249,68 @@ def test_sdk_run_creation_sends_test_execution_mode():
             "p", experiment_id="e", name="test run", code_version_id="code-v1", execution_mode="test"
         )
     assert calls[0][2]["executionMode"] == "test"
+
+
+def test_task_output_model_is_sent_on_create_and_update_with_exactly_one_target():
+    client, calls = task_sdk()
+    created = task_output_model(
+        artifact_path="container/model/weights.bin",
+        create_model={"name": "fine-tuned", "family": "qwen2"},
+        version_template="ft-{runId}",
+    )
+    with client:
+        client.create_task(
+            "p",
+            experiment_id="e",
+            name="training",
+            kind="training",
+            code_version_id="code-v1",
+            output_model=created,
+        )
+        client.update_task(
+            "p",
+            "task",
+            expected_revision=1,
+            changes={"outputModel": task_output_model(artifact_path="weights.bin", model_id="m")},
+        )
+    assert calls[0][3]["outputModel"] == {
+        "modelId": None,
+        "createModel": {"name": "fine-tuned", "family": "qwen2"},
+        "artifactPath": "container/model/weights.bin",
+        "versionTemplate": "ft-{runId}",
+        "defaultCodeVersionId": None,
+        "metadata": {},
+    }
+    assert calls[1][3]["outputModel"]["modelId"] == "m"
+    assert "versionTemplate" not in calls[1][3]["outputModel"]
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [{}, {"model_id": "m", "create_model": {"name": "n", "family": "f"}}, {"create_model": {"name": "n"}}],
+)
+def test_task_output_model_rejects_missing_both_or_partial_targets(targets):
+    with pytest.raises(ConfigurationError):
+        task_output_model(artifact_path="weights.bin", **targets)
+
+
+def test_output_registration_is_none_until_recorded_and_other_errors_propagate():
+    responses = {
+        "recorded": httpx.Response(200, json={"status": "skipped", "modelVersionId": "v"}),
+        "pending": httpx.Response(404, json={"error": "none", "code": "output_registration_not_found"}),
+        "missing-run": httpx.Response(404, json={"error": "none", "code": "not_found"}),
+    }
+    paths = []
+
+    def serve(request):
+        paths.append(request.url.path)
+        return responses[request.url.path.split("/")[-2]]
+
+    with Client(
+        api_url="http://localhost", api_token="sdk-test-secret", transport=httpx.MockTransport(serve)
+    ) as client:
+        assert client.get_output_registration("p", "recorded") == {"status": "skipped", "modelVersionId": "v"}
+        assert client.get_output_registration("p", "pending") is None
+        with pytest.raises(ApiError):
+            client.get_output_registration("p", "missing-run")
+    assert paths[0] == "/api/projects/p/runs/recorded/output-registration"

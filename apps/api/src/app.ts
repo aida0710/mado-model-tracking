@@ -29,6 +29,9 @@ import {
   RunCompletionService,
   type RunCompletionHandler,
 } from './services/runCompletionService.js';
+import { OutputRegistrationHandler } from './services/outputRegistrationHandler.js';
+import { RunOutputRegistrationService } from './services/runOutputRegistrationService.js';
+import { runOutputRegistrationRoutes } from './routes/runOutputRegistrationRoutes.js';
 import { RepositoryFilesService } from './services/repositoryFilesService.js';
 import { GitRepositoryReader, type RepositoryReader } from './services/repositoryReader.js';
 import { ModelAutomationService } from './services/modelAutomationService.js';
@@ -96,9 +99,11 @@ export function createApplication(options: ApplicationOptions) {
     options.repositoryReader ?? ((request) => gitRepositories.read(request)),
   );
   const automation = new ModelAutomationService(database, runs, jobs);
-  terminalHandlers.push(new AutomationSourceRunHandler(automation));
   const automationSweeper = new AutomationPendingSweeper(database, automation);
   const registry = new RegistryService(database, automation);
+  // Output registration must run before the source-run handler releases pending automation.
+  terminalHandlers.push(new OutputRegistrationHandler(registry));
+  terminalHandlers.push(new AutomationSourceRunHandler(automation));
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
   const plugins = new PluginService({
@@ -198,6 +203,10 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', taskRoutes(tasks));
+  app.route(
+    '/api/projects',
+    runOutputRegistrationRoutes(new RunOutputRegistrationService(database)),
+  );
   app.route('/api/projects', repositoryRoutes(repositories));
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', jobRoutes(jobs));
