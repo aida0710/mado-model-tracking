@@ -25,7 +25,7 @@ const decisionBadgeClass: Record<PromotionDecision, string> = {
   skipped: 'status-canceled',
 };
 
-function DecisionBadge({ evaluation }: { evaluation: PromotionEvaluation }) {
+export function DecisionBadge({ evaluation }: { evaluation: PromotionEvaluation }) {
   return (
     <>
       <span className={`status-badge ${decisionBadgeClass[evaluation.decision]}`}>
@@ -63,7 +63,7 @@ function formatComparedValue(result: PromotionCriterionResult): string {
   });
 }
 
-function CriterionResults({ results }: { results: PromotionCriterionResult[] }) {
+export function CriterionResults({ results }: { results: PromotionCriterionResult[] }) {
   return (
     <ul className="promotion-criterion-results">
       {results.map((result, index) => (

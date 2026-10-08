@@ -440,6 +440,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
       versionId,
       actor,
       source: 'api' as const,
+      guard: async () => undefined,
     });
     let releaseFirst!: () => void;
     const firstMayCommit = new Promise<void>((resolve) => (releaseFirst = resolve));

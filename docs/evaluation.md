@@ -112,21 +112,49 @@ editor は評価 Run を自由に作れるため、条件の一致だけで対�
 | `passed` | すべての基準を満たした |
 | `failed` | 満たさない基準が1つ以上ある |
 | `insufficient` | 判定に必要な評価が無い（基準版に同じ rule の評価が無い、など） |
-| `skipped` | 判定できなかった（policy 作成者の権限が失効している、判定中にエラーが起きた） |
+| `skipped` | 判定できなかった（policy の実行ユーザーの権限が失効している、判定中にエラーが起きた） |
 
 - 値が NaN・無限大、または記録されていない metric の基準は `failed` にし、基準ごとの `reason`（`candidate_metric_missing`、`baseline_metric_not_finite` など）に理由を残す。基準が 0 の `relative_delta` も `failed`（`baseline_zero`）である。
 - 基準 alias（既定 `production`）が未設定の初回は、`missingBaseline`（既定 `pass`）に従う。`pass` なら差・相対差の基準を合格扱いにし、判定の `reason` に `baseline_missing_first_promotion` を残す。`absolute` の基準は初回でも判定する。`fail` なら `failed`（`baseline_missing`）である。
 - 基準 alias はあるが、その版に同じ rule の評価が無い場合、差・相対差の基準は `insufficient`（`baseline_not_evaluated`）になる。基準版にも rule を適用して評価してから再判定する。
-- policy 作成者が Project admin（直接付与または group binding）でも全体管理者でもなくなっていれば、判定せずに `skipped`（`creator_access_revoked`）を残す。
+- policy の実行ユーザー（`runAsUserId`。作成時は作成者）が Project admin（直接付与または group binding）でも全体管理者でもなくなっていれば、判定せずに `skipped`（`creator_access_revoked`）を残す。
 - 判定中のエラーは `skipped`（`evaluation_error`）として残す。エラーでも評価 Run の終端と plugin への通知は確定する。
 
 判定履歴は追記だけで、変更・削除できない。Project admin が再判定すると、同じ候補 Run について `sequence` を1つ増やした行を追加する（`requestedBy` に実行者を残す）。editor は再判定できない。
 
-`autoPromote`（既定 false）は保存するだけで、現在は合格しても alias を切り替えない（`promoted` は常に false）。
+### 合格時の自動昇格
+
+`autoPromote`（既定 false）の policy は、評価 Run の終端で `passed` と判定したとき、同じ transaction の中で `targetAlias` を候補版へ切り替える。条件は次のとおり。
+
+- 対象は評価 Run の終端での自動判定だけである。Project admin の再判定は alias を動かさない（人が昇格ダイアログで判定を根拠に切り替える）。
+- 判定の直前に読んだ基準 alias と対象 alias が、Model の行 lock を取った後も同じ版を指していること。判定中に誰かが手動で alias を変えていたら、その変更を上書きせず、判定に `reason='baseline_changed'`、`promoted=false` を残す。
+- 候補版が既に `targetAlias` なら何もしない（`promoted=false`）。
+- policy の実行ユーザーが、alias の lock を取った後も Project admin か全体管理者であること。保護 alias の条件はこれで満たす（判定そのものが、この alias と版への合格判定であるため）。alias の変更が拒否されたら `reason='promotion_denied'`、`promoted=false` を残し、評価 Run の終端は確定させる。
+- 切り替えた場合は、判定に `promoted=true` と `aliasEventId` を残す。alias の変更履歴には `source='promotion_policy'`、`promotionEvaluationId`（その判定）、actor＝policy の実行ユーザー、理由＝policy 名と基準ごとの値の要約（2000 文字まで）が残る。
+
+### 保護 alias
+
+重要な alias（`production` など）は、手で変えられる人と条件を絞れる。保護は Project 全体（`modelId` なし）か、Model ごとに設定する。両方あるときは、それぞれの設定の厳しい方を使う（Model の設定で緩めることはできない）。
+
+| 設定 | 手動で変えられる人と条件 |
+|---|---|
+| `requiredRole: admin` | Project admin（全体管理者を含む）だけ。合格判定か理由が要る |
+| `requiredRole: editor`、`requirePassedEvaluation: true` | editor 以上で、その版のこの alias への合格判定を根拠に指定したときだけ（admin も同じ） |
+| `requiredRole: editor`、`requirePassedEvaluation: false` | editor 以上。合格判定か理由が要る |
+| `requiredRole: admin`、`requirePassedEvaluation: true` | Project admin が合格判定を指定したときだけ |
+
+- 根拠にできる判定は、評価 rule の自動実行 Run による判定（昇格policy の判定履歴）で、同じ Model・同じ版・policy の `targetAlias` がこの alias で、`passed` かつ同じ候補 Run の最新の判定（後の再判定で置き換わっていない）であるもの。
+- 保護 alias の解除は `requiredRole` 以上が要り、`requirePassedEvaluation` の保護では Project admin が要る（判定は解除の根拠にならない）。
+- MLflow 互換 API（公式 SDK の `set_registered_model_alias`、alias 削除、版・Model の削除で外れる alias を含む）は理由も判定も渡せないので、保護 alias には常に `PERMISSION_DENIED` を返す。保護 alias は Web か native API で変える。
+- 保護 alias の追加・変更・解除は Project admin と全体管理者だけで、監査ログ（`model_alias.protection.set`／`model_alias.protection.delete`）に残る。
 
 ### policy の変更
 
-policy の設定は作成後に変更できず、有効/無効だけを切り替えられる（DB の trigger でも拒否する）。基準を変えたいときは新しい policy を作り、古い policy を無効にする。これで過去の判定は作成時の基準のまま読める。作成・切替は Project admin と全体管理者だけで、すべて監査ログに残る。
+policy の設定は作成後に変更できず、有効/無効と所有者（実行ユーザー）だけを切り替えられる（DB の trigger でも拒否する）。基準を変えたいときは新しい policy を作り、古い policy を無効にする。これで過去の判定は作成時の基準のまま読める。作成・切替は Project admin と全体管理者だけで、すべて監査ログに残る。
+
+### policy の所有者の移管
+
+policy は実行ユーザー（`runAsUserId`）の権限で判定し、自動昇格の actor もこのユーザーになる。作成時は作成者で、作成者が異動・退職して Project admin でなくなると判定が `skipped` になる。長く使う policy は、Project admin が所有者を Service Account へ移す（`PUT /projects/:p/promotion-policies/:id/owner`、Web は昇格policy 一覧の「所有者を移管」）。移管先は同じ Project の有効な Service Account で、role が admin のもの。作成者（`createdBy`）の記録は残り、移管は監査ログ（`promotion_policy.owner.transfer`）に残る。
 
 ### 評価コードを直したとき
 
@@ -139,7 +167,11 @@ policy の設定は作成後に変更できず、有効/無効だけを切り替
 
 ## 画面
 
-`EvaluationComparisonPanel`（apps/web/src/components）が比較を表示する部品である。基準 alias を選ぶ（既定は `production`、無ければ名前順で最初の alias）と、metric ごとの候補・基準・差・相対差、値の出典、比較に使った正解セットと評価コード版、比べた評価 Run へのリンクを表示する。モデル版の画面への組み込みは model-version-page の担当。
+`EvaluationComparisonPanel`（apps/web/src/components）が比較を表示する部品である。基準 alias を選ぶ（既定は `production`、無ければ名前順で最初の alias）と、metric ごとの候補・基準・差・相対差、値の出典、比較に使った正解セットと評価コード版、比べた評価 Run へのリンクを表示する。
+
+- Models 画面の「Aliasを設定」は昇格ダイアログ（`PromotionDialog`）で、alias・版・根拠となる判定・理由を入力する。保護 alias では合格判定の選択を出し、不合格の版を付けるときと、判定なしで保護 alias を変えるときは理由を必須にする。
+- Models 画面の「保護alias」タブ（`AliasProtectionSettings`）で保護の一覧を見られ、Project admin は追加・変更・解除できる。
+- モデル版の画面の「昇格の判定」（`PromotionCheckCard`。editor 以上に表示）は、Model の policy ごとに、この版の判定（合格／不合格／判定待ち）と基準ごとの値を出し、「昇格」から合格判定を根拠にした昇格ダイアログを開く。
 
 ## 評価サンプルの推奨形式
 

@@ -5,6 +5,8 @@ import type {
   DatasetVersion,
   Model,
   ModelAliasEventPage,
+  ModelAliasProtection,
+  ModelAliasProtectionRole,
   ModelVersion,
   ModelVersionDetail,
   ModelVersionEvaluationSummary,
@@ -35,7 +37,20 @@ export interface ModelAliasAssignment {
   versionId: string;
   /** Empty means no reason; the API stores it as ''. */
   reason: string;
+  /** A passed promotion decision for this alias and version, sent as the change's evidence. */
+  evaluationId?: string;
 }
+
+/** One protection: modelId null covers the alias on every Model of the Project. */
+export interface ModelAliasProtectionTarget {
+  alias: string;
+  modelId: string | null;
+}
+
+const aliasProtectionPath = (projectId: string, target: ModelAliasProtectionTarget) =>
+  `${projectPath(projectId)}/alias-protections/${encodeId(target.alias)}${
+    target.modelId ? `?${new URLSearchParams({ modelId: target.modelId })}` : ''
+  }`;
 
 const registryPath = (projectId: string, registry: string, id?: string) =>
   `${projectPath(projectId)}/${registry}${id ? `/${encodeId(id)}` : ''}`;
@@ -57,8 +72,33 @@ export const registryApi = {
       jsonRequest('PUT', {
         versionId: assignment.versionId,
         ...(assignment.reason ? { reason: assignment.reason } : {}),
+        ...(assignment.evaluationId ? { evaluationId: assignment.evaluationId } : {}),
       }),
     ),
+  // Without modelId only the Project-wide protections; with it, also that Model's own.
+  aliasProtections: (projectId: string, modelId: string | null, signal?: AbortSignal) =>
+    requestItems<ModelAliasProtection>(
+      `${projectPath(projectId)}/alias-protections${
+        modelId ? `?${new URLSearchParams({ modelId })}` : ''
+      }`,
+      signal,
+    ),
+  setAliasProtection: (
+    projectId: string,
+    protection: ModelAliasProtectionTarget & {
+      requiredRole: ModelAliasProtectionRole;
+      requirePassedEvaluation: boolean;
+    },
+  ) =>
+    request<ModelAliasProtection>(
+      aliasProtectionPath(projectId, protection),
+      jsonRequest('PUT', {
+        requiredRole: protection.requiredRole,
+        requirePassedEvaluation: protection.requirePassedEvaluation,
+      }),
+    ),
+  removeAliasProtection: (projectId: string, target: ModelAliasProtectionTarget) =>
+    request<void>(aliasProtectionPath(projectId, target), { method: 'DELETE' }),
   removeAlias: (projectId: string, id: string, alias: string) =>
     request<void>(`${registryPath(projectId, 'models', id)}/aliases/${encodeId(alias)}`, {
       method: 'DELETE',

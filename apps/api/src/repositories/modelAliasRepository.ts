@@ -1,9 +1,15 @@
-import type { ModelAliasEvent, ModelAliasEventSource } from '@mmt/contracts';
+import type {
+  ModelAliasEvent,
+  ModelAliasEventSource,
+  ModelAliasProtection,
+  ModelAliasProtectionRole,
+} from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, type Connection } from '../db/database.js';
 import { notFound } from '../domain/errors.js';
 
-// Only assignModelAlias and removeModelAliases write model_aliases, so every change leaves an event.
+// Only assignModelAlias and removeModelAliases write model_aliases, so every change leaves an event
+// and passes the caller's guard (alias protections) under the Model lock.
 
 export interface ModelAliasActor {
   userId: string | null;
@@ -13,6 +19,23 @@ export interface ModelAliasActor {
 export function modelAliasActor(principal: Principal): ModelAliasActor {
   return { userId: principal.user.id, tokenId: principal.token?.id ?? null };
 }
+
+/** One alias change as the guard sees it. versionId null is a removal. */
+export interface GuardedModelAliasChange {
+  projectId: string;
+  modelId: string;
+  alias: string;
+  versionId: string | null;
+}
+
+/**
+ * Decides whether the change may happen and throws a DomainError when it may not. Called after the
+ * Model lock, so the alias and its protections cannot move between the check and the write.
+ */
+export type ModelAliasGuard = (
+  connection: Connection,
+  change: GuardedModelAliasChange,
+) => Promise<void>;
 
 interface ModelAliasChange {
   projectId: string;
@@ -42,13 +65,14 @@ async function lockModel(connection: Connection, modelId: string): Promise<strin
 async function appendModelAliasEvent(
   connection: Connection,
   change: ModelAliasChange,
-): Promise<void> {
-  await connection.query(
+): Promise<string> {
+  const event = await first<{ id: string }>(
+    connection,
     // clock_timestamp, not the transaction start: the event is written after the Model lock, so
     // created_at follows the lock order and the history reads as a previous -> next chain.
     `INSERT INTO model_alias_events(project_id,model_id,alias,previous_version_id,version_id,source,
     reason,promotion_evaluation_id,actor_user_id,actor_token_id,created_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,clock_timestamp())`,
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,clock_timestamp()) RETURNING id`,
     [
       change.projectId,
       change.modelId,
@@ -62,12 +86,13 @@ async function appendModelAliasEvent(
       change.actor.tokenId,
     ],
   );
+  return event!.id;
 }
 
 /**
  * Points the alias at versionId. Re-assigning the version it already points at changes nothing and
  * records no event, so SDK retries of the same set_registered_model_alias do not grow the history.
- * Returns whether the alias changed.
+ * Returns the recorded event's id, or null when the alias already pointed at versionId.
  */
 export async function assignModelAlias(
   connection: Connection,
@@ -79,20 +104,27 @@ export async function assignModelAlias(
     source: ModelAliasEventSource;
     reason?: string;
     evaluationId?: string | null;
+    guard: ModelAliasGuard;
   },
-): Promise<boolean> {
+): Promise<string | null> {
   const projectId = await lockModel(connection, assignment.modelId);
   const current = await first<{ versionId: string }>(
     connection,
     'SELECT version_id FROM model_aliases WHERE model_id=$1 AND alias=$2',
     [assignment.modelId, assignment.alias],
   );
-  if (current?.versionId === assignment.versionId) return false;
+  if (current?.versionId === assignment.versionId) return null;
+  await assignment.guard(connection, {
+    projectId,
+    modelId: assignment.modelId,
+    alias: assignment.alias,
+    versionId: assignment.versionId,
+  });
   await connection.query(
     'INSERT INTO model_aliases(model_id,alias,version_id) VALUES($1,$2,$3) ON CONFLICT(model_id,alias) DO UPDATE SET version_id=EXCLUDED.version_id',
     [assignment.modelId, assignment.alias, assignment.versionId],
   );
-  await appendModelAliasEvent(connection, {
+  return appendModelAliasEvent(connection, {
     projectId,
     modelId: assignment.modelId,
     alias: assignment.alias,
@@ -103,7 +135,6 @@ export async function assignModelAlias(
     evaluationId: assignment.evaluationId ?? null,
     actor: assignment.actor,
   });
-  return true;
 }
 
 /**
@@ -119,9 +150,23 @@ export async function removeModelAliases(
     actor: ModelAliasActor;
     source: ModelAliasEventSource;
     reason?: string;
+    guard: ModelAliasGuard;
   },
 ): Promise<string[]> {
   const projectId = await lockModel(connection, removal.modelId);
+  const targets = await rows<{ alias: string }>(
+    connection,
+    `SELECT alias FROM model_aliases WHERE model_id=$1 AND ($2::text IS NULL OR alias=$2)
+    AND ($3::uuid IS NULL OR version_id=$3) ORDER BY alias`,
+    [removal.modelId, removal.alias ?? null, removal.versionId ?? null],
+  );
+  for (const target of targets)
+    await removal.guard(connection, {
+      projectId,
+      modelId: removal.modelId,
+      alias: target.alias,
+      versionId: null,
+    });
   const removed = await rows<{ alias: string; versionId: string }>(
     connection,
     `DELETE FROM model_aliases WHERE model_id=$1 AND ($2::text IS NULL OR alias=$2)
@@ -177,5 +222,119 @@ export async function modelAliasEventCursorExists(
       cursor.id,
       cursor.modelId,
     ]),
+  );
+}
+
+/** The version the alias points at now, or null when it is unset. */
+export async function findModelAliasVersion(
+  connection: Connection,
+  reference: { modelId: string; alias: string },
+): Promise<string | null> {
+  const current = await first<{ versionId: string }>(
+    connection,
+    'SELECT version_id FROM model_aliases WHERE model_id=$1 AND alias=$2',
+    [reference.modelId, reference.alias],
+  );
+  return current?.versionId ?? null;
+}
+
+/** Takes the lock every alias change of the Model takes, so aliases read afterwards stay put. */
+export async function lockModelAliases(connection: Connection, modelId: string): Promise<void> {
+  await lockModel(connection, modelId);
+}
+
+// ---- Alias protections ----
+
+const aliasProtectionColumns = `id,project_id,model_id,alias,required_role,require_passed_evaluation,
+  created_by,created_at,updated_by,updated_at`;
+const aliasProtectionSelect = `SELECT ${aliasProtectionColumns} FROM model_alias_protections`;
+
+/** The Project-wide protections and, with modelId, that Model's protections (Project-wide first). */
+export function listModelAliasProtections(
+  connection: Connection,
+  filter: { projectId: string; modelId?: string },
+): Promise<ModelAliasProtection[]> {
+  return rows<ModelAliasProtection>(
+    connection,
+    `${aliasProtectionSelect} WHERE project_id=$1
+      AND ($2::uuid IS NULL OR model_id IS NULL OR model_id=$2)
+    ORDER BY model_id NULLS FIRST,alias`,
+    [filter.projectId, filter.modelId ?? null],
+  );
+}
+
+/** Every protection that applies to the alias on the Model: the Project-wide one and the Model's own. */
+export function findApplicableAliasProtections(
+  connection: Connection,
+  reference: { projectId: string; modelId: string; alias: string },
+): Promise<ModelAliasProtection[]> {
+  return rows<ModelAliasProtection>(
+    connection,
+    `${aliasProtectionSelect} WHERE project_id=$1 AND alias=$3 AND (model_id IS NULL OR model_id=$2)`,
+    [reference.projectId, reference.modelId, reference.alias],
+  );
+}
+
+export interface AliasProtectionTarget {
+  projectId: string;
+  /** null for the Project-wide protection. */
+  modelId: string | null;
+  alias: string;
+}
+
+/** Creates or replaces the protection of the alias; created_by and created_at keep the first values. */
+export async function upsertModelAliasProtection(
+  connection: Connection,
+  protection: AliasProtectionTarget & {
+    requiredRole: ModelAliasProtectionRole;
+    requirePassedEvaluation: boolean;
+    actorUserId: string;
+  },
+): Promise<ModelAliasProtection> {
+  // The two partial unique indexes cannot share one ON CONFLICT target, so update first.
+  const updated = await first<ModelAliasProtection>(
+    connection,
+    `UPDATE model_alias_protections SET required_role=$4,require_passed_evaluation=$5,updated_by=$6,
+      updated_at=now()
+    WHERE project_id=$1 AND model_id IS NOT DISTINCT FROM $2::uuid AND alias=$3
+    RETURNING ${aliasProtectionColumns}`,
+    [
+      protection.projectId,
+      protection.modelId,
+      protection.alias,
+      protection.requiredRole,
+      protection.requirePassedEvaluation,
+      protection.actorUserId,
+    ],
+  );
+  if (updated) return updated;
+  return (await first<ModelAliasProtection>(
+    connection,
+    `INSERT INTO model_alias_protections(project_id,model_id,alias,required_role,
+      require_passed_evaluation,created_by,updated_by)
+    VALUES($1,$2,$3,$4,$5,$6,$6)
+    RETURNING ${aliasProtectionColumns}`,
+    [
+      protection.projectId,
+      protection.modelId,
+      protection.alias,
+      protection.requiredRole,
+      protection.requirePassedEvaluation,
+      protection.actorUserId,
+    ],
+  ))!;
+}
+
+/** Returns the removed protection, or undefined when the alias was not protected at that level. */
+export function deleteModelAliasProtection(
+  connection: Connection,
+  target: AliasProtectionTarget,
+): Promise<ModelAliasProtection | undefined> {
+  return first<ModelAliasProtection>(
+    connection,
+    `DELETE FROM model_alias_protections
+    WHERE project_id=$1 AND model_id IS NOT DISTINCT FROM $2::uuid AND alias=$3
+    RETURNING ${aliasProtectionColumns}`,
+    [target.projectId, target.modelId, target.alias],
   );
 }

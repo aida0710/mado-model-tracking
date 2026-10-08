@@ -30,3 +30,26 @@
   margin: -8px 0 4px;
   font-size: 12px;
 }
+/* Promotion check card on the model version page: one bordered block per policy. */
+.promotion-check-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.promotion-check {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 8px 12px;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.promotion-check > .section-heading {
+  justify-self: stretch;
+}
+.promotion-check h3 {
+  margin: 0;
+  font-size: 14px;
+}

@@ -17,16 +17,19 @@ import { ModelVersionAutomation } from '../components/ModelVersionAutomation';
 import { EvaluationResultsTable } from '../components/EvaluationResultsTable';
 import { EvaluationComparisonPanel } from '../components/EvaluationComparisonPanel';
 import { PromotionEvaluationTable } from '../components/PromotionEvaluationTable';
+import { PromotionCheckCard } from '../components/PromotionCheckCard';
+import { CommentThread } from '../components/comments/CommentThread';
 import { collectSummaryMetrics, summarizeEvaluations } from '../lib/evaluationSummary';
 import { modelVersionPath } from '../lib/modelVersionPath';
 import { text } from '../i18n/catalog';
 
 /**
  * One model version from training to results: where it came from, what automation ran on it,
- * its evaluation metrics against the baseline version, and its promotion decisions. Read-only.
+ * its evaluation metrics against the baseline version, and its promotion decisions. Editors can
+ * promote it from the promotion check; everything else is read-only apart from the comments.
  */
 export function ModelVersionPage() {
-  const { project } = useProject();
+  const { project, canEdit } = useProject();
   const { modelId = '', versionId = '' } = useParams();
   const { detail, sourceRun, rules, executions } = useModelVersionDetail(project.id, versionId);
   const evaluations = useModelVersionEvaluations(project.id, detail.value);
@@ -70,6 +73,8 @@ export function ModelVersionPage() {
             rules={rules.value ?? []}
             executions={executions}
             evaluations={evaluations}
+            canPromote={canEdit}
+            onPromoted={reloadAll}
           />
         )}
       </Resource>
@@ -84,6 +89,8 @@ function ModelVersionContent({
   rules,
   executions,
   evaluations,
+  canPromote,
+  onPromoted,
 }: {
   projectId: string;
   detail: ModelVersionDetail;
@@ -91,6 +98,8 @@ function ModelVersionContent({
   rules: ModelAutomationRule[];
   executions: QueryState<ModelAutomationExecutionPage>;
   evaluations: ReturnType<typeof useModelVersionEvaluations>;
+  canPromote: boolean;
+  onPromoted: () => void;
 }) {
   const { results, baseline, promotionEvaluations } = evaluations;
   const resultRuns = results.value?.items ?? [];
@@ -133,6 +142,9 @@ function ModelVersionContent({
         model={detail.model}
         candidateVersionId={detail.version.id}
       />
+      {canPromote && (
+        <PromotionCheckCard projectId={projectId} detail={detail} onPromoted={onPromoted} />
+      )}
       <section className="model-version-section" aria-label={text.versionPromotionEvaluations}>
         <h2>{text.versionPromotionEvaluations}</h2>
         <ErrorNotice message={promotionEvaluations.error} retry={promotionEvaluations.reload} />
@@ -157,6 +169,11 @@ function ModelVersionContent({
           </button>
         )}
       </section>
+      <CommentThread
+        projectId={projectId}
+        targetType="model_version"
+        targetId={detail.version.id}
+      />
     </>
   );
 }

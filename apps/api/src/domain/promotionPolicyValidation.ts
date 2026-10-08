@@ -41,6 +41,10 @@ export const promotionPolicyPatchSchema = z.strictObject({
   enabled: z.boolean(),
 });
 
+export const promotionPolicyOwnerSchema = z.strictObject({
+  serviceAccountId: uuidSchema,
+});
+
 export const promotionPolicyQuerySchema = z.strictObject({
   modelId: uuidSchema.optional(),
 });

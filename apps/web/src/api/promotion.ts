@@ -53,6 +53,11 @@ export const promotionApi = {
       throw invalidResponseError();
     return page;
   },
+  transferPolicyOwner: (projectId: string, policyId: string, serviceAccountId: string) =>
+    request<PromotionPolicy>(
+      `${policiesPath(projectId)}/${encodeId(policyId)}/owner`,
+      jsonRequest('PUT', { serviceAccountId }),
+    ),
   reevaluate: (projectId: string, evaluationId: string) =>
     request<PromotionEvaluation>(
       `${evaluationsPath(projectId)}/${encodeId(evaluationId)}/reevaluate`,

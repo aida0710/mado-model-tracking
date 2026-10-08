@@ -3,6 +3,7 @@ import { first, type Database, type Connection } from '../../db/database.js';
 import { conflict } from '../../domain/errors.js';
 import { findRun } from '../../repositories/registryRepository.js';
 import { modelAliasActor, removeModelAliases } from '../../repositories/modelAliasRepository.js';
+import { mlflowAliasGuard } from '../../services/aliasProtectionService.js';
 import type { RegistryService } from '../../services/registryService.js';
 import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
@@ -180,6 +181,7 @@ export class ModelVersionService {
           versionId: version.id,
           actor: modelAliasActor(principal),
           source: 'version_deleted',
+          guard: mlflowAliasGuard,
         });
       },
     );

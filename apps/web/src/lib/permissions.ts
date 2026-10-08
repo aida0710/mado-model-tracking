@@ -52,3 +52,8 @@ export function canCreateProject(user: Pick<User, 'status'>): boolean {
 export function canChangeOwnPassword(user: Pick<User, 'authSources'>): boolean {
   return user.authSources.includes('local');
 }
+
+/** Alias protections follow the promotion policy rule (aliasProtectionService). */
+export function canManageAliasProtections(role: ProjectRole, globalAdmin: boolean): boolean {
+  return globalAdmin || canManageProject(role);
+}
