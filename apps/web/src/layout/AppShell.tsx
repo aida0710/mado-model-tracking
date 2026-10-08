@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { Link, Navigate, NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { LogOut, Moon, Plus, Sun } from 'lucide-react';
+import { LogOut, Moon, Sun } from 'lucide-react';
 import { administrationApi } from '../api/administration';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
@@ -9,7 +8,9 @@ import { useQuery } from '../hooks/useQuery';
 import { useMutation } from '../hooks/useMutation';
 import { ProjectContext } from '../hooks/useProject';
 import { ErrorNotice, Resource } from '../components/Feedback';
-import { ProjectDialog } from '../dialogs/ProjectDialog';
+import { PageHeader } from '../components/PageHeader';
+import { ProjectList } from '../components/ProjectList';
+import { canCreateProject, canManagePlugins, isGlobalAdmin } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 
 const screens = [
@@ -32,7 +33,7 @@ export function AppShell() {
   const theme = useTheme();
   const projects = useQuery('projects', administrationApi.projects);
   const mutation = useMutation();
-  const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const userCanCreateProject = canCreateProject(auth.user);
   return (
     <div className="app-shell">
       <a className="skip-link" href="#content">
@@ -48,8 +49,10 @@ export function AppShell() {
               .filter(
                 (screen) =>
                   screen !== 'plugins' ||
-                  auth.user.isAdmin ||
-                  projects.value?.find((project) => project.id === projectId)?.role === 'admin',
+                  canManagePlugins(
+                    projects.value?.find((project) => project.id === projectId)?.role,
+                    isGlobalAdmin(auth.user),
+                  ),
               )
               .map((screen) => (
                 <NavLink key={screen} to={`/projects/${projectId}/${screen}`}>
@@ -108,40 +111,35 @@ export function AppShell() {
                   </select>
                 </label>
                 <span className="project-role">{project ? text[project.role] : ''}</span>
-                <button className="button small" onClick={() => setShowProjectDialog(true)}>
-                  <Plus size={14} />
-                  {text.newProject}
-                </button>
               </div>
               {project ? (
-                <ProjectContext.Provider value={{ project, reloadProjects: projects.reload }}>
+                <ProjectContext.Provider
+                  value={{ project, projects: items, reloadProjects: projects.reload }}
+                >
                   <main id="content" className="workspace" key={project.id}>
                     <Outlet />
                   </main>
                 </ProjectContext.Provider>
               ) : (
                 <main id="content" className="page">
-                  <h1>{text.projects}</h1>
-                  <p className="muted">{text.noProjects}</p>
-                  <button className="button primary" onClick={() => setShowProjectDialog(true)}>
-                    {text.newProject}
-                  </button>
+                  <PageHeader title={text.settings} />
+                  {items.length === 0 && (
+                    <>
+                      <p className="muted">{text.noProjects}</p>
+                      <p className="muted">
+                        {userCanCreateProject ? text.noProjectsCreateHint : text.noProjectsAskAdmin}
+                      </p>
+                    </>
+                  )}
+                  {(items.length > 0 || userCanCreateProject) && (
+                    <ProjectList projects={items} onCreated={projects.reload} />
+                  )}
                 </main>
               )}
             </>
           );
         }}
       </Resource>
-      {showProjectDialog && (
-        <ProjectDialog
-          onClose={() => setShowProjectDialog(false)}
-          onSaved={(project) => {
-            setShowProjectDialog(false);
-            projects.reload();
-            navigate(`/projects/${project.id}/experiments`);
-          }}
-        />
-      )}
     </div>
   );
 }

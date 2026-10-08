@@ -1,7 +1,6 @@
 import type { ExperimentTask, TaskExecution, TaskRunPage } from '@mmt/contracts';
 import type { CreateTask, LaunchTask, UpdateTask } from './inputs';
-import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
-import { text } from '../i18n/catalog';
+import { encodeId, invalidResponseError, jsonRequest, projectPath, request, requestItems } from './http';
 
 // Match the API's bounded default rather than polling the entire task history.
 const TASK_RUN_PAGE_SIZE = 50;
@@ -26,7 +25,7 @@ export const tasksApi = {
     if (cursor) query.set('cursor', cursor);
     const page = await request<TaskRunPage>(`${taskPath(projectId, id)}/runs?${query}`, { signal });
     if (!Array.isArray(page.items) || (page.nextCursor !== null && typeof page.nextCursor !== 'string'))
-      throw new Error(text.invalidResponse);
+      throw invalidResponseError();
     return page;
   },
 };

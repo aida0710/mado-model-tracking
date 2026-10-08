@@ -1,0 +1,248 @@
+/* App shell: top bar, project bar, page frame and header, tabs, and the login screen. */
+.topbar {
+  display: flex;
+  align-items: stretch;
+  min-height: 49px;
+  background: var(--header);
+  color: var(--header-text);
+  padding-right: 12px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  color: var(--header-text);
+  min-width: 171px;
+  white-space: nowrap;
+  font-size: 14px;
+  gap: 5px;
+}
+.brand:hover {
+  text-decoration: none;
+}
+.brand strong {
+  font-weight: 600;
+}
+.topbar nav {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.topbar nav a {
+  color: #ddd;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+  min-height: 49px;
+}
+.topbar nav a.active {
+  background: #282828;
+  border-bottom-color: #00b9b1;
+  color: #fff;
+}
+.topbar nav a:hover {
+  background: #242424;
+  text-decoration: none;
+}
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding-left: 10px;
+}
+.topbar .icon-button:hover {
+  background: #333;
+}
+.avatar {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #008782;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 650;
+  color: #fff;
+}
+.projectbar {
+  min-height: 43px;
+  padding: 6px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+.projectbar label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.projectbar label > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.projectbar select {
+  max-width: 260px;
+  min-width: 140px;
+  font-size: 12px;
+  padding: 5px 22px 5px 8px;
+  border-color: var(--border);
+}
+.project-role {
+  color: var(--muted);
+  font-size: 11px;
+}
+.workspace {
+  min-height: calc(100vh - 92px);
+}
+.page {
+  padding: 26px var(--page-padding) 40px;
+  min-width: 0;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  min-width: 0;
+}
+.page-header > div:first-child {
+  min-width: 0;
+}
+.page-header h1 {
+  overflow-wrap: anywhere;
+}
+.eyebrow {
+  color: var(--teal);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.breadcrumb-separator {
+  color: var(--muted);
+  margin: 0 10px;
+}
+.page-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.page-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  gap: 1px;
+  overflow-x: auto;
+}
+.tab {
+  color: var(--muted);
+  display: inline-block;
+  padding: 12px 16px 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tab.active {
+  color: var(--text);
+  border-bottom-color: var(--teal);
+  font-weight: 600;
+}
+.tab:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+.login-page {
+  min-height: 100vh;
+  background: var(--surface);
+}
+.login-brand {
+  background: var(--header);
+  color: var(--header-text);
+  padding: 16px 22px;
+  font-size: 14px;
+}
+.login-card {
+  max-width: 430px;
+  margin: 70px auto;
+  background: var(--background);
+  padding: 30px;
+  border: 1px solid var(--border);
+}
+.login-card h1 {
+  font-size: 23px;
+  margin-bottom: 24px;
+}
+.login-card .button {
+  width: 100%;
+  margin-top: 8px;
+}
+@media (max-width: 1200px) {
+  .topbar nav a {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+@media (max-width: 800px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .brand {
+    min-height: 48px;
+  }
+  .topbar nav {
+    order: 3;
+    width: 100%;
+  }
+  .topbar nav a {
+    min-height: 40px;
+  }
+  .topbar-actions {
+    margin-left: auto;
+  }
+  .page-header {
+    align-items: flex-start;
+  }
+  .page-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .page-actions .button {
+    font-size: 11px;
+    padding: 7px 9px;
+  }
+  .projectbar label > span,
+  .project-role {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .page-actions {
+    justify-content: flex-start;
+  }
+  .projectbar select {
+    min-width: 120px;
+    max-width: 170px;
+  }
+  .login-card {
+    margin: 30px 16px;
+    padding: 24px;
+  }
+}

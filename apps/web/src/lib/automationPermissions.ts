@@ -1,5 +1,2 @@
-import type { ProjectRole } from '@mmt/contracts';
-
-export function canManageAutomationRules(role: ProjectRole, isGlobalAdmin: boolean): boolean {
-  return isGlobalAdmin || role === 'admin';
-}
+// Kept so existing automation imports stay unchanged; the rule lives in lib/permissions.ts.
+export { canManageAutomationRules } from './permissions';

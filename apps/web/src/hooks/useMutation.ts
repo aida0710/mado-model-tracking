@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { formatErrorMessage } from '../lib/errorMessage';
 
 export function useMutation() {
   const [pending, setPending] = useState(false);
@@ -19,7 +20,7 @@ export function useMutation() {
     try {
       return await operation();
     } catch (failure) {
-      if (isMounted.current) setError(failure instanceof Error ? failure.message : String(failure));
+      if (isMounted.current) setError(formatErrorMessage(failure));
       return undefined;
     } finally {
       isRunning.current = false;

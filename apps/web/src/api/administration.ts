@@ -9,8 +9,14 @@ import type {
   TokenSummary,
 } from '@mmt/contracts';
 import type { CreateProject, CreateToken, ProjectMember } from './inputs';
-import { encodeId, jsonRequest, projectPath, request, requestItems } from './http';
-import { text } from '../i18n/catalog';
+import {
+  encodeId,
+  invalidResponseError,
+  jsonRequest,
+  projectPath,
+  request,
+  requestItems,
+} from './http';
 
 const pluginPath = (projectId: string, id?: string) =>
   `${projectPath(projectId)}/plugins${id ? `/${encodeId(id)}` : ''}`;
@@ -48,7 +54,7 @@ export const administrationApi = {
     const payload = await request<{ prometheus: string }>(`${pluginPath(projectId, id)}/metrics`, {
       signal,
     });
-    if (typeof payload.prometheus !== 'string') throw new Error(text.invalidResponse);
+    if (typeof payload.prometheus !== 'string') throw invalidResponseError();
     return payload.prometheus;
   },
   searchDatasets: async (projectId: string, id: string, query: string) => {
@@ -56,7 +62,7 @@ export const administrationApi = {
       `${pluginPath(projectId, id)}/datasets/search`,
       jsonRequest('POST', { query }),
     );
-    if (!Array.isArray(payload.items)) throw new Error(text.invalidResponse);
+    if (!Array.isArray(payload.items)) throw invalidResponseError();
     return payload.items;
   },
   importDataset: (projectId: string, id: string, dataset: PluginDataset) =>

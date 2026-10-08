@@ -25,7 +25,11 @@ describe('API応答の扱い', () => {
       'fetch',
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ values: [] }), { status: 200 })),
     );
-    await expect(requestItems('/test')).rejects.toThrow();
+    await expect(requestItems('/test')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+  it('接続できないときは表示文言ではなく接続失敗のcodeを返す', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+    await expect(request('/test')).rejects.toMatchObject({ status: 0, code: 'network_error' });
   });
   it('ブラウザの中断を接続障害に置き換えない', async () => {
     const abort = new DOMException('Aborted', 'AbortError');

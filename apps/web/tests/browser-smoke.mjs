@@ -280,7 +280,8 @@ try {
     .last()
     .click();
   await page.getByRole('button', { name: '失効', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
+  await page.getByRole('dialog').getByText(/browser-test-token.*失効/).waitFor();
+  await page.getByRole('dialog').getByRole('button', { name: '失効', exact: true }).click();
   await page.getByText('browser-test-token', { exact: true }).waitFor({ state: 'hidden' });
 
   console.log('Browser check: launch');

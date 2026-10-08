@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatErrorMessage } from '../lib/errorMessage';
 
 export interface QueryState<T> {
   value: T | undefined;
@@ -47,7 +48,7 @@ export function useQuery<T>(
           setState({
             key,
             loading: false,
-            error: error instanceof Error ? error.message : String(error),
+            error: formatErrorMessage(error),
           });
       }
       if (!controller.signal.aborted && pollMs) timer = setTimeout(load, pollMs);

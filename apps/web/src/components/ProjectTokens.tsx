@@ -1,19 +1,20 @@
 import { useState } from 'react';
+import type { TokenSummary } from '@mmt/contracts';
 import { administrationApi } from '../api/administration';
 import { useProject } from '../hooks/useProject';
 import { useQuery } from '../hooks/useQuery';
 import { DataTable } from './DataTable';
 import { Resource } from './Feedback';
-import { FormDialog } from './FormDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 import { TokenDialog } from '../dialogs/TokenDialog';
 import { formatDate } from '../lib/format';
-import { text } from '../i18n/catalog';
+import { text, textTemplates } from '../i18n/catalog';
 
 export function ProjectTokens() {
   const { project } = useProject();
   const tokens = useQuery('personal-tokens', administrationApi.tokens);
   const [showCreate, setShowCreate] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokingToken, setRevokingToken] = useState<TokenSummary | null>(null);
   return (
     <section className="settings-section">
       <div className="section-heading">
@@ -50,7 +51,7 @@ export function ProjectTokens() {
                 key: 'revoke',
                 label: text.revoke,
                 render: (item) => (
-                  <button className="button small danger" onClick={() => setRevokingId(item.id)}>
+                  <button className="button small danger" onClick={() => setRevokingToken(item)}>
                     {text.revoke}
                   </button>
                 ),
@@ -60,14 +61,16 @@ export function ProjectTokens() {
         )}
       </Resource>
       {showCreate && <TokenDialog onClose={() => setShowCreate(false)} onCreated={tokens.reload} />}
-      {revokingId && (
-        <FormDialog
+      {revokingToken && (
+        <ConfirmDialog
           title={text.revokeToken}
-          onClose={() => setRevokingId(null)}
-          fields={[]}
-          onSubmit={() => administrationApi.revokeToken(revokingId)}
-          onSaved={() => {
-            setRevokingId(null);
+          message={textTemplates.revokeTokenConfirm(revokingToken.name)}
+          confirmLabel={text.revoke}
+          destructive
+          onClose={() => setRevokingToken(null)}
+          onConfirm={() => administrationApi.revokeToken(revokingToken.id)}
+          onConfirmed={() => {
+            setRevokingToken(null);
             tokens.reload();
           }}
         />
