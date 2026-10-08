@@ -133,9 +133,9 @@ def main():
     with start_run(kind="training") as run:
         for step, loss in enumerate(history):
             run.log_metrics({"train.loss": loss}, step=step)
-        artifact = run.log_artifact(output, path="model/weights.json", mime_type="application/json")
-        run.register_output_model(name=f"sample-linear-{run.id}", family="linear",
-                                  version="v1", artifact_id=artifact["id"])
+        # Taskの出力モデル設定（Artifactのパス model/）が、Runの成功後にこの重みを登録する。
+        # ここでrun.register_output_model()により同じModelへ登録した場合、Task側の登録はskipされる。
+        run.log_artifact(output, path="model/weights.json", mime_type="application/json")
 
 
 if __name__ == "__main__":

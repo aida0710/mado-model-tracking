@@ -14,9 +14,11 @@ export type ArtifactBackend = 'filesystem' | 's3';
 export type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 export type { ModelAutomationRule, ModelAutomationExecution } from './modelAutomation.js';
 export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, TaskRunPage, RepositoryFiles } from './experimentTasks.js';
+export type { RunOutputRegistration, TaskOutputModel } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
+import type { TaskOutputModel } from './experimentTasks.js';
 
 export type AuthMode = 'local' | 'oidc' | 'hybrid' | 'development';
 export type AuthSource = 'local' | 'oidc';
@@ -76,6 +78,8 @@ export interface Run {
   inputDatasetVersionIds: string[];
   outputDatasetVersionIds: string[];
   outputModelVersionIds: string[];
+  /** Task outputModel copied at launch; registration runs when the Run ends. */
+  outputModelRegistration?: TaskOutputModel | null;
   parentRunId: string | null;
   environment: JsonObject;
   createdBy: string;
