@@ -2,7 +2,77 @@
 
 Sweep は、探索空間から parameter の組を提案して試行（trial）を繰り返し、目的メトリクスが最良の試行を探す仕組みである。語は W&B の sweep config（`method`、`metric.goal`、`parameters`、`early_terminate`）に合わせる。
 
-2026-10-08 時点では探索アルゴリズムだけを実装している。Sweep を保存・実行する API と画面は未実装で、sweeps-api が担当する。
+Sweep の試行は、既存の Task の起動（Run と Job）として ComputeTarget のキューに入る。worker 側の変更は無い。API と制御は `apps/api/src/services/sweep*.ts`、探索アルゴリズムは `apps/api/src/domain/sweeps/`。SDK（sweeps-sdk）と画面（sweeps-web）は後の波で作る。API の契約は [api-contract.md の Sweeps](api-contract.md#sweeps)。
+
+## 使い方
+
+1. 学習コードの Task を作る（Task の parameters が全試行の共通の既定値になる）。
+2. `POST /api/projects/:p/sweeps` で探索空間・目的メトリクス・試行数・並列数を指定して作る。作成と同時に最初の試行が入る。
+3. 試行の Run が終わるたびに次の試行が入る。全試行が終わると Sweep は `finished` になり、`bestTrial` が最良の試行を指す。
+
+```json
+{
+  "name": "lr-search",
+  "taskId": "<Task ID>",
+  "method": "bayes",
+  "searchSpace": {
+    "lr": { "distribution": "log_uniform", "min": 0.00001, "max": 0.01 },
+    "batch_size": { "values": [16, 32, 64] },
+    "epochs": { "value": 10 }
+  },
+  "objective": { "metric": "val_loss", "goal": "minimize", "aggregation": "min" },
+  "maxTrials": 30,
+  "parallelism": 4,
+  "earlyStopping": { "type": "hyperband", "minIter": 1, "eta": 3 }
+}
+```
+
+### W&B の sweep config との対応
+
+| W&B | Mado Model Tracking | 備考 |
+|---|---|---|
+| `method: grid / random / bayes` | `method` | 同じ |
+| `metric.name` / `metric.goal` | `objective.metric` / `objective.goal` | goal は `minimize` / `maximize` |
+| （summary の値） | `objective.aggregation` | `last`（既定、W&B の summary と同じ）/ `min` / `max` |
+| `parameters.x.values` | `searchSpace.x.values` | |
+| `parameters.x.value` | `searchSpace.x.value` | |
+| `distribution: uniform` + `min`/`max` | `distribution: 'uniform'` | |
+| `distribution: log_uniform_values` | `distribution: 'log_uniform'` | min/max は値そのもの。W&B の `log_uniform`（指数を渡す）とは違う |
+| `distribution: int_uniform` | `distribution: 'int_uniform'` | |
+| `distribution: q_uniform` + `q` | `distribution: 'q_uniform'` + `q` | |
+| `early_terminate: {type: hyperband, min_iter, eta, max_iter}` | `earlyStopping: {type: 'hyperband', minIter, eta, maxIter}` | s（bracket 数）は無い（非同期の ASHA） |
+| `run_cap` | `maxTrials` | 1〜10000 |
+| agent の数 | `parallelism` | 1〜100。下の「並列数」を参照 |
+
+### 学習コードで parameters を読む
+
+試行の Run の parameters は「Task の parameters に試行の値を上書きしたもの」。worker はこれを環境変数 `MMT_PARAMETERS_JSON`（JSON 文字列）とファイル `parameters.json`（パスは `MMT_PARAMETERS_FILE`）で学習コードへ渡す。
+
+```python
+import json, os
+parameters = json.loads(os.environ["MMT_PARAMETERS_JSON"])
+lr = parameters["lr"]
+```
+
+目的メトリクスは、Run のメトリクスとして step 付きで記録する（Python SDK の `run.log_metrics({"val_loss": v}, step=epoch)`、または MLflow の `log_metric`）。早期打ち切りを使うときは step を epoch などの進み具合にする。Sweep の SDK 補助は sweeps-sdk（第4波）で追加する。
+
+## 試行の制御
+
+- 試行の Run は Sweep の作成者が作ったものとして記録する（自動実行の rule と同じ）。名前は `<Sweep名>-<trial_index>`、予約 tag `mmt.sweepId`・`mmt.sweepTrialIndex` をサーバーが付ける。
+- Task の revision は作成時に固定する。Task を編集すると、次の投入時に Sweep を `paused`（`task_revision_changed`）にする。新しい版で勝手に回さないため。再開はできず、新しい Sweep を作る。
+- 作成者が Project の editor でなくなったら、次の投入時に `paused`（`owner_forbidden`）にする。
+- Job の登録に失敗したら（target の無効化など）`paused`（`launch_failed`）。原因を直して resume する。
+- 試行の Job を手で retry して作った Run は Sweep の試行に数えない（tag は引き継がれるが `sweep_trials` には入らない）。
+
+### 並列数と target の max_concurrent_jobs
+
+`parallelism` は「同時に queued か running の試行の数」の上限で、Sweep が Job をキューに入れる量を決める。実際に同時に動く数は、さらに ComputeTarget の `max_concurrent_jobs` と GPU の空きで制限される。例えば parallelism=8 でも target の max_concurrent_jobs=2 なら、2件が動き、6件は queued で待つ。target を他の Job と共有するときは parallelism を max_concurrent_jobs 以下にすると、ほかの Job の順番を押しのけない。
+
+### 早期打ち切りの意味
+
+`earlyStopping` を指定すると、API 内の scheduler（15秒ごと）が running の試行のメトリクスを rung（minIter×eta^k step）で比べ、上位 1/eta に入らなかった試行の Job に cancel を要求する。試行は `early_stopped` になり、Run は worker が止めた後に `canceled` になる。Run の tag `mmt.sweepEarlyStopped=true` が付く。打ち切った試行の objective も記録し、最良試行の候補に含める（打ち切った時点の値なので、通常は上位にならない）。止めた枠にはすぐ次の試行が入る。
+
+最良試行（`bestTrial`）は `finished` と `early_stopped` の試行から選ぶ。failed・canceled は途中で切れた値なので含めない。
 
 ## 探索アルゴリズム
 

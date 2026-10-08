@@ -53,6 +53,10 @@ import { AutomationPendingSweeper } from './services/automationPendingSweeper.js
 import { RunNoteService } from './services/runNoteService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
+import { SweepController } from './services/sweepController.js';
+import { SweepScheduler } from './services/sweepScheduler.js';
+import { SweepService } from './services/sweepService.js';
+import { SweepTrialCompletionHandler } from './services/sweepTrialCompletionHandler.js';
 import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { auditRoutes } from './routes/auditRoutes.js';
@@ -76,6 +80,7 @@ import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
+import { sweepRoutes } from './routes/sweepRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -130,6 +135,11 @@ export function createApplication(options: ApplicationOptions) {
   // Output registration must run before the source-run handler releases pending automation.
   terminalHandlers.push(new OutputRegistrationHandler(registry));
   terminalHandlers.push(new AutomationSourceRunHandler(automation));
+  // Sweep trials follow chaining, promotion and automatic retry, and precede notifications.
+  const sweepController = new SweepController(tasks, jobs);
+  terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));
+  const sweeps = new SweepService(database, jobs, sweepController);
+  const sweepScheduler = new SweepScheduler(database, sweepController);
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
   const evaluation = new EvaluationService(database);
@@ -248,6 +258,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', commentRoutes(comments));
+  app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', workerPresenceRoutes(worker));
@@ -266,6 +277,7 @@ export function createApplication(options: ApplicationOptions) {
     automationSweeper,
     artifactUploadFinalizer,
     artifactUploadSweeper,
+    sweepScheduler,
     services: {
       auth,
       audit,
@@ -290,6 +302,8 @@ export function createApplication(options: ApplicationOptions) {
       runNotes,
       commentTargets,
       comments,
+      sweeps,
+      sweepController,
     },
   };
 }
