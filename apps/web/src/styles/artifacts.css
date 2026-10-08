@@ -31,7 +31,7 @@
   font-size: 11px;
   line-height: 1.6;
 }
-@media (max-width: 800px) {
+@media (width < 900px) {
   .artifact-layout {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;

@@ -309,7 +309,7 @@ tr.selected td {
   background: #3c4149;
   color: #d7dbe1;
 }
-@media (max-width: 1200px) {
+@media (width < 1200px) {
   .run-toolbar {
     flex-wrap: wrap;
   }
@@ -322,7 +322,7 @@ tr.selected td {
     min-height: 36px;
   }
 }
-@media (max-width: 800px) {
+@media (width < 900px) {
   .experiments-layout {
     display: block;
   }
@@ -345,4 +345,35 @@ tr.selected td {
   .selection-bar > div {
     margin-left: auto;
   }
+}
+/* ResponsiveTable: the row's open button and the secondary columns shown beneath an opened row. */
+.responsive-table .responsive-table-toggle {
+  width: calc(var(--tap-target) + 8px);
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: right;
+}
+.responsive-table tr.clickable-row {
+  cursor: pointer;
+}
+.responsive-table-details > td,
+tr.responsive-table-details:hover > td {
+  background: var(--background);
+}
+.responsive-table-details dl {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+}
+.responsive-table-details dl > div {
+  display: contents;
+}
+.responsive-table-details dt {
+  color: var(--muted);
+}
+.responsive-table-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }

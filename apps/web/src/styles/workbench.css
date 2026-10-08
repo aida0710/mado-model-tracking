@@ -121,7 +121,7 @@
 .execution-snapshot {
   min-width: 0;
 }
-@media (max-width: 800px) {
+@media (width < 900px) {
   .workspace-form-grid, .workspace-editor-grid {
     grid-template-columns: minmax(0, 1fr);
   }

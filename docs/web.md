@@ -8,8 +8,9 @@
 
 | ファイル | 対象 |
 |---|---|
+| breakpoints | 画面幅の切り替え点（`--bp-sm`・`--bp-md`・`--bp-lg`）とタップ領域の最小サイズ（`--tap-target`） |
 | base | フォント、テーマ変数、要素の既定、文字組み、ボタン、通知・読み込み表示 |
-| layout | 上部バー、プロジェクトバー、ページ枠と見出し、タブ、ログイン画面 |
+| layout | 上部バー、ナビゲーションのドロワー、プロジェクトバー、ページ枠と見出し、タブ、ログイン画面 |
 | tables | 実験サイドバー、Runのツールバー・選択バー、表、状態バッジ |
 | registry | Registryの一覧・詳細、詳細リスト、自動実行パネル、グラフ、ログ、Job、Lineage |
 | artifacts | Artifactの一覧・プレビュー・アップロード結果 |
@@ -19,7 +20,7 @@
 | uploads | Artifactのアップロードダイアログ、ドロップ領域、進み具合、途中のアップロード |
 
 - 新しいCSSは、そのclassが属する領域のファイルへ足します。`styles.css`のような何でも入るファイルを作り直しません。
-- 画面幅による上書き（`@media`）は、対象の領域ファイルの末尾にまとめます。
+- 画面幅による上書き（`@media`）は、対象の領域ファイルの末尾にまとめます。切り替え点は下の「画面幅への対応」の3つだけを使います。
 - 詳細度が同じルールは読み込み順で勝ち負けが決まります。新しい領域ファイルを作るときは`main.tsx`の末尾に足し、既存の順番を入れ替えません。
 
 ## エラー文言の層
@@ -37,9 +38,19 @@
 
 ## 画面の枠
 
-- `layout/TopBar.tsx`: 上部バー（画面の切り替え、テーマ、ユーザー表示、ログアウト）。ローカルアカウントの利用者は、ユーザー表示から`/account/password`（パスワード変更）を開けます。
-- `layout/AppShell.tsx`: Projectの画面の枠。プロジェクトバーはProjectの選択と自分の権限の表示だけを置きます。Projectの一覧と作成は設定画面の「Projects」セクション（`components/ProjectList.tsx`）です。参加しているProjectが無いときは、作成できる人には作成の案内と「Projects」セクションを、作成できない人には管理者への依頼を表示します。
+- `layout/TopBar.tsx`: 上部バー（画面の切り替え、テーマ、ユーザー表示、ログアウト）。画面の切り替え先は`layout/navigationLinks.ts`が決め、広い幅では上部バーに並べ、狭い幅では`layout/NavigationDrawer.tsx`に入れます。ローカルアカウントの利用者は、ユーザー表示から`/account/password`（パスワード変更）を開けます。
+- `layout/AppShell.tsx`: Projectの画面の枠。プロジェクトバー（`layout/ProjectBar.tsx`）はProjectの選択と自分の権限の表示だけを置き、参加しているProjectが無いときは出しません。Projectの一覧と作成は設定画面の「Projects」セクション（`components/ProjectList.tsx`）です。参加しているProjectが無いときは、作成できる人には作成の案内と「Projects」セクションを、作成できない人には管理者への依頼を表示します。
 - `layout/AccountShell.tsx`: Projectに属さない、ログイン中の利用者向けの画面の枠。
+
+## 画面幅への対応
+
+切り替え点は`styles/breakpoints.css`の`--bp-sm`（640px）・`--bp-md`（900px）・`--bp-lg`（1200px）です。CSSの変数は`@media`の中に書けないので、メディアクエリは同じ値を範囲の書き方で`@media (width < 640px)`・`(width < 900px)`・`(width < 1200px)`と書きます。スクリプトで幅を見るときは`lib/breakpoints.ts`の`narrowerThan('md')`を`lib/useMediaQuery.ts`に渡します。`lib/breakpoints.test.ts`が、CSSの変数とTSの値の一致と、ほかの数値のメディアクエリが無いことを確かめます。
+
+- 上部バー: `--bp-lg`未満では画面の切り替えを左から出るドロワー（`layout/NavigationDrawer.tsx`）へ移します。メニューボタンは`aria-expanded`で開閉を示し、Esc、ドロワーの外側のタップ、リンクの選択で閉じます。
+- プロジェクトバー: どの幅でも1行です。狭い幅ではProjectの選択欄が縮み、名前を省略します。
+- タップ領域: `--bp-md`未満では、ボタン・アイコンボタン・入力欄・選択欄の高さを`--tap-target`（40px）以上にします。
+- 表: 狭い幅で列を減らす一覧は`components/ResponsiveTable.tsx`を使います。列ごとに`priority: 'primary' | 'secondary'`を指定し、`--bp-md`未満では`primary`の列だけを行に残して、行の右端のボタンで`secondary`の列を行の下に開きます。`onRowClick`はポインタ用の近道なので、キーボードで開けるリンクかボタンを`primary`の列に置きます。`components/DataTable.tsx`は表の中だけで横にスクロールします。
+- ダイアログ: `components/Dialog.tsx`は`--bp-sm`未満で全画面になります。`fullScreenOnNarrow={false}`を渡すと、全画面ではなく下から出るシートになります（`ConfirmDialog`はシート）。
 
 ## 確認ダイアログ
 
