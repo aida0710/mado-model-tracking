@@ -20,6 +20,7 @@ CONTEXT_PATH = "/mmt/context"
 OUTPUTS_PATH = "/mmt/outputs"
 SOURCE_PATH = "/mmt/source"
 WEIGHTS_FILENAME = "weights"
+UPSTREAM_RUN_FILENAME = "upstream-run.json"
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,37 @@ def host_environment() -> dict[str, str]:
     # Container variables must not select the CLI binary, daemon, or the host's credentials.
     allowed_names = {"PATH", "HOME", "LANG", "LC_ALL", "LD_LIBRARY_PATH", "TMPDIR"}
     return {name: value for name, value in os.environ.items() if name in allowed_names}
+
+
+def upstream_run_document(run: dict[str, Any], model_version: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Describe the Run whose outputs this Job consumes, or None when it has no upstream.
+
+    The parent Run is the upstream: deferred automation links the training Run and stage
+    chaining links the upstream inference Run. WorkerJob carries no snapshot of that Run, so
+    only the facts visible from this Run are included and the rest (for example its kind)
+    are omitted instead of guessed.
+    """
+    parent_run_id = run.get("parentRunId")
+    if not parent_run_id:
+        return None
+    if not isinstance(parent_run_id, str):
+        raise ValueError("WorkerJob run.parentRunId must be a string")
+    document: dict[str, Any] = {"runId": parent_run_id}
+    # Only the upstream outputs that this Run takes as inputs; the parent may have produced more.
+    upstream_dataset_ids = run.get("upstreamDatasetVersionIds") or []
+    if upstream_dataset_ids:
+        document["outputDatasetVersionIds"] = list(upstream_dataset_ids)
+    if model_version is not None and model_version.get("sourceRunId") == parent_run_id:
+        document["outputModelVersionIds"] = [model_version["id"]]
+    return document
+
+
+def upstream_environment(context: dict[str, Any], upstream_run_file: str) -> dict[str, str]:
+    # A Job without an upstream gets no variables, so code can test for their presence.
+    upstream_run = context.get("upstreamRun")
+    if upstream_run is None:
+        return {}
+    return {"MMT_UPSTREAM_RUN_ID": upstream_run["runId"], "MMT_UPSTREAM_RUN_FILE": upstream_run_file}
 
 
 def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> list[ContainerMount]:
@@ -54,6 +86,9 @@ def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> 
         "model-version.json": {"modelVersion": context["modelVersion"]},
         "dataset-versions.json": {"inputDatasets": context["inputDatasets"]},
     }
+    # A spec saved before upstream inputs existed has no upstreamRun key.
+    if context.get("upstreamRun") is not None:
+        context_files[UPSTREAM_RUN_FILENAME] = context["upstreamRun"]
     for name, document in context_files.items():
         write_json(workspace / "context" / name, document)
     if specification["codeVersion"]["source"] is not None:
@@ -133,6 +168,7 @@ def container_environment(specification: dict[str, Any]) -> dict[str, str]:
         MMT_MODEL_FILE=f"{INPUTS_PATH}/{WEIGHTS_FILENAME}" if context["modelVersion"] is not None else "",
         PYTHONUNBUFFERED="1",
     )
+    environment.update(upstream_environment(context, f"{CONTEXT_PATH}/{UPSTREAM_RUN_FILENAME}"))
     # A Docker-selected GPU UUID/index is remapped to a container-local CUDA ordinal.
     gpu_ids = specification["gpuIds"]
     runtime_kind = specification["codeVersion"].get("runtime", {}).get("kind")
