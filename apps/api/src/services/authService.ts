@@ -4,12 +4,7 @@ import type { ApiConfig } from '../config.js';
 import { first, transaction, type Database } from '../db/database.js';
 import { DomainError } from '../domain/errors.js';
 import { hashSecret, randomSecret } from '../auth/secrets.js';
-import {
-  tokenIdentity,
-  upsertIdentity,
-  upsertOidcUser,
-  type OidcLoginIdentity,
-} from '../repositories/identityRepository.js';
+import { tokenIdentity, upsertIdentity } from '../repositories/identityRepository.js';
 import {
   createSession,
   findActiveSession,
@@ -22,6 +17,7 @@ import { AuthRateLimiter, OIDC_START_IP_LIMIT } from '../auth/authRateLimiter.js
 import { argon2idPasswordHasher } from '../auth/passwordHasher.js';
 import { loginAudit } from '../auth/authAuditEvents.js';
 import { LocalAuthService } from './localAuthService.js';
+import { OidcLoginDeniedError, provisionOidcLogin, type OidcClaims } from './oidcProvisioning.js';
 
 // Short login lifetime bounds replay exposure of an unfinished OIDC login.
 export const LOGIN_LIFETIME_SECONDS = 10 * 60;
@@ -118,7 +114,7 @@ export class AuthService {
     );
     const url = oidc.buildAuthorizationUrl(provider, {
       redirect_uri: `${this.config.publicUrl}/api/auth/callback`,
-      scope: 'openid profile email',
+      scope: this.config.oidc.scopes,
       response_type: 'code',
       state,
       nonce,
@@ -169,7 +165,7 @@ export class AuthService {
     if (!login)
       throw new DomainError(401, 'Loginが失効したか、ブラウザが一致しません', 'invalid_oidc_state');
     const provider = await this.oidcProvider();
-    let identity: OidcLoginIdentity;
+    let claims: OidcClaims;
     try {
       const tokens = await oidc.authorizationCodeGrant(provider, callbackUrl, {
         pkceCodeVerifier: login.verifier,
@@ -177,20 +173,17 @@ export class AuthService {
         expectedNonce: login.nonce,
         idTokenExpected: true,
       });
-      const claims = tokens.claims();
-      if (!claims?.sub || typeof claims.email !== 'string' || claims.email_verified !== true)
-        throw new Error('Verified email is required');
-      const groups = Array.isArray(claims.groups)
-        ? claims.groups.filter((group): group is string => typeof group === 'string')
-        : [];
-      identity = {
+      const idToken = tokens.claims();
+      if (!idToken?.sub) throw new Error('Subject is required');
+      const email = typeof idToken.email === 'string' ? idToken.email : '';
+      claims = {
         issuer: this.config.oidc!.issuer,
-        subject: claims.sub,
-        email: claims.email,
-        emailVerified: true,
-        groups,
-        displayName: typeof claims.name === 'string' ? claims.name : claims.email,
-        isAdmin: groups.includes(this.config.oidc!.adminGroup),
+        subject: idToken.sub,
+        email,
+        // An unverified email is neither stored nor used for linking; provisioning refuses it.
+        emailVerified: email !== '' && idToken.email_verified === true,
+        displayName: typeof idToken.name === 'string' && idToken.name ? idToken.name : email,
+        groups: Array.isArray(idToken.groups) ? idToken.groups : [],
       };
     } catch (error) {
       // Provider responses may contain codes or tokens, so never expose its exception.
@@ -203,11 +196,29 @@ export class AuthService {
       );
       throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
     }
+    try {
+      return await this.provisionSession(claims, metadata);
+    } catch (error) {
+      if (!(error instanceof OidcLoginDeniedError)) throw error;
+      await this.recordOidcDenial(error, claims, metadata);
+      throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
+    }
+  }
+
+  private async provisionSession(
+    claims: OidcClaims,
+    metadata: RequestMetadata,
+  ): Promise<SessionLogin> {
+    const settings = this.config.oidc!;
     return transaction(this.database, async (connection) => {
-      const user = await upsertOidcUser(connection, identity);
-      // Disabling is local to this app, so it overrides a still-valid SSO account.
-      if (user.status !== 'active')
-        throw new DomainError(401, 'OIDC認証に失敗しました', 'oidc_authentication_failed');
+      const user = await provisionOidcLogin(connection, {
+        claims,
+        policy: {
+          rolePolicy: settings.rolePolicy,
+          autoLinkVerifiedEmail: settings.autoLinkVerifiedEmail,
+        },
+        metadata,
+      });
       const session = await createSession(connection, {
         userId: user.id,
         authMethod: 'oidc',
@@ -221,6 +232,27 @@ export class AuthService {
         resourceId: user.id,
       });
       return { user, session };
+    });
+  }
+
+  // The provisioning transaction rolled back, so the denial is recorded on its own.
+  // The audit row names the SSO account so operators can tell who was refused.
+  private async recordOidcDenial(
+    denial: OidcLoginDeniedError,
+    claims: OidcClaims,
+    metadata: RequestMetadata,
+  ): Promise<void> {
+    console.error(
+      JSON.stringify({ event: 'oidc_login_denied', reason: denial.reason, userId: denial.userId }),
+    );
+    await writeAuditEvent(this.database, {
+      actorType: 'system',
+      action: 'auth.oidc.denied',
+      outcome: 'denied',
+      resourceType: 'user',
+      resourceId: denial.userId,
+      details: { reason: denial.reason, subject: claims.subject, email: claims.email },
+      ...metadata,
     });
   }
 

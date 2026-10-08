@@ -7,8 +7,8 @@
 | AUTH_MODE | 使えるログイン | 必須の設定 | 向いている場面 |
 |---|---|---|---|
 | `local` | ローカルアカウント | なし（`OIDC_*`は読まない） | SSOが無い環境、閉じたLAN |
-| `oidc` | Authentik（SSO）だけ | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID` | SSOへ移行し終えた本番 |
-| `hybrid` | SSOとローカルアカウント | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID` | SSOの導入中。Local Adminを緊急経路に残す |
+| `oidc` | Authentik（SSO）だけ | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、`OIDC_ALLOWED_GROUPS` | SSOへ移行し終えた本番 |
+| `hybrid` | SSOとローカルアカウント | `OIDC_ISSUER_URL`、`OIDC_CLIENT_ID`、`OIDC_ALLOWED_GROUPS` | SSOの導入中。Local Adminを緊急経路に残す |
 | `development` | 開発用ログイン | なし | ローカル開発。`NODE_ENV=production`では起動しない |
 
 必須の設定が欠けると、APIは設定名だけを示して起動しません。無効なmodeの経路は404を返します（`local`のOIDC開始・callback、`oidc`の`POST /api/auth/local-login`）。
@@ -37,15 +37,31 @@ migration 010はsessionに`auth_method`を必須で追加します。migration�
 
 ## 監査ログ
 
-認証（上記）、Projectメンバーの権限変更（`project.member.set`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
+認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`）、API tokenの発行・失効（`token.create`、`token.revoke`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
 
 Project adminは設定画面の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
 
 ## Authentik
 
-AuthentikにOAuth2/OpenID ProviderとApplicationを用意します。client secretはAPI serverにだけ設定します。Redirect URIには`https://<アプリのホスト>/api/auth/callback`を完全一致で登録し、per-providerのissuerを使います。Providerの設定方法は[Authentik公式資料](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)を参照してください。
+アプリはOIDC Authorization Code Flow + PKCEを使います。MFA、password policy、recovery、login flowはAuthentikを正本とし、アプリはUser、全体role、browser session、監査ログを管理します。Project内の権限はアプリで設定します。
 
-API server側の設定:
+### Authentikに登録する値
+
+`https://tracking.example.com`は実際のHTTPS URL（`MMT_PUBLIC_URL`）へ置き換えます。
+
+| 項目 | 値 |
+|---|---|
+| Redirect URI | `https://tracking.example.com/api/auth/callback`（完全一致） |
+| Issuer | application単位のURL（例: `https://sso.example.com/application/o/model-tracking/`） |
+| Scope | `openid profile email`（`OIDC_SCOPES`と同じにする） |
+
+AuthentikではApplicationとOAuth2/OpenID Providerを作ります。client secretはAPI serverにだけ設定します。ID tokenに`email`、`email_verified`、`name`、`groups`（group名の配列）を出すscope mappingが必要です。Providerの設定方法は[Authentik公式資料](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)を参照してください。
+
+アプリはstate、nonce、PKCE、ID tokenの署名・issuer・audienceを検証します。OIDC開始時に短命のHttpOnly cookieを発行し、callbackは同じbrowserからだけ受け付けます。
+
+### 設定例
+
+導入時はLocal Adminを緊急経路として残すため`hybrid`を推奨します（上の「SSOへの移行手順」）。本番ではHTTPSが必須です。
 
 ```dotenv
 NODE_ENV=production
@@ -55,19 +71,66 @@ MMT_WEB_ORIGIN=https://tracking.example.com
 OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
 OIDC_CLIENT_ID=<providerのclient ID>
 OIDC_CLIENT_SECRET=<secret>
-OIDC_ADMIN_GROUP=mmt-admins
 OIDC_LABEL=Authentik
+OIDC_SCOPES=openid profile email
+OIDC_AUTO_LINK_VERIFIED_EMAIL=false
+OIDC_ALLOWED_GROUPS=mmt-users,mmt-admins
+OIDC_ROLE_MAPPING_JSON={"mmt-admins":"admin","mmt-users":"user"}
+OIDC_DEFAULT_ROLE=user
 ```
 
-アプリはAuthorization Code＋PKCE、state、nonce、ID tokenの署名・issuer・audienceを検証します。`openid profile email`を要求し、`email_verified=true`が必要です。Authentik側のscope mappingから必要なclaimをID tokenへ出してください。`groups`配列に`mmt-admins`がある利用者だけが全体管理者になります。Project内の権限はアプリで個別に設定します。
+| 設定 | 意味 |
+|---|---|
+| `OIDC_ALLOWED_GROUPS` | loginを許すgroup（カンマ区切り）。`oidc`/`hybrid`で必須で、空なら起動しません |
+| `OIDC_ROLE_MAPPING_JSON` | group→全体roleの対応表。roleは`admin`（全体管理者）と`user`（loginのみ）。ほかの値は起動時エラー |
+| `OIDC_DEFAULT_ROLE` | 対応表のどのgroupにも入っていない許可ユーザーの全体role。既定`user` |
+| `OIDC_ADMIN_GROUP` | `{"<group>":"admin"}`の省略形（以前からの設定）。対応表と両方指定して、adminのgroupが食い違うと起動しません。どちらも無ければ`mmt-admins`をadminとします |
+| `OIDC_AUTO_LINK_VERIFIED_EMAIL` | 同じemailのLocal Userへ自動連携するか。既定`false` |
+| `OIDC_SCOPES` | 要求するscope。既定`openid profile email`。`openid`が無いと起動しません |
+
+対応表に書いたgroupも`OIDC_ALLOWED_GROUPS`に入れてください。許可groupに無いgroupだけを持つ人は、対応表に関係なくloginできません。
+
+以前の版から更新するときは、`OIDC_ALLOWED_GROUPS`を足してから再起動してください（無いとAPIが起動しません）。`OIDC_ADMIN_GROUP`だけの設定は、そのまま同じ全体管理者の判定になります。
+
+### Userと全体roleの同期規則
+
+- 初回SSOでUserをJIT作成します。self-signupの画面はありません。
+- `OIDC_ALLOWED_GROUPS`のどのgroupにも入っていない人は拒否し、Userも作りません。
+- loginのたびに、全体管理者かどうか（`users.is_admin`）を対応表から同期します。複数groupに該当すれば強い方（`admin`）になります。
+- loginのたびに、その人のgroupを`user_groups`へ保存し直します。ProjectのSSO group bindingはこの表を使います。
+- 同期で有効な全体管理者（Local Adminを含む）が0人になる場合は、そのloginを拒否し、`is_admin`を残します。
+- 既存Local Userへのemail自動連携は既定で無効で、同じemailでも別のUserになります。有効にした場合も`email_verified=true`かつemail一致（大文字小文字を区別しない）で、まだSSOと結び付いていないLocal Userが1人だけのときに限ります。全体管理者やどこかのProject adminであるLocal Userは自動連携しません。
+- `email_verified`がtrueでないloginは拒否します。
+- SSO由来の表示名とemailはloginのたびに更新します。Local UserのユーザーIDは連携後も維持します。
+- 作成・連携、全体roleやgroupの変化は監査ログの`auth.oidc.sync`に残ります。
+
+Role同期を使う環境では、SSO Userの全体roleを画面から一時的に変えても次回ログインでAuthentik側の状態へ戻ります。恒久変更はAuthentik groupで行います。
+
+groupの判定と全体roleの同期はloginのときにだけ行います。Authentik側でgroupから外しても、loginしているsessionは期限（`AUTH_SESSION_ABSOLUTE_SECONDS`、既定12時間）まで元の権限のままです。
 
 Web sessionはHttpOnly/SameSite=Lax cookieで、期限は上の`AUTH_SESSION_*`に従います。変更操作はOriginを検証します。アプリからのlogoutはアプリsessionを失効させます。Authentik全体のsession logout、SCIM、back-channel logoutは提供しません。
+
+### SSOで入れないときの切り分け
+
+callbackで断ったときは、利用者には理由を区別せず401を返します。理由はAPIの標準エラー出力の1行JSON（`{"event":"oidc_login_denied","reason":"<reason>","userId":...}`）と、監査ログの`auth.oidc.denied`（`details.reason`、`details.subject`、`details.email`）に残ります。全体の監査ログは全体管理者が`GET /api/audit-events?action=auth.oidc.denied`で読めます。tokenやcodeは出しません。
+
+| `reason` | 意味 | 直し方 |
+|---|---|---|
+| `group_not_allowed` | `OIDC_ALLOWED_GROUPS`のどのgroupにも入っていない | Authentikでgroupに入れる。ID tokenに`groups`が出ているかも確認する |
+| `email_not_verified` | ID tokenの`email`が無いか、`email_verified`がtrueでない | Authentikでemailを検証済みにし、scope mappingで`email_verified`を出す |
+| `user_disabled` | アプリでそのUserが無効になっている | 全体管理者がUserを有効に戻す |
+| `last_admin` | groupの同期で、最後の有効な全体管理者を外そうとした | 別の全体管理者（Local Adminでもよい）を先に用意する |
+| `privileged_link_required` | 自動連携が有効で、検証済みemailが特権を持つLocal Userと一致した | 乗っ取りを防ぐため自動では連携しない。管理者がLocal Userの権限を確認して対応する |
+
+これ以外の401（`event`が`oidc_authentication_failed`の行や、監査ログ`auth.login`の`details.reason`が`invalid_oidc_state`）は、IdPとの通信、stateの期限切れ、開始したbrowserとの不一致などの問題です。
+
+### 接続元とメンバーの登録
 
 LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します。CORS、ログイン/logout、sessionの変更操作で同じ判定を使い、HTTP(S)のIPv4 private・loopback・link-local・CGNAT、IPv6 ULA・loopback・link-localとlocalhostを許可します。設定省略時はfalseです。DNS名で使う場合は`MMT_WEB_ORIGIN`と`MMT_PUBLIC_URL`へ実際のURLを設定してください。Originが欠落/nullの場合や、許可されていないpublic IP・DNS名は拒否します。Bearer API tokenは従来どおりOriginなしで使えます。
 
 開発Webはport5182でLANから接続できます。`/api`はloopbackのAPI4182へproxyします。Authentikのcallbackは`MMT_PUBLIC_URL`の固定URLを使うので、SSOで使うURLはProviderにも完全一致で登録します。
 
-初回に管理者がloginしProjectを作成します。メンバーは一度SSOでloginするとユーザーIDが作られ、Projectの設定からそのIDでviewer/editor/adminを付けられます。API tokenは発行時のscopeに加え、その所有者の現在のProject membershipを確認します。
+初回に管理者がloginしProjectを作成します。メンバー（`OIDC_ALLOWED_GROUPS`のgroupに入っている人）は一度SSOでloginするとユーザーIDが作られ、Projectの設定からそのIDでviewer/editor/adminを付けられます。API tokenは発行時のscopeに加え、その所有者の現在のProject membershipを確認します。
 
 ## Artifacts
 

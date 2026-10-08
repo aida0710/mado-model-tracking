@@ -2,6 +2,23 @@ import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
+// ID token claims the provider returns. Tests swap them to act as different IdP accounts.
+export interface MockOidcClaims {
+  subject: string;
+  email: string | undefined;
+  emailVerified: boolean;
+  name: string;
+  groups: unknown[];
+}
+
+const DEFAULT_CLAIMS: MockOidcClaims = {
+  subject: 'test-subject',
+  email: 'oidc@example.test',
+  emailVerified: true,
+  name: 'OIDC Test User',
+  groups: ['mmt-admins'],
+};
+
 export async function startMockOidcProvider() {
   const keyPair = await generateKeyPair('RS256', { extractable: true });
   const publicKey = {
@@ -18,6 +35,7 @@ export async function startMockOidcProvider() {
   let shouldReturnWrongNonce = false;
   let shouldSignWithWrongKey = false;
   let tokenRequests = 0;
+  let claims: MockOidcClaims = { ...DEFAULT_CLAIMS };
   const wrongKey = await generateKeyPair('RS256');
   const server = createServer((request, response) => {
     void (async () => {
@@ -89,14 +107,14 @@ export async function startMockOidcProvider() {
         if (Object.values(checks).some((value) => !value))
           return json({ error: 'invalid_grant' }, 400);
         const idToken = await new SignJWT({
-          email: 'oidc@example.test',
-          email_verified: true,
-          name: 'OIDC Test User',
-          groups: ['mmt-admins'],
+          email: claims.email,
+          email_verified: claims.emailVerified,
+          name: claims.name,
+          groups: claims.groups,
           nonce: shouldReturnWrongNonce ? 'wrong-nonce' : authorization.nonce,
         })
           .setProtectedHeader({ alg: 'RS256', kid: 'mock-signing-key' })
-          .setSubject('test-subject')
+          .setSubject(claims.subject)
           .setIssuer(issuer)
           .setAudience('mmt-test')
           .setIssuedAt()
@@ -129,6 +147,13 @@ export async function startMockOidcProvider() {
     },
     wrongSignature(value: boolean) {
       shouldSignWithWrongKey = value;
+    },
+    // Changes apply to the next token response; resetClaims returns to the default account.
+    setClaims(change: Partial<MockOidcClaims>) {
+      claims = { ...claims, ...change };
+    },
+    resetClaims() {
+      claims = { ...DEFAULT_CLAIMS };
     },
     async close() {
       await new Promise<void>((resolve, reject) =>

@@ -24,6 +24,7 @@ describe.skipIf(!testDatabaseUrl)('ローカルアカウントとAUTH_MODE（独
       AUTH_MODE: mode,
       OIDC_ISSUER_URL: provider.issuer,
       OIDC_CLIENT_ID: 'mmt-test',
+      OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
       OIDC_CLIENT_SECRET: 'mock-client-secret',
       OIDC_ALLOW_INSECURE_HTTP: 'true',
     });
