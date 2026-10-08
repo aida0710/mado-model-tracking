@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidStorageBackendName } from '@mmt/platform';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
 import { codeSourceSchema } from './codeSourceValidation.js';
 export { codeSourceSchema } from './codeSourceValidation.js';
@@ -16,7 +17,8 @@ export const runKindSchema = z.enum([
 ]);
 export const runStatusSchema = z.enum(['queued', 'running', 'finished', 'failed', 'canceled']);
 export const roleSchema = z.enum(['viewer', 'editor', 'admin']);
-export const artifactBackendSchema = z.enum(['filesystem', 's3']);
+// Environment backends ('filesystem', 's3') or a name an administrator stored in storage_backends.
+export const artifactBackendSchema = z.string().refine(isValidStorageBackendName);
 export const scopeSchema = z.enum([
   'read',
   'runs:write',
