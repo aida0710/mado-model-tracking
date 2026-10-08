@@ -7,12 +7,14 @@ import type {
 } from '../types/modelAutomation';
 import type { FormValues } from '../types/form';
 import { getFieldValue, getSelectedValues, parseJsonObject, parseStringMap } from './formValues';
-import { DEFAULT_JOB_ATTEMPTS, parseMaxAttempts } from './executionValidation';
+import { parseMaxAttempts } from './executionValidation';
 import { validateTargetGpuIds, validateTargetRuntime } from './runtimeValidation';
 import { text } from '../i18n/catalog';
 import { automationText } from '../i18n/automation';
 
 export const AUTOMATION_KINDS: AutomationKind[] = ['inference', 'evaluation', 'processing'];
+// Matches the API default: a rule retries automatically only when more attempts are chosen.
+const DEFAULT_AUTOMATION_ATTEMPTS = 1;
 export const AUTOMATION_TRIGGERS: AutomationTrigger[] = [
   'model_registered',
   'upstream_run_finished',
@@ -57,7 +59,7 @@ export function createAutomationValues(modelFamilies: string[] = []): FormValues
     inputDatasetVersionIds: [],
     parameters: '{}',
     tags: '{}',
-    maxAttempts: String(DEFAULT_JOB_ATTEMPTS),
+    maxAttempts: String(DEFAULT_AUTOMATION_ATTEMPTS),
   };
 }
 export function updateAutomationValues({

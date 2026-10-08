@@ -15,6 +15,8 @@ import {
 } from '../i18n/automation';
 import { automationSkipReason } from '../lib/automationSkipReason';
 import { groupAutomationPipelines, type AutomationPipelineRow } from '../lib/automationPipelines';
+import { canRerunExecution } from '../lib/automationRerun';
+import { AutomationRerunButton } from './AutomationRerunButton';
 
 function outcomeLabel(execution: ModelAutomationExecution): string {
   const skipReason = automationSkipReason(execution);
@@ -41,6 +43,9 @@ function RuleCell({
       )}
       {execution.attempt > 1 && (
         <span className="muted"> · {automationText.attemptLabel(execution.attempt)}</span>
+      )}
+      {execution.retryOfExecutionId && (
+        <span className="muted"> · {automationText.retryOf(execution.attempt - 1)}</span>
       )}
     </span>
   );
@@ -70,7 +75,7 @@ function ModelVersionLink({
 /**
  * Automation executions grouped by pipeline. The 'project' variant lists every version; the
  * 'version' variant is one version's history, so it drops the version column and adds the rule's
- * kind and the Run's duration.
+ * kind and the Run's duration. onRerun is given only to Project admins, who may apply a rule again.
  */
 export function AutomationExecutionsTable({
   executions,
@@ -78,12 +83,14 @@ export function AutomationExecutionsTable({
   projectId,
   catalog,
   variant = 'project',
+  onRerun,
 }: {
   executions: ModelAutomationExecution[];
   rules: ModelAutomationRule[];
   projectId: string;
   catalog?: ExecutionCatalog;
   variant?: 'project' | 'version';
+  onRerun?: () => void;
 }) {
   const base = `/projects/${projectId}`;
   const rows = groupAutomationPipelines(executions, rules);
@@ -129,6 +136,25 @@ export function AutomationExecutionsTable({
           },
         ]
       : [];
+  const rerunColumns = onRerun
+    ? [
+        {
+          key: 'rerun',
+          label: automationText.rerun,
+          render: column((execution) => {
+            const rule = ruleOf(execution);
+            return rule && canRerunExecution(execution, rule) ? (
+              <AutomationRerunButton
+                execution={execution}
+                rule={rule}
+                projectId={projectId}
+                onRerun={onRerun}
+              />
+            ) : null;
+          }),
+        },
+      ]
+    : [];
   return (
     <DataTable
       items={rows}
@@ -217,6 +243,7 @@ export function AutomationExecutionsTable({
             <span className="automation-error">{execution.error ?? '—'}</span>
           )),
         },
+        ...rerunColumns,
       ]}
     />
   );

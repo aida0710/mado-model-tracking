@@ -126,7 +126,7 @@ export function AutomationRuleFields({
     { name: 'tags', label: text.tagsJson, type: 'textarea' },
     {
       name: 'maxAttempts',
-      label: text.maxAttempts,
+      label: automationText.maxAttempts,
       type: 'number',
       required: true,
       min: 1,

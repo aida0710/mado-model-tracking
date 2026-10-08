@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type {
+  AutomationRuleOwnerTransfer,
+  Job,
   ModelAutomationExecution,
   ModelAutomationExecutionPage,
   ModelAutomationRule,
@@ -7,7 +9,7 @@ import type {
   Run,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
+import { first, transaction, type Connection, type Database } from '../db/database.js';
 import { automationFailureMessage } from '../domain/automationFailure.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { DomainError, notFound } from '../domain/errors.js';
@@ -18,16 +20,23 @@ import {
   type ModelAutomationRuleCreate,
 } from '../domain/modelAutomationValidation.js';
 import { isTerminalStatus } from '../domain/runTransitions.js';
+import { DEFAULT_JOB_ATTEMPTS } from '../domain/validation.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
-import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
+import {
+  findExecutionForRun,
+  type AutomationExecutionRecord,
+} from '../repositories/automationExecutionLookup.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import {
+  findAutomaticRetry,
   findAutomationExecution,
   findAutomationExecutionBoundary,
-  hasAutomationCreatorAccess,
+  findAutomationRule,
+  hasAutomationOwnerAccess,
   insertAutomationEvent,
   insertAutomationExecution,
   listAutomationExecutions,
+  listAutomationRules,
   lockAutomationRule,
   lockExpiredAutomationEvents,
   lockPendingAutomationEvents,
@@ -35,8 +44,11 @@ import {
   measureRuleChain,
   resolveAutomationEvent,
   summarizeRuleAttempts,
+  updateAutomationRuleOwner,
+  type AutomationExecutionInsert,
   type PendingAutomationEvent,
 } from '../repositories/modelAutomationRepository.js';
+import { findServiceAccount } from '../repositories/serviceAccountRepository.js';
 import {
   assertProjectReference,
   assertProjectReferences,
@@ -51,6 +63,7 @@ import {
 import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import { requireProject } from './accessService.js';
 import { auditActor, recordDenial, type AuditEventDraft } from './auditService.js';
+import { enqueueAutomationFailure } from './automationFailureNotification.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
@@ -64,6 +77,9 @@ const UNSUCCESSFUL_SOURCE_ERRORS = {
     'source_run_timeout: 学習Runの成功を期限内に確認できなかったか、学習Runが削除されたため起動しません',
 } as const;
 type UnsuccessfulSourceState = keyof typeof UNSUCCESSFUL_SOURCE_ERRORS;
+
+const OWNER_ACCESS_REVOKED_ERROR =
+  'creator_access_revoked: ルールの実行者（所有者）の管理者権限が失効しています';
 
 // A chain longer than this is far beyond inference → evaluation → report; the limit keeps a
 // mistaken setup from fanning out an unbounded number of Jobs from one model registration.
@@ -90,11 +106,22 @@ const AUTOMATIC_REGISTRATION: AutomationTrigger = {
 };
 
 export class ModelAutomationService {
-  constructor(
-    private readonly database: Database,
-    private readonly runs: RunService,
-    private readonly jobs: JobService,
-  ) {}
+  private readonly database: Database;
+  private readonly runs: RunService;
+  private readonly jobs: JobService;
+  // Links in automation.failed notifications point at the Web app.
+  private readonly webOrigin: string;
+  constructor(options: {
+    database: Database;
+    runs: RunService;
+    jobs: JobService;
+    webOrigin: string;
+  }) {
+    this.database = options.database;
+    this.runs = options.runs;
+    this.jobs = options.jobs;
+    this.webOrigin = options.webOrigin;
+  }
 
   async rules(principal: Principal, projectId: string): Promise<ModelAutomationRule[]> {
     await requireProject(this.database, principal, {
@@ -102,11 +129,7 @@ export class ModelAutomationService {
       role: 'viewer',
       scope: 'read',
     });
-    return rows(
-      this.database,
-      'SELECT * FROM model_automation_rules WHERE project_id=$1 ORDER BY created_at DESC,id DESC',
-      [projectId],
-    );
+    return listAutomationRules(this.database, projectId);
   }
 
   async createRule(
@@ -146,10 +169,10 @@ export class ModelAutomationService {
         gpuIds: input.gpuIds,
         runtime: code.runtime,
       });
-      return (await first<ModelAutomationRule>(
+      const created = (await first<{ id: string }>(
         connection,
-        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by,trigger,upstream_rule_id,summary_metrics)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+        `INSERT INTO model_automation_rules(project_id,name,enabled,model_families,kind,experiment_id,code_version_id,target_id,gpu_ids,input_dataset_version_ids,parameters,tags,max_attempts,created_by,trigger,upstream_rule_id,summary_metrics,run_as_user_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$14) RETURNING id`,
         [
           projectId,
           input.name,
@@ -170,6 +193,7 @@ export class ModelAutomationService {
           input.summaryMetrics,
         ],
       ))!;
+      return (await findAutomationRule(connection, { projectId, id: created.id }))!;
     });
   }
 
@@ -209,14 +233,67 @@ export class ModelAutomationService {
   ): Promise<ModelAutomationRule> {
     return transaction(this.database, async (connection) => {
       await this.requireRuleAdmin(connection, principal, projectId);
-      const rule = await first<ModelAutomationRule>(
+      const toggled = await first(
         connection,
-        'UPDATE model_automation_rules SET enabled=$3 WHERE id=$1 AND project_id=$2 RETURNING *',
+        'UPDATE model_automation_rules SET enabled=$3 WHERE id=$1 AND project_id=$2 RETURNING id',
         [toggle.ruleId, projectId, toggle.enabled],
       );
-      if (!rule) notFound('ModelAutomationRule');
-      return rule;
+      if (!toggled) notFound('ModelAutomationRule');
+      return (await findAutomationRule(connection, { projectId, id: toggle.ruleId }))!;
     });
+  }
+
+  /**
+   * Moves the user a rule runs as to a Service Account of the same Project, so the rule keeps
+   * running when its creator leaves. The account must be active and a Project admin, which is
+   * what running a rule requires. created_by keeps the creator. Setting the same owner again
+   * changes nothing and is not audited again.
+   */
+  async transferOwner(
+    principal: Principal,
+    projectId: string,
+    transfer: { ruleId: string; input: AutomationRuleOwnerTransfer; metadata: RequestMetadata },
+  ): Promise<ModelAutomationRule> {
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...transfer.metadata,
+      action: 'automation_rule.owner.transfer',
+      resourceType: 'model_automation_rule',
+      resourceId: transfer.ruleId,
+      projectId,
+      details: { serviceAccountId: transfer.input.serviceAccountId },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await this.requireRuleAdmin(connection, principal, projectId);
+        const rule = await lockAutomationRule(connection, {
+          projectId,
+          id: transfer.ruleId,
+          mode: 'update',
+        });
+        if (!rule) notFound('ModelAutomationRule');
+        const serviceAccountId = transfer.input.serviceAccountId;
+        const account = await findServiceAccount(connection, { projectId, serviceAccountId });
+        if (!account || account.status !== 'active' || account.role !== 'admin')
+          throw new DomainError(
+            422,
+            '移管先は同じプロジェクトの有効なService Account（role admin）にしてください',
+            'invalid_automation_owner',
+          );
+        if (rule.runAsUserId !== serviceAccountId) {
+          await updateAutomationRuleOwner(connection, {
+            ruleId: rule.id,
+            runAsUserId: serviceAccountId,
+          });
+          await writeAuditEvent(connection, {
+            ...draft,
+            outcome: 'success',
+            details: { ...draft.details, previousRunAsUserId: rule.runAsUserId },
+          });
+        }
+        return (await findAutomationRule(connection, { projectId, id: rule.id }))!;
+      }),
+    );
   }
 
   async executions(
@@ -309,14 +386,20 @@ export class ModelAutomationService {
         projectId: event.projectId,
         id: event.modelVersionId,
       });
-      for (const rule of await lockRegistrationRules(connection, model))
-        await insertAutomationExecution(connection, {
+      for (const rule of await lockRegistrationRules(connection, model)) {
+        const execution = {
+          id: randomUUID(),
           projectId: model.projectId,
           ruleId: rule.id,
           modelVersionId: model.id,
-          status: 'skipped',
+          status: 'skipped' as const,
           error: UNSUCCESSFUL_SOURCE_ERRORS[resolution.state],
-        });
+        };
+        // A failed source Run is announced as run.failed already; only the timeout is new news.
+        if (resolution.state === 'source_timeout')
+          await this.recordUnstarted(connection, { execution, rule, model });
+        else await insertAutomationExecution(connection, execution);
+      }
       await resolveAutomationEvent(connection, {
         modelVersionId: model.id,
         state: resolution.state,
@@ -350,19 +433,23 @@ export class ModelAutomationService {
       source: trigger.source,
       requestedBy: trigger.requestedBy,
     };
-    if (!(await hasAutomationCreatorAccess(connection, rule))) {
-      await insertAutomationExecution(connection, {
-        ...execution,
-        status: 'skipped',
-        error: 'creator_access_revoked: ルール作成者の管理者権限が失効しています',
+    if (!(await hasAutomationOwnerAccess(connection, rule))) {
+      await this.recordUnstarted(connection, {
+        execution: { ...execution, status: 'skipped', error: OWNER_ACCESS_REVOKED_ERROR },
+        rule,
+        model,
       });
       return execution.id;
     }
     if (!model.artifactId && !model.weightsUri) {
-      await insertAutomationExecution(connection, {
-        ...execution,
-        status: 'skipped',
-        error: 'weights_required: モデルの重みが指定されていません',
+      await this.recordUnstarted(connection, {
+        execution: {
+          ...execution,
+          status: 'skipped',
+          error: 'weights_required: モデルの重みが指定されていません',
+        },
+        rule,
+        model,
       });
       return execution.id;
     }
@@ -376,7 +463,7 @@ export class ModelAutomationService {
         });
       const run = await this.runs.insertRun(connection, {
         projectId: model.projectId,
-        createdBy: rule.createdBy,
+        createdBy: rule.runAsUserId,
         input: {
           experimentId: rule.experimentId,
           name: `${rule.name}: ${model.version}`.slice(0, RUN_NAME_LIMIT),
@@ -407,7 +494,9 @@ export class ModelAutomationService {
           runId: run.id,
           targetId: rule.targetId,
           gpuIds: rule.gpuIds,
-          maxAttempts: rule.maxAttempts,
+          // A rule's maxAttempts bounds automatic attempts (1, the default, means no automatic
+          // retry); people may still retry an automated Job by hand up to the usual Job limit.
+          maxAttempts: Math.max(rule.maxAttempts, DEFAULT_JOB_ATTEMPTS),
         },
         attempt: 1,
       });
@@ -419,14 +508,109 @@ export class ModelAutomationService {
       });
     } catch (error) {
       await connection.query('ROLLBACK TO SAVEPOINT automation_rule');
-      await insertAutomationExecution(connection, {
-        ...execution,
-        status: 'failed',
-        error: automationFailureMessage(error),
+      await this.recordUnstarted(connection, {
+        execution: { ...execution, status: 'failed', error: automationFailureMessage(error) },
+        rule,
+        model,
       });
     }
     await connection.query('RELEASE SAVEPOINT automation_rule');
     return execution.id;
+  }
+
+  /**
+   * Starts the next attempt of an automated Run that failed: a new execution that points at the
+   * failed one, with a Run and Job made by the Job retry (retry_of_job_id). It runs as the rule's
+   * current owner and never resumes from a checkpoint (resuming is a manual choice). Whether the
+   * failure deserves a retry is the caller's decision. Returns the new execution id, or null
+   * when the execution was already retried or its rule allows no further attempt.
+   */
+  async retryExecution(
+    connection: Connection,
+    failed: { execution: AutomationExecutionRecord; run: Run; job: Job },
+  ): Promise<string | null> {
+    const { execution, run, job } = failed;
+    const rule = await lockAutomationRule(connection, {
+      projectId: execution.projectId,
+      id: execution.ruleId,
+      mode: 'share',
+    });
+    // A disabled rule stops its pipeline, including the retries of Runs it started before.
+    if (!rule?.enabled || execution.attempt >= rule.maxAttempts) return null;
+    if (job.attempt >= job.maxAttempts) return null;
+    if (await findAutomaticRetry(connection, execution.id)) return null;
+    const model = await findModelVersion(connection, {
+      projectId: execution.projectId,
+      id: execution.modelVersionId,
+    });
+    const retry = {
+      id: randomUUID(),
+      projectId: execution.projectId,
+      ruleId: rule.id,
+      modelVersionId: model.id,
+      triggerRunId: execution.triggerRunId,
+      pipelineRootExecutionId: execution.pipelineRootExecutionId,
+      attempt: execution.attempt + 1,
+      source: 'automatic' as const,
+      retryOfExecutionId: execution.id,
+    };
+    if (!(await hasAutomationOwnerAccess(connection, rule))) {
+      await this.recordUnstarted(connection, {
+        execution: { ...retry, status: 'skipped', error: OWNER_ACCESS_REVOKED_ERROR },
+        rule,
+        model,
+      });
+      return retry.id;
+    }
+    await connection.query('SAVEPOINT automation_retry');
+    try {
+      const next = await this.jobs.insertRetry(connection, {
+        previousJob: job,
+        previousRun: run,
+        createdBy: rule.runAsUserId,
+        checkpointId: null,
+      });
+      await insertAutomationExecution(connection, {
+        ...retry,
+        runId: next.run.id,
+        jobId: next.job.id,
+        status: 'queued',
+      });
+    } catch (error) {
+      await connection.query('ROLLBACK TO SAVEPOINT automation_retry');
+      await this.recordUnstarted(connection, {
+        execution: { ...retry, status: 'failed', error: automationFailureMessage(error) },
+        rule,
+        model,
+      });
+    }
+    await connection.query('RELEASE SAVEPOINT automation_retry');
+    return retry.id;
+  }
+
+  // An execution that did not start a Run is stored and announced as automation.failed.
+  private async recordUnstarted(
+    connection: Connection,
+    unstarted: {
+      execution: AutomationExecutionInsert & {
+        id: string;
+        status: 'failed' | 'skipped';
+        error: string;
+      };
+      rule: ModelAutomationRule;
+      model: ModelVersion;
+    },
+  ): Promise<void> {
+    const { execution } = unstarted;
+    await insertAutomationExecution(connection, execution);
+    await enqueueAutomationFailure(connection, {
+      executionId: execution.id,
+      rule: unstarted.rule,
+      model: unstarted.model,
+      status: execution.status,
+      error: execution.error,
+      webOrigin: this.webOrigin,
+    });
   }
 
   /**

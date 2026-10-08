@@ -54,7 +54,14 @@ export interface CreateCodeVersion {
 // summaryMetrics defaults to [] on the server; the rule form does not set it yet.
 export type CreateAutomationRule = Omit<
   ModelAutomationRule,
-  'id' | 'projectId' | 'createdBy' | 'createdAt' | 'summaryMetrics'
+  | 'id'
+  | 'projectId'
+  | 'createdBy'
+  | 'createdAt'
+  | 'summaryMetrics'
+  | 'runAsUserId'
+  | 'runAsKind'
+  | 'runAsName'
 > & { summaryMetrics?: string[] };
 /** Without content: a reference version (version, uri, digest). With content: the server sets uri and digest. */
 export interface CreateDatasetVersion {

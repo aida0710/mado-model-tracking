@@ -20,6 +20,7 @@ import {
   findRun,
 } from '../repositories/registryRepository.js';
 import { findJob, jobColumns } from '../repositories/jobRepository.js';
+import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
 import { requireProject } from './accessService.js';
 import { JobTokenService } from './jobTokenService.js';
 import type { RunCompletionService } from './runCompletionService.js';
@@ -31,6 +32,24 @@ import {
   pinResumeCheckpoint,
   selectRetryCheckpoint,
 } from './checkpointResume.js';
+
+function assertRetryable(job: Job): void {
+  if (!isTerminalStatus(job.status)) conflict('実行中または状態未確認のJobは再実行できません');
+  if (job.attempt >= job.maxAttempts) conflict('Jobの最大試行回数に達しました');
+}
+
+/**
+ * The parent of a retry Run. An automated Run's parent is its upstream (the training Run or the
+ * upstream stage, or none), which the worker hands to the container, so its retries keep that
+ * parent; other retries hang under the Run they retry.
+ */
+async function retryParentRunId(connection: Connection, previousRun: Run): Promise<string | null> {
+  const execution = await findExecutionForRun(connection, {
+    projectId: previousRun.projectId,
+    runId: previousRun.id,
+  });
+  return execution ? previousRun.parentRunId : previousRun.id;
+}
 
 export class JobService {
   private readonly database: Database;
@@ -212,56 +231,74 @@ export class JobService {
         });
         return { job: existingRetry, run: retryRun };
       }
-      if (!isTerminalStatus(previousJob.status))
-        conflict('実行中または状態未確認のJobは再実行できません');
-      if (previousJob.attempt >= previousJob.maxAttempts) conflict('Jobの最大試行回数に達しました');
+      assertRetryable(previousJob);
       const checkpointId = await selectRetryCheckpoint(connection, {
         projectId,
         previousRun,
         request: retryRequest,
       });
-      const insertedRun = await this.runs.insertRun(connection, {
-        projectId,
+      return this.insertRetry(connection, {
+        previousJob,
+        previousRun,
         createdBy: principal.user.id,
-        ...(previousRun.taskId && previousRun.taskRevision
-          ? { task: { id: previousRun.taskId, revision: previousRun.taskRevision } }
-          : {}),
-        input: {
-          experimentId: previousRun.experimentId,
-          name: `${previousRun.name} (retry ${previousJob.attempt + 1})`,
-          kind: previousRun.kind,
-          parameters: previousRun.parameters,
-          tags: previousRun.tags,
-          modelVersionId: previousRun.modelVersionId,
-          codeVersionId: previousRun.codeVersionId,
-          executionMode: previousRun.executionMode ?? 'run',
-          inputDatasetVersionIds: previousRun.inputDatasetVersionIds,
-          parentRunId: previousRun.id,
-          environment: previousRun.environment,
-        },
-        // A retried chained evaluation keeps the reference set apart from the upstream outputs,
-        // so promotion and baseline comparison still match it against the rule's inputs.
-        upstreamDatasetVersionIds: previousRun.upstreamDatasetVersionIds,
+        checkpointId,
       });
-      const run = checkpointId
-        ? await pinResumeCheckpoint(connection, { run: insertedRun, checkpointId })
-        : insertedRun;
-      const job = await this.insertJob(connection, {
-        run,
-        input: {
-          runId: run.id,
-          targetId: previousJob.targetId,
-          gpuIds: previousJob.gpuIds,
-          maxAttempts: previousJob.maxAttempts,
-        },
-        attempt: previousJob.attempt + 1,
-      });
-      await connection.query('UPDATE jobs SET retry_of_job_id=$2 WHERE id=$1', [
-        job.id,
-        previousJob.id,
-      ]);
-      return { run, job };
     });
+  }
+
+  /**
+   * Creates the next attempt of a finished Job as a new Run and Job, linked by retry_of_job_id.
+   * Shared by the retry API and automatic retries; authorization, the duplicate check, and the
+   * checkpoint choice are the caller's. The unique retry_of_job_id still refuses a second retry.
+   */
+  async insertRetry(
+    connection: Connection,
+    retry: { previousJob: Job; previousRun: Run; createdBy: string; checkpointId: string | null },
+  ): Promise<{ run: Run; job: Job }> {
+    const { previousJob, previousRun, checkpointId } = retry;
+    assertRetryable(previousJob);
+    const projectId = previousRun.projectId;
+    const insertedRun = await this.runs.insertRun(connection, {
+      projectId,
+      createdBy: retry.createdBy,
+      ...(previousRun.taskId && previousRun.taskRevision
+        ? { task: { id: previousRun.taskId, revision: previousRun.taskRevision } }
+        : {}),
+      input: {
+        experimentId: previousRun.experimentId,
+        name: `${previousRun.name} (retry ${previousJob.attempt + 1})`,
+        kind: previousRun.kind,
+        parameters: previousRun.parameters,
+        tags: previousRun.tags,
+        modelVersionId: previousRun.modelVersionId,
+        codeVersionId: previousRun.codeVersionId,
+        executionMode: previousRun.executionMode ?? 'run',
+        inputDatasetVersionIds: previousRun.inputDatasetVersionIds,
+        parentRunId: await retryParentRunId(connection, previousRun),
+        environment: previousRun.environment,
+      },
+      // A retried chained evaluation keeps the reference set apart from the upstream outputs,
+      // so promotion and baseline comparison still match it against the rule's inputs.
+      upstreamDatasetVersionIds: previousRun.upstreamDatasetVersionIds,
+    });
+    const run = checkpointId
+      ? await pinResumeCheckpoint(connection, { run: insertedRun, checkpointId })
+      : insertedRun;
+    const job = await this.insertJob(connection, {
+      run,
+      input: {
+        runId: run.id,
+        targetId: previousJob.targetId,
+        gpuIds: previousJob.gpuIds,
+        maxAttempts: previousJob.maxAttempts,
+      },
+      attempt: previousJob.attempt + 1,
+    });
+    await connection.query('UPDATE jobs SET retry_of_job_id=$2 WHERE id=$1', [
+      job.id,
+      previousJob.id,
+    ]);
+    return { run, job };
   }
 
   // Resending the same retry returns the Run it created; asking for another checkpoint is refused.

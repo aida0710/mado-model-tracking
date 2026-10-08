@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 import {
   automationExecutionCreateSchema,
   automationExecutionQuerySchema,
@@ -8,6 +9,9 @@ import {
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 import type { ModelAutomationService } from '../services/modelAutomationService.js';
+import { uuidSchema } from '../domain/validation.js';
+
+const automationRuleOwnerSchema = z.strictObject({ serviceAccountId: uuidSchema });
 
 export function modelAutomationRoutes(automation: ModelAutomationService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
@@ -31,6 +35,15 @@ export function modelAutomationRoutes(automation: ModelAutomationService): Hono<
       await automation.toggleRule(principal(context), uuidParam(context, 'p'), {
         ruleId: uuidParam(context, 'id'),
         ...(await jsonBody(context, modelAutomationToggleSchema)),
+      }),
+    ),
+  );
+  routes.put('/:p/automation-rules/:id/owner', async (context) =>
+    context.json(
+      await automation.transferOwner(principal(context), uuidParam(context, 'p'), {
+        ruleId: uuidParam(context, 'id'),
+        input: await jsonBody(context, automationRuleOwnerSchema),
+        metadata: requestMetadata(context),
       }),
     ),
   );
