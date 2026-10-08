@@ -1,92 +1,49 @@
-"""CPU/memory and selected NVIDIA GPU telemetry; no secrets or command environments."""
+"""Worker job telemetry on top of the shared system metrics collector; no secrets or environments."""
 
 from __future__ import annotations
 
-import csv
-import io
+import json
 import os
-import subprocess
+from pathlib import Path
 from typing import Any
 
-from ..timestamps import utc_timestamp
-
-# Telemetry is optional; a missing/slow nvidia-smi must not fail an otherwise valid job.
-NVIDIA_TIMEOUT_SECONDS = 3.0
+from ..system_metrics import SystemMetricsState, collect
 
 
-def metric(name: str, value: float, step: int) -> dict[str, Any]:
-    return {
-        "name": name,
-        "value": value,
-        "step": step,
-        "timestamp": utc_timestamp(),
-    }
+def collect_system_metrics(
+    *, pid: int, gpu_ids: list[str], step: int, state_path: Path | None = None
+) -> list[dict[str, Any]]:
+    """One telemetry sample for a job; jobs without GPUs never probe NVML or nvidia-smi.
 
-
-def collect_system_metrics(*, pid: int, gpu_ids: list[str], step: int) -> list[dict[str, Any]]:
-    metrics: list[dict[str, Any]] = []
+    Each runner poll is a new process, so disk/network rates need `state_path` to persist the
+    previous counters between polls. Without it only instantaneous values are reported.
+    """
+    state = _read_state(state_path)
     try:
-        import psutil  # type: ignore[import-untyped]
+        return collect(state, step=step, pid=pid or None, gpu_ids=gpu_ids)
+    finally:
+        state.close()
+        _write_state(state_path, state)
 
-        metrics.append(metric("system.cpu.percent", psutil.cpu_percent(interval=None), step))
-        memory = psutil.virtual_memory()
-        metrics.append(metric("system.memory.used_bytes", float(memory.used), step))
-        metrics.append(metric("system.memory.percent", float(memory.percent), step))
-        if pid:
-            process = psutil.Process(pid)
-            processes = [process, *process.children(recursive=True)]
-            memory_bytes = sum(child.memory_info().rss for child in processes if child.is_running())
-            metrics.append(metric("system.process.memory_bytes", float(memory_bytes), step))
-    except (ImportError, OSError, ProcessLookupError):
-        _collect_linux_memory(metrics, step)
-    except Exception:
-        # A process can disappear between enumerating its children and reading /proc.
-        _collect_linux_memory(metrics, step)
-    if not gpu_ids:
-        return metrics
+
+def _read_state(path: Path | None) -> SystemMetricsState:
+    if path is None:
+        return SystemMetricsState()
     try:
-        output = subprocess.check_output(
-            [
-                "nvidia-smi",
-                "--query-gpu=index,uuid,utilization.gpu,memory.used,memory.total,temperature.gpu",
-                "--format=csv,noheader,nounits",
-            ],
-            text=True,
-            stderr=subprocess.DEVNULL,
-            timeout=NVIDIA_TIMEOUT_SECONDS,
-        )
-        for row in csv.reader(io.StringIO(output)):
-            values = [value.strip() for value in row]
-            if len(values) != 6 or not ({values[0], values[1]} & set(gpu_ids)):
-                continue
-            prefix = f"system.gpu.{values[0]}"
-            for name, raw_value, scale in (
-                ("utilization_percent", values[2], 1),
-                ("memory_used_bytes", values[3], 1024**2),
-                ("memory_total_bytes", values[4], 1024**2),
-                ("temperature_celsius", values[5], 1),
-            ):
-                try:
-                    metrics.append(metric(f"{prefix}.{name}", float(raw_value) * scale, step))
-                except ValueError:
-                    continue
-    except (OSError, subprocess.SubprocessError):
-        pass
-    return metrics
+        return SystemMetricsState.from_json(json.loads(path.read_text()))
+    except (OSError, ValueError):
+        return SystemMetricsState()
 
 
-def _collect_linux_memory(metrics: list[dict[str, Any]], step: int) -> None:
+def _write_state(path: Path | None, state: SystemMetricsState) -> None:
+    if path is None:
+        return
+    temporary_path = path.with_name(f".{path.name}.tmp")
     try:
-        from pathlib import Path
-
-        memory_fields = {}
-        for line in Path("/proc/meminfo").read_text().splitlines():
-            name, value = line.split(":", 1)
-            memory_fields[name] = float(value.strip().split()[0]) * 1024
-        used = memory_fields["MemTotal"] - memory_fields["MemAvailable"]
-        metrics.append(metric("system.memory.used_bytes", used, step))
-        metrics.append(metric("system.memory.percent", used / memory_fields["MemTotal"] * 100, step))
-        load = os.getloadavg()[0]
-        metrics.append(metric("system.cpu.load1", load, step))
-    except (OSError, KeyError, ValueError, AttributeError):
+        descriptor = os.open(temporary_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w") as content:
+            json.dump(state.to_json(), content)
+        os.replace(temporary_path, path)
+    except OSError:
+        # Losing the previous counters only drops rates from the next sample.
         pass
