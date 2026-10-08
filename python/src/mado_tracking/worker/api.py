@@ -29,6 +29,10 @@ from .job_responses import InvalidWorkerJob, parse_worker_job_response
 ARTIFACT_CHUNK_BYTES = 1024 * 1024
 
 LEASE_REJECTED_STATUSES = {401, 403, 404, 409, 410}
+# Output declarations answer 403/404/409 for the declared Model, Dataset or scope; only these mean
+# the lease itself is gone (the other job routes treat every such status as a lost lease).
+OUTPUT_LEASE_REJECTED_STATUSES = {401, 410}
+INVALID_LEASE_CODE = "invalid_lease"
 LOGGER = logging.getLogger(__name__)
 # The distribution name in pyproject.toml; its version is what operators compare across hosts.
 DISTRIBUTION_NAME = "mado-tracking"
@@ -172,6 +176,25 @@ class WorkerApi:
         await self.request(
             f"worker/jobs/{job.id}/metrics", {"leaseId": job.lease_id, "metrics": metrics}, leased=True
         )
+
+    async def declare_outputs(
+        self, job: WorkerJob, declarations: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Register result.json models/datasets; a resent index returns the stored registration."""
+        try:
+            response = await self.request(
+                f"worker/jobs/{job.id}/outputs", {"leaseId": job.lease_id, "declarations": declarations}
+            )
+        except ApiError as error:
+            if error.status_code in OUTPUT_LEASE_REJECTED_STATUSES or error.code == INVALID_LEASE_CODE:
+                raise LeaseRejected(str(error), status_code=error.status_code, code=error.code) from None
+            raise
+        items = response.get("items")
+        if not isinstance(items, list) or not all(
+            isinstance(item, dict) and type(item.get("index")) is int for item in items
+        ):
+            raise ConfigurationError("Output declaration response must contain indexed items")
+        return items
 
     async def complete(
         self,

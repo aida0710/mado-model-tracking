@@ -13,7 +13,7 @@ from background_process import entrypoint_with_background_child
 
 from mado_tracking.security import SecretMasker
 from mado_tracking.worker import host_runner
-from mado_tracking.worker.container_outputs import read_output_chunk
+from mado_tracking.worker.container_outputs import parse_output_index, read_output_chunk, read_output_index
 from mado_tracking.worker.host_execution import CommandExecution
 from mado_tracking.worker.host_state import process_identity, read_json, write_json
 from mado_tracking.worker.runtime import execution_specification
@@ -113,7 +113,8 @@ def test_python_job_outputs_and_result_json_are_collected_like_container_outputs
     assert environment["MMT_OUTPUTS_DIR"] == str(workspace / "outputs")
     assert environment["MMT_RESULT_FILE"] == str(workspace / "outputs/result.json")
     assert state["status"] == "finished"
-    assert [artifact["path"] for artifact in state["results"]["artifacts"]] == ["model/weights.bin"]
+    index = parse_output_index(read_output_index(workspace, state["results"]))
+    assert [artifact["path"] for artifact in index] == ["model/weights.bin"]
     assert state["results"]["metrics"][0]["name"] == "loss"
     chunk = read_output_chunk(workspace, {"path": "model/weights.bin"}, state)
     assert base64.b64decode(chunk["content"]) == weights

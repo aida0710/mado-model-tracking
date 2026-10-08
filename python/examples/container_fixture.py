@@ -31,6 +31,32 @@ printf '{"version":1,"complete":true,'\
 mv "$MMT_OUTPUTS_DIR/manifest.partial" "$MMT_RESULT_FILE"
 """
 
+# Audio inference writes one file per utterance: 1000 outputs listed in a JSON Lines manifest, plus
+# a model declared in result.json version 2 so that a training Run registers it without the SDK.
+BULK_OUTPUT_FIXTURE_SCRIPT = r"""
+set -eu
+mkdir -p "$MMT_OUTPUTS_DIR/audio" "$MMT_OUTPUTS_DIR/model"
+: > "$MMT_OUTPUTS_DIR/artifacts.partial"
+i=0
+while [ "$i" -lt 1000 ]; do
+  path="audio/$i.wav"
+  printf 'utterance-%s' "$i" > "$MMT_OUTPUTS_DIR/$path"
+  checksum=$(sha256sum "$MMT_OUTPUTS_DIR/$path" | cut -d ' ' -f 1)
+  size=$(wc -c < "$MMT_OUTPUTS_DIR/$path" | tr -d ' ')
+  printf '{"path":"%s","sha256":"%s","size":%s,"mimeType":"audio/wav"}\n' \
+    "$path" "$checksum" "$size" >> "$MMT_OUTPUTS_DIR/artifacts.partial"
+  i=$((i + 1))
+done
+mv "$MMT_OUTPUTS_DIR/artifacts.partial" "$MMT_OUTPUTS_DIR/artifacts.jsonl"
+printf 'trained-weights' > "$MMT_OUTPUTS_DIR/model/weights.bin"
+checksum=$(sha256sum "$MMT_OUTPUTS_DIR/model/weights.bin" | cut -d ' ' -f 1)
+printf '{"version":2,"complete":true,"artifactsManifest":"artifacts.jsonl",'\
+'"artifacts":[{"path":"model/weights.bin","sha256":"%s","size":15}],'\
+'"models":[{"path":"model/weights.bin","metadata":{"utterances":1000}}]}' \
+  "$checksum" > "$MMT_OUTPUTS_DIR/manifest.partial"
+mv "$MMT_OUTPUTS_DIR/manifest.partial" "$MMT_RESULT_FILE"
+"""
+
 
 def main() -> None:
     runtime: DockerRuntime = {

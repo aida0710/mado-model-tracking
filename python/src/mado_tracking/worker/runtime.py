@@ -2,19 +2,41 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import zipfile
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker, secret_values
 from .config import WorkerSettings
 from .container_layout import resume_checkpoint_document, upstream_run_document
 from .contracts import WorkerJob
+from .output_archive import ARCHIVE_REJECTED_EXIT_CODE, OUTPUT_ARCHIVE_COMMAND
 from .tracking_environment import build_tracking_environment
 from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, create_target_transport
+
+StreamResult = TypeVar("StreamResult")
+# A refused stream keeps a short diagnostic; the runner writes one line to stderr.
+STREAM_DIAGNOSTIC_BYTES = 4096
+# host_runner answers JSON commands; the output archive writes binary tar to stdout, so the bundle
+# entry routes it to output_archive before host_runner reads stdin as a JSON request.
+RUNNER_MAIN = f"""import sys
+if sys.argv[1:2] == [{OUTPUT_ARCHIVE_COMMAND!r}]:
+    from runtime.output_archive import run_output_archive_command
+    run_output_archive_command(sys.argv)
+else:
+    from runtime.host_runner import main
+    main()
+"""
+
+
+class StreamRejected(ConfigurationError):
+    """The runner refused a streamed command (for example, outputs changed after validation)."""
+
 
 BOOTSTRAP = """
 import hashlib, io, json, os, pathlib, sys, tempfile, zipfile
@@ -55,7 +77,7 @@ def build_runtime_bundle() -> bytes:
     package_directory = Path(__file__).resolve().parent.parent
     archive_buffer = io.BytesIO()
     with zipfile.ZipFile(archive_buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("__main__.py", "from runtime.host_runner import main\nmain()\n")
+        archive.writestr("__main__.py", RUNNER_MAIN)
         archive.writestr("runtime/__init__.py", "")
         archive.write(package_directory / "security.py", "runtime/security.py")
         archive.write(package_directory / "timestamps.py", "runtime/timestamps.py")
@@ -72,6 +94,7 @@ def build_runtime_bundle() -> bytes:
             "telemetry",
             "container_layout",
             "container_outputs",
+            "output_archive",
             "runtime_capability",
             "docker_container",
             "sif_container",
@@ -125,6 +148,7 @@ def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[st
         "sdkEnvironment": build_tracking_environment(job, settings.api),
         "installDependencies": settings.install_dependencies,
         "cancelGraceSeconds": settings.cancel_grace_seconds,
+        "maxOutputFiles": settings.max_output_files,
     }
 
 
@@ -169,6 +193,76 @@ class JobExecutor:
         )
         return self._response(output)
 
+    async def stream_command(
+        self,
+        name: str,
+        *,
+        payload: dict[str, Any],
+        consume: Callable[[asyncio.StreamReader], Awaitable[StreamResult]],
+    ) -> StreamResult:
+        """One runner process whose stdout is consumed as a stream, without the response size cap.
+
+        A stream that ends early raises the consumer's error unless the runner exited with
+        ARCHIVE_REJECTED_EXIT_CODE, which becomes StreamRejected (retrying cannot succeed).
+        """
+        if self.workspace is None or self.runtime is None:
+            raise ConfigurationError("Runtime must be installed before job control")
+        argv = self.transport.command_argv(
+            [self.job.target["pythonExecutable"], self.runtime, name, self.workspace]
+        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *argv,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+        except OSError:
+            raise TransportError("Could not start the compute transport") from None
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise TransportError("Compute transport pipes are unavailable")
+        stderr_task = asyncio.create_task(_read_bounded(process.stderr, STREAM_DIAGNOSTIC_BYTES))
+        try:
+            try:
+                process.stdin.write(json.dumps(payload, allow_nan=False).encode())
+                await process.stdin.drain()
+                process.stdin.close()
+                result = await consume(process.stdout)
+            except (EOFError, BrokenPipeError, ConnectionResetError) as error:
+                # A runner that refused the request exits before reading or writing everything.
+                await self._raise_for_finished_exit(process, stderr_task)
+                if isinstance(error, EOFError):
+                    raise
+                raise TransportError("Compute transport closed the stream") from None
+            self._raise_for_exit(await process.wait(), await stderr_task)
+            return result
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+            stderr_task.cancel()
+            await asyncio.gather(stderr_task, return_exceptions=True)
+
+    async def _raise_for_finished_exit(
+        self, process: asyncio.subprocess.Process, stderr_task: asyncio.Task[bytes]
+    ) -> None:
+        try:
+            async with asyncio.timeout(CONTROL_TIMEOUT_SECONDS):
+                exit_code = await process.wait()
+                stderr = await stderr_task
+        except TimeoutError:
+            # A stalled runner is still alive; the caller's error stands and the process is killed.
+            return
+        self._raise_for_exit(exit_code, stderr)
+
+    def _raise_for_exit(self, exit_code: int, stderr: bytes) -> None:
+        if not exit_code:
+            return
+        diagnostic = self.masker.mask(stderr.decode("utf-8", "replace")).strip()
+        if exit_code == ARCHIVE_REJECTED_EXIT_CODE:
+            raise StreamRejected(diagnostic or "Compute runner refused the stream")
+        raise TransportError(f"Compute transport exited ({exit_code}): {diagnostic}")
+
     async def poll(
         self, offsets: dict[str, int], *, telemetry: bool = False, step: int = 0
     ) -> dict[str, Any]:
@@ -190,3 +284,11 @@ class JobExecutor:
         if not isinstance(response, dict):
             raise TransportError("Compute runner returned a non-object response")
         return response
+
+
+async def _read_bounded(reader: asyncio.StreamReader, maximum_bytes: int) -> bytes:
+    """Drain a pipe so the process never blocks on it, keeping only the first bytes."""
+    kept = bytearray()
+    while chunk := await reader.read(STREAM_DIAGNOSTIC_BYTES):
+        kept.extend(chunk[: max(0, maximum_bytes - len(kept))])
+    return bytes(kept)
