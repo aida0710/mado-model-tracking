@@ -7,6 +7,7 @@ import type {
   ModelVersion,
   Project,
   Run,
+  RunKind,
 } from '@mmt/contracts';
 import { entity, login, request, type Harness } from './harness.js';
 
@@ -115,7 +116,7 @@ export async function executionFixture(harness: Harness) {
       },
     }),
   );
-  async function newRun(name = 'Inference'): Promise<Run> {
+  async function newRun(name = 'Inference', kind: RunKind = 'inference'): Promise<Run> {
     return entity<Run>(
       await request(harness.app, `${basePath}/runs`, {
         method: 'POST',
@@ -123,7 +124,7 @@ export async function executionFixture(harness: Harness) {
         body: {
           experimentId: experiment.id,
           name,
-          kind: 'inference',
+          kind,
           modelVersionId: modelVersion.id,
         },
       }),

@@ -1,8 +1,12 @@
 import type { CodeVersion, DatasetVersion, ModelVersion, Run } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
 import { conflict, notFound } from '../domain/errors.js';
+import { outputModelVersionIdsColumn } from './runListProjection.js';
 
-export const modelSelect = `SELECT m.*, (SELECT version FROM model_versions v WHERE v.model_id=m.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_version,
+// models.next_version is the internal numbering counter and is not part of the Model contract.
+export const modelColumns = 'id,project_id,name,family,description,created_at';
+export const modelSelect = `SELECT m.id,m.project_id,m.name,m.family,m.description,m.created_at,
+  (SELECT version FROM model_versions v WHERE v.model_id=m.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_version,
   (SELECT COALESCE(jsonb_object_agg(alias,version_id::text),'{}'::jsonb) FROM model_aliases WHERE model_id=m.id) AS aliases FROM models m`;
 export const codeSelect = `SELECT c.*, (SELECT version FROM code_versions v WHERE v.code_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_version FROM codes c`;
 export const datasetSelect = `SELECT d.*, (SELECT version FROM dataset_versions v WHERE v.dataset_id=d.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_version FROM datasets d`;
@@ -108,7 +112,7 @@ export async function findRun(
 ): Promise<Run> {
   const run = await first<Run>(
     connection,
-    `SELECT * FROM runs WHERE project_id=$1 AND id=$2 ${reference.lock ? 'FOR UPDATE' : ''}`,
+    `SELECT *,${outputModelVersionIdsColumn} FROM runs WHERE project_id=$1 AND id=$2 ${reference.lock ? 'FOR UPDATE' : ''}`,
     [reference.projectId, reference.id],
   );
   if (!run) notFound('Run');

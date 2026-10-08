@@ -15,7 +15,6 @@ import type {
   DatasetVersionCreate,
   ModelVersionCreate,
 } from '../domain/validation.js';
-import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { conflict, notFound } from '../domain/errors.js';
 import { isTerminalStatus } from '../domain/runTransitions.js';
 import {
@@ -24,18 +23,16 @@ import {
   codeSelect,
   datasetSelect,
   datasetVersionSelect,
-  findCodeVersion,
   findRun,
+  modelColumns,
   modelSelect,
   modelVersionSelect,
 } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
 import { enqueueRunEvent } from './outboxEvents.js';
 import type { ModelAutomationService } from './modelAutomationService.js';
-import {
-  findSavedArtifact,
-  validateCodeArtifacts,
-} from '../repositories/runtimeArtifactRepository.js';
+import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
+import { registerModelVersion, type ModelVersionRegistration } from './modelVersionRegistration.js';
 
 export class RegistryService {
   constructor(
@@ -43,11 +40,17 @@ export class RegistryService {
     private readonly automation: ModelAutomationService,
   ) {}
 
-  async models(principal: Principal, projectId: string): Promise<Model[]> {
+  async models(
+    principal: Principal,
+    projectId: string,
+    filter: { name?: string } = {},
+  ): Promise<Model[]> {
     await this.requireReadAccess(principal, projectId);
-    return rows(this.database, `${modelSelect} WHERE m.project_id=$1 ORDER BY m.created_at DESC`, [
-      projectId,
-    ]);
+    return rows(
+      this.database,
+      `${modelSelect} WHERE m.project_id=$1 AND ($2::text IS NULL OR m.name=$2) ORDER BY m.created_at DESC`,
+      [projectId, filter.name ?? null],
+    );
   }
 
   async createModel(
@@ -58,7 +61,7 @@ export class RegistryService {
     await this.requireWriteAccess(this.database, principal, projectId);
     const model = (await first<Omit<Model, 'latestVersion' | 'aliases'>>(
       this.database,
-      'INSERT INTO models(project_id,name,family,description) VALUES($1,$2,$3,$4) RETURNING *',
+      `INSERT INTO models(project_id,name,family,description) VALUES($1,$2,$3,$4) RETURNING ${modelColumns}`,
       [projectId, input.name, input.family, input.description],
     ))!;
     return { ...model, latestVersion: null, aliases: {} };
@@ -87,73 +90,29 @@ export class RegistryService {
     projectId: string,
     registration: { modelId: string; input: ModelVersionCreate },
   ): Promise<ModelVersion> {
+    const { input } = registration;
     return transaction(this.database, (connection) =>
-      this.insertModelVersion(connection, {
-        principal,
+      this.registerModelVersion(connection, {
         projectId,
         modelId: registration.modelId,
-        input: registration.input,
+        version: input.version,
+        sourceRunId: input.sourceRunId,
+        parentVersionIds: input.parentModelVersionIds,
+        artifactId: input.artifactId,
+        weightsUri: input.weightsUri,
+        defaultCodeVersionId: input.defaultCodeVersionId,
+        metadata: input.metadata,
+        actor: { type: 'principal', principal },
       }),
     );
   }
 
-  async insertModelVersion(
+  // Internal entry point for MLflow, Run completion, and worker registrations.
+  registerModelVersion(
     connection: PoolClient,
-    registration: {
-      principal: Principal;
-      projectId: string;
-      modelId: string;
-      input: ModelVersionCreate;
-    },
+    registration: ModelVersionRegistration,
   ): Promise<ModelVersion> {
-    const { principal, projectId, input } = registration;
-    await this.requireWriteAccess(connection, principal, projectId);
-    const model = await first<Model>(
-      connection,
-      'SELECT * FROM models WHERE id=$1 AND project_id=$2',
-      [registration.modelId, projectId],
-    );
-    if (!model) notFound('Model');
-    await assertProjectReferences(connection, {
-      table: 'model_versions',
-      projectId,
-      ids: input.parentModelVersionIds,
-    });
-    if (input.sourceRunId) await findRun(connection, { projectId, id: input.sourceRunId });
-    if (input.artifactId)
-      await findSavedArtifact(connection, {
-        projectId,
-        artifactId: input.artifactId,
-      });
-    if (input.defaultCodeVersionId)
-      validateCodeCompatibility(
-        await findCodeVersion(connection, {
-          projectId,
-          id: input.defaultCodeVersionId,
-        }),
-        { model },
-      );
-    const version = (await first<Omit<ModelVersion, 'family'>>(
-      connection,
-      `INSERT INTO model_versions(model_id,project_id,version,source_run_id,parent_model_version_ids,weights_uri,artifact_id,default_code_version_id,metadata)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-      [
-        model.id,
-        projectId,
-        input.version,
-        input.sourceRunId ?? null,
-        input.parentModelVersionIds,
-        input.weightsUri ?? null,
-        input.artifactId ?? null,
-        input.defaultCodeVersionId ?? null,
-        JSON.stringify(input.metadata),
-      ],
-    ))!;
-    await this.automation.processRegistration(connection, {
-      projectId,
-      modelVersionId: version.id,
-    });
-    return { ...version, family: model.family };
+    return registerModelVersion(connection, registration, this.automation);
   }
 
   async setAlias(

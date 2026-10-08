@@ -133,6 +133,7 @@ export const text = {
   codeVersion: 'コード版',
   inputDatasets: '入力データセット版',
   outputDatasets: '出力データセット版',
+  outputModels: '出力モデル版',
   version: 'Version',
   latestVersion: 'Latest version',
   family: 'Family',

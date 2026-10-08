@@ -9,6 +9,10 @@ import os
 from contextlib import nullcontext
 from pathlib import Path
 
+# Every Run adds the next numbered version (1, 2, 3, ...) to this one Model; the Run lists it
+# in outputModelVersionIds.
+OUTPUT_MODEL_NAME = "cpu-linear"
+
 
 def initial_weights(*, kind: str, directory: Path, run=None) -> tuple[float, float]:
     if kind == "training":
@@ -66,10 +70,9 @@ def train(
     output.write_text(json.dumps(model), encoding="utf-8")
     if run is not None:
         artifact = run.log_artifact(output, path="model/weights.json", mime_type="application/json")
-        model_version = run.register_output_model(
-            name=f"cpu-linear-{run.id}",
+        run.register_output_model(
+            model_name=OUTPUT_MODEL_NAME,
             family="linear",
-            version="v1",
             artifact_id=artifact["id"],
             metadata={
                 "algorithm": "gradient descent",
@@ -78,7 +81,6 @@ def train(
                 "initial_bias": initial_bias,
             },
         )
-        run.set_tags({"outputModelVersionId": model_version["id"]})
     return model
 
 

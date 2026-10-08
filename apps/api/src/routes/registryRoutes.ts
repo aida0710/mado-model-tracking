@@ -16,7 +16,11 @@ import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../h
 export function registryRoutes(registry: RegistryService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/:p/models', async (context) =>
-    context.json({ items: await registry.models(principal(context), uuidParam(context, 'p')) }),
+    context.json({
+      items: await registry.models(principal(context), uuidParam(context, 'p'), {
+        name: parse(nameSchema.optional(), context.req.query('name')),
+      }),
+    }),
   );
   routes.post('/:p/models', async (context) =>
     context.json(

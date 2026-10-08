@@ -104,7 +104,8 @@ export const codeVersionSchema = z
       });
   });
 export const modelVersionSchema = z.strictObject({
-  version: nameSchema,
+  // Omitted versions are numbered by the API (registerModelVersion).
+  version: nameSchema.optional(),
   parentModelVersionIds: uniqueIdsSchema.default([]),
   sourceRunId: uuidSchema.nullish(),
   weightsUri: z.string().min(1).max(4000).nullish(),
