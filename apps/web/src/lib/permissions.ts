@@ -57,3 +57,11 @@ export function canChangeOwnPassword(user: Pick<User, 'authSources'>): boolean {
 export function canManageAliasProtections(role: ProjectRole, globalAdmin: boolean): boolean {
   return globalAdmin || canManageProject(role);
 }
+
+/**
+ * Pausing, resuming, canceling or resizing a sweep: its creator while still an editor, or a
+ * Project admin (sweepService; other editors get 403 sweep_owner_required).
+ */
+export function canControlSweep(role: ProjectRole, userId: string, sweep: { createdBy: string }): boolean {
+  return canManageProject(role) || (canEditProject(role) && sweep.createdBy === userId);
+}

@@ -10,6 +10,12 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 const ExperimentsPage = lazy(() =>
   import('./pages/ExperimentsPage').then((module) => ({ default: module.ExperimentsPage })),
 );
+const SweepsPage = lazy(() =>
+  import('./pages/SweepsPage').then((module) => ({ default: module.SweepsPage })),
+);
+const SweepDetailPage = lazy(() =>
+  import('./pages/SweepDetailPage').then((module) => ({ default: module.SweepDetailPage })),
+);
 const RunDetailPage = lazy(() =>
   import('./pages/RunDetailPage').then((module) => ({ default: module.RunDetailPage })),
 );
@@ -73,6 +79,8 @@ export function App() {
           <Route path="/projects/:projectId" element={<AppShell />}>
             <Route index element={<Navigate replace to="experiments" />} />
             <Route path="experiments" element={<ExperimentsPage />} />
+            <Route path="sweeps" element={<SweepsPage />} />
+            <Route path="sweeps/:sweepId" element={<SweepDetailPage />} />
             <Route path="runs/:runId" element={<RunDetailPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="models" element={<ModelsPage />} />

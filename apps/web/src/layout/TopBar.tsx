@@ -13,6 +13,7 @@ import { text } from '../i18n/catalog';
 
 const screens = [
   'experiments',
+  'sweeps',
   'tasks',
   'models',
   'codes',
