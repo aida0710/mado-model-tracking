@@ -16,6 +16,15 @@ export const runKindSchema = z.enum([
 ]);
 export const runStatusSchema = z.enum(['queued', 'running', 'finished', 'failed', 'canceled']);
 export const roleSchema = z.enum(['viewer', 'editor', 'admin']);
+export const roleAssignmentSchema = z.strictObject({ role: roleSchema });
+// Same bounds as user_groups.group_name (migration 012); names come from Authentik as-is.
+export const groupNameSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .refine((value) => !/[\u0000-\u001f\u007f]/.test(value), 'Control characters are not allowed');
+// Query string of GET /users: a prefix of an email, username, or display name.
+export const userSearchQuerySchema = z.object({ query: z.string().trim().min(1).max(200) });
 export const artifactBackendSchema = z.enum(['filesystem', 's3']);
 export const scopeSchema = z.enum([
   'read',

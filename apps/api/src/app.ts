@@ -76,6 +76,9 @@ import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
 import { runNoteRoutes } from './routes/runNoteRoutes.js';
 import { commentRoutes } from './routes/commentRoutes.js';
+import { userRoutes } from './routes/userRoutes.js';
+import { ProjectGroupBindingService } from './services/projectGroupBindingService.js';
+import { UserDirectoryService } from './services/userDirectoryService.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -230,7 +233,8 @@ export function createApplication(options: ApplicationOptions) {
   app.get('/api/health', async (context) => context.json(await health()));
   app.route('/api/auth', authRoutes(auth));
   app.route('/api', auditRoutes(audit));
-  app.route('/api/projects', projectRoutes(projects));
+  app.route('/api/projects', projectRoutes(projects, new ProjectGroupBindingService(database)));
+  app.route('/api', userRoutes(new UserDirectoryService(database)));
   app.route('/api/projects', registryRoutes(registry));
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));

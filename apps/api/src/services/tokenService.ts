@@ -146,10 +146,10 @@ export class TokenService {
       role: needsAdmin ? 'admin' : writes ? 'editor' : 'viewer',
       scope: 'admin',
     });
-    // Unlike session administration, token membership is mandatory.
+    // Unlike session administration, token membership (direct or through a group) is mandatory.
     const membership = await first(
       connection,
-      'SELECT role FROM project_members WHERE project_id=$1 AND user_id=$2',
+      'SELECT role FROM effective_project_roles WHERE project_id=$1 AND user_id=$2',
       [projectId, principal.user.id],
     );
     if (!membership)
