@@ -63,3 +63,9 @@ export async function requireWorker(
   });
   return { projectId: principal.token.projectId, tokenId: principal.token.id };
 }
+
+// Descriptions and comments are human records, so code running inside a Job may not write them.
+export function rejectJobToken(principal: Principal): void {
+  if (principal.token?.job)
+    throw new DomainError(403, 'Job限定tokenではこの操作はできません', 'job_token_forbidden');
+}

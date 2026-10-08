@@ -50,6 +50,9 @@ import { PluginService, type PluginClientFactory } from './services/pluginServic
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
 import { AutomationSourceRunHandler } from './services/automationSourceRunHandler.js';
 import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
+import { RunNoteService } from './services/runNoteService.js';
+import { CommentService } from './services/commentService.js';
+import { createCommentTargetRegistry } from './services/commentTargets.js';
 import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { auditRoutes } from './routes/auditRoutes.js';
@@ -71,6 +74,8 @@ import {
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
 import { evaluationRoutes } from './routes/evaluationRoutes.js';
+import { runNoteRoutes } from './routes/runNoteRoutes.js';
+import { commentRoutes } from './routes/commentRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -135,6 +140,10 @@ export function createApplication(options: ApplicationOptions) {
     clientFactory: options.pluginClientFactory,
   });
   const outbox = new OutboxDispatcher(database, plugins);
+  const runNotes = new RunNoteService(database);
+  // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
+  const commentTargets = createCommentTargetRegistry();
+  const comments = new CommentService(database, commentTargets);
   const app = new Hono<ApiEnvironment>();
   app.onError((error, context) => {
     if (isMlflowRequest(context.req.path)) {
@@ -237,6 +246,8 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/projects', evaluationRoutes(evaluation));
+  app.route('/api/projects', runNoteRoutes(runNotes));
+  app.route('/api/projects', commentRoutes(comments));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', workerPresenceRoutes(worker));
@@ -276,6 +287,9 @@ export function createApplication(options: ApplicationOptions) {
       jobTokens,
       plugins,
       evaluation,
+      runNotes,
+      commentTargets,
+      comments,
     },
   };
 }
