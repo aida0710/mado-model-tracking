@@ -3,27 +3,19 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ArtifactService } from '../services/artifactService.js';
 import {
+  artifactContentHeaders,
+  artifactValidatorHeaders,
+  IMMUTABLE_ARTIFACT_CACHE_CONTROL,
+  matchesIfNoneMatch,
+  shouldServeRange,
+} from '../http/artifactContentHeaders.js';
+import {
   parse,
   principal,
   uuidParam,
   type ApiEnvironment,
   type ApiContext,
 } from '../http/request.js';
-
-const safeInlineMimeTypes = new Set([
-  'text/plain',
-  'application/json',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'audio/wav',
-  'audio/x-wav',
-  'audio/mpeg',
-  'audio/ogg',
-  'video/mp4',
-  'video/webm',
-]);
 
 // Bound project catalogs while leaving room for uploaded SIF files and model weights.
 const DEFAULT_CATALOG_LIMIT = 100;
@@ -32,6 +24,19 @@ const artifactCatalogQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(MAX_CATALOG_LIMIT).default(DEFAULT_CATALOG_LIMIT),
   query: z.string().trim().max(200).optional(),
 });
+
+function declaredContentLength(context: ApiContext): number | undefined {
+  const header = context.req.header('Content-Length');
+  return header && /^\d+$/.test(header) ? Number(header) : undefined;
+}
+
+/**
+ * Earlier middleware has already materialized the response (CORS) and set the API-wide no-store,
+ * and Hono copies those headers over a returned Response. Setting them on the context wins.
+ */
+function setResponseHeaders(context: ApiContext, headers: Record<string, string>) {
+  for (const [name, value] of Object.entries(headers)) context.header(name, value);
+}
 
 export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
@@ -44,7 +49,8 @@ export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment>
       await artifacts.upload(principal(context), uuidParam(context, 'p'), {
         runId,
         path: context.req.query('path') ?? '',
-        mimeType: context.req.header('Content-Type') ?? 'application/octet-stream',
+        mimeType: context.req.header('Content-Type'),
+        declaredBytes: declaredContentLength(context),
         body,
       }),
       201,
@@ -80,28 +86,32 @@ export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment>
     ),
   );
   routes.get('/:p/artifacts/:a/content', async (context) => {
-    const { artifact, content } = await artifacts.content(
+    const artifact = await artifacts.getMetadata(
       principal(context),
       uuidParam(context, 'p'),
-      { artifactId: uuidParam(context, 'a'), range: context.req.header('Range') },
+      uuidParam(context, 'a'),
     );
-    const mimeType = artifact.mimeType.split(';')[0]!.toLowerCase();
-    const disposition = safeInlineMimeTypes.has(mimeType) ? 'inline' : 'attachment';
-    const filename = artifact.path.split('/').at(-1)!;
-    const headers: Record<string, string> = {
-      'Content-Type': artifact.mimeType,
-      'Content-Length': String(content.size),
-      'Accept-Ranges': 'bytes',
-      'Content-Disposition': `${disposition}; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)}`,
-      'X-Content-Type-Options': 'nosniff',
-      'Content-Security-Policy': "sandbox; default-src 'none'",
-      'Cache-Control': 'private, no-store',
-    };
-    if (content.contentRange) headers['Content-Range'] = content.contentRange;
-    return new Response(Readable.toWeb(content.body) as ReadableStream<Uint8Array>, {
-      status: content.status,
-      headers,
-    });
+    if (matchesIfNoneMatch(context.req.header('If-None-Match'), artifact)) {
+      setResponseHeaders(
+        context,
+        artifactValidatorHeaders(artifact, IMMUTABLE_ARTIFACT_CACHE_CONTROL),
+      );
+      return context.body(null, 304);
+    }
+    const range = shouldServeRange(context.req.header('If-Range'), artifact)
+      ? context.req.header('Range')
+      : undefined;
+    const content = await artifacts.readContent(artifact, range);
+    setResponseHeaders(
+      context,
+      artifactContentHeaders({
+        artifact,
+        content,
+        disposition: 'inline-when-safe',
+        cacheControl: IMMUTABLE_ARTIFACT_CACHE_CONTROL,
+      }),
+    );
+    return context.body(Readable.toWeb(content.body) as ReadableStream<Uint8Array>, content.status);
   });
   return routes;
 }
