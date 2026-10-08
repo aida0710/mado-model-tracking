@@ -127,6 +127,7 @@ export const reportSchema = namedContractSchema(
     currentRevision: z.number().int(),
     createdBy: reportUserSchema,
     createdAt: timestampSchema,
+    updatedBy: reportUserSchema,
     updatedAt: timestampSchema,
     archivedAt: timestampSchema.nullable(),
     archivedBy: reportUserSchema.nullable(),
@@ -192,7 +193,11 @@ export const reportBlockSnapshotSchema = namedContractSchema(
       z.strictObject({ type: z.literal('scatter'), table: runAnalysisTableResponseSchema }),
       // Run summaries carry the extra columns of native Run responses (see runSchema).
       z.strictObject({ type: z.literal('run_table'), runs: z.array(runSchema) }),
-      z.strictObject({ type: z.literal('media'), grid: mediaCompareGridSchema }),
+      z.strictObject({
+        type: z.literal('media'),
+        runs: z.array(snapshotRunSchema),
+        grid: mediaCompareGridSchema,
+      }),
       z.strictObject({ type: z.literal('media_table'), page: mediaTablePageSchema }),
     ]),
   }),

@@ -123,6 +123,8 @@ export interface Report {
   currentRevision: number;
   createdBy: ReportUser;
   createdAt: string;
+  /** The editor who saved the current revision. */
+  updatedBy: ReportUser;
   /** When the last revision was saved or the report was archived or unarchived. */
   updatedAt: string;
   archivedAt: string | null;
@@ -196,7 +198,7 @@ export type ReportSnapshotData =
   | { type: 'scatter'; table: RunAnalysisTableResponse }
   | { type: 'run_table'; runs: Run[] }
   /** Cells name Artifacts by ID; Artifacts are immutable, so the media stays the same. */
-  | { type: 'media'; grid: MediaCompareGrid }
+  | { type: 'media'; runs: ReportSnapshotRun[]; grid: MediaCompareGrid }
   /** The first page of the table. */
   | { type: 'media_table'; page: MediaTablePage };
 

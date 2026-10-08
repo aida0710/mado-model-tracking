@@ -20,16 +20,23 @@ interface StoredReport {
   createdById: string;
   createdByName: string;
   createdAt: string;
+  updatedById: string;
+  updatedByName: string;
   updatedAt: string;
   archivedAt: string | null;
   archivedById: string | null;
   archivedByName: string | null;
 }
 
+// The editor of a report is the author of its current revision.
 const reportSelect = `SELECT r.id,r.project_id,r.title,r.current_revision,
-  r.created_by AS created_by_id,cu.display_name AS created_by_name,r.created_at,r.updated_at,
+  r.created_by AS created_by_id,cu.display_name AS created_by_name,r.created_at,
+  cv.created_by AS updated_by_id,uu.display_name AS updated_by_name,r.updated_at,
   r.archived_at,r.archived_by AS archived_by_id,au.display_name AS archived_by_name
-  FROM reports r JOIN users cu ON cu.id=r.created_by LEFT JOIN users au ON au.id=r.archived_by`;
+  FROM reports r JOIN users cu ON cu.id=r.created_by
+  JOIN report_revisions cv ON cv.report_id=r.id AND cv.revision=r.current_revision
+  JOIN users uu ON uu.id=cv.created_by
+  LEFT JOIN users au ON au.id=r.archived_by`;
 
 function toReport(stored: StoredReport): Report {
   return {
@@ -39,6 +46,7 @@ function toReport(stored: StoredReport): Report {
     currentRevision: stored.currentRevision,
     createdBy: { id: stored.createdById, displayName: stored.createdByName },
     createdAt: stored.createdAt,
+    updatedBy: { id: stored.updatedById, displayName: stored.updatedByName },
     updatedAt: stored.updatedAt,
     archivedAt: stored.archivedAt,
     archivedBy:

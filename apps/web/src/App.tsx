@@ -16,6 +16,12 @@ const SweepsPage = lazy(() =>
 const SweepDetailPage = lazy(() =>
   import('./pages/SweepDetailPage').then((module) => ({ default: module.SweepDetailPage })),
 );
+const ReportsPage = lazy(() =>
+  import('./pages/ReportsPage').then((module) => ({ default: module.ReportsPage })),
+);
+const ReportPage = lazy(() =>
+  import('./pages/ReportPage').then((module) => ({ default: module.ReportPage })),
+);
 const RunDetailPage = lazy(() =>
   import('./pages/RunDetailPage').then((module) => ({ default: module.RunDetailPage })),
 );
@@ -81,6 +87,8 @@ export function App() {
             <Route path="experiments" element={<ExperimentsPage />} />
             <Route path="sweeps" element={<SweepsPage />} />
             <Route path="sweeps/:sweepId" element={<SweepDetailPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports/:reportId" element={<ReportPage />} />
             <Route path="runs/:runId" element={<RunDetailPage />} />
             <Route path="compare" element={<ComparePage />} />
             <Route path="models" element={<ModelsPage />} />

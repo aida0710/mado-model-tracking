@@ -111,6 +111,7 @@ export class ReportSnapshotService {
       case 'media':
         return {
           type: block.type,
+          runs: await readRunNames(this.database, { projectId, runIds: block.runIds }),
           grid: await runMedia.compare(principal, projectId, {
             runIds: block.runIds,
             key: block.key,
