@@ -6,7 +6,6 @@ import { uuidSchema } from '../../domain/validation.js';
 import { parse } from '../../http/request.js';
 import { findRun } from '../../repositories/registryRepository.js';
 import { requireProject } from '../../services/accessService.js';
-import { enqueueRunEvent } from '../../services/outboxEvents.js';
 import type { RunCompletionService } from '../../services/runCompletionService.js';
 import type { RegistryService } from '../../services/registryService.js';
 import type { RunService } from '../../services/runService.js';
@@ -124,7 +123,10 @@ export class RunTrackingService {
           input.user_id ?? principal.user.id,
         ],
       ))!;
-      await enqueueRunEvent(connection, started);
+      await this.runCompletion.recordStatusChange(connection, {
+        previousStatus: run.status,
+        run: started,
+      });
       return serializeRun(connection, started);
     });
   }
@@ -192,7 +194,11 @@ export class RunTrackingService {
         started_at=$6 WHERE id=$1 RETURNING *`,
         [run.id, input.run_name, JSON.stringify(tags), status, endedAt, startedAt],
       ))!;
-      if (status !== run.status) await enqueueRunEvent(connection, updated);
+      if (status !== run.status)
+        await this.runCompletion.recordStatusChange(connection, {
+          previousStatus: run.status,
+          run: updated,
+        });
       return serializeRunInfo(updated);
     });
   }

@@ -31,7 +31,6 @@ import {
   listMetrics,
 } from '../repositories/telemetryRepository.js';
 import { requireProject } from './accessService.js';
-import { enqueueRunEvent } from './outboxEvents.js';
 import type { RunCompletionService } from './runCompletionService.js';
 
 export class RunService {
@@ -212,7 +211,11 @@ export class RunService {
           input.parameters ? JSON.stringify(input.parameters) : null,
         ],
       ))!;
-      if (status !== run.status) await enqueueRunEvent(connection, updated);
+      if (status !== run.status)
+        await this.runCompletion.recordStatusChange(connection, {
+          previousStatus: run.status,
+          run: updated,
+        });
       return updated;
     });
   }

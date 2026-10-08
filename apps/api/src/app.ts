@@ -25,7 +25,6 @@ import { RunService } from './services/runService.js';
 import { TaskService } from './services/taskService.js';
 import { AuditService } from './services/auditService.js';
 import { RunCompletionService } from './services/runCompletionService.js';
-import { pluginOutboxCompletionHandler } from './services/outboxEvents.js';
 import { RepositoryFilesService } from './services/repositoryFilesService.js';
 import { GitRepositoryReader, type RepositoryReader } from './services/repositoryReader.js';
 import { ModelAutomationService } from './services/modelAutomationService.js';
@@ -68,8 +67,10 @@ export function createApplication(options: ApplicationOptions) {
   const auth = new AuthService(database, config);
   const audit = new AuditService(database);
   const projects = new ProjectService(database, () => stores.backends());
-  // Handlers run in this order inside the terminal-transition transaction.
-  const runCompletion = new RunCompletionService([pluginOutboxCompletionHandler]);
+  // Handlers run in this order inside the terminal-transition transaction. Output registration
+  // must precede pending automation so versions it creates start in the same completion.
+  // Plugin outbox events are not handlers: RunCompletionService enqueues them on every status change.
+  const runCompletion = new RunCompletionService([]);
   const runs = new RunService(database, runCompletion);
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores);
