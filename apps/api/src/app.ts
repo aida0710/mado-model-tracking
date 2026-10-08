@@ -18,6 +18,7 @@ import { mlflowInformationRoutes } from './mlflow/informationRoutes.js';
 import { mlflowTrackingRoutes } from './mlflow/tracking/index.js';
 import { mlflowModelRoutes } from './mlflow/models/index.js';
 import { mlflowArtifactRoutes } from './mlflow/artifacts/index.js';
+import { MlflowMultipartUploadService } from './mlflow/artifacts/multipartUploadService.js';
 import { AuthService } from './services/authService.js';
 import { ArtifactService } from './services/artifactService.js';
 import { ArtifactUploadService } from './services/artifactUploadService.js';
@@ -116,7 +117,18 @@ export function createApplication(options: ApplicationOptions) {
   const artifactUploads = new ArtifactUploadService(database, stores, {
     maxBytes: config.artifactMaxBytes,
   });
-  const artifactUploadFinalizer = new ArtifactUploadFinalizer({ database, stores });
+  const mlflowMultipartUploads = new MlflowMultipartUploadService({
+    database,
+    stores,
+    uploads: artifactUploads,
+    finalizeWaitMs: config.uploadFinalizeWaitMs,
+  });
+  // Mapping stays on when MLflow multipart is turned off so sessions already open still complete.
+  const artifactUploadFinalizer = new ArtifactUploadFinalizer({
+    database,
+    stores,
+    onRegistered: mlflowMultipartUploads.mapRegisteredArtifact,
+  });
   const artifactUploadSweeper = new ArtifactUploadSweeper({ database, stores });
   const targets = new TargetService(database, config);
   const jobTokens = new JobTokenService(database);
@@ -256,10 +268,17 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', workerPresenceRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
-  app.route('/api/mlflow/projects/:p', mlflowInformationRoutes(database));
+  app.route('/api/mlflow/projects/:p', mlflowInformationRoutes(database, config.mlflowMultipart));
   app.route('/api/mlflow/projects/:p', mlflowTrackingRoutes({ database, runs, registry, runCompletion }));
   app.route('/api/mlflow/projects/:p', mlflowModelRoutes({ database, registry }));
-  app.route('/api/mlflow/projects/:p', mlflowArtifactRoutes({ database, artifacts }));
+  app.route(
+    '/api/mlflow/projects/:p',
+    mlflowArtifactRoutes({
+      database,
+      artifacts,
+      multipart: config.mlflowMultipart.uploadsEnabled ? mlflowMultipartUploads : undefined,
+    }),
+  );
   app.get('/api/storage/backends', (context) => {
     requireScope(principal(context), 'read');
     return context.json({ items: stores.backends() });

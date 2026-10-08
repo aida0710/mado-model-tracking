@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -22,11 +24,8 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 from mlflow import MlflowClient
-from mlflow.environment_variables import (
-    MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD,
-    MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE,
-)
-from mlflow.exceptions import MlflowException, _UnsupportedMultipartUploadException
+from mlflow.exceptions import MlflowException
+from mlflow.store.artifact.mlflow_artifacts_repo import MlflowArtifactsRepository
 from mlflow3_checks.common import (
     AutomationEnvironment,
     create_local_cpu_target,
@@ -34,6 +33,7 @@ from mlflow3_checks.common import (
     expect_mlflow_error,
     linear_fixture,
     record_rest_calls,
+    tracking_headers,
 )
 from mlflow3_checks.evaluation import verify_evaluation, verify_evaluation_automation
 from mlflow3_checks.pyfunc_model import verify_pyfunc_model
@@ -51,6 +51,12 @@ WORK_DIRECTORY = ROOT / "var/verification-mlflow3"
 # Exceed the JSON body limit to exercise streamed binary transfer through the Web proxy.
 LARGE_ARTIFACT_BYTES = 6 * 1024 * 1024
 TOKEN_LIFETIME = timedelta(hours=1)
+# The smallest part S3 accepts, so the same check passes on filesystem and S3 Projects.
+MULTIPART_CHUNK_BYTES = 5 * 1024 * 1024
+MULTIPART_MINIMUM_FILE_BYTES = 1024 * 1024
+# Just over 6 MiB: one full chunk and a shorter final part.
+MULTIPART_ARTIFACT_BYTES = MULTIPART_CHUNK_BYTES + 1024 * 1024 + 7
+SERVER_INFO_PATHS = ("/server-info", "/api/3.0/mlflow/server-info")
 
 
 def configure_mlflow(*, project_id: str, token: str) -> MlflowClient:
@@ -124,30 +130,68 @@ def verify_tracking(client: MlflowClient, temporary: Path) -> dict:
     }
 
 
-def verify_multipart_fallback(client: MlflowClient, temporary: Path, *, token: str) -> dict | None:
-    """Check that opt-in proxy multipart uploads fall back to one streamed PUT."""
-    if not MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD.get():
-        return None
-    minimum_size = MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE.get()
-    source = temporary / "multipart-fallback.bin"
-    # Just over the threshold so the SDK tries mpu/create before falling back to the plain PUT.
-    source.write_bytes(b"multipart" * (minimum_size // 9 + 1))
-    with mlflow.start_run(run_name="Multipart fallback upload") as run:
+@contextmanager
+def multipart_upload_settings() -> Iterator[None]:
+    """Lower the SDK's multipart thresholds so a 6 MiB file uses mpu/create.
+
+    MLflow 3.17+ decides from server-info; 3.0.0 never reads it and needs the explicit switch.
+    """
+    settings = {
+        "MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE": str(MULTIPART_MINIMUM_FILE_BYTES),
+        "MLFLOW_MULTIPART_UPLOAD_CHUNK_SIZE": str(MULTIPART_CHUNK_BYTES),
+    }
+    if not hasattr(MlflowArtifactsRepository, "_fetch_server_capabilities"):
+        settings["MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD"] = "true"
+    previous = {name: os.environ.get(name) for name in settings}
+    os.environ.update(settings)
+    try:
+        yield
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+def verify_multipart_upload(client: MlflowClient, temporary: Path) -> dict:
+    """Check that log_artifact goes through mpu/create, part PUTs and complete."""
+    server_info = {
+        path: httpx.get(f"{mlflow.get_tracking_uri()}{path}", headers=tracking_headers(), timeout=30).json()
+        for path in SERVER_INFO_PATHS
+    }
+    assert all(info["multipart_uploads_enabled"] for info in server_info.values()), server_info
+    source = temporary / "multipart.bin"
+    source.write_bytes(os.urandom(MULTIPART_ARTIFACT_BYTES))
+    with multipart_upload_settings(), mlflow.start_run(run_name="Multipart upload") as run:
         run_id = run.info.run_id
-        mlflow.log_artifact(str(source), artifact_path="multipart")
-    probe = httpx.post(
-        f"{mlflow.get_tracking_uri()}/api/2.0/mlflow-artifacts/mpu/create/runs/{run_id}/artifacts/probe.bin",
-        json={"path": "probe.bin", "num_parts": 1},
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=30,
-    )
-    assert probe.status_code == 501, probe.status_code
-    assert probe.json()["message"].startswith(_UnsupportedMultipartUploadException.MESSAGE)
+        with record_rest_calls() as calls:
+            mlflow.log_artifact(str(source), artifact_path="multipart")
+    multipart_calls = [path for _method, path in calls.calls if "mlflow-artifacts/mpu/" in path]
+    part_puts = [
+        path for method, path in calls.calls if method == "PUT" and "mlflow-artifacts/mpu/parts/" in path
+    ]
+    assert len(part_puts) == 2, multipart_calls
+    assert any("/mpu/create/" in path for path in multipart_calls), multipart_calls
+    assert any("/mpu/complete/" in path for path in multipart_calls), multipart_calls
+    assert not any(
+        method == "PUT" and "mlflow-artifacts/artifacts/" in path for method, path in calls.calls
+    ), "multipart upload fell back to a single PUT"
+    listing = client.list_artifacts(run_id, "multipart")
+    assert [(entry.path, entry.file_size) for entry in listing] == [
+        ("multipart/multipart.bin", MULTIPART_ARTIFACT_BYTES)
+    ]
     downloaded = Path(
-        client.download_artifacts(run_id, "multipart/multipart-fallback.bin", str(temporary / "download"))
+        client.download_artifacts(run_id, "multipart/multipart.bin", str(temporary / "download"))
     )
     assert hashlib.sha256(downloaded.read_bytes()).digest() == hashlib.sha256(source.read_bytes()).digest()
-    return {"runId": run_id, "bytes": source.stat().st_size, "minimumFileSize": minimum_size}
+    return {
+        "runId": run_id,
+        "bytes": MULTIPART_ARTIFACT_BYTES,
+        "chunkSize": MULTIPART_CHUNK_BYTES,
+        "partRequests": len(part_puts),
+        "serverInfo": server_info,
+    }
 
 
 def verify_models(client: MlflowClient) -> dict:
@@ -381,10 +425,8 @@ def main() -> None:
                 "tracking, nested runs, metric history, search, streamed artifact upload/download"
             )
             with tempfile.TemporaryDirectory(prefix="mmt-mlflow3-multipart-") as directory:
-                multipart_fallback = verify_multipart_fallback(client, Path(directory), token=token)
-            if multipart_fallback:
-                summary["multipartFallback"] = multipart_fallback
-                summary["checks"].append("proxy multipart upload falls back to streamed PUT on 501")
+                summary["multipartUpload"] = verify_multipart_upload(client, Path(directory))
+            summary["checks"].append("server-info on both paths, proxied multipart upload in 2 parts")
             summary["models"] = verify_models(client)
             summary["checks"].append("logged models, native registry, alias, pyfunc load, dataset lineage")
             summary["autolog"] = verify_autolog(client)

@@ -1,8 +1,9 @@
 import { Transform, type TransformCallback } from 'node:stream';
 import { parseDocument } from 'yaml';
+import type { Connection } from '../../db/database.js';
 
 // MLmodel contains metadata, not weights. Oversized files still stream to storage without capture.
-const MAX_MLMODEL_METADATA_BYTES = 64 * 1024;
+export const MAX_MLMODEL_METADATA_BYTES = 64 * 1024;
 // Limit YAML alias expansion before serializing the document into PostgreSQL JSON.
 const MAX_MLMODEL_YAML_ALIASES = 32;
 
@@ -33,4 +34,16 @@ export class MlmodelCapture extends Transform {
       return null;
     }
   }
+}
+
+/** Stores the parsed MLmodel on the Logged Model; null removes metadata an earlier MLmodel left. */
+export async function saveLoggedModelMlmodel(
+  connection: Connection,
+  model: { projectId: string; id: string; metadata: Record<string, unknown> | null },
+): Promise<void> {
+  await connection.query(
+    `UPDATE mlflow_logged_models SET metadata=CASE WHEN $3::jsonb IS NULL THEN metadata-'mlmodel'
+     ELSE jsonb_set(metadata,'{mlmodel}',$3::jsonb) END,updated_at=now() WHERE id=$1 AND project_id=$2`,
+    [model.id, model.projectId, model.metadata === null ? null : JSON.stringify(model.metadata)],
+  );
 }

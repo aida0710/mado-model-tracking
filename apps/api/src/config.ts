@@ -33,6 +33,9 @@ const DEFAULT_ARTIFACT_MAX_BYTES = 200 * 1024 ** 3;
 const DEFAULT_UPLOAD_REQUEST_TIMEOUT_MS = 0;
 // A stalled client releases its socket after two minutes without received bytes.
 const DEFAULT_UPLOAD_IDLE_TIMEOUT_MS = 120_000;
+// MLflow's mpu/complete is synchronous. The wait stays below the SDK's default 120-second request
+// timeout so a slow verification answers 503 instead of the SDK giving up and aborting.
+const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -93,6 +96,14 @@ const environmentSchema = z.object({
     .int()
     .min(0)
     .default(DEFAULT_UPLOAD_IDLE_TIMEOUT_MS),
+  MMT_MLFLOW_MULTIPART_UPLOADS: z.enum(['true', 'false']).default('true'),
+  // Presigned downloads are not implemented; true makes MLflow 3.17+ SDK downloads fail.
+  MMT_MLFLOW_MULTIPART_DOWNLOADS: z.enum(['true', 'false']).default('false'),
+  MMT_UPLOAD_FINALIZE_WAIT_MS: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
 });
 
 export interface ApiConfig {
@@ -125,6 +136,10 @@ export interface ApiConfig {
   // 0 means the timeout is disabled.
   uploadRequestTimeoutMs: number;
   uploadIdleTimeoutMs: number;
+  // Advertised by MLflow server-info; uploads=false answers mpu/* with the SDK's fallback 501.
+  mlflowMultipart: { uploadsEnabled: boolean; downloadsEnabled: boolean };
+  // How long MLflow's mpu/complete waits for the upload finalizer before answering 503.
+  uploadFinalizeWaitMs: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -225,5 +240,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     artifactMaxBytes: settings.MMT_ARTIFACT_MAX_BYTES,
     uploadRequestTimeoutMs: settings.MMT_UPLOAD_REQUEST_TIMEOUT_MS,
     uploadIdleTimeoutMs: settings.MMT_UPLOAD_IDLE_TIMEOUT_MS,
+    mlflowMultipart: {
+      uploadsEnabled: settings.MMT_MLFLOW_MULTIPART_UPLOADS === 'true',
+      downloadsEnabled: settings.MMT_MLFLOW_MULTIPART_DOWNLOADS === 'true',
+    },
+    uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
   };
 }
