@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { AuthService } from '../services/authService.js';
 import { LOGIN_LIFETIME_SECONDS } from '../services/authService.js';
 import { RateLimitedError } from '../auth/authRateLimiter.js';
+import { DomainError } from '../domain/errors.js';
 import { LOGIN_BINDING_COOKIE, SESSION_COOKIE, validateOrigin } from '../http/authMiddleware.js';
 import { jsonBody, principal, type ApiContext, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
@@ -12,6 +13,8 @@ import { requestMetadata } from '../http/requestMetadata.js';
 // Generous bounds: the hasher enforces the real password rules, these only cap request size.
 const MAX_USERNAME_LENGTH = 256;
 const MAX_PASSWORD_INPUT_LENGTH = 4096;
+// A signed logout token is a few KB; the form body is read whole, so it is capped well above that.
+const MAX_BACKCHANNEL_LOGOUT_BODY_BYTES = 20_000;
 
 const localLoginSchema = z.strictObject({
   username: z.string().min(1).max(MAX_USERNAME_LENGTH),
@@ -124,6 +127,21 @@ export function authRoutes(auth: AuthService): Hono<ApiEnvironment> {
     });
     setSessionCookie(context, login.session);
     return context.redirect(auth.config.webOrigin);
+  });
+  // Called by the IdP, not a browser: no cookie and no Origin, so it is authenticated by the
+  // logout token's signature alone (see OidcBackchannelLogout).
+  routes.post('/oidc/backchannel-logout', async (context) => {
+    context.header('Cache-Control', 'no-store');
+    if (!context.req.header('Content-Type')?.startsWith('application/x-www-form-urlencoded'))
+      throw new DomainError(400, 'logout_tokenをform形式で送ってください', 'invalid_logout_token');
+    const body = await context.req.text();
+    if (Buffer.byteLength(body) > MAX_BACKCHANNEL_LOGOUT_BODY_BYTES)
+      throw new DomainError(413, 'logout tokenの上限サイズを超えています', 'body_too_large');
+    const logoutToken = new URLSearchParams(body).get('logout_token');
+    if (!logoutToken)
+      throw new DomainError(400, 'logout_tokenがありません', 'invalid_logout_token');
+    await auth.backchannelLogout(logoutToken, requestMetadata(context));
+    return context.body(null, 200);
   });
   routes.post('/logout', async (context) => {
     validateOrigin(context.req.header('Origin'), auth.config);

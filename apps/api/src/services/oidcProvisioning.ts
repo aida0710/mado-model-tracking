@@ -17,6 +17,7 @@ import {
   lockAccount,
   lockActiveGlobalAdminIds,
   recordLogin,
+  recordOidcGroupSync,
   recordOidcIdentityLogin,
   replaceUserGroups,
   updateOidcUserProfile,
@@ -107,6 +108,7 @@ async function syncAccount(
   });
   const groupsBefore = await listUserGroups(connection, userId);
   await replaceUserGroups(connection, userId, access.groups);
+  await recordOidcGroupSync(connection, claims);
   const groupsAdded = difference(access.groups, groupsBefore);
   const groupsRemoved = difference(groupsBefore, access.groups);
   const globalRoleBefore = globalRoleOf(account.isAdmin);

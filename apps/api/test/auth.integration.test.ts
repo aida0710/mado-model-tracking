@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { createApplication } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
-import { startMockOidcProvider } from './mockOidcProvider.js';
+import { startMockOidcProvider, TEST_SESSION_ENCRYPTION_KEY } from './mockOidcProvider.js';
 import type { ApiEnvironment } from '../src/http/request.js';
 import type { Hono } from 'hono';
 
@@ -23,6 +23,7 @@ describe.skipIf(!testDatabaseUrl)(
         OIDC_ALLOWED_GROUPS: 'mmt-users,mmt-admins',
         OIDC_CLIENT_SECRET: 'mock-client-secret',
         OIDC_ALLOW_INSECURE_HTTP: 'true',
+        MMT_SESSION_ENCRYPTION_KEY: TEST_SESSION_ENCRYPTION_KEY,
       });
       app = createApplication({ config, database: harness.database, stores: harness.stores }).app;
     });

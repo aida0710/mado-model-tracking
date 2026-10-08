@@ -42,6 +42,13 @@ const DEFAULT_UPLOAD_FINALIZE_WAIT_MS = 100_000;
 const DEFAULT_TOKEN_MAX_LIFETIME_DAYS = 365;
 // Rows of one CSV export (decisions.md); beyond this Excel use gets slow and the filter should narrow.
 const DEFAULT_CSV_EXPORT_MAX_ROWS = 50_000;
+// An SSO session asks UserInfo for the current groups at most this often (decisions.md: 60 seconds),
+// so a user removed from a group loses access within about a minute even while active.
+const DEFAULT_OIDC_RECHECK_SECONDS = 60;
+// API tokens of SSO users stop when the last group sync is older than this (decisions.md: 7 days).
+const DEFAULT_OIDC_TOKEN_SYNC_MAX_AGE_SECONDS = 7 * 24 * 60 * 60;
+// Shorter than a minute would sync on nearly every token request and gain nothing.
+const MIN_OIDC_TOKEN_SYNC_MAX_AGE_SECONDS = 60;
 
 const environmentSchema = z.object({
   NODE_ENV: z.string().default('development'),
@@ -78,6 +85,14 @@ const environmentSchema = z.object({
   OIDC_SCOPES: z.string().default(DEFAULT_OIDC_SCOPES),
   OIDC_LABEL: z.string().min(1).max(100).default('Authentik'),
   OIDC_ALLOW_INSECURE_HTTP: z.enum(['true', 'false']).default('false'),
+  // base64 of 32 bytes. Encrypts the IdP tokens kept in SSO sessions; required for oidc and hybrid.
+  MMT_SESSION_ENCRYPTION_KEY: optionalSetting,
+  OIDC_RECHECK_SECONDS: z.coerce.number().int().min(1).default(DEFAULT_OIDC_RECHECK_SECONDS),
+  OIDC_TOKEN_SYNC_MAX_AGE_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(MIN_OIDC_TOKEN_SYNC_MAX_AGE_SECONDS)
+    .default(DEFAULT_OIDC_TOKEN_SYNC_MAX_AGE_SECONDS),
   DEVELOPMENT_ADMIN_EMAIL: z
     .string()
     .regex(/^[^\s@]+@[^\s@]+$/)
@@ -147,6 +162,10 @@ export interface ApiConfig {
     scopes: string;
     label: string;
     allowInsecureHttp: boolean;
+    // Encrypts the access and refresh tokens stored with each SSO session.
+    sessionEncryptionKey: SecretKey;
+    // An SSO session older than this since its last UserInfo check is checked again.
+    recheckSeconds: number;
   } | null;
   developmentAdminEmail: string;
   allowLocalExecutor: boolean;
@@ -168,6 +187,8 @@ export interface ApiConfig {
   checkpointKeepCount: number;
   // Rows of POST /runs/search/export.csv; further matches are cut and marked at the end.
   csvExportMaxRows: number;
+  // API tokens of users with an SSO identity need a group sync within this many seconds.
+  oidcTokenSyncMaxAgeSeconds: number;
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -231,6 +252,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     }
     const scopes = settings.OIDC_SCOPES.split(/\s+/).filter(Boolean);
     if (!scopes.includes('openid')) throw new Error('OIDC_SCOPES must include openid');
+    if (!settings.MMT_SESSION_ENCRYPTION_KEY)
+      throw new Error(
+        `MMT_SESSION_ENCRYPTION_KEY is required when AUTH_MODE=${settings.AUTH_MODE}`,
+      );
+    let sessionEncryptionKey: SecretKey;
+    try {
+      sessionEncryptionKey = parseSecretKey(settings.MMT_SESSION_ENCRYPTION_KEY);
+    } catch {
+      throw new Error('MMT_SESSION_ENCRYPTION_KEY must be base64 of 32 bytes');
+    }
     oidc = {
       issuer: settings.OIDC_ISSUER_URL,
       clientId: settings.OIDC_CLIENT_ID,
@@ -245,6 +276,8 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       scopes: scopes.join(' '),
       label: settings.OIDC_LABEL,
       allowInsecureHttp,
+      sessionEncryptionKey,
+      recheckSeconds: settings.OIDC_RECHECK_SECONDS,
     };
   }
   return {
@@ -285,5 +318,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
     checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
     csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,
+    oidcTokenSyncMaxAgeSeconds: settings.OIDC_TOKEN_SYNC_MAX_AGE_SECONDS,
   };
 }
