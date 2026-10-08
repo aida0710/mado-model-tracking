@@ -8,6 +8,7 @@ import { ProjectMembers } from '../components/ProjectMembers';
 import { ProjectGroupBindings } from '../components/ProjectGroupBindings';
 import { ProjectTokens } from '../components/ProjectTokens';
 import { ProjectServiceAccounts } from '../components/ProjectServiceAccounts';
+import { NotificationSettings } from '../components/NotificationSettings';
 import { ProjectList } from '../components/ProjectList';
 import { AuditEventsTable } from '../components/AuditEventsTable';
 import { ErrorNotice, Loading } from '../components/Feedback';
@@ -31,6 +32,7 @@ export function SettingsPage() {
         <ProjectGroupBindings onChanged={projectMembers.members.reload} />
         <ProjectServiceAccounts access={serviceAccounts} />
         <ProjectTokens projectTokens={serviceAccounts.projectTokens} />
+        <NotificationSettings />
         {isProjectAdmin && (
           <section className="settings-section">
             <div className="section-heading">

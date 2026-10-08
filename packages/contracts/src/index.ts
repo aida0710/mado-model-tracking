@@ -103,6 +103,27 @@ export {
   SYNC_ORIGIN_MAX_LENGTH,
 } from './runSync.js';
 export type {
+  NotificationChannel,
+  NotificationChannelCreate,
+  NotificationChannelKind,
+  NotificationChannelPatch,
+  NotificationDelivery,
+  NotificationDeliveryStatus,
+  NotificationEvent,
+  NotificationEventType,
+  NotificationRule,
+  NotificationRuleCreate,
+  NotificationRuleFilter,
+  NotificationRulePatch,
+  NotificationRunSummary,
+  NotificationTestResult,
+} from './notifications.js';
+export {
+  NOTIFICATION_ENV_PREFIX,
+  NOTIFICATION_EVENT_TYPES,
+  NOTIFICATION_RECIPIENTS_MAX,
+} from './notifications.js';
+export type {
   Sweep,
   SweepCancel,
   SweepCreate,

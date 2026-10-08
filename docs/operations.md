@@ -290,6 +290,42 @@ MLflowのRunは終端から`RUNNING`へ戻して再び終端にできるため�
 
 plugin outboxへのイベント投入はhandlerではありません。状態が変わるたび（run.startedを含む）と、終端Runへの出力・Dataset追加の再送で積まれ、失敗するとRunの変更ごと戻ります。終端への遷移はRunを`FOR UPDATE`でlockするので、同じRunへの出力モデル登録と直列になり、終端イベントの`run.outputModelVersionIds`には確定済みの版が入ります。
 
+## 通知（Slack・Webhook・メール）
+
+Runの失敗などを外部へ知らせます。通知先（channel）は全体管理者が登録し、どのイベントをどの通知先へ送るか（rule）は各ProjectのProject adminが設定画面の「通知」で決めます。
+
+### 通知先の環境変数を置く
+
+Webhookの URL と署名の鍵はDBにも画面にも保存しません。API serverの環境変数に値を置き、通知先には変数名だけを登録します（pluginの`tokenEnv`と同じ方針）。変数名は`MMT_NOTIFICATION_`で始まる英大文字・数字・`_`に限ります。ほかの設定（DBのURLなど）を通知先に指定できないようにするためです。
+
+```sh
+# API serverの.env（値はリポジトリやチャットに貼らない）
+MMT_NOTIFICATION_SLACK_URL=https://hooks.slack.com/services/…
+MMT_NOTIFICATION_OPS_URL=https://ops.example.com/hooks/mmt
+MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
+```
+
+環境変数を変えたらAPIを再起動します。設定画面の通知先一覧の「環境変数」が「未設定」なら、APIのプロセスにその変数が見えていません。全体管理者は「テスト送信」で、outboxを通さずにその場で1件送って結果のcodeを確かめられます。
+
+| 種類 | 必要な設定 | 送る内容 |
+|---|---|---|
+| Slack（Incoming Webhook） | `urlEnv` | `text`（通知のfallback）と`blocks`（タイトル、Project、Run、実験、種別・状態、エラーの先頭500文字） |
+| Webhook（署名付き） | `urlEnv`、`secretEnv` | NotificationEventのJSON。headerに`X-MMT-Event`、`X-MMT-Event-Id`、`X-MMT-Delivery`、`X-MMT-Signature: sha256=<HMAC-SHA256(鍵, 本文)>` |
+| メール | `recipients`（1〜50件） | SMTPの送信部品が入るまでは送らず、送信履歴に`email_sender_unavailable`の失敗として残る |
+
+受信側は`X-MMT-Signature`を本文そのままのbyte列で検証し、`X-MMT-Event-Id`（同じイベントは全ruleで同じID）で重複を除いてください。本文にexecution snapshot、parameters、環境変数、tokenは入れません。
+
+送信は5秒で打ち切り、redirectは追いません（3xxは`notification_redirect_refused`）。URLは`http`/`https`だけで、user・passwordを含むURLは送りません。
+
+### 送信の流れと失敗の扱い
+
+- Runが`failed`・`canceled`・（ruleで選べば）`finished`になると、終端と同じtransactionで通知outbox（`notification_outbox`）へruleごとに1件積みます。終端がrollbackされれば通知も残りません。同じRunの同じ種別は1回だけです（completeの再送、MLflowで再開して同じ状態で終わった場合も増えません）。
+- 積むのは、有効なruleで、通知先も有効で、filter（実行種別・実験・自動実行のRunだけ）に合うものだけです。
+- API内のdispatcherが1秒ごとに取り出して送ります。失敗すると5秒から倍々（上限1時間）で待って再送し、8回（`NOTIFICATION_MAX_ATTEMPTS`。約10分）失敗すると`failed`にします。古い通知を送り続けても意味が薄いためです。送信中のまま60秒を過ぎた行（APIが送信中に止まった場合）は、次のdispatcherが引き取ります。
+- 積んだ後で通知先やruleを無効にした行は、送らずに`failed`（`notification_channel_disabled`／`notification_rule_disabled`）にします。有効に戻しても古い通知はまとめて届きません。
+- Project adminは設定画面の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。
+- 通知先の作成・変更・テスト送信、ruleの作成・有効切替は監査ログ（`notification.channel.create`／`update`／`test`、`notification.rule.create`／`update`）に残ります。環境変数の値と宛先のメールアドレスは記録しません（宛先は件数だけ）。
+
 ## Gitのファイルをエディタへ読み込む
 
 API serverにも`git`、`ssh`、CA証明書が必要です。`Dockerfile.api`には同梱しています。公開HTTPSリポジトリは完全なcommit hashを指定します。Webで読み込むファイル数・サイズは制限し、省略したファイルを画面に表示します。Git設定やユーザーの認証情報を自動で引き継ぎません。
