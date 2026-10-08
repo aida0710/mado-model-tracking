@@ -5,7 +5,7 @@ export const runsText = {
   filterEmpty: '検索式を入力してください。',
   firstPage: '最初のページ',
   mediaTab: 'Media',
-  analysisTab: 'Analysis',
+  analysisTab: '分析',
   charts: '図',
   showCharts: '図を表示',
   hideCharts: '図を隠す',

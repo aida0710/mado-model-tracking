@@ -24,6 +24,7 @@ export function ChartLegend({
           key={line.id}
           type="button"
           className="chart-legend-item"
+          title={line.label}
           aria-pressed={!hiddenIds.has(line.id)}
           onClick={() => onToggle(line.id)}
           onMouseEnter={() => onHighlight(line.id)}

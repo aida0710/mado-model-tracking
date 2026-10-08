@@ -7,6 +7,7 @@ import {
   type RunComparisonNamespace,
   type RunComparisonValue,
 } from '@mmt/contracts';
+import { formatNumber, formatValue } from './format';
 
 // Same labels as the API's CSV, so the page and a downloaded file name versions alike.
 export const modelVersionLabel = (version: ComparedModelVersion) =>
@@ -55,6 +56,14 @@ function referenceRow(
   values: (string | null)[],
 ): ComparisonTableRow {
   return { id: group, group, key: '', values, differs: valuesDiffer(values) };
+}
+
+/**
+ * A cell of the comparison table. Metric numbers are rounded to the six significant digits their
+ * differences show, so one row reads alike; params and tags show what was recorded.
+ */
+export function formatComparisonValue(group: ComparisonRowGroup, value: RunComparisonValue): string {
+  return group === 'metrics' && typeof value === 'number' ? formatNumber(value) : formatValue(value);
 }
 
 /**

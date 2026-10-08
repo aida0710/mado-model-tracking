@@ -37,6 +37,7 @@ import {
 } from '../lib/runColumns';
 import {
   CHARTS_OPEN,
+  formatRunKinds,
   readRunListConditions,
   RUN_LIST_PARAMS,
   savedViewUrl,
@@ -56,7 +57,8 @@ export function ExperimentsPage() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const listConditions = readRunListConditions(params);
-  const { experimentId, searchText, status, sort } = listConditions;
+  const { experimentId, searchText, status, kinds, sort } = listConditions;
+  const kindsParam = formatRunKinds(kinds);
   const isChartsOpen = params.get(RUN_LIST_PARAMS.charts) === CHARTS_OPEN;
   const cursorHistory = (params.get(CURSOR_HISTORY_PARAM) ?? '')
     .split(CURSOR_SEPARATOR)
@@ -66,7 +68,7 @@ export function ExperimentsPage() {
   const mutation = useMutation();
   const csvExport = useMutation();
   const [isExportTruncated, setIsExportTruncated] = useState(false);
-  useEffect(() => setSelectedIds([]), [experimentId, searchText, status]);
+  useEffect(() => setSelectedIds([]), [experimentId, searchText, status, kindsParam]);
   const experiments = useQuery(`${project.id}:experiments`, (signal) =>
     trackingApi.experiments(project.id, signal),
   );
@@ -75,6 +77,7 @@ export function ExperimentsPage() {
     ...toRunSearchConditions(searchText),
     ...(experimentId ? { experimentIds: [experimentId] } : {}),
     ...(status ? { statuses: [status as RunStatus] } : {}),
+    ...(kinds.length ? { kinds } : {}),
     orderBy: runSortOrderBy(sort),
     limit: RUNS_PER_PAGE,
     ...(cursor ? { cursor } : {}),
@@ -195,12 +198,14 @@ export function ExperimentsPage() {
         <RunToolbar
           searchText={searchText}
           status={status}
+          kinds={kinds}
           sort={sort}
           metricNames={metricNames}
           columnNames={columnNames}
           isColumnVisible={isColumnVisible}
           onSearch={(value) => updateParams({ q: value })}
           onStatusChange={(value) => updateParams({ status: value })}
+          onKindsChange={(value) => updateParams({ [RUN_LIST_PARAMS.kinds]: formatRunKinds(value) })}
           onSortChange={(value) => updateParams({ sort: value })}
           onColumnToggle={(name) => savedView.setColumns(toggleColumn(columns, name))}
           exportingCsv={csvExport.pending}

@@ -45351,6 +45351,13 @@
             "type": "string",
             "format": "uuid"
           },
+          "createdByName": {
+            "description": "作成者の表示名",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"

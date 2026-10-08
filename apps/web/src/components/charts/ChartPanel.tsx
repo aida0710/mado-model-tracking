@@ -27,7 +27,8 @@ import {
   type PanelMoveDirection,
   type PanelWidth,
 } from '../../lib/chartPanelLayout';
-import { groupChartSeries, runChartSeries } from '../../lib/metricSeries';
+import { groupChartSeries, runChartSeries, seriesForMetricKeys } from '../../lib/metricSeries';
+import { chartValueUnit } from '../../lib/systemMetricKeys';
 import { text } from '../../i18n/catalog';
 
 /** Height of one grid row; a panel spans PANEL_HEIGHTS rows. */
@@ -192,6 +193,7 @@ export function ChartPanel({
           xAxis={config.xAxis}
           xScale={view.xScale}
           yScale={config.yScale}
+          valueUnit={chartValueUnit(config.metricKeys)}
           smoothing={config.smoothing}
           showRange={config.showRange}
           showRaw={view.showRaw}
@@ -219,23 +221,19 @@ export function ChartPanel({
   );
 }
 
-/**
- * Lines of one panel. With several metric keys each line is a Run (or group) and key pair,
- * labeled with both; with one key the line keeps the Run id so its color matches other charts.
- */
+/** Lines of one panel (lib/metricSeries seriesForMetricKeys), scaled to the unit of the panel. */
 function toChartSeries(
   data: ChartPlanData,
   keys: readonly string[],
   runLabels: Readonly<Record<string, string>>,
   valueScale: ((key: string) => number) | undefined,
 ): MetricsChartSeries[] {
-  return keys.flatMap((key) => {
+  return seriesForMetricKeys(keys, (key) => {
     const lines =
       data.kind === 'series' ? runChartSeries(data.series, key, runLabels) : groupChartSeries(data.groups, key);
     const scale = valueScale?.(key) ?? 1;
     return lines.map((line) => ({
       ...line,
-      ...(keys.length > 1 ? { id: `${line.id}/${key}`, label: `${line.label} · ${key}` } : {}),
       points:
         scale === 1
           ? line.points

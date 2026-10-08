@@ -18,7 +18,7 @@ import { ChartTooltip } from './ChartTooltip';
 import { Empty } from '../Feedback';
 import { bandPath, linePath, paddedDomain, xExtent, type PixelScale } from '../../lib/chartScale';
 import { formatXTick, formatXValue } from '../../lib/chartXAxis';
-import { formatNumber } from '../../lib/format';
+import { formatChartTick } from '../../lib/chartTicks';
 import { prepareChartLines, valuesAtX, type ChartLine } from '../../lib/metricSeries';
 import { text, textTemplates } from '../../i18n/catalog';
 
@@ -49,6 +49,7 @@ export function MetricsChart({
   xAxis,
   xScale = 'linear',
   yScale,
+  valueUnit = 'number',
   smoothing,
   showRange,
   showRaw,
@@ -158,7 +159,7 @@ export function MetricsChart({
               domain={['auto', 'auto']}
               scale={yScale}
               width={Y_AXIS_WIDTH}
-              tickFormatter={formatNumber}
+              tickFormatter={(value: number) => formatChartTick(value, valueUnit)}
               tick={{ fontSize: 11 }}
             />
             {/* Invisible: gives recharts a graphical item that reads the corners for the axes. */}

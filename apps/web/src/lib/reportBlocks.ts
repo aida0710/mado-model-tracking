@@ -14,7 +14,7 @@ import {
   type SavedViewState,
 } from '@mmt/contracts';
 import { createPanelConfig, PANEL_HEIGHTS, PANEL_WIDTHS } from './chartPanelLayout';
-import { groupChartSeries, runChartSeries } from './metricSeries';
+import { groupChartSeries, runChartSeries, seriesForMetricKeys } from './metricSeries';
 import { metricFieldKey, paramFieldKey } from './runAnalysisFields';
 import type { MetricsChartSeries } from '../components/charts/chartProps';
 
@@ -219,20 +219,14 @@ export function refreshableSnapshotIds(blocks: readonly ReportBlock[], requested
   return blocks.filter((block) => isEmbedBlock(block) && block.mode === 'snapshot' && requested.has(block.id)).map((block) => block.id);
 }
 
-/**
- * Lines of a chart embed, as the chart grid draws them: with several metric keys each line is a
- * Run (or group) and key pair; with one key the line keeps the Run id so its color matches other
- * charts.
- */
+/** Lines of a chart embed, named as the chart grid names them (seriesForMetricKeys). */
 export function reportChartSeries(
   chart: Extract<ReportSnapshotData, { type: 'chart' }>,
   keys: readonly string[],
 ): MetricsChartSeries[] {
   const runLabels = snapshotRunLabels(chart.runs);
-  return keys.flatMap((key) =>
-    (chart.groups ? groupChartSeries(chart.groups, key) : runChartSeries(chart.series ?? [], key, runLabels)).map(
-      (line) => (keys.length > 1 ? { ...line, id: `${line.id}/${key}`, label: `${line.label} · ${key}` } : line),
-    ),
+  return seriesForMetricKeys(keys, (key) =>
+    chart.groups ? groupChartSeries(chart.groups, key) : runChartSeries(chart.series ?? [], key, runLabels),
   );
 }
 

@@ -12,7 +12,7 @@ import type {
 } from '../components/charts/chartProps';
 import { keepPlottablePoints, type ChartScale } from './chartScale';
 import { smoothValues } from './chartSmoothing';
-import { seriesColor } from './seriesColors';
+import { distinctSeriesColors } from './seriesColors';
 
 export const isSystemMetric = (name: string) =>
   /^(system[./]|gpu[./]|cpu[./]|memory[./])/.test(name);
@@ -23,6 +23,8 @@ export const groupSeriesId = (groupKey: string) => `group:${groupKey}`;
 /**
  * One chart line per Run for `key` from `POST /metrics/series`. A sampled bucket keeps its min/max
  * as the band; a single stored point has none, so showRange draws no zero-width band for it.
+ * The API answers every Run and key pair; a Run that never logged the key (an evaluation Run in a
+ * panel of training metrics) gets no line, so it does not fill the legend.
  */
 export function runChartSeries(
   series: readonly MetricSeries[],
@@ -30,7 +32,7 @@ export function runChartSeries(
   runLabels: Readonly<Record<string, string>> = {},
 ): MetricsChartSeries[] {
   return series
-    .filter((item) => item.key === key)
+    .filter((item) => item.key === key && item.totalPoints > 0)
     .map((item) => ({
       id: item.runId,
       label: runLabels[item.runId] ?? item.runId,
@@ -42,6 +44,28 @@ export function runChartSeries(
             : { x: point.x, value: point.value, min: point.min, max: point.max },
       ),
     }));
+}
+
+/**
+ * The lines of a panel with one or more metric keys. With several keys each line is a Run (or
+ * group) and key pair: named by the key alone when the panel draws one Run, since repeating its
+ * name would hide what tells the lines apart, and key first otherwise so a long Run name is what
+ * the legend shortens. With one key a line keeps the Run id so its color matches other charts.
+ */
+export function seriesForMetricKeys(
+  keys: readonly string[],
+  linesOfKey: (key: string) => MetricsChartSeries[],
+): MetricsChartSeries[] {
+  const linesByKey = keys.map((key) => ({ key, lines: linesOfKey(key) }));
+  if (keys.length <= 1) return linesByKey.flatMap(({ lines }) => lines);
+  const sourceCount = new Set(linesByKey.flatMap(({ lines }) => lines.map((line) => line.id))).size;
+  return linesByKey.flatMap(({ key, lines }) =>
+    lines.map((line) => ({
+      ...line,
+      id: `${line.id}/${key}`,
+      label: sourceCount === 1 ? key : `${key} · ${line.label}`,
+    })),
+  );
 }
 
 /** One mean line with its min/max band per group for `key` from `POST /metrics/groups`. */
@@ -130,13 +154,14 @@ export function prepareChartLines(
   series: readonly MetricsChartSeries[],
   options: { xScale: ChartScale; yScale: ChartScale; smoothing: ChartSmoothing },
 ): ChartLine[] {
+  const colors = distinctSeriesColors(series.map((item) => item.id));
   return series.map((item) => {
     const { points, excludedCount } = keepPlottablePoints(item.points, options);
     return {
       id: item.id,
       label: item.label,
       kind: item.kind,
-      color: item.color ?? seriesColor(item.id),
+      color: item.color ?? colors.get(item.id)!,
       points,
       smoothedValues: smoothValues(
         points.map((point) => point.value),

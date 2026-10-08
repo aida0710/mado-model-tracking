@@ -150,7 +150,7 @@ export function ChartPanelGrid({
         <ChartPanelEditor
           dialogTitle={text.addChart}
           initial={{
-            panel: createPanelConfig(metricKeys.slice(0, 1)),
+            panel: createPanelConfig([]),
             view: { xScale: 'linear', showRaw: true },
           }}
           metricKeys={metricKeys}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Columns3, Download, Search } from 'lucide-react';
-import type { RunStatus } from '@mmt/contracts';
+import type { RunKind, RunStatus } from '@mmt/contracts';
 import { ErrorNotice } from '../Feedback';
 import {
   findRunFilterSyntaxError,
@@ -8,19 +8,24 @@ import {
   parseMetricRunSort,
   toRunSearchConditions,
 } from '../../lib/runFilter';
+import { RUN_KINDS } from '../../lib/runListUrl';
 import { text, textTemplates } from '../../i18n/catalog';
 
 const runStatuses: RunStatus[] = ['queued', 'running', 'finished', 'failed', 'canceled'];
+// The select chooses one kind; a view saved through the API with several keeps them as one choice.
+const KIND_OPTION_SEPARATOR = ',';
 
 export function RunToolbar({
   searchText,
   status,
+  kinds,
   sort,
   metricNames,
   columnNames,
   isColumnVisible,
   onSearch,
   onStatusChange,
+  onKindsChange,
   onSortChange,
   onColumnToggle,
   exportingCsv,
@@ -28,12 +33,14 @@ export function RunToolbar({
 }: {
   searchText: string;
   status: string;
+  kinds: RunKind[];
   sort: string;
   metricNames: string[];
   columnNames: string[];
   isColumnVisible: (name: string) => boolean;
   onSearch: (searchText: string) => void;
   onStatusChange: (status: string) => void;
+  onKindsChange: (kinds: RunKind[]) => void;
   onSortChange: (sort: string) => void;
   onColumnToggle: (name: string) => void;
   exportingCsv: boolean;
@@ -46,6 +53,7 @@ export function RunToolbar({
     setSearchInput(searchText);
     setSyntaxError(null);
   }, [searchText]);
+  const kindValue = kinds.join(KIND_OPTION_SEPARATOR);
   const sortedMetric = parseMetricRunSort(sort);
   // Keep the current metric order selectable even when this page lacks that metric.
   const sortMetricNames =
@@ -91,6 +99,30 @@ export function RunToolbar({
           >
             <option value="">{text.allStatus}</option>
             {runStatuses.map((value) => (
+              <option key={value} value={value}>
+                {text[value]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="toolbar-select">
+          <span>{text.kind}</span>
+          <select
+            aria-label={text.kind}
+            value={kindValue}
+            onChange={(event) =>
+              onKindsChange(
+                event.target.value
+                  ? (event.target.value.split(KIND_OPTION_SEPARATOR) as RunKind[])
+                  : [],
+              )
+            }
+          >
+            <option value="">{text.allKinds}</option>
+            {kinds.length > 1 && (
+              <option value={kindValue}>{kinds.map((kind) => text[kind]).join('・')}</option>
+            )}
+            {RUN_KINDS.map((value) => (
               <option key={value} value={value}>
                 {text[value]}
               </option>

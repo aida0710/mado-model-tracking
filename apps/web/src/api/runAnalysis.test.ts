@@ -81,6 +81,45 @@ describe('Run分析のAPI', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('比較したRunが同じSweepの試行なら、そのSweepの目的metricを既定の候補にする', async () => {
+    const fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith('/sweeps/s1')) return jsonResponse({ objective: { metric: 'val_loss', goal: 'minimize' } });
+      return jsonResponse({
+        runs: [],
+        rows: [
+          { namespace: 'metrics', key: 'system.cpu.percent' },
+          { namespace: 'metrics', key: 'val_loss' },
+          { namespace: 'metrics', key: 'acc' },
+          { namespace: 'tags', key: 'mmt.sweepId', values: ['s1', 's1'] },
+        ],
+      });
+    });
+    vi.stubGlobal('fetch', fetch);
+    await expect(runAnalysisApi.metricOptions('p1', { runIds: ['r1', 'r2'] })).resolves.toEqual({
+      metricKeys: ['acc', 'val_loss', 'system.cpu.percent'],
+      objectiveMetric: null,
+      preferredMetric: 'val_loss',
+    });
+  });
+
+  it('別々のSweepの試行やSweep外のRunが混ざれば目的metricを問い合わせない', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      jsonResponse({
+        runs: [],
+        rows: [
+          { namespace: 'metrics', key: 'loss' },
+          { namespace: 'tags', key: 'mmt.sweepId', values: ['s1', null] },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    await expect(runAnalysisApi.metricOptions('p1', { runIds: ['r1', 'r2'] })).resolves.toEqual({
+      metricKeys: ['loss'],
+      objectiveMetric: null,
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it('SweepはobjectiveのmetricをmetricKeysに含めて返す', async () => {
     const fetch = vi.fn().mockImplementation(async (url: string) => {
       if (url.endsWith('/sweeps/s1')) return jsonResponse({ objective: { metric: 'val_loss', goal: 'minimize' } });

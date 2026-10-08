@@ -4,6 +4,7 @@ import {
   analysisRows,
   defaultParamAxisKeys,
   metricFields,
+  orderAnalysisMetricKeys,
   paramFields,
   resolveAnalysisTarget,
   tableMetricKeys,
@@ -59,7 +60,49 @@ describe('分析の表から図の行と項目を作る', () => {
   });
 });
 
+describe('既定の平行座標の軸', () => {
+  it('重要度が1件も無いとき（目的metricを持つRunが無い）もcoverageの順で軸を出す', () => {
+    const noImportance = { entries: [] } as unknown as Parameters<typeof defaultParamAxisKeys>[1];
+    expect(defaultParamAxisKeys(sweepTable, noImportance)).toEqual(['params.lr', 'params.loss']);
+  });
+
+  it('重要度で順位の付いたparamの後に、残りをcoverageの順で足す', () => {
+    const partial = { entries: [{ param: 'loss' }] } as unknown as Parameters<typeof defaultParamAxisKeys>[1];
+    expect(defaultParamAxisKeys(sweepTable, partial)).toEqual(['params.loss', 'params.lr']);
+  });
+});
+
 describe('分析の目的metric', () => {
+  it('system.*とsystem/はほかのmetricの後ろに並べ、既定に選ばない', () => {
+    const metricKeys = orderAnalysisMetricKeys([
+      'system.cpu.percent',
+      'val_loss',
+      'system/gpu_0_utilization_percentage',
+      'evaluation.duration_match_rate',
+      'val_loss',
+    ]);
+    expect(metricKeys).toEqual([
+      'evaluation.duration_match_rate',
+      'val_loss',
+      'system.cpu.percent',
+      'system/gpu_0_utilization_percentage',
+    ]);
+    expect(resolveAnalysisTarget(null, { metricKeys: orderAnalysisMetricKeys(['system.cpu.percent', 'val_loss']), objectiveMetric: null })).toEqual({
+      source: 'latest_metric',
+      metric: 'val_loss',
+    });
+  });
+
+  it('Sweepの試行を選んだ比較では、そのSweepの目的metricを既定にする', () => {
+    const options = { metricKeys: ['acc', 'val_loss'], objectiveMetric: null, preferredMetric: 'val_loss' };
+    expect(resolveAnalysisTarget(null, options)).toEqual({ source: 'latest_metric', metric: 'val_loss' });
+    expect(resolveAnalysisTarget(null, { ...options, preferredMetric: 'missing' })).toEqual({
+      source: 'latest_metric',
+      metric: 'acc',
+    });
+  });
+
+
   it('既定はSweepならobjective、それ以外は名前順で最初のmetricになる', () => {
     expect(resolveAnalysisTarget(null, { metricKeys: ['acc', 'loss'], objectiveMetric: 'loss' })).toEqual({
       source: 'sweep_objective',
