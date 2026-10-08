@@ -15,7 +15,6 @@ import { findRun } from '../repositories/registryRepository.js';
 import { appendLogs, appendMetrics } from '../repositories/telemetryRepository.js';
 import { requireWorker } from './accessService.js';
 import type { JobService } from './jobService.js';
-import { enqueueRunEvent } from './outboxEvents.js';
 import type { RunCompletionService } from './runCompletionService.js';
 
 // A busy target should not block claims for other targets in the same queue.
@@ -204,7 +203,11 @@ export class WorkerService {
         if (job.status !== request.status) conflict('完了済みJobと再送された状態が一致しません');
         return job;
       }
-      await findRun(connection, { projectId: job.projectId, id: job.runId, lock: true });
+      const previousRun = await findRun(connection, {
+        projectId: job.projectId,
+        id: job.runId,
+        lock: true,
+      });
       const completed = (await first<Job>(
         connection,
         `UPDATE jobs SET status=$2,exit_code=$3,error=$4,ended_at=now(),heartbeat_at=now() WHERE id=$1 RETURNING ${jobColumns()}`,
@@ -216,7 +219,10 @@ export class WorkerService {
         [job.runId, request.status, request.error ?? null],
       ))!;
       await connection.query('DELETE FROM gpu_reservations WHERE job_id=$1', [job.id]);
-      await enqueueRunEvent(connection, run);
+      await this.runCompletion.recordStatusChange(connection, {
+        previousStatus: previousRun.status,
+        run,
+      });
       return completed;
     });
   }

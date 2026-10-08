@@ -21,7 +21,6 @@ import {
 } from '../repositories/registryRepository.js';
 import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { requireProject } from './accessService.js';
-import { enqueueRunEvent } from './outboxEvents.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 
@@ -144,7 +143,7 @@ export class JobService {
           [job.id],
         ))!;
       }
-      await findRun(connection, { projectId, id: job.runId, lock: true });
+      const previousRun = await findRun(connection, { projectId, id: job.runId, lock: true });
       const canceled = (await first<Job>(
         connection,
         `UPDATE jobs SET status='canceled',cancel_requested=true,ended_at=now() WHERE id=$1 RETURNING ${jobColumns()}`,
@@ -155,7 +154,10 @@ export class JobService {
         "UPDATE runs SET status='canceled',ended_at=now() WHERE id=$1 RETURNING *",
         [job.runId],
       ))!;
-      await enqueueRunEvent(connection, run);
+      await this.runCompletion.recordStatusChange(connection, {
+        previousStatus: previousRun.status,
+        run,
+      });
       return canceled;
     });
   }
@@ -265,7 +267,11 @@ export class JobService {
   ): Promise<Job> {
     const leaseId = randomUUID();
     const { job } = reservation;
-    await findRun(connection, { projectId: job.projectId, id: job.runId, lock: true });
+    const previousRun = await findRun(connection, {
+      projectId: job.projectId,
+      id: job.runId,
+      lock: true,
+    });
     const claimed = (await first<Job>(
       connection,
       `UPDATE jobs SET status='claimed',worker_id=$2,lease_id=$3,worker_token_id=$4,started_at=now(),heartbeat_at=now()
@@ -282,7 +288,10 @@ export class JobService {
       "UPDATE runs SET status='running',started_at=COALESCE(started_at,now()) WHERE id=$1 RETURNING *",
       [job.runId],
     ))!;
-    await enqueueRunEvent(connection, run);
+    await this.runCompletion.recordStatusChange(connection, {
+      previousStatus: previousRun.status,
+      run,
+    });
     return claimed;
   }
 }
