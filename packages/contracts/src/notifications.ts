@@ -34,7 +34,9 @@ export const NOTIFICATION_RECIPIENTS_MAX = 50;
 
 /**
  * A destination. The webhook URL and the signing secret are never stored: urlEnv and secretEnv
- * name server environment variables, and configured tells whether those variables are set.
+ * name server environment variables, and configured tells whether those variables are set. An
+ * email channel lists up to NOTIFICATION_RECIPIENTS_MAX addresses (no display names) in recipients;
+ * it is configured only while the server has MMT_SMTP_URL and MMT_SMTP_FROM.
  * projectId null means every Project's rules may use the channel.
  */
 export interface NotificationChannel {

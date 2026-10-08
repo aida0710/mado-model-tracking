@@ -9,3 +9,4 @@ export * from './artifactMultipart.js';
 export * from './storageBackendConfig.js';
 export * from './s3ClientFactory.js';
 export * from './notificationSenders.js';
+export * from './emailNotificationSender.js';

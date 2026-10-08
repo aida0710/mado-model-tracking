@@ -1,5 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type { NotificationChannelKind, NotificationEvent } from '@mmt/contracts';
+import { createEmailNotificationSender, type SmtpSettings } from './emailNotificationSender.js';
 
 // A slow receiver must not hold the outbox dispatcher or the channel test request.
 export const NOTIFICATION_DEADLINE_MS = 5000;
@@ -30,7 +31,7 @@ export interface NotificationSender {
   send(channel: NotificationDestination, event: NotificationEvent): Promise<{ deliveryId: string }>;
 }
 
-/** Senders by channel kind. A kind without a sender (email until SMTP is added) cannot deliver. */
+/** Senders by channel kind. A kind without a sender (email while SMTP is unset) cannot deliver. */
 export type NotificationSenders = Partial<Record<NotificationChannelKind, NotificationSender>>;
 
 /** A failure with a code that is safe to store and show: never the URL or the remote response. */
@@ -159,7 +160,7 @@ async function postJson(
 }
 
 export function createNotificationSenders(
-  options: { fetcher?: typeof fetch; deadlineMs?: number } = {},
+  options: { fetcher?: typeof fetch; deadlineMs?: number; smtp?: SmtpSettings | null } = {},
 ): NotificationSenders {
   const transport = {
     fetcher: options.fetcher ?? fetch,
@@ -201,5 +202,7 @@ export function createNotificationSenders(
         return { deliveryId };
       },
     },
+    // Email is sent only when MMT_SMTP_URL is set; otherwise its deliveries fail as unavailable.
+    ...(options.smtp ? { email: createEmailNotificationSender({ smtp: options.smtp }) } : {}),
   };
 }

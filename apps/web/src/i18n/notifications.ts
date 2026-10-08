@@ -8,7 +8,7 @@ import type {
 export const notificationsText = {
   notifications: '通知',
   notificationsDescription:
-    'Runの失敗などをSlackやWebhookへ通知します。通知先は全体管理者が登録し、どのイベントを送るかはProject adminがルールで決めます。',
+    'Runの失敗などをSlack、Webhook、メールへ通知します。通知先は全体管理者が登録し、どのイベントを送るかはProject adminがルールで決めます。',
   notificationChannels: '通知先',
   newNotificationChannel: '通知先を追加',
   editNotificationChannel: '通知先を変更',
@@ -18,15 +18,17 @@ export const notificationsText = {
   notificationScopeGlobal: 'すべてのProject',
   notificationScopeProject: 'このProjectだけ',
   notificationDestination: '送信先',
-  notificationConfigured: '環境変数',
+  notificationConfigured: '送信設定',
   notificationConfiguredYes: '設定済み',
   notificationConfiguredNo: '未設定',
+  notificationSmtpUnconfigured: '未設定（SMTPの送信設定が無い）',
   notificationUrlEnv: 'URLを参照する環境変数名（MMT_NOTIFICATION_で始まる）',
   notificationSecretEnv: '署名の鍵を参照する環境変数名（MMT_NOTIFICATION_で始まる）',
   notificationRecipients: '宛先のメールアドレス（1行に1件）',
   notificationChannelHint:
     'URLと署名の鍵はAPI serverの環境変数に置き、ここには変数名だけを登録します。値は画面にもDBにも保存しません。',
-  notificationEmailHint: 'メールの送信はSMTPの設定が入るまで行われず、送信履歴に失敗として残ります。',
+  notificationEmailHint:
+    'メールはAPI serverにSMTPの送信設定（MMT_SMTP_URL、MMT_SMTP_FROM）があるときだけ送ります。設定が無くても通知先は作成できますが、送信は失敗として送信履歴に残ります。',
   notificationTest: 'テスト送信',
   notificationTestDelivered: 'テスト送信が届きました',
   notificationTestFailed: 'テスト送信に失敗しました',

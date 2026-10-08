@@ -403,7 +403,7 @@ describe.skipIf(!testDatabaseUrl)('通知チャネル・ルール・送信outbox
       name: 'ml-team-mail',
       recipients: ['ml-team@example.com'],
     });
-    expect(channel).toMatchObject({ kind: 'email', urlEnv: null, configured: true });
+    expect(channel).toMatchObject({ kind: 'email', urlEnv: null, configured: false });
     await createRule(fixture, { channelId: channel.id, eventTypes: ['run.failed'] });
     const { completeFailed } = await claimedJob(fixture);
     await completeFailed();

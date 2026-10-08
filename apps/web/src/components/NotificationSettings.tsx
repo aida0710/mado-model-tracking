@@ -122,8 +122,7 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
               {
                 key: 'configured',
                 label: text.notificationConfigured,
-                render: (channel) =>
-                  channel.configured ? text.notificationConfiguredYes : text.notificationConfiguredNo,
+                render: (channel) => configuredLabel(channel),
               },
               {
                 key: 'enabled',
@@ -176,6 +175,14 @@ function ChannelSection({ settings, projectId }: { settings: Settings; projectId
   );
 }
 
+// An email channel has no variables of its own; it is unconfigured when the server has no SMTP.
+function configuredLabel(channel: NotificationChannel): string {
+  if (channel.configured) return text.notificationConfiguredYes;
+  return channel.kind === 'email'
+    ? text.notificationSmtpUnconfigured
+    : text.notificationConfiguredNo;
+}
+
 function channelFields(channel?: NotificationChannel): FormField[] {
   const kindOf = (values: FormValues) =>
     channel?.kind ?? (values.kind as string);
@@ -226,6 +233,7 @@ function channelFields(channel?: NotificationChannel): FormField[] {
       label: text.notificationRecipients,
       type: 'textarea',
       required: true,
+      placeholder: 'ml-team@example.com',
       defaultValue: channel?.recipients.join('\n') ?? '',
       visible: (values) => kindOf(values) === 'email',
     },
