@@ -19,6 +19,9 @@ import { mlflowModelRoutes } from './mlflow/models/index.js';
 import { mlflowArtifactRoutes } from './mlflow/artifacts/index.js';
 import { AuthService } from './services/authService.js';
 import { ArtifactService } from './services/artifactService.js';
+import { ArtifactUploadService } from './services/artifactUploadService.js';
+import { ArtifactUploadFinalizer } from './services/artifactUploadFinalizer.js';
+import { ArtifactUploadSweeper } from './services/artifactUploadSweeper.js';
 import { ProjectService } from './services/projectService.js';
 import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
@@ -45,6 +48,7 @@ import { runRoutes } from './routes/runRoutes.js';
 import { taskRoutes } from './routes/taskRoutes.js';
 import { repositoryRoutes } from './routes/repositoryRoutes.js';
 import { artifactRoutes } from './routes/artifactRoutes.js';
+import { artifactUploadRoutes, PART_SHA256_HEADER } from './routes/artifactUploadRoutes.js';
 import { jobRoutes, targetRoutes, workerRoutes } from './routes/executionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
@@ -60,6 +64,8 @@ export interface ApplicationOptions {
 
 // Registry JSON and code uploads are bounded separately from streamed artifact bodies.
 const MAX_JSON_BODY_BYTES = 4 * 1024 * 1024;
+// Upload session parts are raw bytes up to the part size, not JSON.
+const ARTIFACT_UPLOAD_PART_PATH = /\/artifact-uploads\/[^/]+\/parts\/[^/]+$/;
 
 export function createApplication(options: ApplicationOptions) {
   const { config, database } = options;
@@ -76,6 +82,11 @@ export function createApplication(options: ApplicationOptions) {
   const artifacts = new ArtifactService(database, stores, {
     maxBytes: config.artifactMaxBytes,
   });
+  const artifactUploads = new ArtifactUploadService(database, stores, {
+    maxBytes: config.artifactMaxBytes,
+  });
+  const artifactUploadFinalizer = new ArtifactUploadFinalizer({ database, stores });
+  const artifactUploadSweeper = new ArtifactUploadSweeper({ database, stores });
   const targets = new TargetService(database, config);
   const jobs = new JobService({ database, runs, config, runCompletion });
   const tasks = new TaskService(database, runs, jobs);
@@ -146,7 +157,7 @@ export function createApplication(options: ApplicationOptions) {
       origin: (origin) => (isAllowedOrigin(origin, config) ? origin : undefined),
       credentials: true,
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['Content-Type', 'Authorization', 'Range'],
+      allowHeaders: ['Content-Type', 'Authorization', 'Range', PART_SHA256_HEADER],
       exposeHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Disposition'],
     }),
   );
@@ -155,7 +166,8 @@ export function createApplication(options: ApplicationOptions) {
     context.header('Cache-Control', 'no-store');
     // Artifact routes accept arbitrary binary MIME types including application/json.
     const isNativeArtifactUpload =
-      context.req.method === 'PUT' && context.req.path.endsWith('/artifacts');
+      context.req.method === 'PUT' &&
+      (context.req.path.endsWith('/artifacts') || ARTIFACT_UPLOAD_PART_PATH.test(context.req.path));
     if (!isNativeArtifactUpload && !isMlflowArtifactUpload(context.req)) {
       return bodyLimit({
         maxSize: MAX_JSON_BODY_BYTES,
@@ -186,6 +198,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', taskRoutes(tasks));
   app.route('/api/projects', repositoryRoutes(repositories));
   app.route('/api/projects', artifactRoutes(artifacts));
+  app.route('/api/projects', artifactUploadRoutes(artifactUploads));
   app.route('/api/projects', jobRoutes(jobs));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/targets', targetRoutes(targets));
@@ -202,6 +215,8 @@ export function createApplication(options: ApplicationOptions) {
   return {
     app,
     outbox,
+    artifactUploadFinalizer,
+    artifactUploadSweeper,
     services: {
       auth,
       audit,
@@ -214,6 +229,7 @@ export function createApplication(options: ApplicationOptions) {
       repositories,
       lineage,
       artifacts,
+      artifactUploads,
       targets,
       jobs,
       worker,

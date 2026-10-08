@@ -7,7 +7,12 @@ import { applyIdleTimeout, serverTimeouts } from './http/serverTimeouts.js';
 const config = loadConfig();
 const database = createDatabase(config.databaseUrl);
 database.on('error', () => console.error(JSON.stringify({ event: 'database_pool_error' })));
-const { app, outbox } = createApplication({ config, database });
+const { app, outbox, artifactUploadFinalizer, artifactUploadSweeper } = createApplication({
+  config,
+  database,
+});
+// Background tasks share the server lifetime; stop() waits for the run in progress.
+const backgroundTasks = [outbox, artifactUploadFinalizer, artifactUploadSweeper];
 const timeouts = serverTimeouts(config);
 const server = serve(
   {
@@ -20,7 +25,7 @@ const server = serve(
   (address) => console.log(`API listening on ${config.host}:${address.port}`),
 );
 applyIdleTimeout(server, timeouts);
-outbox.start();
+for (const task of backgroundTasks) task.start();
 
 let isClosing = false;
 async function shutdown(): Promise<void> {
@@ -29,7 +34,7 @@ async function shutdown(): Promise<void> {
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve())),
   );
-  await outbox.stop();
+  await Promise.all(backgroundTasks.map((task) => task.stop()));
   await database.end();
 }
 process.once('SIGTERM', () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pipeline, type Readable } from 'node:stream';
-import type { Artifact, ArtifactBackend } from '@mmt/contracts';
+import type { Artifact } from '@mmt/contracts';
 import {
   ArtifactNotFoundError,
   ArtifactRangeError,
@@ -8,12 +8,17 @@ import {
   type ArtifactStores,
 } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
+import { first, rows, transaction, type Database } from '../db/database.js';
 import { resolveArtifactMimeType } from '../domain/artifactMimeType.js';
 import { DomainError, notFound } from '../domain/errors.js';
-import { isRelativeFilePath } from '../domain/validation.js';
 import { findRun } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
+import {
+  assertArtifactPath,
+  projectArtifactBackend,
+  registerStoredArtifact,
+  type ArtifactStoredHook,
+} from './artifactRegistration.js';
 import {
   ArtifactSizeLimit,
   artifactTooLargeError,
@@ -84,7 +89,7 @@ export class ArtifactService {
       /** Content-Length from the request, when the client declared one. */
       declaredBytes?: number;
       body: Readable;
-      onStored?: (connection: Connection, artifact: Artifact) => Promise<void>;
+      onStored?: ArtifactStoredHook;
     },
   ): Promise<Artifact> {
     await requireProject(this.database, principal, {
@@ -92,20 +97,13 @@ export class ArtifactService {
       role: 'editor',
       scope: 'artifacts:write',
     });
-    if (!isRelativeFilePath(upload.path) || upload.path.length > 1024)
-      throw new DomainError(422, 'Artifactには安全な相対パスが必要です', 'invalid_artifact_path');
+    assertArtifactPath(upload.path);
     if (upload.runId) await findRun(this.database, { projectId, id: upload.runId });
     assertDeclaredArtifactSize(upload.declaredBytes, this.limits.maxBytes);
-    const project = (await first<{ artifactBackend: ArtifactBackend }>(
-      this.database,
-      'SELECT artifact_backend FROM projects WHERE id=$1',
-      [projectId],
-    ))!;
-    if (!this.stores.backends().includes(project.artifactBackend))
-      throw new DomainError(503, 'Artifact保存先が設定されていません', 'backend_unavailable');
+    const backend = await projectArtifactBackend(this.database, projectId, this.stores);
     const id = randomUUID();
     const key = `${projectId}/${id}/content`;
-    const reference = { backend: project.artifactBackend, key };
+    const reference = { backend, key };
     const mimeType = resolveArtifactMimeType({
       path: upload.path,
       declaredMimeType: upload.mimeType,
@@ -123,25 +121,21 @@ export class ArtifactService {
           scope: 'artifacts:write',
         });
         if (upload.runId) await findRun(connection, { projectId, id: upload.runId });
-        const artifact = (await first<Artifact>(
+        return registerStoredArtifact(
           connection,
-          `INSERT INTO artifacts(id,project_id,run_id,path,backend,storage_key,mime_type,size,sha256)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-          [
+          {
             id,
             projectId,
-            upload.runId ?? null,
-            upload.path,
-            reference.backend,
-            key,
+            runId: upload.runId ?? null,
+            path: upload.path,
+            backend: reference.backend,
+            storageKey: key,
             mimeType,
-            stored.size,
-            stored.sha256,
-          ],
-        ))!;
-        // Commit the compatibility index with its Artifact so failed mappings leave no visible file.
-        await upload.onStored?.(connection, artifact);
-        return artifact;
+            size: stored.size,
+            sha256: stored.sha256,
+          },
+          upload.onStored,
+        );
       });
     } catch (error) {
       try {

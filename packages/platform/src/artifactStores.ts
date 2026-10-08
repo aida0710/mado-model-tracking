@@ -18,6 +18,7 @@ export function createArtifactStores(
     put: ({ backend, ...write }) => configuredStore(backend).put(write),
     read: ({ backend, ...read }) => configuredStore(backend).read(read),
     remove: ({ backend, key }) => configuredStore(backend).remove(key),
+    multipart: (backend) => configuredStore(backend).multipart ?? null,
   };
 }
 export function createArtifactStoresFromEnv(env: NodeJS.ProcessEnv = process.env): ArtifactStores {
