@@ -521,3 +521,17 @@ export interface ApiError {
   issues?: unknown;
 }
 export type { TargetCheck, TargetCheckFailureReason, TargetCheckGpu, TargetCheckItem, TargetCheckItemCode, TargetCheckItemName, TargetCheckItemStatus, TargetCheckResult, TargetCheckStatus, WorkerTargetCheck, WorkerTargetCheckClaim, WorkerTargetCheckComplete } from './targetChecks.js';
+export type {
+  SavedView,
+  SavedViewColumn,
+  SavedViewCreate,
+  SavedViewPage,
+  SavedViewPatch,
+  SavedViewState,
+  SavedViewVisibility,
+} from './savedViews.js';
+export {
+  SAVED_VIEW_MAX_COLUMNS,
+  SAVED_VIEW_NAME_MAX_LENGTH,
+  SAVED_VIEW_STATE_MAX_BYTES,
+} from './savedViews.js';

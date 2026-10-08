@@ -19,19 +19,19 @@ const MAX_GROUP_KEY_LENGTH = 200;
  */
 export const MAX_RESPONSE_POINTS = 1_000_000;
 
-const metricKeySchema = z.string().min(1).max(MAX_METRIC_KEY_LENGTH);
+export const metricKeySchema = z.string().min(1).max(MAX_METRIC_KEY_LENGTH);
 const uniqueRunIds = (maximum: number) =>
   z
     .array(uuidSchema)
     .min(1)
     .max(maximum)
     .refine((ids) => new Set(ids).size === ids.length, 'runIds must be unique');
-const keysSchema = z
+export const keysSchema = z
   .array(metricKeySchema)
   .min(1)
   .max(MAX_SERIES_KEYS)
   .refine((keys) => new Set(keys).size === keys.length, 'keys must be unique');
-const xAxisSchema = z
+export const xAxisSchema = z
   .strictObject({
     kind: z.enum(['step', 'relative_time', 'wall_time', 'metric']),
     metricKey: metricKeySchema.optional(),
@@ -51,7 +51,7 @@ const maxPointsSchema = z
   .min(1)
   .max(MAX_SERIES_POINTS)
   .default(DEFAULT_SERIES_POINTS);
-const groupBySchema = z
+export const groupBySchema = z
   .strictObject({
     kind: z.enum(['tag', 'param', 'experiment']),
     key: z.string().min(1).max(MAX_GROUP_KEY_LENGTH).optional(),

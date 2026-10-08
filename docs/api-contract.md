@@ -283,6 +283,18 @@ APIに届かない計算機で記録したRunを後から送る。Run IDとbatch
 - 試行の終端: RunCompletionServiceのterminal handler `SweepTrialCompletionHandler`（登録順は出力登録→保留自動実行→連鎖→昇格→自動再試行→Sweep試行→通知）が、同じtransactionで試行の状態（Runのfinished/failed/canceled）とobjective（Runのmetricsから`objective.metric`をstep順に集約。NaNは記録なし）を確定し、空いた枠に次の試行を投入する。同じRunで2回呼ばれてもobjectiveを再計算するだけで、試行を余分に作らない。
 - 早期打ち切り: API内のscheduler（`SWEEP_TICK_INTERVAL_MS=15000`、running/pausedのSweep。lockが取れないSweepは次回）が、runningの試行のobjective履歴をhyperband（ASHA）で判定し、止める試行のJobに`requestCancelInTransaction`でcancel_requestedを立て、試行を`early_stopped`（`stopReason`は`hyperband_rung_<step>`）、Runのtagに`mmt.sweepEarlyStopped=true`を付ける。Runはworkerが止めた後にcanceledになり、試行は`early_stopped`のままobjectiveを記録する。schedulerは、handlerが失敗して取りこぼした試行の終端の記録と投入もやり直す。
 
+## 保存ビュー
+
+- 型は`packages/contracts/src/savedViews.ts`。SavedView `{id,projectId,ownerUserId,visibility:'private'|'project',page:'runs',name,state,createdAt,updatedAt}`。`private`は所有者だけ、`project`はProjectのviewer全員に見える。`page`は今は`runs`（Run一覧）だけ。Webは`?view=<id>`で開く。
+- SavedViewState `{version:1,experimentIds,filter,orderBy,statuses,kinds,columns:{key,width?}[],groupBy?:RunGroupBy,chartPanels:ChartPanelLayout}`。検索条件は`RunSearchRequest`と同じ上限（experimentIds最大100、filter最大2000文字、orderBy最大5件・各500文字）で、省略した条件は空として保存する。columnsは最大200件（keyは1〜300文字で重複不可、widthは20〜4000の整数）。groupByはメトリクス系列のRunグループと同じ形。chartPanelsは12列のgridで、panelは最大100個（idは重複不可、`x+w≤12`、metricKeysは1〜50件、smoothing.weightは0〜1、`metric`軸は`metricKey`必須）。`JSON.stringify(state)`のUTF-8が64KiB（`SAVED_VIEW_STATE_MAX_BYTES`）を超えると422 `saved_view_state_too_large`、`version`が1以外は422 `saved_view_state_unsupported_version`、形の違反は422 `invalid_request`。filterとorderByは保存時に`runs/search`と同じcompilerで検証し、検索できなければ422 `saved_view_filter_invalid`。同じProjectに無いexperimentIdsは422 `saved_view_experiment_not_found`。
+- nameは前後の空白を除いて1〜200文字。同じProject・同じ所有者・同じpageで一意、`project`どうしもProject・page内で一意で、重複は409 `saved_view_name_conflict`（別の所有者の`private`どうしなら同名でよい）。
+- `GET /projects/:p/saved-views?page=runs` → `{items:SavedView[]}`（自分の`private`と`project`の全件、name・idの順）。`GET /projects/:p/saved-views/:id` → SavedView。どちらもviewer＋`read`。他人の`private`はProject adminにも404。
+- `POST /projects/:p/saved-views` ({visibility,page?,name,state}) → SavedView（201）。`private`はviewer以上、`project`はeditor以上（viewerは403 `saved_view_share_forbidden`）。tokenは`runs:write`。
+- `PATCH /projects/:p/saved-views/:id` ({name?,state?,visibility?}、1つ以上) → SavedView。所有者は自分のビューを変えられるが、変更後が`project`ならeditor以上（403 `saved_view_share_forbidden`）。`project`のビューは所有者以外でもProject admin（global adminを含む）が名前・stateを変えられる。公開範囲の変更は所有者だけ（ほかは403 `saved_view_owner_required`）。所有者以外のeditorは403 `saved_view_owner_required`。
+- `DELETE /projects/:p/saved-views/:id` → 204。所有者（roleを問わない）か、`project`のビューならProject admin。ほかは403 `saved_view_owner_required`。
+- 書き込みはtokenに`runs:write`を要求し、Job限定tokenは403 `job_token_forbidden`。別Projectのビューは404。
+- 監査は`project`のビューだけ: `saved_view.create`（details: name、page）・`saved_view.update`（details: name、changedFields、previousVisibility、visibility、byOwner。`private`から`project`への変更を含む）・`saved_view.delete`（details: name、byOwner）。resource_type `saved_view`。403/409はdeniedで残る。stateは入れない。`private`は個人の表示設定なので記録しない。
+
 ## 監査ログ
 
 認証・Project・token・権限などの操作を`audit_events`へ記録する。AuditEventは`{id,occurredAt,actorType:'user'|'token'|'system',actorUserId,actorTokenId,action,outcome:'success'|'denied'|'failed',resourceType,resourceId,projectId,details,ip,userAgent}`。成功の記録は業務と同じtransactionでINSERTし、業務がrollbackすれば記録も残らない。拒否・失敗の記録は業務のtransactionの外で書く。`details`へpassword・token・secretの値を入れない。`ip`はAPIが受けたsocketの接続元で、転送ヘッダーは信頼しない。
