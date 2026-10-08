@@ -4,6 +4,7 @@ import type { AutomationCatalog } from '../types/modelAutomation';
 import { DataTable } from './DataTable';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { text } from '../i18n/catalog';
+import { automationText, automationTriggerLabels } from '../i18n/automation';
 
 export function AutomationRulesTable({
   rules,
@@ -57,6 +58,26 @@ export function AutomationRulesTable({
           render: (rule) => rule.modelFamilies.join(', '),
         },
         { key: 'kind', label: text.kind, render: (rule) => text[rule.kind] },
+        {
+          key: 'trigger',
+          label: automationText.trigger,
+          render: (rule) => {
+            if (rule.trigger !== 'upstream_run_finished')
+              return automationTriggerLabels[rule.trigger];
+            const upstream = rules.find((item) => item.id === rule.upstreamRuleId);
+            return (
+              <span>
+                {`${automationText.upstreamRule}: `}
+                <button
+                  className="link-button"
+                  onClick={() => rule.upstreamRuleId && onSelect(rule.upstreamRuleId)}
+                >
+                  {upstream?.name ?? rule.upstreamRuleId}
+                </button>
+              </span>
+            );
+          },
+        },
         {
           key: 'code',
           label: text.codeVersion,
