@@ -4,11 +4,14 @@ import type {
   PluginConnection,
   PluginDataset,
   PluginManifest,
+  PluginOutboxSummary,
 } from '@mmt/contracts';
 import { createPluginClient, type PluginClient } from '@mmt/platform';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
+import { isPluginDeliveryStalled } from '../domain/operationsAlerts.js';
+import { findPluginBacklog } from '../repositories/operationsAlertRepository.js';
 import { datasetVersionSelect } from '../repositories/registryRepository.js';
 import { requireGlobalAdmin, requireProject } from './accessService.js';
 import type { PluginPatch } from '../domain/validation.js';
@@ -226,6 +229,26 @@ export class PluginService {
       );
       return { queued: queued.rowCount ?? 0 };
     });
+  }
+
+  // Disabled plugins are included: their backlog is what an administrator checks before enabling.
+  async outboxSummary(
+    principal: Principal,
+    projectId: string,
+    pluginId: string,
+  ): Promise<PluginOutboxSummary> {
+    await requireProject(this.database, principal, { projectId, role: 'admin', scope: 'admin' });
+    const backlog = await findPluginBacklog(this.database, { projectId, pluginId });
+    if (!backlog) notFound('Plugin');
+    return {
+      pending: backlog.pending,
+      sending: backlog.sending,
+      oldestPendingAt: backlog.oldestPendingAt,
+      maxAttempts: backlog.maxAttempts,
+      lastError: backlog.lastError,
+      lastDeliveredAt: backlog.lastDeliveredAt,
+      stalled: backlog.enabled && isPluginDeliveryStalled(backlog),
+    };
   }
 
   client(plugin: Pick<PluginConnection, 'baseUrl' | 'tokenEnv'>): PluginClient {
