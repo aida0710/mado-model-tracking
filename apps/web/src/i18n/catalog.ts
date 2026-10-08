@@ -21,6 +21,7 @@ import { operationsText, operationsTextTemplates } from './operations';
 import { chartsText, chartsTextTemplates } from './charts';
 import { analysisText, analysisTextTemplates } from './analysis';
 import { sweepsText, sweepsTextTemplates } from './sweeps';
+import { mediaText, mediaTextTemplates } from './media';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -56,6 +57,7 @@ export const textTemplates = {
   ...chartsTextTemplates,
   ...analysisTextTemplates,
   ...sweepsTextTemplates,
+  ...mediaTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -85,6 +87,7 @@ export const text = {
   ...chartsText,
   ...analysisText,
   ...sweepsText,
+  ...mediaText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',

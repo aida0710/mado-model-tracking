@@ -1,0 +1,9 @@
+{
+  "columns": ["caption", "image", "audio", "score", "meta"],
+  "data": [
+    ["赤い画像", {"type": "image", "filepath": "table_images/step-0.png", "compressed_filepath": "table_images/thumbnail.png"}, "audio/run-a-step-0.wav", 0.91, {"speaker": "A"}],
+    ["緑の画像", {"type": "image", "filepath": "table_images/step-1.png"}, "mmt-artifact://runs/RUN_B_ID/audio/run-b-step-1.wav", 0.72, {"speaker": "B"}],
+    ["別Projectの参照", {"type": "image", "filepath": "table_images/step-2.png"}, "mmt-artifact://projects/99999999-9999-4999-8999-999999999999/runs/RUN_B_ID/a.wav", 0.5, null],
+    ["見つからない音声", null, "audio/missing.wav", 0.1, null]
+  ]
+}
