@@ -46,6 +46,9 @@ export { ARTIFACT_MEDIA_INFO_BATCH_LIMIT } from './artifactMediaInfo.js';
 export type { ArtifactPreview, ArtifactPreviewKind, ArtifactPreviewStatus, WaveformPeaksPreview } from './artifactPreviews.js';
 export { ARTIFACT_PREVIEW_KINDS, BROWSER_AUDIO_ANALYSIS_MAX_BYTES } from './artifactPreviews.js';
 import type { DatasetContentKind } from './datasetContent.js';
+import type { DatasetTransferMode } from './targetDatasetCache.js';
+export type { DatasetTransferMode } from './targetDatasetCache.js';
+export { DATASET_TRANSFER_MODES, DEFAULT_DATASET_CACHE_MAX_BYTES, MIN_DATASET_CACHE_MAX_BYTES } from './targetDatasetCache.js';
 export type { DatasetContentKind, DatasetVersionContent, DatasetVersionFile, DatasetVersionFileInput, DatasetVersionFilePage } from './datasetContent.js';
 export { MAX_DATASET_VERSION_FILES } from './datasetContent.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
@@ -382,6 +385,9 @@ export interface ComputeTarget {
   maxConcurrentJobs: number;
   enabled: boolean;
   executor: 'ssh' | 'local';
+  /** Upper bound of the target's dataset cache (<workDirectory>/.mmt-cache/datasets). */
+  datasetCacheMaxBytes: number;
+  datasetTransfer: DatasetTransferMode;
 }
 export interface Job {
   id: string;

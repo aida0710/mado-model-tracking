@@ -6,6 +6,7 @@ import fcntl
 import json
 import logging
 import os
+import re
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, TextIO
@@ -15,6 +16,9 @@ from .contracts import WorkerJob
 from .host_state import read_json, write_json
 
 LOGGER = logging.getLogger(__name__)
+# Input dataset staging (dataset_staging.py): a request, a relayed archive, or one downloaded file
+# for the input at this index.
+DATASET_TRANSFER_KIND = re.compile(r"^dataset-(?:request|archive|file)-\d+$")
 
 
 def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
@@ -119,7 +123,9 @@ class JobJournal:
         return self.transfer_path(job_id, "source")
 
     def transfer_path(self, job_id: str, kind: str) -> Path:
-        if kind not in {"source", "weights", "sif", "output", "snapshot", "checkpoint"}:
+        if kind not in {"source", "weights", "sif", "output", "snapshot", "checkpoint"} and not (
+            DATASET_TRANSFER_KIND.fullmatch(kind)
+        ):
             raise ValueError("Unknown transfer kind")
         path = self.directory / f"{job_id}.{kind}"
         descriptor = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)

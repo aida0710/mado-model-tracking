@@ -22,6 +22,10 @@ export const computeText = {
   workerOfflineHint: '120秒以上応答がありません',
   jobUnresponsive: '応答なし',
   jobUnresponsiveHint: '60秒以上heartbeatがありません。Jobの状態とGPUの予約は変えていません',
+  datasetCacheMaxGiB: 'データセットのcache上限（GiB）',
+  datasetTransfer: 'データセットの転送',
+  datasetTransferRelay: 'workerが中継する',
+  datasetTransferDirect: 'targetがAPIから直接取得する',
   checkTarget: '接続を確認',
   targetCheck: '接続確認',
   targetCheckHint:

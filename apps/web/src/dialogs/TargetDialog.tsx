@@ -1,4 +1,4 @@
-import type { ComputeTarget } from '@mmt/contracts';
+import { DEFAULT_DATASET_CACHE_MAX_BYTES, type ComputeTarget } from '@mmt/contracts';
 import type { FormField } from '../types/form';
 import { executionApi } from '../api/execution';
 import { authApi } from '../api/auth';
@@ -6,10 +6,14 @@ import { useQuery } from '../hooks/useQuery';
 import { QueryDialog } from '../components/QueryDialog';
 import { FormDialog } from '../components/FormDialog';
 import { getFieldValue } from '../lib/formValues';
-import { buildTargetInput } from '../lib/targetInput';
+import { BYTES_PER_GIB, buildTargetInput } from '../lib/targetInput';
 import { EXECUTION_RUNTIME_KINDS } from '../lib/runtimeValidation';
 import { runtimeLabels } from '../i18n/runtime';
 import { text } from '../i18n/catalog';
+
+function datasetCacheGiB(target: ComputeTarget): string {
+  return String(Math.max(1, Math.round(target.datasetCacheMaxBytes / BYTES_PER_GIB)));
+}
 
 export function TargetDialog({
   onClose,
@@ -91,14 +95,37 @@ export function TargetDialog({
               max: 128,
               defaultValue: '1',
             },
+            {
+              name: 'datasetTransfer',
+              label: text.datasetTransfer,
+              type: 'select',
+              defaultValue: 'relay',
+              options: [
+                { value: 'relay', label: text.datasetTransferRelay },
+                { value: 'direct', label: text.datasetTransferDirect },
+              ],
+            },
+            {
+              name: 'datasetCacheMaxGiB',
+              label: text.datasetCacheMaxGiB,
+              type: 'number',
+              required: true,
+              min: 1,
+              defaultValue: String(DEFAULT_DATASET_CACHE_MAX_BYTES / BYTES_PER_GIB),
+            },
             { name: 'enabled', label: text.enabled, type: 'checkbox', defaultValue: 'true' },
           ] satisfies FormField[]).map((field) => {
             if (!target) return field;
+            if (field.name === 'datasetCacheMaxGiB')
+              return { ...field, defaultValue: datasetCacheGiB(target) };
             const value = target[field.name as keyof ComputeTarget];
             return { ...field, defaultValue: field.name === 'gpuIds' ? target.gpuIds.join('\n') : Array.isArray(value) ? value : String(value) };
           })}
           onSubmit={(values) => {
             const input = buildTargetInput(values);
+            // A bound set through the API in bytes is kept unless the GiB field was edited.
+            if (target && getFieldValue(values, 'datasetCacheMaxGiB') === datasetCacheGiB(target))
+              input.datasetCacheMaxBytes = target.datasetCacheMaxBytes;
             return target ? executionApi.updateTarget(target.id, input) : executionApi.createTarget(input);
           }}
         />

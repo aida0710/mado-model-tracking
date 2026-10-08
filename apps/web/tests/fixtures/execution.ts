@@ -31,6 +31,8 @@ export const computeTarget: ComputeTarget = {
   maxConcurrentJobs: 1,
   enabled: true,
   executor: 'ssh',
+  datasetCacheMaxBytes: 107374182400,
+  datasetTransfer: 'relay',
 };
 export const sifArtifact: Artifact = {
   id: 'artifact',

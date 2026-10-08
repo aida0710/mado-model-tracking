@@ -102,6 +102,9 @@ def build_runtime_bundle() -> bytes:
             "source_snapshot",
             "source_tree",
             "artifact_files",
+            "dataset_cache",
+            "dataset_downloads",
+            "dataset_runner",
         ):
             source = (package_directory / "worker" / f"{name}.py").read_text()
             archive.writestr(

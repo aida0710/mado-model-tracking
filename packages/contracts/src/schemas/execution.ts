@@ -22,6 +22,8 @@ export const computeTargetSchema = namedContractSchema(
     maxConcurrentJobs: z.number().int(),
     enabled: z.boolean(),
     executor: z.enum(['ssh', 'local']),
+    datasetCacheMaxBytes: z.number().int(),
+    datasetTransfer: z.enum(['relay', 'direct']),
   }),
 );
 export const jobSchema = namedContractSchema(

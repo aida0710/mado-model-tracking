@@ -40,8 +40,8 @@ export class TargetService {
     validateTargetConfiguration(input, this.config.allowLocalExecutor);
     return (await first<ComputeTarget>(
       this.database,
-      `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor,runtime_kinds)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor,runtime_kinds,dataset_cache_max_bytes,dataset_transfer)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [
         input.name,
         input.host,
@@ -56,6 +56,8 @@ export class TargetService {
         input.enabled,
         input.executor,
         input.runtimeKinds,
+        input.datasetCacheMaxBytes,
+        input.datasetTransfer,
       ],
     ))!;
   }
@@ -84,7 +86,8 @@ export class TargetService {
       return (await first<ComputeTarget>(
         connection,
         `UPDATE compute_targets SET name=$2,host=$3,port=$4,username=$5,ssh_key_path=$6,known_hosts_path=$7,
-        work_directory=$8,python_executable=$9,gpu_ids=$10,max_concurrent_jobs=$11,enabled=$12,executor=$13,runtime_kinds=$14
+        work_directory=$8,python_executable=$9,gpu_ids=$10,max_concurrent_jobs=$11,enabled=$12,executor=$13,runtime_kinds=$14,
+        dataset_cache_max_bytes=$15,dataset_transfer=$16
         WHERE id=$1 RETURNING *`,
         [
           targetId,
@@ -101,6 +104,8 @@ export class TargetService {
           updated.enabled,
           updated.executor,
           updated.runtimeKinds,
+          updated.datasetCacheMaxBytes,
+          updated.datasetTransfer,
         ],
       ))!;
     });

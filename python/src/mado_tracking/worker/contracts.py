@@ -18,6 +18,9 @@ ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Job tokens are what the Job's own code authenticates with; the worker token never reaches it.
 JOB_TOKEN = re.compile(r"^mmtj_[A-Za-z0-9_-]+$")
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
+# An 'artifacts' DatasetVersion's digest is the server-computed manifest digest.
+MANIFEST_DIGEST = re.compile(r"^sha256:[a-f0-9]{64}$")
+DATASET_TRANSFERS = {"relay", "direct"}
 
 
 def require_uuid(value: object, field: str) -> str:
@@ -122,6 +125,7 @@ class WorkerJob:
             require_uuid(dataset["id"], "inputDataset.id")
             if dataset["projectId"] != project_id:
                 raise ConfigurationError("Input DatasetVersion is outside the project")
+            validate_dataset_content(dataset)
             dataset_ids.append(dataset["id"])
         if sorted(dataset_ids) != sorted(self.run["inputDatasetVersionIds"]):
             raise ConfigurationError("Pinned DatasetVersions were not supplied")
@@ -135,6 +139,7 @@ class WorkerJob:
             raise ConfigurationError("Run.runtime does not match its immutable executionSnapshot")
         if self.target["executor"] not in {"local", "ssh"}:
             raise ConfigurationError("Unknown compute executor")
+        validate_target_dataset_settings(self.target)
         runtime_kinds = self.target.get("runtimeKinds", ["python"])
         if (
             not isinstance(runtime_kinds, list)
@@ -148,6 +153,42 @@ class WorkerJob:
                 raise ConfigurationError("Invalid CodeVersion environment")
         if self.resume_checkpoint is not None:
             validate_resume_checkpoint(self.resume_checkpoint, run=self.run)
+
+
+def _is_positive_integer(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def validate_dataset_content(dataset: dict[str, Any]) -> None:
+    """What the worker needs to fetch and verify a version (absent from APIs before W4 content)."""
+    content_kind = dataset.get("contentKind")
+    if content_kind is None:
+        return
+    if content_kind == "artifacts":
+        file_count = dataset.get("fileCount")
+        if (
+            not isinstance(dataset.get("digest"), str)
+            or not MANIFEST_DIGEST.fullmatch(dataset["digest"])
+            or not isinstance(dataset.get("datasetId"), str)
+            or not isinstance(file_count, int)
+            or isinstance(file_count, bool)
+            or file_count < 0
+        ):
+            raise ConfigurationError("Input DatasetVersion has an invalid artifacts manifest")
+        require_uuid(dataset["datasetId"], "inputDataset.datasetId")
+    elif content_kind == "reference":
+        if not isinstance(dataset.get("uri"), str) or not isinstance(dataset.get("digest"), str):
+            raise ConfigurationError("Input DatasetVersion reference needs a uri and digest")
+    else:
+        raise ConfigurationError("Input DatasetVersion has an unknown contentKind")
+
+
+def validate_target_dataset_settings(target: dict[str, Any]) -> None:
+    # Both are optional so that an API from before the setting existed keeps working.
+    if target.get("datasetTransfer", "relay") not in DATASET_TRANSFERS:
+        raise ConfigurationError("Compute target has an unknown datasetTransfer")
+    if "datasetCacheMaxBytes" in target and not _is_positive_integer(target["datasetCacheMaxBytes"]):
+        raise ConfigurationError("Compute target datasetCacheMaxBytes must be a positive integer")
 
 
 def _is_file_entry(entry: Any) -> bool:

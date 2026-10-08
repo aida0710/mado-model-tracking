@@ -73,11 +73,18 @@ def scan_dataset_directory(directory: Path) -> list[LocalDatasetFile]:
 
 def dataset_manifest_digest(files: list[LocalDatasetFile]) -> str:
     """The digest the API computes for an 'artifacts' version (see datasetManifestDigest.ts)."""
-    entries = [
-        {"path": file.path, "sha256": file.sha256, "size": file.size}
-        for file in sorted(files, key=lambda file: file.path.encode("utf-8"))
+    return manifest_entries_digest(
+        [{"path": file.path, "sha256": file.sha256, "size": file.size} for file in files]
+    )
+
+
+def manifest_entries_digest(entries: list[dict[str, Any]]) -> str:
+    """Same digest from `{path, sha256, size}` entries, such as a version's listed files."""
+    canonical_entries = [
+        {"path": entry["path"], "sha256": entry["sha256"], "size": entry["size"]}
+        for entry in sorted(entries, key=lambda entry: str(entry["path"]).encode("utf-8"))
     ]
-    canonical = json.dumps(entries, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(canonical_entries, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 

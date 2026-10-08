@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import type { CodeVersion, DatasetVersion, ModelVersion, Run } from '@mmt/contracts';
+import { DEFAULT_DATASET_CACHE_MAX_BYTES } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApplicationOptions } from '../app.js';
 import { createApplication } from '../app.js';
@@ -307,6 +308,8 @@ export async function seedDemo(
           gpuIds: [],
           maxConcurrentJobs: 2,
           enabled: true,
+          datasetCacheMaxBytes: DEFAULT_DATASET_CACHE_MAX_BYTES,
+          datasetTransfer: 'relay',
         });
     }
     await database.query('INSERT INTO demo_seed_history(name,project_id) VALUES($1,$2)', [
