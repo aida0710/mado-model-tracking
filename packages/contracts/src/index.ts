@@ -17,6 +17,14 @@ export type { ExecutionMode, ExecutionSnapshot, ExperimentTask, TaskExecution, T
 export type { RunOutputRegistration, TaskOutputModel } from './experimentTasks.js';
 export type { AuditActorType, AuditEvent, AuditEventPage, AuditOutcome } from './audit.js';
 export type { ModelAliasEvent, ModelAliasEventPage, ModelAliasEventSource } from './modelAliases.js';
+export type {
+  EvaluationComparison,
+  EvaluationComparisonStatus,
+  MetricComparison,
+  MetricValueSource,
+  MetricValueStatus,
+} from './evaluation.js';
+export { DEFAULT_BASELINE_ALIAS } from './evaluation.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
@@ -77,6 +85,8 @@ export interface Run {
   executionMode?: ExecutionMode;
   executionSnapshot?: ExecutionSnapshot | null;
   inputDatasetVersionIds: string[];
+  // Subset of inputDatasetVersionIds produced by an upstream Run; fixed at creation.
+  upstreamDatasetVersionIds: string[];
   outputDatasetVersionIds: string[];
   outputModelVersionIds: string[];
   /** Task outputModel copied at launch; registration runs when the Run ends. */
