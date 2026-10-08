@@ -304,7 +304,6 @@ export function createApplication(options: ApplicationOptions) {
   const runNotes = new RunNoteService(database);
   const runResumes = new RunResumeService(database, runCompletion);
   const runSync = new RunSyncService(database, { runs, runCompletion });
-  // Later services such as reports call commentTargets.registerCommentTarget for their own kind.
   const commentTargets = createCommentTargetRegistry();
   commentTargets.registerCommentTarget('report', reportCommentTarget);
   const comments = new CommentService(database, commentTargets);

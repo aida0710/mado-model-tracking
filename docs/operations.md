@@ -456,6 +456,7 @@ API serverは30秒ごとに次を確かめ、見つけたらProjectの「運用�
 | 変数 | 既定 | 意味 |
 |---|---|---|
 | `MMT_TOKEN_MAX_LIFETIME_DAYS` | `365` | 新しいAPI tokenの期限の上限。期限を省略したtokenはこの日数で切れる。1〜3650 |
+| `MMT_REPORT_SNAPSHOT_MAX_BYTES` | `52428800` | 共有レポートの1つの版で「作成時点で固定」したブロックの固定データ（JSONのUTF-8）の合計の上限（バイト）。超える保存は413 `report_snapshot_too_large` で版を作らない。1ブロックは別に5MiB（`REPORT_SNAPSHOT_BLOCK_MAX_BYTES`、定数）まで。正の整数 |
 | `MMT_CSV_EXPORT_MAX_ROWS` | `50000` | `POST /projects/:p/runs/search/export.csv`の最大行数。超えた分は省き、応答ヘッダ`X-MMT-Export-Truncated: true`とCSV末尾の`# truncated: ...`行で示す。正の整数 |
 | `MMT_CHECKPOINT_KEEP_COUNT` | `5` | Runごとに既定の一覧へ出すcheckpointの数（1以上）。超えた古いcheckpointは`retained=false`になり、一覧の既定表示から外れる。Artifactは消さないので再開には使える |
 | `MMT_ARTIFACT_DELETE_GRACE_DAYS` | `7` | 削除したArtifactのblobをgarbage collectorが保存先から消すまでの日数。0〜3650（0は次の周回で消す） |

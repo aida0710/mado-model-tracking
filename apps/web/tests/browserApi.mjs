@@ -55,6 +55,7 @@ export function createBrowserApi() {
     namespace: 'test',
     description: '',
     latestVersion: 'v1',
+    archivedAt: null,
     createdAt: now,
   };
   const codeVersion = {
@@ -179,6 +180,9 @@ export function createBrowserApi() {
     maxConcurrentJobs: 1,
     enabled: true,
     executor: 'ssh',
+    // The API defaults of migration 047.
+    datasetCacheMaxBytes: 107374182400,
+    datasetTransfer: 'relay',
   };
   const plugin = {
     id: id(),

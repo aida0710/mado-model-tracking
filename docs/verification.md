@@ -303,6 +303,19 @@ node apps/web/tests/browser-analysis.mjs
 
 標準出力のJSONに、brush後の件数と、5000件でのdragの各ステップの時間（ms）が出ます。
 
+## 共有レポートをブラウザで確認する
+
+`apps/web/tests/browser-reports.mjs` は、開発モード（`AUTH_MODE=development`）のAPIに実際のRun・metrics・音声・保存ビューを作り、レポートの作成から閲覧までを確かめます。稼働中の開発用API・Webとは別のportで起動してください。
+
+```bash
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_WEB_URL=http://127.0.0.1:<Webのport> \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/reports-web \
+node apps/web/tests/browser-reports.mjs
+```
+
+Markdown・グループの平均と範囲の図（固定と最新）・平行座標・音声の聴き比べ・保存ビューのRun一覧を埋め込んで保存できること、保存後にmetricsを足すと最新の図だけ変わること、2つのタブで同時に編集すると後の保存が衝突の案内になること、過去の版は読み取り専用で戻すと新しい版になること、コメント、viewerは閲覧とコメントの閲覧だけになること、アーカイブで一覧の既定表示から外れることを確かめます。
+
 ## Runの説明文とコメントをブラウザで確認する
 
 `apps/web/tests/browser-comments.mjs`は、開発モード（`AUTH_MODE=development`）のAPIに対して、実際に記録を作って確かめます。稼働中の開発用API・Webとは別のportで起動してください。

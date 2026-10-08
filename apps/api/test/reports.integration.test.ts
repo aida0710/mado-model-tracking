@@ -161,6 +161,7 @@ describe.skipIf(!testDatabaseUrl)('共有レポートの版と権限（独立Pos
       title: 'Weekly results',
       currentRevision: 1,
       createdBy: { id: fixture.editor.userId },
+      updatedBy: { id: fixture.editor.userId },
       archivedAt: null,
     });
     expect(created.revision).toMatchObject({ revision: 1, restoredFromRevision: null });
@@ -176,7 +177,12 @@ describe.skipIf(!testDatabaseUrl)('共有レポートの版と権限（独立Pos
       ),
       200,
     );
-    expect(edited.report).toMatchObject({ currentRevision: 2, title: 'Weekly results v2' });
+    expect(edited.report).toMatchObject({
+      currentRevision: 2,
+      title: 'Weekly results v2',
+      createdBy: { id: fixture.editor.userId },
+      updatedBy: { id: secondEditor.userId },
+    });
     expect(edited.revision).toMatchObject({
       revision: 2,
       message: '結論を追記',

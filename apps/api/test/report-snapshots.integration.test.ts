@@ -285,6 +285,45 @@ describe.skipIf(!testDatabaseUrl)('レポートの作成時点での固定（独
     ]);
   });
 
+  it('mediaの固定データは格子と並べたRunの名前を持つ', async () => {
+    for (const run of runs) {
+      const audio = await entity<{ id: string }>(
+        await request(harness.app, `${fixture.basePath}/runs/${run.id}/artifacts?path=eval%2Fstep-0.wav`, {
+          method: 'PUT',
+          cookie: fixture.editor.cookie,
+          binary: `audio of ${run.name}`,
+          headers: { 'Content-Type': 'audio/wav' },
+        }),
+      );
+      await entity(
+        await request(harness.app, `${fixture.basePath}/runs/${run.id}/media`, {
+          method: 'POST',
+          cookie: fixture.editor.cookie,
+          body: { items: [{ key: 'eval/audio', step: 0, kind: 'audio', artifactId: audio.id }] },
+        }),
+        201,
+      );
+    }
+    const created = await entity<ReportDetail>(
+      await createReport([
+        {
+          type: 'media',
+          id: 'listen',
+          runIds: runs.map((run) => run.id),
+          key: 'eval/audio',
+          mode: 'snapshot',
+        },
+      ]),
+    );
+    const media = snapshotOf(await readSnapshots(created.report.id), 'listen').data;
+    expect(media.type === 'media' && media.runs).toEqual(
+      runs.map((run) => ({ runId: run.id, name: run.name })),
+    );
+    expect(media.type === 'media' && media.grid.rows.map((row) => row.runId)).toEqual(
+      runs.map((run) => run.id),
+    );
+  });
+
   it('5MiBを超えるブロックの固定は413で、版を作らない', async () => {
     // 500 Runs with 12KB of parameters each make a Run table snapshot of about 6MB.
     await harness.database.query(
