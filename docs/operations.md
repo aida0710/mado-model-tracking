@@ -161,7 +161,7 @@ group同期はブラウザのloginかsessionの再確認でしか起きません
 
 - SDKだけを使う研究者のtokenは、ブラウザで7日間ログインしないと止まります。**ブラウザで一度ログインすれば、同じtokenがそのまま使えるようになります。**
 - 長期に動くworker・自動実行・CIは、人のtokenではなくService Account（上の「workerホストへworkerを導入する」の1.）のtokenを使います。Service Accountはこの期限の対象外です。
-- 自動実行のrule・自動昇格のpolicyの所有者（実行するUser）も、Projectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService AccountでRoleがadmin）。人が所有したままだと、その人が7日ログインしないと自動実行が401で止まります。
+- 自動実行のrule・自動昇格のpolicyの所有者（実行するUser）も、Projectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService AccountでRoleがadmin）。APIではruleが`PUT /api/projects/:p/automation-rules/:id/owner`、policyが`PUT /api/projects/:p/promotion-policies/:id/owner`で、bodyはどちらも`{serviceAccountId}`。移管先が条件に合わなければ422（ruleは`invalid_automation_owner`、policyは`promotion_owner_invalid`）です。人が所有したままだと、その人が7日ログインしないと自動実行が401で止まります。
 - emailで自動連携したLocal UserもSSO identityを持つので対象です。ローカルアカウントでログインしてもgroupは同期されないため、SSOで一度ログインします。
 - `AUTH_MODE=local`へ切り替えた後も、SSO identityを持つUserのtokenは期限で止まります。
 
@@ -291,7 +291,7 @@ APIサーバーはworkerホストへSSHしない（decisions.md）。導入・�
 workerのtokenは、人に紐付かないService Accountで発行する。発行した人がProjectを離れても止まらない。
 
 1. Projectの設定画面「Service Accounts」で「Service Accountを作成」を押す。名前（例: `gpu-host-1-worker`）、説明、Role `Admin` を入力する。`worker:execute` scope は Role が Admin の Service Account にだけ発行できる。
-2. 作成した行の「tokenを発行」を押し、scope `read`・`worker:execute`・`artifacts:write`（出力の登録をするなら `registry:write` も）、有効期限（上限365日、`MMT_TOKEN_MAX_LIFETIME_DAYS`）を選ぶ。
+2. 作成した行の「tokenを発行」を押し、scope `read`・`worker:execute`・`artifacts:write`（出力の登録をするなら `registry:write` も。`result.json` version 2で出力（モデル・データセット）を宣言するJobは `registry:write` が無いとfailedになる）、有効期限（上限365日、`MMT_TOKEN_MAX_LIFETIME_DAYS`）を選ぶ。
 3. 表示されたtokenを次の手順の入力に使う。tokenは一度だけ表示される。
 
 APIで行う場合（Project adminのbrowser sessionが必要。API tokenからは403 `session_required`）:
@@ -388,17 +388,34 @@ MMT_NOTIFICATION_OPS_URL=https://ops.example.com/hooks/mmt
 MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
 ```
 
-環境変数を変えたらAPIを再起動します。設定画面の通知先一覧の「環境変数」が「未設定」なら、APIのプロセスにその変数が見えていません。全体管理者は「テスト送信」で、outboxを通さずにその場で1件送って結果のcodeを確かめられます。
+環境変数を変えたらAPIを再起動します。設定画面の通知先一覧の「送信設定」が「未設定」なら、APIのプロセスにその変数が見えていません（メールは「未設定（SMTPの送信設定が無い）」）。全体管理者は「テスト送信」で、outboxを通さずにその場で1件送って結果のcodeを確かめられます。
 
 | 種類 | 必要な設定 | 送る内容 |
 |---|---|---|
 | Slack（Incoming Webhook） | `urlEnv` | `text`（通知のfallback）と`blocks`（タイトル、Project、Run、実験、種別・状態、エラーの先頭500文字） |
 | Webhook（署名付き） | `urlEnv`、`secretEnv` | NotificationEventのJSON。headerに`X-MMT-Event`、`X-MMT-Event-Id`、`X-MMT-Delivery`、`X-MMT-Signature: sha256=<HMAC-SHA256(鍵, 本文)>` |
-| メール | `recipients`（1〜50件） | SMTPの送信部品が入るまでは送らず、送信履歴に`email_sender_unavailable`の失敗として残る |
+| メール | `recipients`（1〜50件、表示名なしのアドレス） | 件名`[<Project名>] <タイトル>`、本文はSlackと同じ項目のplain text（エラーの先頭2000文字）。headerに`X-MMT-Event`、`X-MMT-Event-Id`、`X-MMT-Delivery`。API serverにSMTPの設定が無ければ送らず、送信履歴に`email_sender_unavailable`の失敗として残る |
 
 受信側は`X-MMT-Signature`を本文そのままのbyte列で検証し、`X-MMT-Event-Id`（同じイベントは全ruleで同じID）で重複を除いてください。本文にexecution snapshot、parameters、環境変数、tokenは入れません。
 
 送信は5秒で打ち切り、redirectは追いません（3xxは`notification_redirect_refused`）。URLは`http`/`https`だけで、user・passwordを含むURLは送りません。
+
+### メール（SMTP）を有効にする
+
+メールはAPI serverに次の2つがあるときだけ送ります。無ければメールの通知先は作成・ruleへの登録はできますが、送信は`email_sender_unavailable`で失敗します（再試行しません）。
+
+```sh
+# API serverの.env（URLにパスワードを含むので、値はリポジトリやチャットに貼らない）
+MMT_SMTP_URL=smtps://<user>:<password>@smtp.example.com:465   # STARTTLSなら smtp://…:587
+MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
+```
+
+- `smtp://`はサーバーがSTARTTLSを提示すれば使い、`smtps://`は最初からTLSで接続します。userとpasswordに記号を含むならURLエンコードします。URLのquery（`?…`）は受け付けません（TLSの検証を外す指定を入れられないようにするため）。
+- 片方だけの設定、`smtp`/`smtps`以外のURL、アドレスでない`MMT_SMTP_FROM`はAPIの起動を止めます。エラーには変数名だけを出し、値は出しません。
+- TLSの証明書は常に検証します。社内CAの証明書を使うSMTPサーバーなら、API serverの`NODE_EXTRA_CA_CERTS`にCAのPEMを指定します。
+- 接続・応答待ちと1通の送信全体は10秒で打ち切ります（HTTPの通知より長いのは、SMTPは挨拶・EHLO・STARTTLS・AUTH・宛先・本文と往復が多く、中継サーバーが挨拶をわざと遅らせることがあるため）。
+- 失敗のcodeは`notification_timeout`、`notification_smtp_auth_failed`（認証失敗）、`notification_smtp_tls_failed`（STARTTLSの失敗）、`notification_smtp_recipients_rejected`（全宛先を拒否された）、`notification_smtp_<応答code>`、`notification_destination_unavailable`（接続できない、証明書の検証に失敗した）です。SMTPの応答文は残しません。
+- 設定を入れたら、設定画面の通知先で「テスト送信」して届くことを確かめます。
 
 ### 送信の流れと失敗の扱い
 
@@ -406,8 +423,24 @@ MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
 - 積むのは、有効なruleで、通知先も有効で、filter（実行種別・実験・自動実行のRunだけ）に合うものだけです。
 - API内のdispatcherが1秒ごとに取り出して送ります。失敗すると5秒から倍々（上限1時間）で待って再送し、8回（`NOTIFICATION_MAX_ATTEMPTS`。約10分）失敗すると`failed`にします。古い通知を送り続けても意味が薄いためです。送信中のまま60秒を過ぎた行（APIが送信中に止まった場合）は、次のdispatcherが引き取ります。
 - 積んだ後で通知先やruleを無効にした行は、送らずに`failed`（`notification_channel_disabled`／`notification_rule_disabled`）にします。有効に戻しても古い通知はまとめて届きません。
-- Project adminは設定画面の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。
+- Project adminは設定画面の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。メールのcodeは上の「メール（SMTP）を有効にする」を参照。
 - 通知先の作成・変更・テスト送信、ruleの作成・有効切替は監査ログ（`notification.channel.create`／`update`／`test`、`notification.rule.create`／`update`）に残ります。環境変数の値と宛先のメールアドレスは記録しません（宛先は件数だけ）。
+
+## 運用監視（heartbeat途絶・worker停止・plugin送信滞留）
+
+API serverは30秒ごとに次を確かめ、見つけたらProjectの「運用アラート」（ヘッダのベル）に出し、通知ruleで選んだ通知先へ送ります。複数のAPI processを動かしても判定は1つだけが行います。
+
+| 種別 | 条件 | 閉じる条件 |
+|---|---|---|
+| Jobのheartbeat途絶（`job.heartbeat_stale`） | claimed/runningのJobのheartbeatが60秒より古い | heartbeatが戻る（`job.heartbeat_recovered`を通知）／Jobが終わる |
+| workerの停止（`worker.offline`） | workerの最終応答が120秒より古い | workerが再びclaim・heartbeatする／tokenの失効・期限切れ／7日以上応答なし（引退扱い） |
+| Plugin送信の滞留（`plugin.delivery_stalled`） | 有効なpluginの未送信eventのうち最古が15分より古い、または1件でも5回以上試行した | 未送信が条件を下回る／pluginを無効にする |
+
+- 通知はアラートを開いたときに1回だけ（Jobは復旧時にも1回）。同じ対象が再び途絶したら、新しいアラートとして再び通知します。
+- 通知を受けるには、Project設定の「通知」でruleを作り、上の種別を選びます。worker・pluginの通知は、Runの条件（実行種別・実験）を付けたruleには届きません。
+- Jobは途絶しても失敗にしません（workerがまだ処理を続けている可能性があるため）。止まったJobはJobs画面から停止を要求するか、workerホストを確認します。
+- Pluginの送信状況はPlugins画面の「イベントの送信状況」（Project admin）で見られます。pluginを直したら「イベントを再送」で待ち時間を飛ばして再送します。
+- 閾値はコードの定数（`apps/api/src/domain/workerLiveness.ts`、`apps/api/src/domain/operationsAlerts.ts`）で、環境変数では変えません。
 
 ## API serverの上限と保持数
 

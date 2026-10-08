@@ -2,8 +2,7 @@ import type {
   ChartSmoothing,
   ChartXAxis,
   MetricGroup,
-  MetricPoint,
-  MetricSeries as SampledMetricSeries,
+  MetricSeries,
   RunResumeEventPage,
 } from '@mmt/contracts';
 import type {
@@ -15,15 +14,6 @@ import { keepPlottablePoints, type ChartScale } from './chartScale';
 import { smoothValues } from './chartSmoothing';
 import { seriesColor } from './seriesColors';
 
-/** Every recorded point of a Run, as `GET /runs/:r/metrics` and the comparison history give them. */
-export interface MetricSeries {
-  id: string;
-  label: string;
-  points: MetricPoint[];
-}
-
-export const getMetricNames = (series: MetricSeries[]) =>
-  Array.from(new Set(series.flatMap((item) => item.points.map((point) => point.name)))).sort();
 export const isSystemMetric = (name: string) =>
   /^(system[./]|gpu[./]|cpu[./]|memory[./])/.test(name);
 
@@ -31,29 +21,11 @@ export const isSystemMetric = (name: string) =>
 export const groupSeriesId = (groupKey: string) => `group:${groupKey}`;
 
 /**
- * One chart line per Run from recorded points on the step axis. Every point is drawn, ordered by
- * step and then by time; two values at the same step both stay instead of the later one winning.
- */
-export function recordedPointSeries(series: MetricSeries[], metric: string): MetricsChartSeries[] {
-  return series.map((item) => ({
-    id: item.id,
-    label: item.label,
-    kind: 'run',
-    points: item.points
-      .filter((point) => point.name === metric)
-      .sort(
-        (left, right) => left.step - right.step || left.timestamp.localeCompare(right.timestamp),
-      )
-      .map((point) => ({ x: point.step, value: point.value })),
-  }));
-}
-
-/**
  * One chart line per Run for `key` from `POST /metrics/series`. A sampled bucket keeps its min/max
  * as the band; a single stored point has none, so showRange draws no zero-width band for it.
  */
 export function runChartSeries(
-  series: readonly SampledMetricSeries[],
+  series: readonly MetricSeries[],
   key: string,
   runLabels: Readonly<Record<string, string>> = {},
 ): MetricsChartSeries[] {

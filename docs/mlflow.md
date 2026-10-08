@@ -20,6 +20,8 @@ Authentikのログインはブラウザでの操作に使います。Pythonの�
 
 学習を実行するマシンのターミナルで設定します。`PROJECT_ID`は記録先ProjectのUUIDへ置き換えてください。`http://10.0.10.160:5182`はこの開発環境のURLです。別の配置ではそのWeb/APIのURLに変更します。
 
+Webの設定画面「MLflow 3から接続」に、このProjectの`MLFLOW_TRACKING_URI`／`MLFLOW_REGISTRY_URI`と、コピーできる設定例があります。「このProject用のtokenを発行」は、read・runs:write・registry:write・artifacts:write を選んだ状態でtokenの作成画面を開きます（viewerには表示しません）。
+
 ```bash
 python -m pip install 'mlflow>=3,<4'
 export MLFLOW_TRACKING_URI='http://10.0.10.160:5182/api/mlflow/projects/PROJECT_ID'
@@ -170,6 +172,14 @@ with mlflow.start_run():
 
 音声ファイルは`mlflow.log_artifact`で保存します。SDKはPythonの`mimetypes`で判定したContent-Typeを送り、サーバーはその値をそのまま保存して返します。手元の確認ではwavが`audio/x-wav`、flacが`audio/flac`でした。SDKが`application/octet-stream`を送った場合（`mimetypes`が拡張子を知らない環境）は、拡張子から`audio/wav`や`audio/flac`を推定します。Range要求には206で一部だけを返すので、プレイヤーのシークに使えます。nativeのcontent URL（`GET /projects/:p/artifacts/:a/content`）も、MLflowから保存した音声を同じContent-Typeのままinline・Range対応で返します。
 
+`log_image(image, key=..., step=...)`で記録した画像は、通常のArtifactとして保存したうえで、Runのmediaとしてkeyとstepで引けるようにします（nativeの`GET /api/projects/:p/runs/:r/media?key=...`、step順）。公式SDKが同じ呼び出しで保存する縮小版（`compressed.webp`）は、同じ項目のthumbnailになります。ファイル名の形式はSDKの版で違い、3.0.0は`images/<key>%step%<step>%timestamp%<ms>%<uuid>.png`、3.17.0以降は`images/<key>+step+<step>+timestamp+<ms>+<uuid>.png`です。どちらも読みます。
+
+MLflow 3.0.0のSDKは、keyの`/`を`#`に置き換えたままURLへ載せるため、`#`より後ろが送られずファイル名が切れます。3.0.0では`/`を含まないkey（`eval_mel`など）を使ってください。3.17.0以降は`/`を`~`にするので問題ありません。
+
+`log_table`の表は、Runの`mlflow.loggedArtifacts`タグに載ったものをstep 0の表としてmediaの一覧に出します。表APIは`orient='split'`のJSON（`log_table`の既定）を読み、画像の列（`{type:'image', filepath, compressed_filepath}`）を保存済みのArtifactに解決します。parquetで保存した表は表示できません（422 `unsupported_table_format`）。50MiBを超える表はAPIで頁送りせず、Artifactをダウンロードして開きます。
+
+この機能より前に保存した画像は、`npm run backfill-run-media`で索引できます。何度実行しても増えません。multipart uploadで保存した画像（既定では500MiB以上）は保存時には索引せず、backfillで入ります。
+
 ## 自作のpyfuncモデルを登録する
 
 `mlflow.pyfunc.PythonModel`を継承したモデルを、複数のファイルやディレクトリを`artifacts`に指定して保存できます。登録した版は`models:/名前@alias`で読み込めます。`mlflow.artifacts.download_artifacts("models:/名前@alias")`は、`MLmodel`・`python_model.pkl`と、指定したファイル・ディレクトリの全体を元のbytesのまま返します。
@@ -203,6 +213,7 @@ export MLFLOW_TRACKING_PASSWORD
 - passwordにローカルアカウントのパスワードを入れても通りません（401）。
 - 失効・scope・Projectの権限の確認はBearerと同じです。Job限定token（`mmtj_`）をpasswordにしても、Job tokenの許可表がそのまま効きます。
 - tokenを発行した直後の画面に、Bearer／Basicそれぞれの環境変数の設定例が出ます。
+- 設定画面「MLflow 3から接続」の折りたたみにも、Basic認証の設定例があります。
 
 ## autologを使う
 
@@ -242,6 +253,7 @@ JobのRunに追加したSDKのparamsは記録用の`recordedParameters`へ保存
 | 登録をきっかけにした自動評価 | 対応 | モデル版の登録からCPUのJobで`evaluate()`を実行し、実行記録が1件、評価結果がJobのRunだけに入る |
 | `log_table`・`log_image`・`log_dict`・`log_text`・`log_figure` | 対応 | 一覧、ダウンロードした内容、PNGのContent-Type |
 | 音声Artifact（wav・flac） | 対応 | Content-Typeの保持、Range要求の206、nativeのinline表示 |
+| `log_image(key=, step=)`・`log_table`（画像列）のmedia索引 | 対応 | `scripts/mlflow3_checks/media_steps.py`。3 stepの画像がstep順に3件・thumbnail付きで並び、表の画像セルがArtifactに解決される（3.0.0はkeyに`/`を含めない） |
 | 自作pyfunc・複数ファイルのモデル | 対応 | alias経由の読み込みと予測値の一致、`download_artifacts("models:/名前@alias")`で全ファイルのhashが一致 |
 | `mlflow.search_runs`のpandas出力 | 対応 | `run_id`・`params.*`・`metrics.*`・`tags.*`・`status`の列 |
 | webhooks（`create_webhook`など） | 未対応 | 3.17.0は404 `ENDPOINT_NOT_FOUND`の`MlflowException`になる。3.0.0のSDKにはAPIがない |
@@ -275,5 +287,14 @@ MMT_VERIFY_API_URL=http://127.0.0.1:47070 artifacts/verification/mlflow3-venv/bi
 検証用Project・token・CPU target・自動実行ルールを作り、終了時にtokenを失効しルールを無効化します。Runとモデルは確認用に残します。結果は`artifacts/verification/<日付>/mlflow3/sdk-integration.json`へ保存します。
 
 確認の処理は`scripts/mlflow3_checks/`に分けています。`evaluation.py`が評価と自動評価、`rich_artifacts.py`が表・画像・音声、`pyfunc_model.py`が自作pyfuncとsearch_runs、`common.py`が共通の部品です。自動評価の確認では`python/examples/mlflow_evaluation.py`をそのまま評価コードとして登録して動かします。`rich_artifacts.py`は`matplotlib`・`pandas`・`PyYAML`・`Pillow`を使います。どれも`mlflow`（skinnyではない方）を入れると一緒に入ります。
+
+stepごとのmediaは単独の`scripts/mlflow3_checks/media_steps.py`で確かめます。テスト専用DBの検証用APIへ記録し、結果を`artifacts/verification/<日付>/media-steps/mlflow-<版>.json`へ保存します。
+
+```bash
+MMT_VERIFY_API_PORT=47080 MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \
+  npx tsx scripts/serve_mlflow_verification.ts
+<MLflow 3.0.0 または 3.17.0 の venv>/bin/python scripts/mlflow3_checks/media_steps.py \
+  --mado-api-url http://127.0.0.1:47080
+```
 
 この検証は公式SDKとHTTP APIの互換性を確かめます。実SSH/GPU、Authentik、実S3の接続確認は別途行います。

@@ -7,7 +7,7 @@ import { EXECUTION_POLL_MS, useQuery, type QueryState } from './useQuery';
 const activeStatuses: readonly RunStatus[] = ['queued', 'running'];
 
 /**
- * The comparison of the Runs from one API call, with their downsampled metric history. It is
+ * The comparison of the Runs from one API call. It is
  * refreshed while any compared Run can still change and stops once all have ended.
  */
 export function useRunComparison(comparison: {
@@ -25,7 +25,6 @@ export function useRunComparison(comparison: {
       {
         runIds,
         ...(baselineRunId ? { baselineRunId } : {}),
-        includeHistory: true,
       },
       signal,
     );

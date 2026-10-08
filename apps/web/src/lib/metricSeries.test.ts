@@ -6,7 +6,6 @@ import {
   isSystemMetric,
   nearestPointIndex,
   prepareChartLines,
-  recordedPointSeries,
   resumeMarkers,
   runChartSeries,
   valuesAtX,
@@ -67,29 +66,6 @@ describe('APIの系列から図の系列への変換', () => {
       },
     ]);
     expect(groupChartSeries([group], 'acc')[0]!.points).toEqual([]);
-  });
-
-  it('記録した全点の系列は同じstepの値を両方残し、stepと時刻の順に並べる', () => {
-    const [series] = recordedPointSeries(
-      [
-        {
-          id: 'a',
-          label: 'A',
-          points: [
-            { name: 'loss', value: 0.2, step: 1, timestamp: '2026-10-08T00:01:00Z' },
-            { name: 'loss', value: 0.4, step: 1, timestamp: '2026-10-08T00:00:00Z' },
-            { name: 'loss', value: 0.1, step: 0, timestamp: '2026-10-08T00:02:00Z' },
-            { name: 'acc', value: 0.9, step: 0, timestamp: '2026-10-08T00:02:00Z' },
-          ],
-        },
-      ],
-      'loss',
-    );
-    expect(series!.points).toEqual([
-      { x: 0, value: 0.1 },
-      { x: 1, value: 0.4 },
-      { x: 1, value: 0.2 },
-    ]);
   });
 
   it('system metricsはsystem・gpu・cpu・memoryで始まる名前', () => {

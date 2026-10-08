@@ -37,6 +37,9 @@ export const modelAutomationRuleSchema = namedContractSchema(
     maxAttempts: z.number().int(),
     summaryMetrics: z.array(z.string()),
     createdBy: idSchema,
+    runAsUserId: idSchema,
+    runAsKind: z.enum(['human', 'service']).optional(),
+    runAsName: z.string().optional(),
     createdAt: timestampSchema,
   }),
 );
@@ -61,6 +64,7 @@ export const modelAutomationExecutionSchema = namedContractSchema(
     attempt: z.number().int(),
     source: z.enum(['automatic', 'manual']),
     requestedBy: idSchema.nullable(),
+    retryOfExecutionId: idSchema.nullable(),
     createdAt: timestampSchema,
   }),
 );

@@ -57,10 +57,11 @@ class FakeSyncApi:
         if segments[0] == "artifacts" and request.method == "GET":
             return httpx.Response(200, json=self.artifacts[segments[1]])
         if segments[0] == "runs" and segments[2:] == ["media"]:
-            payload = json.loads(body)
-            created = payload["id"] not in self.media
-            self.media.setdefault(payload["id"], payload)
-            return httpx.Response(201 if created else 200, json=self.media[payload["id"]])
+            # RunMediaCreate {items}; a resent id returns the stored item, still with 201.
+            items = json.loads(body)["items"]
+            for item in items:
+                self.media.setdefault(item["id"], item)
+            return httpx.Response(201, json={"items": [self.media[item["id"]] for item in items]})
         if segments[0] == "runs" and segments[2:] == ["artifacts"]:
             prefix = request.url.params["prefix"]
             items = [

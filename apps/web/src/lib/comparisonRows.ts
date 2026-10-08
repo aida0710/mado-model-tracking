@@ -7,7 +7,6 @@ import {
   type RunComparisonNamespace,
   type RunComparisonValue,
 } from '@mmt/contracts';
-import type { MetricSeries } from './metricSeries';
 
 // Same labels as the API's CSV, so the page and a downloaded file name versions alike.
 export const modelVersionLabel = (version: ComparedModelVersion) =>
@@ -108,23 +107,4 @@ export function filterComparisonRows(
   onlyDifferences: boolean,
 ): ComparisonTableRow[] {
   return onlyDifferences ? rows.filter((row) => row.differs) : rows;
-}
-
-/** The downsampled step history as the series MetricsChart draws, one per Run. */
-export function comparisonChartSeries(comparison: RunComparison): MetricSeries[] {
-  return comparison.runs.map((run) => ({
-    id: run.id,
-    label: run.name,
-    points: (comparison.history ?? [])
-      .filter((series) => series.runId === run.id)
-      .flatMap((series) =>
-        // The chart orders points by step; the history carries no wall time.
-        series.points.map((point) => ({
-          name: series.key,
-          value: point.value,
-          step: point.step,
-          timestamp: '',
-        })),
-      ),
-  }));
 }

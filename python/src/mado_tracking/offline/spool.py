@@ -335,7 +335,7 @@ class RunSpool:
         step: int,
         kind: str,
         artifact_path: str,
-        caption: str = "",
+        caption: str | None = None,
         metadata: Mapping[str, Any] | None = None,
         media_id: str | None = None,
     ) -> dict[str, Any]:

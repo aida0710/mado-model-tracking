@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { OperationsAlertKind, OperationsAlertResolution } from '@mmt/contracts';
 import { JOB_HEARTBEAT_STALE_SECONDS, WORKER_OFFLINE_SECONDS } from './workerLiveness.js';
 
@@ -8,6 +9,15 @@ export const PLUGIN_STALL_ATTEMPTS = 5;
 // A worker silent for a week is treated as retired (renamed or removed host), so it neither
 // opens a new alert nor keeps an old one open forever.
 export const WORKER_RETIRED_SECONDS = 7 * 24 * 60 * 60;
+
+// The header badge lists open alerts; history views page through at most 200 at a time.
+const DEFAULT_ALERT_PAGE_SIZE = 50;
+const MAX_ALERT_PAGE_SIZE = 200;
+
+export const operationsAlertQuerySchema = z.strictObject({
+  state: z.enum(['open', 'all']).default('open'),
+  limit: z.coerce.number().int().min(1).max(MAX_ALERT_PAGE_SIZE).default(DEFAULT_ALERT_PAGE_SIZE),
+});
 
 export type OperationsAlertDetail = Record<string, string | number | boolean | null>;
 

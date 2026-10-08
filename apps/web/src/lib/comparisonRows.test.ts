@@ -3,7 +3,6 @@ import type { Run, RunComparison } from '@mmt/contracts';
 import {
   buildComparisonTableRows,
   chooseBaselineRunId,
-  comparisonChartSeries,
   filterComparisonRows,
   isComparableRunCount,
   parseComparedRunIds,
@@ -108,19 +107,6 @@ describe('比較表の行', () => {
       'tags.team',
     ]);
     expect(filterComparisonRows(rows, false)).toHaveLength(rows.length);
-  });
-
-  it('履歴はRunごとの系列になり、履歴の無いRunは空の系列になる', () => {
-    const series = comparisonChartSeries(comparison);
-    expect(series.map((item) => [item.id, item.points.length])).toEqual([
-      ['a', 1],
-      ['b', 0],
-    ]);
-    expect(series[0]!.points[0]).toMatchObject({
-      name: 'wer',
-      step: 1,
-      value: 0.3,
-    });
   });
 });
 

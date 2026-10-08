@@ -73,6 +73,45 @@ SDKを使うコードは、RunのメトリクスやArtifactを既存APIへ保存
 
 manifestのSHA256とbyte数は実ファイルと一致させます。すべての出力を書き終えてからmanifestを置きます。workerは終了後にmanifestと出力を検証し、metricsとArtifactsをRunへ回収します。詳細な制限と、停止・worker再接続の動作は[worker手順](worker.md)を参照してください。
 
+### 出力が多いとき（音声の推論など）
+
+出力ファイルは1つのJobで10000件まで保存できます（workerの`MMT_WORKER_MAX_OUTPUT_FILES`で変更）。`result.json`は1MiBまでなので、数千件のファイルは`result.json`に並べず、JSON Linesのファイル（1行に1件`{"path","sha256","size","mimeType"}`）に書いて`artifactsManifest`で指します。このときは`"version": 2`にします。
+
+```json
+{"version": 2, "complete": true, "artifactsManifest": "artifacts.jsonl"}
+```
+
+`artifacts.jsonl`と`result.json`自身はRun Artifactとして保存されません。workerは出力を1本のtar streamでまとめて受け取るので、ファイル数が多くてもSSH接続は1回です。途中で接続が切れた場合は、保存できていないファイルだけを取り直します。
+
+### 学習結果のモデルやデータセットを登録する
+
+学習結果のモデルや、推論・前処理で作ったデータセットを、SDKなしで登録したいときは`result.json`をversion 2にして`models`と`datasets`を書きます。
+
+```json
+{
+  "version": 2,
+  "complete": true,
+  "artifacts": [{"path": "model/weights.bin", "sha256": "<64桁hex>", "size": 1048576}],
+  "models": [{"path": "model/weights.bin"}]
+}
+```
+
+- `modelId`を省略すると、Taskの「成功時に出力モデルを登録」で選んだModelへ登録します。Taskで設定していない場合は`modelId`を書きます。Taskと別のModelは指定できません（どちらに登録されたか分からなくなるため）。
+- 同じModelをTaskでも設定している場合、登録は宣言の1回だけで、下流の推論・評価も1回だけ起動します。
+- 宣言したモデルの推論・評価は、学習Runが成功してから起動します。失敗・キャンセルなら起動しません。
+- `datasets`は`{datasetId, path または uri, digest, schema?, metadata?}`。`path`の場合、版のURIは`mmt-artifact://runs/<RunのID>/container/<path>`になり、評価の表から同じ形で参照できます。
+- モデルを宣言できるのはtraining / finetuningのRunだけです。workerのtokenに`registry:write`が要ります（無いとJobはfailedになります）。
+
+### 出力の上限
+
+| 項目 | 上限 |
+|---|---|
+| 出力ファイル数 | 10000（`MMT_WORKER_MAX_OUTPUT_FILES`） |
+| `result.json` | 1MiB |
+| `artifactsManifest`の1行 | 4KiB |
+| metrics | 1000点 |
+| `models` / `datasets` | 16件 / 64件 |
+
 ### 評価コンテナが書く結果ファイル
 
 評価の自動実行で動くコンテナは、サンプルごとの結果を`eval/results.jsonl`のようなjsonlで出力すると、Webで音声を聴きながら確認できます。列名は`audio`・`reference`・`prediction`・`score`です。形式は[評価サンプルの推奨形式](evaluation.md#評価サンプルの推奨形式)を参照してください。

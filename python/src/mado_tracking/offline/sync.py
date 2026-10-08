@@ -240,17 +240,19 @@ class _RunSync:
         for media in read_media(self.directory):
             if media["id"] in self.state.sent_media_ids:
                 continue
-            body: dict[str, Any] = {
+            item: dict[str, Any] = {
                 "id": media["id"],
                 "key": media["key"],
                 "step": media["step"],
                 "kind": media["kind"],
                 "artifactId": self._artifact_id(media["artifactPath"], artifact_ids),
-                "caption": media.get("caption", ""),
+                "caption": media.get("caption"),
                 "metadata": media.get("metadata", {}),
             }
             # The media id makes the POST idempotent, so a lost response can be retried.
-            self.client.request("POST", f"{self.run_path}/media", json=body, retryable=True)
+            self.client.request(
+                "POST", f"{self.run_path}/media", json={"items": [item]}, retryable=True
+            )
             self.state.sent_media_ids.append(media["id"])
             self._save()
             self.report.media += 1

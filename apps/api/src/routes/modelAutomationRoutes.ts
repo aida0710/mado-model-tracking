@@ -1,17 +1,14 @@
 import { Hono } from 'hono';
-import { z } from 'zod';
 import {
   automationExecutionCreateSchema,
   automationExecutionQuerySchema,
+  automationRuleOwnerSchema,
   modelAutomationRuleSchema,
   modelAutomationToggleSchema,
 } from '../domain/modelAutomationValidation.js';
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 import type { ModelAutomationService } from '../services/modelAutomationService.js';
-import { uuidSchema } from '../domain/validation.js';
-
-const automationRuleOwnerSchema = z.strictObject({ serviceAccountId: uuidSchema });
 
 export function modelAutomationRoutes(automation: ModelAutomationService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();

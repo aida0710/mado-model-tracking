@@ -519,7 +519,7 @@ SDKとworkerは同じ収集処理`mado_tracking.system_metrics`を使う。名�
 
 ### MLflowの`system/`名との対応
 
-公式MLflow 3（`mlflow.enable_system_metrics_logging()`）は`system/`接頭辞で記録する。MadoのMLflow APIはこの名前をそのまま保存し、get-historyで読める（2026-10-08、MLflow 3.0.0と3.17.0で確認。`artifacts/verification/2026-10-08/system-metrics/`）。Webで両方の名前を同じ図にまとめる表示は未実装（第5波のchart-panels-and-pages-webで対応予定）。
+公式MLflow 3（`mlflow.enable_system_metrics_logging()`）は`system/`接頭辞で記録する。MadoのMLflow APIはこの名前をそのまま保存し、get-historyで読める（2026-10-08、MLflow 3.0.0と3.17.0で確認。`artifacts/verification/2026-10-08/system-metrics/`）。WebのRun詳細「System metrics」タブは、両方の名前を同じ分類（CPU、メモリ、ディスク、ネットワーク、GPUごと）と単位の図にまとめる（`apps/web/src/lib/systemMetricKeys.ts`）。MLflowのMB（10^6）はbytesに換算して同じ図に置く。MLflowのnetworkは累積MBなので、Madoの毎秒量とは別の図「ネットワーク（開始からの累計 bytes）」にする。表に無い`system`名は1つずつ別の図にする。
 
 | Mado | MLflow | 単位の違い |
 |---|---|---|

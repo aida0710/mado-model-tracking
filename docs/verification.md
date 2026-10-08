@@ -282,3 +282,39 @@ MMT_WEB_URL=http://127.0.0.1:<Webのport> \
 MMT_VERIFY_OUTPUT=artifacts/verification/<日付>/storage-web \
 node apps/web/tests/browser-admin-storage.mjs
 ```
+
+## 探索結果の分析（平行座標・パラメータ重要度・散布図）をブラウザで確認する
+
+`apps/web/tests/browser-analysis.mjs`は、`/tests/fixtures/analysis-harness.html`（RunAnalysisPanelを単独でmountするページ）をmockのAPIで開きます。確認する項目は次のとおりです。
+
+- 合成Run 300件で、brushによる絞り込みと、その結果がRun一覧の代わりの要素へ渡ること
+- 重要度の表の並べ替え
+- 散布図のclickでRun詳細へ移ること
+- Sweepのobjectiveが目的の既定になること
+- 5000件でdragの1ステップが200ms以内に応答すること
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47129 npx vite --port 47120 --strictPort --host 127.0.0.1) &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_WEB_URL=http://127.0.0.1:47120 \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/analysis-web \
+node apps/web/tests/browser-analysis.mjs
+```
+
+標準出力のJSONに、brush後の件数と、5000件でのdragの各ステップの時間（ms）が出ます。
+
+## Runの説明文とコメントをブラウザで確認する
+
+`apps/web/tests/browser-comments.mjs`は、開発モード（`AUTH_MODE=development`）のAPIに対して、実際に記録を作って確かめます。稼働中の開発用API・Webとは別のportで起動してください。
+
+```bash
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_WEB_URL=http://127.0.0.1:<Webのport> \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/comments-web \
+node apps/web/tests/browser-comments.mjs
+```
+
+説明文の8000文字超過は送信前に止まること、保存した説明文とMLflowの`runs/get`の`mlflow.note.content`が同じこと、`<script>`・`onerror`・`javascript:`リンクが実行されず文字として出ること、外部画像は読み込まずリンクになること、コメントの投稿・返信・編集（編集済み表示）・削除（「削除されました」）、viewerには入力欄と操作が出ないこと、モデル版の詳細ページに別のスレッドが出ることを確かめます。
+
+`apps/api/test/harness.ts`はWebのOriginを`http://127.0.0.1:5182`に固定するため、別portのWebから使うときはOriginを付け替える検証用の小さなserverが要ります（2026-10-08の検証では`/tmp`に置いて使い、リポジトリには入れていない）。

@@ -21,10 +21,7 @@ const UNREACHABLE_DATABASE_URL = 'postgresql://mmt@127.0.0.1:1/mmt_unreachable';
 
 // Documented in api-contract.md but implemented by a route of the same wave that is not merged
 // into this branch yet. The parent removes an entry when it adds the route to the catalog.
-const DOCUMENTED_ROUTES_PENDING_IMPLEMENTATION = new Set([
-  // run-media-api (wave 5): the media routes.
-  'POST /runs/{}/media',
-]);
+const DOCUMENTED_ROUTES_PENDING_IMPLEMENTATION = new Set<string>();
 // Codes the contract names that no native route returns (MLflow responses, worker-side checks).
 const DOCUMENTED_CODES_OUTSIDE_NATIVE_ROUTES = new Set([
   // Returned through the MLflow Artifact API in its own error format.

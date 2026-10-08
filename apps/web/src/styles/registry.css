@@ -106,19 +106,6 @@
   border-color: var(--border);
   min-width: 160px;
 }
-.chart-canvas {
-  height: 330px;
-  width: 100%;
-  background: var(--background);
-}
-.chart-points {
-  margin-top: 16px;
-  margin-bottom: 24px;
-  color: var(--muted);
-}
-.chart-points table {
-  margin-top: 12px;
-}
 .log-view {
   background: #13171b;
   color: #d8e1e5;
@@ -229,9 +216,6 @@
     border-left: 0;
     border-top: 1px solid var(--border);
     padding: 22px 0 0;
-  }
-  .chart-canvas {
-    height: 280px;
   }
 }
 @media (max-width: 480px) {

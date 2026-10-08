@@ -47,6 +47,7 @@ const TAGS: { name: string; description: string }[] = [
   { name: 'evaluation', description: '評価結果の集約と比較' },
   { name: 'promotion', description: '昇格policyと判定履歴' },
   { name: 'collaboration', description: 'Runの説明文・コメント' },
+  { name: 'media', description: 'Runのstepごとの音声・画像・動画・表' },
   { name: 'saved-views', description: 'Run一覧の保存ビュー' },
   { name: 'sync', description: 'オフライン記録の後送り' },
   { name: 'checkpoints', description: '学習の途中再開のcheckpoint' },
@@ -54,6 +55,7 @@ const TAGS: { name: string; description: string }[] = [
   { name: 'audit', description: '監査ログ' },
   { name: 'admin', description: '全体管理（保存先・ユーザー）' },
   { name: 'notifications', description: '通知先・通知rule' },
+  { name: 'operations', description: '運用アラート' },
 ];
 
 const SECURITY_SCHEMES = {
@@ -91,6 +93,7 @@ const PATH_PARAMETERS: Record<string, { description: string; schema: JsonSchema 
   j: { description: 'Job ID', schema: { type: 'string', format: 'uuid' } },
   s: { description: 'Sweep ID', schema: { type: 'string', format: 'uuid' } },
   c: { description: 'Comment ID', schema: { type: 'string', format: 'uuid' } },
+  mediaId: { description: 'RunMedia ID', schema: { type: 'string', format: 'uuid' } },
   v: { description: '版または保存ビューのID', schema: { type: 'string', format: 'uuid' } },
   id: { description: '対象のID', schema: { type: 'string', format: 'uuid' } },
   userId: { description: 'User ID', schema: { type: 'string', format: 'uuid' } },

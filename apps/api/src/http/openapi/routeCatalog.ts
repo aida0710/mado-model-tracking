@@ -40,11 +40,14 @@ import {
 import {
   modelAliasAssignmentSchema,
   modelAliasEventQuerySchema,
+  modelAliasProtectionInputSchema,
+  modelAliasProtectionQuerySchema,
   modelAliasRemovalSchema,
 } from '../../domain/modelAliasValidation.js';
 import {
   automationExecutionCreateSchema,
   automationExecutionQuerySchema,
+  automationRuleOwnerSchema,
   modelAutomationRuleSchema as automationRuleCreateSchema,
   modelAutomationToggleSchema,
 } from '../../domain/modelAutomationValidation.js';
@@ -62,6 +65,7 @@ import {
 import {
   promotionEvaluationQuerySchema,
   promotionPolicyCreateSchema,
+  promotionPolicyOwnerSchema,
   promotionPolicyPatchSchema,
   promotionPolicyQuerySchema,
 } from '../../domain/promotionPolicyValidation.js';
@@ -69,7 +73,14 @@ import {
   parameterImportanceRequestSchema,
   runAnalysisTableRequestSchema,
 } from '../../domain/runAnalysisValidation.js';
+import { operationsAlertQuerySchema } from '../../domain/operationsAlerts.js';
 import { runNoteUpdateSchema } from '../../domain/runNote.js';
+import {
+  mediaCompareSchema,
+  mediaTableQuerySchema,
+  runMediaCreateSchema,
+  runMediaListQuerySchema,
+} from '../../domain/runMediaValidation.js';
 import { runResumeRequestSchema } from '../../domain/runResume.js';
 import {
   artifactPresenceCheckSchema,
@@ -331,6 +342,23 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: { kind: 'public' },
     responses: { 204: null },
     errors: routeError(403, 'invalid_origin'),
+  },
+  {
+    method: 'post',
+    path: '/api/auth/oidc/backchannel-logout',
+    tag: 'auth',
+    summary: 'IdPからのback-channel logout',
+    access: { kind: 'public' },
+    body: {
+      contentType: 'application/x-www-form-urlencoded',
+      description: 'logout_token（OpenID Connect Back-Channel Logout 1.0）',
+    },
+    responses: { 200: null },
+    errors: [
+      ...routeError(400, 'invalid_logout_token', 'logout_token_replayed'),
+      ...routeError(404, 'oidc_disabled'),
+      ...routeError(503, 'oidc_unavailable'),
+    ],
   },
   {
     method: 'get',
@@ -607,6 +635,16 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: REGISTRY_WRITE,
     body: modelAliasAssignmentSchema,
     responses: { 200: contract.modelSchema },
+    errors: [
+      ...routeError(403, 'alias_protected'),
+      ...routeError(409, 'alias_evaluation_not_passed'),
+      ...routeError(
+        422,
+        'alias_evaluation_required',
+        'alias_reason_required',
+        'alias_evaluation_mismatch',
+      ),
+    ],
   },
   {
     method: 'delete',
@@ -617,6 +655,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     body: modelAliasRemovalSchema,
     bodyOptional: true,
     responses: { 204: null },
+    errors: routeError(403, 'alias_protected'),
   },
   {
     method: 'get',
@@ -626,6 +665,34 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: PROJECT_VIEWER,
     query: modelAliasEventQuerySchema,
     responses: { 200: contract.modelAliasEventPageSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/alias-protections',
+    tag: 'registry',
+    summary: '保護aliasの一覧',
+    access: PROJECT_VIEWER,
+    query: modelAliasProtectionQuerySchema,
+    responses: { 200: contract.itemsOf(contract.modelAliasProtectionSchema) },
+  },
+  {
+    method: 'put',
+    path: '/api/projects/:p/alias-protections/:alias',
+    tag: 'registry',
+    summary: 'aliasを保護する（設定の置き換え）',
+    access: PROJECT_ADMIN,
+    query: modelAliasProtectionQuerySchema,
+    body: modelAliasProtectionInputSchema,
+    responses: { 200: contract.modelAliasProtectionSchema },
+  },
+  {
+    method: 'delete',
+    path: '/api/projects/:p/alias-protections/:alias',
+    tag: 'registry',
+    summary: 'aliasの保護を外す',
+    access: PROJECT_ADMIN,
+    query: modelAliasProtectionQuerySchema,
+    responses: { 204: null },
   },
   {
     method: 'get',
@@ -813,6 +880,16 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     responses: { 200: contract.modelAutomationRuleSchema },
   },
   {
+    method: 'put',
+    path: '/api/projects/:p/automation-rules/:id/owner',
+    tag: 'automation',
+    summary: 'ruleの所有者をService Accountへ移す',
+    access: PROJECT_ADMIN,
+    body: automationRuleOwnerSchema,
+    responses: { 200: contract.modelAutomationRuleSchema },
+    errors: routeError(422, 'invalid_automation_owner'),
+  },
+  {
     method: 'post',
     path: '/api/projects/:p/automation-rules/:id/executions',
     tag: 'automation',
@@ -987,6 +1064,70 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     body: runNoteUpdateSchema,
     responses: { 200: contract.runNoteSchema },
     errors: routeError(409, 'run_deleted'),
+  },
+
+  // media
+  {
+    method: 'post',
+    path: '/api/projects/:p/runs/:r/media',
+    tag: 'media',
+    summary: 'stepごとのmediaを登録（クライアントのidで冪等）',
+    access: RUNS_WRITE,
+    body: runMediaCreateSchema,
+    responses: { 201: contract.runMediaListSchema },
+    errors: [
+      ...routeError(409, 'media_conflict', 'media_exists', 'run_finalized'),
+      ...routeError(413, 'media_table_too_large'),
+      ...routeError(
+        422,
+        'media_duplicate_item',
+        'media_artifact_unavailable',
+        'media_artifact_run',
+        'media_kind_mismatch',
+        'media_table_invalid',
+        'unsupported_table_format',
+      ),
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/runs/:r/media',
+    tag: 'media',
+    summary: 'Runのmedia（step順）',
+    access: PROJECT_VIEWER,
+    query: runMediaListQuerySchema,
+    responses: { 200: contract.runMediaPageSchema },
+    errors: routeError(400, 'invalid_cursor'),
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/runs/:r/media/keys',
+    tag: 'media',
+    summary: 'Runのmediaのkeyごとの件数とstepの範囲',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.itemsOf(contract.runMediaKeySummarySchema) },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/runs/:r/media/:mediaId/table',
+    tag: 'media',
+    summary: '表のmediaを行の範囲で読む',
+    access: PROJECT_VIEWER,
+    query: mediaTableQuerySchema,
+    responses: { 200: contract.mediaTablePageSchema },
+    errors: [
+      ...routeError(413, 'media_table_too_large'),
+      ...routeError(422, 'media_not_table', 'unsupported_table_format'),
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/media/compare',
+    tag: 'media',
+    summary: '複数Runの同じkeyのmediaをstepで並べる',
+    access: PROJECT_VIEWER,
+    body: mediaCompareSchema,
+    responses: { 200: contract.mediaCompareGridSchema },
   },
   {
     method: 'post',
@@ -1562,6 +1703,14 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     responses: { 200: z.strictObject({ prometheus: z.string() }) },
   },
   {
+    method: 'get',
+    path: '/api/projects/:p/plugins/:id/outbox',
+    tag: 'plugins',
+    summary: 'pluginのevent送信状況',
+    access: PROJECT_ADMIN,
+    responses: { 200: contract.pluginOutboxSummarySchema },
+  },
+  {
     method: 'post',
     path: '/api/projects/:p/plugins/:id/datasets/search',
     tag: 'plugins',
@@ -1616,6 +1765,16 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: PROJECT_ADMIN,
     body: promotionPolicyPatchSchema,
     responses: { 200: contract.promotionPolicySchema },
+  },
+  {
+    method: 'put',
+    path: '/api/projects/:p/promotion-policies/:id/owner',
+    tag: 'promotion',
+    summary: 'policyの所有者をService Accountへ移す',
+    access: PROJECT_ADMIN,
+    body: promotionPolicyOwnerSchema,
+    responses: { 200: contract.promotionPolicySchema },
+    errors: routeError(422, 'promotion_owner_invalid'),
   },
   {
     method: 'get',
@@ -2099,5 +2258,16 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: PROJECT_ADMIN,
     query: notificationDeliveryQuerySchema,
     responses: { 200: contract.itemsOf(contract.notificationDeliverySchema) },
+  },
+
+  // operations
+  {
+    method: 'get',
+    path: '/api/projects/:p/operations-alerts',
+    tag: 'operations',
+    summary: '運用アラート（Jobのheartbeat途絶・worker停止・plugin送信滞留）',
+    access: PROJECT_VIEWER,
+    query: operationsAlertQuerySchema,
+    responses: { 200: contract.itemsOf(contract.operationsAlertSchema) },
   },
 ];

@@ -6,11 +6,7 @@ import { Empty, ErrorNotice, Resource } from '../Feedback';
 import { MediaCompareGrid } from './MediaCompareGrid';
 import { mediaKindLabels } from '../../i18n/media';
 import { text, textTemplates } from '../../i18n/catalog';
-
-export interface MediaCompareProps {
-  projectId: string;
-  runIds: string[];
-}
+import type { MediaCompareProps } from '../charts/chartProps';
 
 // Columns for the "evenly spaced" shortcut: enough to follow training, few enough to fit a screen.
 const EVENLY_SPACED_COLUMNS = 8;

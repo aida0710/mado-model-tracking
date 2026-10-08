@@ -36,6 +36,7 @@ export const promotionPolicySchema = namedContractSchema(
     missingBaseline: z.enum(['pass', 'fail']),
     autoPromote: z.boolean(),
     createdBy: idSchema,
+    runAsUserId: idSchema,
     createdAt: timestampSchema,
   }),
 );
@@ -84,6 +85,8 @@ export const promotionEvaluationSchema = namedContractSchema(
         'baseline_not_evaluated',
         'creator_access_revoked',
         'evaluation_error',
+        'baseline_changed',
+        'promotion_denied',
       ])
       .nullable(),
     promoted: z.boolean(),

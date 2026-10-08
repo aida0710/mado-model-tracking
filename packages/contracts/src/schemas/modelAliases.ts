@@ -3,6 +3,7 @@ import type {
   ModelAliasEvent,
   ModelAliasEventPage,
   ModelAliasEventSource,
+  ModelAliasProtection,
 } from '../modelAliases.js';
 import { cursorPageOf, idSchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
@@ -40,6 +41,21 @@ export const modelAliasEventPageSchema = namedContractSchema(
   'ModelAliasEventPage',
   cursorPageOf(modelAliasEventSchema),
 );
+export const modelAliasProtectionSchema = namedContractSchema(
+  'ModelAliasProtection',
+  z.strictObject({
+    id: idSchema,
+    projectId: idSchema,
+    modelId: idSchema.nullable(),
+    alias: z.string(),
+    requiredRole: z.enum(['editor', 'admin']),
+    requirePassedEvaluation: z.boolean(),
+    createdBy: idSchema,
+    createdAt: timestampSchema,
+    updatedBy: idSchema,
+    updatedAt: timestampSchema,
+  }),
+);
 
 type _ModelAliasEventSource = Expect<
   MutuallyAssignable<z.infer<typeof modelAliasEventSourceSchema>, ModelAliasEventSource>
@@ -49,4 +65,7 @@ type _ModelAliasEvent = Expect<
 >;
 type _ModelAliasEventPage = Expect<
   MutuallyAssignable<z.infer<typeof modelAliasEventPageSchema>, ModelAliasEventPage>
+>;
+type _ModelAliasProtection = Expect<
+  MutuallyAssignable<z.infer<typeof modelAliasProtectionSchema>, ModelAliasProtection>
 >;

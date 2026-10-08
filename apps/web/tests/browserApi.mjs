@@ -365,8 +365,10 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       return reply({ items: [], nextCursor: null });
     if (resource === 'operations-alerts' && method === 'GET') return list([]);
     if (resource === 'members') {
-      if (method === 'GET') return list([{ user, role: project.role }]);
-      return reply({ ...user, role: body.role });
+      // ProjectMember: the mock grants the role directly and binds no SSO group.
+      if (method === 'GET')
+        return list([{ user, role: project.role, directRole: project.role, groups: [] }]);
+      return reply({ user, role: body.role, directRole: body.role, groups: [] });
     }
     if (resource === 'lineage')
       return reply({

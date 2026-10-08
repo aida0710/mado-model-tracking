@@ -8,11 +8,7 @@ import { MediaGallery } from './MediaGallery';
 import { MediaStepSlider } from './MediaStepSlider';
 import { mediaKindLabels } from '../../i18n/media';
 import { text, textTemplates } from '../../i18n/catalog';
-
-export interface RunMediaPanelProps {
-  projectId: string;
-  runId: string;
-}
+import type { RunMediaPanelProps } from '../charts/chartProps';
 
 function KeyList({
   keys,

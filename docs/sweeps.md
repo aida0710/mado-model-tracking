@@ -2,7 +2,7 @@
 
 Sweep は、探索空間から parameter の組を提案して試行（trial）を繰り返し、目的メトリクスが最良の試行を探す仕組みである。語は W&B の sweep config（`method`、`metric.goal`、`parameters`、`early_terminate`）に合わせる。
 
-Sweep の試行は、既存の Task の起動（Run と Job）として ComputeTarget のキューに入る。worker 側の変更は無い。API と制御は `apps/api/src/services/sweep*.ts`、探索アルゴリズムは `apps/api/src/domain/sweeps/`。Python SDK は `python/src/mado_tracking/sweeps.py`（下の「Python SDK」）。画面（sweeps-web）は後の波で作る。API の契約は [api-contract.md の Sweeps](api-contract.md#sweeps)。
+Sweep の試行は、既存の Task の起動（Run と Job）として ComputeTarget のキューに入る。worker 側の変更は無い。API と制御は `apps/api/src/services/sweep*.ts`、探索アルゴリズムは `apps/api/src/domain/sweeps/`。Python SDK は `python/src/mado_tracking/sweeps.py`（下の「Python SDK」）。画面は Project の「Sweeps」（Experiments の右）。一覧 `/projects/:p/sweeps`、詳細 `/projects/:p/sweeps/:sweepId`（下の「画面」）。API の契約は [api-contract.md の Sweeps](api-contract.md#sweeps)。
 
 ## 使い方
 
@@ -120,7 +120,7 @@ with Client() as client:
 
 ### W&B 形式の config の変換規則
 
-SDK（`python/src/mado_tracking/sweep_config.py` の `convert_sweep_config`）と画面（sweeps-web の `lib/sweepConfig.ts`）は、同じ config を同じ API の body に変換する。どちらかを変えるときは、この表ともう一方を合わせて直す。未対応のキーは無視せずエラーにする（SDK は `ConfigurationError`、画面は入力エラー）。黙って捨てると、書いたものと違う探索が回るため。
+SDK（`python/src/mado_tracking/sweep_config.py` の `convert_sweep_config`）と画面（`apps/web/src/lib/sweepConfig.ts`）は、同じ config を同じ API の body に変換する。どちらかを変えるときは、この表ともう一方を合わせて直す。未対応のキーは無視せずエラーにする（SDK は `ConfigurationError`、画面は入力エラー）。黙って捨てると、書いたものと違う探索が回るため。
 
 | W&B の config | API の body | 例 |
 |---|---|---|
@@ -141,7 +141,21 @@ SDK（`python/src/mado_tracking/sweep_config.py` の `convert_sweep_config`）�
 | `parallelism` | `parallelism` | 省略時はサーバーの既定1 |
 | `program`・`command`・`name`・`project` などほかのトップレベルのキー | エラー | 名前は `create_sweep(name=)`、実行するコードは Task で決める |
 
+画面（JavaScript）では JSON の `1.0` と `1` を区別できないので、distribution を省略した `{min: 1.0, max: 8.0}` は画面では int_uniform、SDK では uniform になる。どちらにしたいか曖昧なときは distribution を書く。
+
 値の範囲（min<max、grid の組み合わせ数など）は SDK では確かめず、API の 422（`sweep_space_invalid`・`sweep_early_terminate_invalid`）で返る。
+
+## 画面
+
+- 一覧（Sweeps）: 名前、Task、探索方法、状態、試行数/上限、実行中（queued と running の数）、最良の目的値、作成者、作成日時。状態で絞り込み、続きは「さらに読み込む」（cursor）。「Sweepを作成」は editor 以上に出る。
+- 作成ダイアログ: Task（作成時点の revision を固定することを表示）、Experiment は Task のものを表示するだけ（API の SweepCreate に experimentId は無い）、Compute target と GPU（空は Task の既定）、探索方法、目的（metric 名の候補は Task の最新の Run 50件の metrics）、最大試行数、並列数、seed、早期打ち切り（なし / hyperband: min_iter・eta・max_iter）。
+  - 探索空間は parameter ごとの行（値の列挙 / 範囲＋分布 / 定数）か、W&B 形式の JSON の貼り付け。JSON の変換は上の「W&B 形式の config の変換規則」の表と同じ。未対応のキーは画面の入力エラー。JSON に切り替えると、行の内容を W&B 形式にして表示する。
+  - 値の列挙はカンマ区切り（数値・true/false は型を保つ。`"32"` のように引用符で囲むと文字列）。値にカンマを含むときは JSON 配列で書く。
+  - grid の組み合わせ数を入力中に表示し、10000 を超えたら送信しない。
+  - min<max などの値の検査は API に任せ、422 `sweep_space_invalid` の message が「名前」で指す parameter の行に出す。指さない message は探索空間の上に出す。
+- 詳細: 状態と理由、進み具合（作成済みの試行数/最大試行数と状態別の件数）、最良試行（目的値と parameters）、試行ごとの目的値の散布と「それまでの最良」の階段線（finished と early_stopped だけで更新）、定義、試行の表（parameters の列、目的値、状態。early_stopped は別の色、Run・Job へのリンク、試行番号順 / 目的値の良い順）、試行 Run の目的メトリクスの重ね描き（新しい200試行まで）、分析（RunAnalysisPanel、runSet は sweepId）。
+  - 一時停止・再開・中止・試行数と並列数の変更は、作成者（editor 以上）か Project admin にだけ出す。終了した Sweep には出さない。Task の改訂で止まった Sweep（`task_revision_changed`）には再開を出さず、新しい Sweep の作成を案内する。
+  - Sweep が running か、queued・running の試行が残る間は5秒ごとに読み直す。
 
 ## 試行の制御
 

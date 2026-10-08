@@ -20,9 +20,13 @@ export function genericErrorsOf(route: NativeRoute): RouteError[] {
     );
     errors.push(...routeError(403, 'password_change_required'));
     if (route.method !== 'get') errors.push(...routeError(403, 'invalid_origin'));
+    // An SSO session is rechecked against the IdP's UserInfo; an unreachable IdP fails closed.
+    errors.push(...routeError(503, 'oidc_unavailable'));
   }
-  if (access.kind === 'session' || ('sessionOnly' in access && access.sessionOnly))
-    errors.push(...routeError(403, 'session_required'));
+  const isSessionOnly = access.kind === 'session' || ('sessionOnly' in access && access.sessionOnly);
+  if (isSessionOnly) errors.push(...routeError(403, 'session_required'));
+  // An SSO user's API token stops when the user's group sync is older than the allowed age.
+  else if (access.kind !== 'public') errors.push(...routeError(401, 'identity_sync_required'));
   if (access.kind === 'signedIn' || access.kind === 'project' || access.kind === 'globalAdmin')
     errors.push(...routeError(403, 'insufficient_scope'));
   if (access.kind === 'project')

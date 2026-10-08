@@ -46,6 +46,10 @@ export const modelAutomationToggleSchema = z.strictObject({
   enabled: z.boolean(),
 });
 
+export const automationRuleOwnerSchema = z.strictObject({
+  serviceAccountId: uuidSchema,
+});
+
 export const automationExecutionCreateSchema = z.union([
   z.strictObject({ modelVersionId: uuidSchema }),
   z.strictObject({ triggerRunId: uuidSchema }),
