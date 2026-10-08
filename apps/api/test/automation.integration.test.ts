@@ -15,6 +15,10 @@ import type {
   WorkerJob,
 } from '@mmt/contracts';
 import { transaction } from '../src/db/database.js';
+import {
+  AUTOMATION_PENDING_MAX_AGE_HOURS,
+  AutomationPendingSweeper,
+} from '../src/services/automationPendingSweeper.js';
 import { DomainError } from '../src/domain/errors.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import {
@@ -81,6 +85,18 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
         200,
       )
     ).items;
+  }
+
+  async function finishWithoutJob(fixture: ContainerFixture, runId: string): Promise<void> {
+    for (const status of ['running', 'finished'])
+      await entity(
+        await request(harness.app, `${fixture.basePath}/runs/${runId}`, {
+          method: 'PATCH',
+          cookie: fixture.editor.cookie,
+          body: { status },
+        }),
+        200,
+      );
   }
 
   async function replayRegistration(fixture: ContainerFixture, model: ModelVersion): Promise<void> {
@@ -449,6 +465,8 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
         }),
       }),
     );
+    // Registered after training ended, so the rules run at registration.
+    await finishWithoutJob(fixture, sourceRun.id);
     const model = await registerModel(fixture, {
       sourceRunId: sourceRun.id,
       defaultCodeVersionId: newerCode.id,
@@ -540,7 +558,7 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
     expect((await harness.database.query('SELECT * FROM jobs')).rows).toHaveLength(1);
   });
 
-  it('SDKのproject scopedモデル出力登録も同じ経路を通り、sourceRunをparentRunへ保存する', async () => {
+  it('SDKのproject scopedモデル出力登録も同じ経路を通り、学習Runの成功後にsourceRunをparentRunへ保存する', async () => {
     const fixture = await containerFixture(harness);
     const rule = await registerRule(fixture);
     const sourceRun = await fixture.newRun('SDK training run', 'training');
@@ -572,10 +590,15 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
         },
       }),
     );
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({ ruleId: rule.id, modelVersionId: model.id, status: 'pending' }),
+    ]);
+    await finishWithoutJob(fixture, sourceRun.id);
     const execution = (await executionHistory(fixture))[0]!;
     expect(execution).toMatchObject({
       ruleId: rule.id,
       modelVersionId: model.id,
+      sourceRunId: sourceRun.id,
       status: 'queued',
     });
     const run = await entity<Run>(
@@ -977,5 +1000,299 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
     expect(await executionHistory(fixture)).toEqual([
       expect.objectContaining({ modelVersionId: model.id, status: 'queued' }),
     ]);
+  });
+
+  async function registerOutput(
+    fixture: ContainerFixture,
+    output: { sourceRunId: string; version: string },
+  ): Promise<ModelVersion> {
+    return registerModel(fixture, output);
+  }
+
+  async function startTrainingJob(fixture: ContainerFixture, name: string) {
+    const run = await fixture.newRun(name, 'training');
+    const job = await entity<Job>(
+      await request(harness.app, `${fixture.basePath}/jobs`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { runId: run.id, targetId: fixture.target.id },
+      }),
+    );
+    return { run, job };
+  }
+
+  async function claimJob(fixture: ContainerFixture, workerId: string): Promise<WorkerJob> {
+    return (
+      await entity<{ item: WorkerJob }>(
+        await request(harness.app, '/api/worker/claim', {
+          method: 'POST',
+          token: fixture.workerToken,
+          body: { workerId },
+        }),
+        200,
+      )
+    ).item;
+  }
+
+  async function completeJob(
+    fixture: ContainerFixture,
+    claimed: WorkerJob,
+    status: 'finished' | 'failed',
+  ): Promise<void> {
+    await entity(
+      await request(harness.app, `/api/worker/jobs/${claimed.job.id}/complete`, {
+        method: 'POST',
+        token: fixture.workerToken,
+        body: { leaseId: claimed.job.leaseId, status, exitCode: status === 'finished' ? 0 : 1 },
+      }),
+      200,
+    );
+  }
+
+  async function automaticRuns(): Promise<{ id: string; parent_run_id: string; status: string }[]> {
+    return (
+      await harness.database.query(
+        "SELECT id,parent_run_id,status FROM runs WHERE tags ? 'automation.ruleId' ORDER BY created_at",
+      )
+    ).rows;
+  }
+
+  async function eventState(modelVersionId: string): Promise<string> {
+    return (
+      await harness.database.query<{ state: string }>(
+        'SELECT state FROM model_automation_events WHERE model_version_id=$1',
+        [modelVersionId],
+      )
+    ).rows[0]!.state;
+  }
+
+  it('学習Runのrunning中に登録した版は保留し、worker completeのfinishedで1組だけ起動する', async () => {
+    const fixture = await containerFixture(harness);
+    const rule = await registerRule(fixture);
+    const training = await startTrainingJob(fixture, 'Training');
+    const claimed = await claimJob(fixture, 'training-worker');
+    expect(claimed.job.id).toBe(training.job.id);
+    const model = await registerOutput(fixture, {
+      sourceRunId: training.run.id,
+      version: 'trained',
+    });
+
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({
+        ruleId: rule.id,
+        modelVersionId: model.id,
+        sourceRunId: training.run.id,
+        status: 'pending',
+        runId: null,
+        jobId: null,
+      }),
+    ]);
+    expect((await harness.database.query('SELECT * FROM model_automation_executions')).rows).toEqual(
+      [],
+    );
+    expect(await automaticRuns()).toEqual([]);
+
+    await completeJob(fixture, claimed, 'finished');
+    await completeJob(fixture, claimed, 'finished');
+
+    const history = await executionHistory(fixture);
+    expect(history).toEqual([
+      expect.objectContaining({ ruleId: rule.id, modelVersionId: model.id, status: 'queued' }),
+    ]);
+    expect(await automaticRuns()).toEqual([
+      { id: history[0]!.runId, parent_run_id: training.run.id, status: 'queued' },
+    ]);
+    const jobs = await harness.database.query('SELECT * FROM jobs WHERE run_id=$1', [
+      history[0]!.runId,
+    ]);
+    expect(jobs.rows).toEqual([expect.objectContaining({ status: 'queued' })]);
+    expect(await eventState(model.id)).toBe('processed');
+  });
+
+  it('学習Runがfailed・canceledならskipped(source_run_unsuccessful)を残しJobを作らない', async () => {
+    const fixture = await containerFixture(harness);
+    const rule = await registerRule(fixture);
+    const failing = await startTrainingJob(fixture, 'Failing training');
+    const claimed = await claimJob(fixture, 'failing-worker');
+    const failedModel = await registerOutput(fixture, {
+      sourceRunId: failing.run.id,
+      version: 'from-failed',
+    });
+    const canceled = await startTrainingJob(fixture, 'Canceled training');
+    const canceledModel = await registerOutput(fixture, {
+      sourceRunId: canceled.run.id,
+      version: 'from-canceled',
+    });
+
+    await completeJob(fixture, claimed, 'failed');
+    await entity(
+      await request(harness.app, `${fixture.basePath}/jobs/${canceled.job.id}/cancel`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+      }),
+      200,
+    );
+
+    const history = await executionHistory(fixture);
+    expect(history).toHaveLength(2);
+    for (const model of [failedModel, canceledModel]) {
+      expect(history.find((execution) => execution.modelVersionId === model.id)).toMatchObject({
+        ruleId: rule.id,
+        status: 'skipped',
+        runId: null,
+        jobId: null,
+        error: expect.stringMatching(/^source_run_unsuccessful:/),
+      });
+      expect(await eventState(model.id)).toBe('source_unsuccessful');
+    }
+    expect(await automaticRuns()).toEqual([]);
+  });
+
+  it('保留中に無効化したruleは起動せず、保留中に作ったruleは終端時点の有効ruleとして起動する', async () => {
+    const fixture = await containerFixture(harness);
+    const disabledLater = await registerRule(fixture);
+    const sourceRun = await fixture.newRun('Training', 'training');
+    const model = await registerOutput(fixture, { sourceRunId: sourceRun.id, version: 'pending' });
+    await entity(
+      await request(harness.app, `${fixture.basePath}/automation-rules/${disabledLater.id}`, {
+        method: 'PATCH',
+        cookie: fixture.administrator.cookie,
+        body: { enabled: false },
+      }),
+      200,
+    );
+    expect(await executionHistory(fixture)).toEqual([]);
+    const createdLater = await registerRule(fixture, { overrides: { name: 'Created later' } });
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({ ruleId: createdLater.id, status: 'pending' }),
+    ]);
+
+    await finishWithoutJob(fixture, sourceRun.id);
+
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({ ruleId: createdLater.id, modelVersionId: model.id, status: 'queued' }),
+    ]);
+    // A version registered after its source Run ended does not wait.
+    const afterFinish = await registerOutput(fixture, {
+      sourceRunId: sourceRun.id,
+      version: 'after-finish',
+    });
+    expect(await eventState(afterFinish.id)).toBe('processed');
+    expect(
+      (await executionHistory(fixture)).filter(
+        (execution) => execution.modelVersionId === afterFinish.id,
+      ),
+    ).toEqual([expect.objectContaining({ ruleId: createdLater.id, status: 'queued' })]);
+  });
+
+  it('MLflowのrunning Run中にlog_modelして登録した版も、UpdateRun FINISHEDで1回だけ起動する', async () => {
+    const fixture = await containerFixture(harness);
+    const rule = await registerRule(fixture);
+    const mlflow = `/api/mlflow/projects/${fixture.project.id}/api/2.0/mlflow`;
+    const post = async <T>(endpoint: string, body: unknown, method = 'POST') =>
+      entity<T>(
+        await request(harness.app, `${mlflow}${endpoint}`, {
+          method,
+          cookie: fixture.editor.cookie,
+          body,
+        }),
+        200,
+      );
+    const created = await post<{ run: { info: { run_id: string } } }>('/runs/create', {
+      experiment_id: fixture.experiment.id,
+    });
+    const runId = created.run.info.run_id;
+    const logged = await post<{ model: { info: { model_id: string } } }>('/logged-models', {
+      experiment_id: fixture.experiment.id,
+      source_run_id: runId,
+      name: 'trained-model',
+    });
+    const loggedModelId = logged.model.info.model_id;
+    for (const [path, contents] of Object.entries({
+      MLmodel: 'flavors:\n  python_function:\n    loader_module: model\n    model_path: model.bin\n',
+      'model.bin': 'trained weights',
+    }))
+      await entity(
+        await request(
+          harness.app,
+          `/api/mlflow/projects/${fixture.project.id}/api/2.0/mlflow-artifacts/artifacts/models/${loggedModelId}/artifacts/${path}`,
+          { method: 'PUT', cookie: fixture.editor.cookie, binary: contents },
+        ),
+        200,
+      );
+    await post(
+      `/logged-models/${loggedModelId}`,
+      { model_id: loggedModelId, status: 'LOGGED_MODEL_READY' },
+      'PATCH',
+    );
+    await post('/registered-models/create', {
+      name: 'MLflow trained',
+      tags: [{ key: 'mmt.model_family', value: 'qwen2' }],
+    });
+    await post('/model-versions/create', {
+      name: 'MLflow trained',
+      source: `models:/${loggedModelId}`,
+      model_id: loggedModelId,
+      run_id: runId,
+    });
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({ ruleId: rule.id, sourceRunId: runId, status: 'pending' }),
+    ]);
+
+    for (const status of ['FINISHED', 'RUNNING', 'FINISHED'])
+      await post('/runs/update', { run_id: runId, status });
+
+    expect(await executionHistory(fixture)).toEqual([
+      expect.objectContaining({ ruleId: rule.id, sourceRunId: runId, status: 'queued' }),
+    ]);
+    expect(await automaticRuns()).toEqual([expect.objectContaining({ parent_run_id: runId })]);
+  });
+
+  it('7日を超えた保留と削除済みsource Runの保留は、並行するsweeperでも1回だけskipped(source_run_timeout)にする', async () => {
+    const fixture = await containerFixture(harness);
+    const rule = await registerRule(fixture);
+    const staleRun = await fixture.newRun('Stale training', 'training');
+    const stale = await registerOutput(fixture, { sourceRunId: staleRun.id, version: 'stale' });
+    const deletedRun = await fixture.newRun('Deleted training', 'training');
+    const deleted = await registerOutput(fixture, {
+      sourceRunId: deletedRun.id,
+      version: 'deleted-source',
+    });
+    const freshRun = await fixture.newRun('Fresh training', 'training');
+    const fresh = await registerOutput(fixture, { sourceRunId: freshRun.id, version: 'fresh' });
+    await harness.database.query(
+      `UPDATE model_automation_events SET pending_since=now()-make_interval(hours=>$2+1)
+      WHERE model_version_id=$1`,
+      [stale.id, AUTOMATION_PENDING_MAX_AGE_HOURS],
+    );
+    await harness.database.query("UPDATE runs SET lifecycle_stage='deleted' WHERE id=$1", [
+      deletedRun.id,
+    ]);
+
+    const sweepers = Array.from(
+      { length: 2 },
+      () => new AutomationPendingSweeper(harness.database, harness.services.automation),
+    );
+    const expired = await Promise.all(sweepers.map((sweeper) => sweeper.sweep()));
+    expect(expired.reduce((total, count) => total + count, 0)).toBe(2);
+    expect(await Promise.all(sweepers.map((sweeper) => sweeper.sweep()))).toEqual([0, 0]);
+
+    const history = await executionHistory(fixture);
+    for (const model of [stale, deleted]) {
+      expect(history.filter((execution) => execution.modelVersionId === model.id)).toEqual([
+        expect.objectContaining({
+          ruleId: rule.id,
+          status: 'skipped',
+          error: expect.stringMatching(/^source_run_timeout:/),
+        }),
+      ]);
+      expect(await eventState(model.id)).toBe('source_timeout');
+    }
+    expect(await eventState(fresh.id)).toBe('pending');
+
+    // Training that succeeds after the expiry no longer starts automation.
+    await finishWithoutJob(fixture, staleRun.id);
+    expect((await executionHistory(fixture)).filter((execution) => execution.modelVersionId === stale.id)).toHaveLength(1);
+    expect(await automaticRuns()).toEqual([]);
   });
 });

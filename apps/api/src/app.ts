@@ -25,7 +25,10 @@ import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
 import { TaskService } from './services/taskService.js';
 import { AuditService } from './services/auditService.js';
-import { RunCompletionService } from './services/runCompletionService.js';
+import {
+  RunCompletionService,
+  type RunCompletionHandler,
+} from './services/runCompletionService.js';
 import { RepositoryFilesService } from './services/repositoryFilesService.js';
 import { GitRepositoryReader, type RepositoryReader } from './services/repositoryReader.js';
 import { ModelAutomationService } from './services/modelAutomationService.js';
@@ -37,6 +40,8 @@ import { WorkerService } from './services/workerService.js';
 import { TokenService } from './services/tokenService.js';
 import { PluginService, type PluginClientFactory } from './services/pluginService.js';
 import { OutboxDispatcher } from './services/outboxDispatcher.js';
+import { AutomationSourceRunHandler } from './services/automationSourceRunHandler.js';
+import { AutomationPendingSweeper } from './services/automationPendingSweeper.js';
 import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { auditRoutes } from './routes/auditRoutes.js';
@@ -72,7 +77,10 @@ export function createApplication(options: ApplicationOptions) {
   // Handlers run in this order inside the terminal-transition transaction. Output registration
   // must precede pending automation so versions it creates start in the same completion.
   // Plugin outbox events are not handlers: RunCompletionService enqueues them on every status change.
-  const runCompletion = new RunCompletionService([]);
+  // Handlers depend on services built from runCompletion, so they are appended to this array
+  // (which RunCompletionService keeps by reference) once those services exist.
+  const terminalHandlers: RunCompletionHandler[] = [];
+  const runCompletion = new RunCompletionService(terminalHandlers);
   const runs = new RunService(database, runCompletion);
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores, {
@@ -88,6 +96,8 @@ export function createApplication(options: ApplicationOptions) {
     options.repositoryReader ?? ((request) => gitRepositories.read(request)),
   );
   const automation = new ModelAutomationService(database, runs, jobs);
+  terminalHandlers.push(new AutomationSourceRunHandler(automation));
+  const automationSweeper = new AutomationPendingSweeper(database, automation);
   const registry = new RegistryService(database, automation);
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
@@ -206,6 +216,7 @@ export function createApplication(options: ApplicationOptions) {
   return {
     app,
     outbox,
+    automationSweeper,
     services: {
       auth,
       audit,
