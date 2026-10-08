@@ -2,7 +2,7 @@ import { rows, type Database } from '../../db/database.js';
 import {
   registeredModelSelect,
   modelVersionSelect,
-  activeModelVersions,
+  activeModelVersionsByModel,
 } from './modelRepository.js';
 import { registeredModelProtocol, modelVersionProtocol } from './protocol.js';
 import {
@@ -31,13 +31,14 @@ const modelFields: Record<string, SearchField> = {
 };
 const versionFields: Record<string, SearchField> = {
   ...modelFields,
+  name: { expression: 'm.name', numeric: false, acceptsInList: true },
   version: {
     expression: "CASE WHEN v.version ~ '^[0-9]+$' THEN v.version::numeric END",
     numeric: true,
   },
-  run_id: { expression: 'v.source_run_id::text', numeric: false },
-  model_id: { expression: 'vm.logged_model_id', numeric: false },
-  source_path: { expression: 'vm.artifact_uri', numeric: false },
+  run_id: { expression: 'v.source_run_id::text', numeric: false, acceptsInList: true },
+  model_id: { expression: 'vm.logged_model_id', numeric: false, acceptsInList: true },
+  source_path: { expression: 'vm.artifact_uri', numeric: false, acceptsInList: true },
   creation_timestamp: {
     expression: timestampInMillisecondsSql('v.created_at'),
     numeric: true,
@@ -102,16 +103,15 @@ export async function searchRegisteredModels(
     `${registeredModelSelect} WHERE m.project_id=$1 AND mm.deleted_at IS NULL AND ${search.filter} ORDER BY ${search.order} LIMIT ${limit} OFFSET ${start}`,
     search.parameters.values,
   );
-  const registeredModels = [];
-  for (const model of matches.slice(0, input.max_results))
-    registeredModels.push(
-      registeredModelProtocol(
-        model,
-        await activeModelVersions(database, { projectId, id: model.id }),
-      ),
-    );
+  const page = matches.slice(0, input.max_results);
+  const versionsByModel = await activeModelVersionsByModel(database, {
+    projectId,
+    modelIds: page.map((model) => model.id),
+  });
   return {
-    registered_models: registeredModels,
+    registered_models: page.map((model) =>
+      registeredModelProtocol(model, versionsByModel.get(model.id) ?? []),
+    ),
     ...(matches.length > input.max_results
       ? { next_page_token: nextPageToken(offset + input.max_results, fingerprint) }
       : {}),

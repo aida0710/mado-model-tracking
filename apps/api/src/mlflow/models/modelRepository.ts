@@ -96,9 +96,29 @@ export async function activeModelVersions(
   connection: Connection,
   model: { projectId: string; id: string },
 ): Promise<ModelVersionRecord[]> {
-  return rows(
+  const versionsByModel = await activeModelVersionsByModel(connection, {
+    projectId: model.projectId,
+    modelIds: [model.id],
+  });
+  return versionsByModel.get(model.id) ?? [];
+}
+
+// Loads every listed Model's versions in one query so list responses do not issue one per Model.
+export async function activeModelVersionsByModel(
+  connection: Connection,
+  models: { projectId: string; modelIds: string[] },
+): Promise<Map<string, ModelVersionRecord[]>> {
+  const versionsByModel = new Map<string, ModelVersionRecord[]>();
+  if (!models.modelIds.length) return versionsByModel;
+  const versions = await rows<ModelVersionRecord>(
     connection,
-    `${modelVersionSelect} WHERE v.project_id=$1 AND v.model_id=$2 AND vm.deleted_at IS NULL AND mm.deleted_at IS NULL ORDER BY v.created_at DESC,v.id DESC`,
-    [model.projectId, model.id],
+    `${modelVersionSelect} WHERE v.project_id=$1 AND v.model_id=ANY($2::uuid[]) AND vm.deleted_at IS NULL AND mm.deleted_at IS NULL ORDER BY v.created_at DESC,v.id DESC`,
+    [models.projectId, models.modelIds],
   );
+  for (const version of versions) {
+    const modelVersions = versionsByModel.get(version.modelId);
+    if (modelVersions) modelVersions.push(version);
+    else versionsByModel.set(version.modelId, [version]);
+  }
+  return versionsByModel;
 }

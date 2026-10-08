@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Code, CodeVersion, Project } from '@mmt/contracts';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Code, CodeVersion, Project, Run } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import {
   modelFixture,
@@ -804,5 +804,115 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
       (await entity<VersionResponse>(await fixture.register(ready.model.info.model_id), 200))
         .model_version.version,
     ).toBe('2');
+  });
+
+  it('版検索はrun_id INとname NOT INで絞り込み、括弧のないINと非対応fieldのINは422にする', async () => {
+    await entity(await fixture.createRegistered('Classifier'), 200);
+    await entity(await fixture.createRegistered('Regressor'), 200);
+    const otherRun = await entity<Run>(
+      await request(harness.app, `${fixture.basePath}/runs`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { experimentId: fixture.experiment.id, name: 'Other source', kind: 'training' },
+      }),
+    );
+    const fromFirstRun = await fixture.readyModel();
+    const fromOtherRun = await fixture.createLogged({ sourceRunId: otherRun.id });
+    const otherModelId = fromOtherRun.model.info.model_id;
+    await entity(await fixture.upload(otherModelId, 'MLmodel', 'flavors: {}\n'), 200);
+    await entity(await fixture.upload(otherModelId, 'model.pkl', 'other-weights'), 200);
+    await entity(await fixture.finalize(otherModelId), 200);
+    await entity(await fixture.register(fromFirstRun.model.info.model_id), 200);
+    await entity(await fixture.register(otherModelId), 200);
+    await entity(
+      await fixture.register(fromFirstRun.model.info.model_id, { name: 'Regressor' }),
+      200,
+    );
+    async function search(endpoint: string, filter: string) {
+      return request(fixture.app, `${endpoint}/search?${new URLSearchParams({ filter })}`, {
+        cookie: fixture.viewer.cookie,
+      });
+    }
+    async function foundVersions(filter: string) {
+      const found = await entity<{ model_versions: VersionResponse['model_version'][] }>(
+        await search(fixture.versionEndpoint, filter),
+        200,
+      );
+      return found.model_versions.map((version) => `${version.name}/${version.version}`).sort();
+    }
+    const unknownRunId = '00000000-0000-4000-8000-000000000000';
+    expect(await foundVersions(`run_id IN ('${otherRun.id}', '${unknownRunId}')`)).toEqual([
+      'Classifier/2',
+    ]);
+    expect(
+      await foundVersions(`run_id IN ('${fixture.run.id}') AND name NOT IN ('Regressor')`),
+    ).toEqual(['Classifier/1']);
+    expect(await foundVersions(`name not in ("Classifier","Regressor")`)).toEqual([]);
+    for (const invalid of [
+      `run_id IN '${fixture.run.id}'`,
+      'run_id IN ()',
+      `run_id IN ('${fixture.run.id}',)`,
+      "version IN ('1')",
+      "tags.stage IN ('production')",
+    ])
+      expect((await search(fixture.versionEndpoint, invalid)).status, invalid).toBe(422);
+    expect((await search(fixture.registryEndpoint, "name IN ('Classifier')")).status).toBe(422);
+  });
+
+  it('registered-models/searchは表示するModelの数に関係なく版を1回のSQLで取得する', async () => {
+    const names = ['Alpha', 'Beta', 'Gamma'];
+    const ready = await fixture.readyModel();
+    for (const name of names) {
+      await entity(await fixture.createRegistered(name), 200);
+      await entity(await fixture.register(ready.model.info.model_id, { name }), 200);
+    }
+    await entity(await fixture.register(ready.model.info.model_id, { name: 'Gamma' }), 200);
+    await entity(
+      await request(fixture.app, `${fixture.registryEndpoint}/alias`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: { name: 'Gamma', alias: 'champion', version: '1' },
+      }),
+      200,
+    );
+    const versionListSql = 'FROM model_versions v JOIN models m';
+    const databaseQuery = vi.spyOn(harness.database, 'query');
+    async function searchModels(maxResults: number) {
+      databaseQuery.mockClear();
+      const found = await entity<{
+        registered_models: {
+          name: string;
+          latest_versions: { version: string }[];
+          aliases: { alias: string; version: string }[];
+        }[];
+      }>(
+        await request(fixture.app, `${fixture.registryEndpoint}/search?max_results=${maxResults}`, {
+          cookie: fixture.viewer.cookie,
+        }),
+        200,
+      );
+      const versionQueryCount = databaseQuery.mock.calls.filter(
+        ([statement]) => typeof statement === 'string' && statement.includes(versionListSql),
+      ).length;
+      return { found, versionQueryCount };
+    }
+    try {
+      expect((await searchModels(1)).versionQueryCount).toBe(1);
+      const all = await searchModels(names.length);
+      expect(all.versionQueryCount).toBe(1);
+      expect(
+        all.found.registered_models.map((model) => ({
+          name: model.name,
+          latest: model.latest_versions.map((version) => version.version),
+          aliases: model.aliases,
+        })),
+      ).toEqual([
+        { name: 'Alpha', latest: ['1'], aliases: [] },
+        { name: 'Beta', latest: ['1'], aliases: [] },
+        { name: 'Gamma', latest: ['2'], aliases: [{ alias: 'champion', version: '1' }] },
+      ]);
+    } finally {
+      databaseQuery.mockRestore();
+    }
   });
 });
