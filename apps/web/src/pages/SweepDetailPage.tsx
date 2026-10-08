@@ -53,7 +53,7 @@ export function SweepDetailPage() {
                   [text.sweepSeedValue, <span className="mono">{sweep.seed}</span>],
                   [text.created, formatDate(sweep.createdAt)],
                 ]} />
-                <details>
+                <details className="sweep-search-space">
                   <summary>{text.sweepSearchSpace}</summary>
                   <JsonDetails value={sweep.searchSpace} />
                 </details>

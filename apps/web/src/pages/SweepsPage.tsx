@@ -11,7 +11,7 @@ import { useQuery } from '../hooks/useQuery';
 import { useSweepList } from '../hooks/useSweeps';
 import { formatDate, formatNumber } from '../lib/format';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { ErrorNotice, Loading, Resource } from '../components/Feedback';
 import { CreateSweepDialog } from '../components/sweeps/CreateSweepDialog';
 import { SweepStatusBadge } from '../components/sweeps/SweepSummary';
@@ -57,38 +57,41 @@ export function SweepsPage() {
       </label>
       <ErrorNotice message={sweeps.error} retry={sweeps.reload} />
       {sweeps.loading && !sweeps.items.length ? <Loading /> : (
-        <DataTable
-          items={sweeps.items}
+        <ResponsiveTable
+          rows={sweeps.items}
           rowKey={(sweep) => sweep.id}
           empty={text.sweepNone}
           columns={[
-            { key: 'name', label: text.name, render: (sweep) => <Link to={sweepPath(sweep)}>{sweep.name}</Link> },
-            { key: 'task', label: text.sweepTask, render: taskName },
-            { key: 'method', label: text.sweepMethod, render: (sweep) => sweepMethodLabels[sweep.method] },
-            { key: 'status', label: text.status, render: (sweep) => <SweepStatusBadge status={sweep.status} /> },
+            { key: 'name', header: text.name, priority: 'primary', render: (sweep) => <Link to={sweepPath(sweep)}>{sweep.name}</Link> },
+            { key: 'task', header: text.sweepTask, priority: 'secondary', render: taskName },
+            { key: 'method', header: text.sweepMethod, priority: 'secondary', render: (sweep) => sweepMethodLabels[sweep.method] },
+            { key: 'status', header: text.status, priority: 'primary', render: (sweep) => <SweepStatusBadge status={sweep.status} /> },
             {
               key: 'trials',
-              label: text.sweepTrials,
+              header: text.sweepTrials,
               className: 'mono',
+              priority: 'primary',
               render: (sweep) => textTemplates.sweepTrialProgress(sweep.trialCounts.total, sweep.maxTrials),
             },
             {
               key: 'running',
-              label: text.sweepRunningTrials,
+              header: text.sweepRunningTrials,
               className: 'mono',
+              priority: 'secondary',
               render: (sweep) => sweep.trialCounts.queued + sweep.trialCounts.running,
             },
             {
               key: 'best',
-              label: text.sweepBestObjective,
+              header: text.sweepBestObjective,
               className: 'mono',
+              priority: 'secondary',
               render: (sweep) => {
                 const best = sweep.bestTrial?.objectiveValue ?? null;
                 return best === null ? '—' : `${formatNumber(best)}（${sweep.objective.metric}）`;
               },
             },
-            { key: 'createdBy', label: text.sweepCreatedBy, render: creatorName },
-            { key: 'created', label: text.created, render: (sweep) => formatDate(sweep.createdAt) },
+            { key: 'createdBy', header: text.sweepCreatedBy, priority: 'secondary', render: creatorName },
+            { key: 'created', header: text.created, priority: 'secondary', render: (sweep) => formatDate(sweep.createdAt) },
           ]}
         />
       )}

@@ -6,6 +6,7 @@ import {
   computePositions,
   createAxisScale,
   moveAxis,
+  parallelPlotWidth,
   rampColor,
   rampStops,
   selectRowIndexes,
@@ -16,6 +17,8 @@ import {
 } from '../../lib/parallelCoordinates';
 import { useDocumentTheme } from '../../hooks/useDocumentTheme';
 import { useElementWidth } from '../../hooks/useElementWidth';
+import { narrowerThan } from '../../lib/breakpoints';
+import { useMediaQuery } from '../../lib/useMediaQuery';
 
 export interface ParallelCoordinatesChartProps {
   rows: ChartRunRow[];
@@ -38,6 +41,12 @@ const PLOT_TOP = 76;
 const PLOT_BOTTOM_GAP = 60;
 const MISSING_BAND_GAP = 28;
 const AXIS_HIT_WIDTH = 28;
+// Closest the axes may be: their headers hold the label and the move and log controls side by
+// side. Narrow screens make those controls tap-sized (--tap-target), so the headers need more room.
+const MIN_AXIS_SPACING = 96;
+const NARROW_MIN_AXIS_SPACING = 148;
+const AXIS_HEADER_GAP = 8;
+const MIN_AXIS_HEADER_WIDTH = 60;
 // Tick labels are 10px monospace (styles/analysis.css): about 0.6em per character. The plate
 // behind a label hides the Run lines that cross it, which a text halo alone did not.
 const TICK_CHARACTER_WIDTH = 6;
@@ -92,7 +101,8 @@ export function ParallelCoordinatesChart({
   height = DEFAULT_HEIGHT,
 }: ParallelCoordinatesChartProps) {
   const theme = useDocumentTheme();
-  const { ref: containerRef, width } = useElementWidth();
+  const isNarrow = useMediaQuery(narrowerThan('md'));
+  const { ref: containerRef, width: availableWidth } = useElementWidth();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [axisOrder, setAxisOrder] = useState<string[]>([]);
   const [logAxes, setLogAxes] = useState<ReadonlySet<string>>(new Set());
@@ -152,6 +162,12 @@ export function ParallelCoordinatesChart({
     onSelectionChangeRef.current?.(committedSelection);
   }, [committedSelection]);
 
+  const width = parallelPlotWidth({
+    availableWidth,
+    axisCount: scaledAxes.length,
+    minAxisSpacing: isNarrow ? NARROW_MIN_AXIS_SPACING : MIN_AXIS_SPACING,
+    horizontalMargin: MARGIN_LEFT + MARGIN_RIGHT,
+  });
   const layout = createLayout(width, height, scaledAxes.length);
   const usesCanvas = rows.length > PARALLEL_LINES_CANVAS_THRESHOLD;
   const lineColor = (index: number) =>
@@ -248,93 +264,98 @@ export function ParallelCoordinatesChart({
         <span className="parallel-chart-hint">{text.analysisBrushHint}</span>
         {colorAxisKey && <ColorLegend theme={theme} />}
       </div>
-      <div className="parallel-chart-plot" ref={containerRef} style={{ height }}>
-        {usesCanvas && <canvas ref={canvasRef} className="parallel-chart-canvas" style={{ width, height }} />}
-        {width > 0 && (
-          <svg width={width} height={height} className="parallel-chart-svg" role="img" aria-label={text.analysisParallel}>
-            {!usesCanvas &&
-              rows.map((row, index) => (
-                <path
-                  key={row.runId}
-                  d={linePoints(index)
-                    .map(([x, y], pointIndex) => `${pointIndex === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
-                    .join('')}
-                  stroke={lineColor(index)}
-                  className={selectedFlags[index] ? 'parallel-line selected' : 'parallel-line'}
-                >
-                  <title>{row.name}</title>
-                </path>
-              ))}
-            <line
-              x1={MARGIN_LEFT / 2}
-              x2={width - MARGIN_RIGHT / 2}
-              y1={layout.missingY - MISSING_BAND_GAP / 2}
-              y2={layout.missingY - MISSING_BAND_GAP / 2}
-              className="parallel-missing-divider"
-            />
-            <text x={4} y={layout.missingY + 4} className="parallel-missing-label">
-              {text.analysisMissing}
-            </text>
-            {scaledAxes.map((axis, axisIndex) => (
-              <AxisGraphic
-                key={axis.key}
-                axisKey={axis.key}
-                label={axis.definition.label}
-                scale={axis.scale}
-                x={layout.axisX(axisIndex)}
-                layout={layout}
-                brush={activeBrushes.find((brush) => brush.axisKey === axis.key) ?? null}
-                onPointerDown={(event) => startBrush(axis.key, event)}
-                onPointerMove={moveBrush}
-                onPointerUp={endBrush}
+      <div className="parallel-chart-scroll" ref={containerRef}>
+        <div className="parallel-chart-plot" style={{ width, height }}>
+          {usesCanvas && <canvas ref={canvasRef} className="parallel-chart-canvas" style={{ width, height }} />}
+          {width > 0 && (
+            <svg width={width} height={height} className="parallel-chart-svg" role="img" aria-label={text.analysisParallel}>
+              {!usesCanvas &&
+                rows.map((row, index) => (
+                  <path
+                    key={row.runId}
+                    d={linePoints(index)
+                      .map(([x, y], pointIndex) => `${pointIndex === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
+                      .join('')}
+                    stroke={lineColor(index)}
+                    className={selectedFlags[index] ? 'parallel-line selected' : 'parallel-line'}
+                  >
+                    <title>{row.name}</title>
+                  </path>
+                ))}
+              <line
+                x1={MARGIN_LEFT / 2}
+                x2={width - MARGIN_RIGHT / 2}
+                y1={layout.missingY - MISSING_BAND_GAP / 2}
+                y2={layout.missingY - MISSING_BAND_GAP / 2}
+                className="parallel-missing-divider"
               />
-            ))}
-          </svg>
-        )}
-        {scaledAxes.map((axis, axisIndex) => (
-          <div
-            key={axis.key}
-            className="parallel-axis-header"
-            style={{ left: layout.axisX(axisIndex), width: Math.max(60, axisSpacing - 8) }}
-          >
-            <span className="parallel-axis-label" title={axis.definition.label}>
-              {axis.definition.label}
-            </span>
-            <span className="parallel-axis-actions">
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={`${axis.definition.label}: ${text.analysisMoveAxisLeft}`}
-                title={text.analysisMoveAxisLeft}
-                disabled={axisIndex === 0}
-                onClick={() => setAxisOrder(moveAxis(orderedAxes.map((item) => item.key), axis.key, -1))}
-              >
-                <ArrowLeft size={12} />
-              </button>
-              <button
-                type="button"
-                className="icon-button"
-                aria-label={`${axis.definition.label}: ${text.analysisMoveAxisRight}`}
-                title={text.analysisMoveAxisRight}
-                disabled={axisIndex === scaledAxes.length - 1}
-                onClick={() => setAxisOrder(moveAxis(orderedAxes.map((item) => item.key), axis.key, 1))}
-              >
-                <ArrowRight size={12} />
-              </button>
-              {axis.logAvailable && (
-                <label className="parallel-axis-log">
-                  <input
-                    type="checkbox"
-                    checked={logAxes.has(axis.key)}
-                    aria-label={`${axis.definition.label}: ${text.analysisLogScale}`}
-                    onChange={() => toggleLog(axis.key)}
-                  />
-                  {text.analysisLogScale}
-                </label>
-              )}
-            </span>
-          </div>
-        ))}
+              <text x={4} y={layout.missingY + 4} className="parallel-missing-label">
+                {text.analysisMissing}
+              </text>
+              {scaledAxes.map((axis, axisIndex) => (
+                <AxisGraphic
+                  key={axis.key}
+                  axisKey={axis.key}
+                  label={axis.definition.label}
+                  scale={axis.scale}
+                  x={layout.axisX(axisIndex)}
+                  layout={layout}
+                  brush={activeBrushes.find((brush) => brush.axisKey === axis.key) ?? null}
+                  onPointerDown={(event) => startBrush(axis.key, event)}
+                  onPointerMove={moveBrush}
+                  onPointerUp={endBrush}
+                />
+              ))}
+            </svg>
+          )}
+          {scaledAxes.map((axis, axisIndex) => (
+            <div
+              key={axis.key}
+              className="parallel-axis-header"
+              style={{
+                left: layout.axisX(axisIndex),
+                width: Math.max(MIN_AXIS_HEADER_WIDTH, axisSpacing - AXIS_HEADER_GAP),
+              }}
+            >
+              <span className="parallel-axis-label" title={axis.definition.label}>
+                {axis.definition.label}
+              </span>
+              <span className="parallel-axis-actions">
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`${axis.definition.label}: ${text.analysisMoveAxisLeft}`}
+                  title={text.analysisMoveAxisLeft}
+                  disabled={axisIndex === 0}
+                  onClick={() => setAxisOrder(moveAxis(orderedAxes.map((item) => item.key), axis.key, -1))}
+                >
+                  <ArrowLeft size={12} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label={`${axis.definition.label}: ${text.analysisMoveAxisRight}`}
+                  title={text.analysisMoveAxisRight}
+                  disabled={axisIndex === scaledAxes.length - 1}
+                  onClick={() => setAxisOrder(moveAxis(orderedAxes.map((item) => item.key), axis.key, 1))}
+                >
+                  <ArrowRight size={12} />
+                </button>
+                {axis.logAvailable && (
+                  <label className="parallel-axis-log">
+                    <input
+                      type="checkbox"
+                      checked={logAxes.has(axis.key)}
+                      aria-label={`${axis.definition.label}: ${text.analysisLogScale}`}
+                      onChange={() => toggleLog(axis.key)}
+                    />
+                    {text.analysisLogScale}
+                  </label>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

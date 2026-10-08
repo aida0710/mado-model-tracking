@@ -1,0 +1,15 @@
+/*
+ * Width breakpoints shared by every screen. CSS custom properties cannot appear inside @media, so
+ * media queries write the same literal values in range syntax and nothing else:
+ *   (width < 640px)  phones in portrait       — --bp-sm
+ *   (width < 900px)  tablets, narrow windows  — --bp-md
+ *   (width < 1200px) small laptops            — --bp-lg
+ * Scripts read the same values from lib/breakpoints.ts; breakpoints.test.ts keeps all three in step.
+ */
+:root {
+  --bp-sm: 640px;
+  --bp-md: 900px;
+  --bp-lg: 1200px;
+  /* WCAG-style minimum size of anything tapped on a narrow screen. */
+  --tap-target: 40px;
+}

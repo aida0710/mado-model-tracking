@@ -190,6 +190,26 @@ export function moveAxis(order: string[], key: string, offset: number): string[]
   return next;
 }
 
+/**
+ * The width to draw the plot at: the space it is given, or wider when that would put the axes
+ * closer than `minAxisSpacing` (the plot then scrolls sideways inside its own box).
+ */
+export function parallelPlotWidth({
+  availableWidth,
+  axisCount,
+  minAxisSpacing,
+  horizontalMargin,
+}: {
+  availableWidth: number;
+  axisCount: number;
+  minAxisSpacing: number;
+  horizontalMargin: number;
+}): number {
+  if (availableWidth <= 0) return 0;
+  const neededWidth = horizontalMargin + Math.max(0, axisCount - 1) * minAxisSpacing;
+  return Math.max(availableWidth, neededWidth);
+}
+
 // Single-hue blue ramp (dataviz reference palette, steps 250 to 700). Light-on-dark reverses it so
 // the best values stay the most visible against either surface.
 const LIGHT_RAMP = ['#86b6ef', '#5598e7', '#2a78d6', '#1c5cab', '#104281', '#0d366b'];

@@ -171,3 +171,16 @@
   gap: 8px;
   margin-top: 8px;
 }
+/* Narrow screens are touch screens: reply, edit and delete become full tap targets. */
+@media (width < 900px) {
+  .comment-actions {
+    gap: 4px;
+    margin-top: 2px;
+  }
+  .comment-actions .link-button {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    padding: 0 8px;
+    text-align: center;
+  }
+}

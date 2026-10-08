@@ -24,7 +24,7 @@ export function ConfirmDialog({
 }) {
   const mutation = useMutation();
   return (
-    <Dialog title={title} onClose={onClose} busy={mutation.pending}>
+    <Dialog title={title} onClose={onClose} busy={mutation.pending} fullScreenOnNarrow={false}>
       <form
         onSubmit={(event) => {
           event.preventDefault();

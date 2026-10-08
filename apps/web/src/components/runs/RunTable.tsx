@@ -205,12 +205,14 @@ export function RunTable({
         <thead>
           <tr>
             <th scope="col">
-              <input
-                type="checkbox"
-                aria-label={text.selectAll}
-                checked={allShownSelected}
-                onChange={(event) => toggleShownRuns(event.target.checked)}
-              />
+              <label className="run-select-target">
+                <input
+                  type="checkbox"
+                  aria-label={text.selectAll}
+                  checked={allShownSelected}
+                  onChange={(event) => toggleShownRuns(event.target.checked)}
+                />
+              </label>
             </th>
             <th scope="col">{text.runName}</th>
             {shownColumns.map((column) => (
@@ -265,12 +267,14 @@ export function RunTable({
           {runs.map((run) => (
             <tr key={run.id} className={selectedIds.includes(run.id) ? 'selected' : ''}>
               <td>
-                <input
-                  type="checkbox"
-                  aria-label={`${text.selectRun}: ${run.name}`}
-                  checked={selectedIds.includes(run.id)}
-                  onChange={() => toggleRun(run.id)}
-                />
+                <label className="run-select-target">
+                  <input
+                    type="checkbox"
+                    aria-label={`${text.selectRun}: ${run.name}`}
+                    checked={selectedIds.includes(run.id)}
+                    onChange={() => toggleRun(run.id)}
+                  />
+                </label>
               </td>
               <td>
                 <Link className="run-name" title={run.name} to={`/projects/${projectId}/runs/${run.id}`}>

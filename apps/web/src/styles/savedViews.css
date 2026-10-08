@@ -144,3 +144,9 @@
   box-shadow: 0 4px 18px #0003;
   white-space: normal;
 }
+@media (width < 900px) {
+  .saved-views-menu > summary,
+  .saved-views-menu .popover button {
+    min-height: var(--tap-target);
+  }
+}

@@ -56,10 +56,16 @@
 .parallel-chart-hint {
   color: var(--muted);
 }
-.parallel-chart-plot {
-  position: relative;
+/* The plot keeps a minimum distance between axes; when that is wider than the panel it scrolls
+   sideways here instead of widening the page. */
+.parallel-chart-scroll {
   width: 100%;
   min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.parallel-chart-plot {
+  position: relative;
   overflow: hidden;
 }
 .parallel-chart-canvas,
@@ -145,6 +151,7 @@
   align-items: center;
   gap: 3px;
   font-size: 11px;
+  white-space: nowrap;
 }
 .parallel-color-legend {
   display: inline-flex;
@@ -276,4 +283,25 @@
   border: 1px solid var(--border);
   background: var(--surface);
   font-size: 12px;
+}
+
+/* Narrow screens are touch screens: the axis controls and menus get a full tap target. */
+@media (width < 900px) {
+  .parallel-axis-actions .icon-button {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+  .parallel-axis-log,
+  .importance-method label {
+    min-height: var(--tap-target);
+  }
+  .analysis-axis-menu > summary {
+    padding-block: 11px;
+  }
+  .analysis-axis-menu label {
+    min-height: var(--tap-target);
+  }
+  .parallel-color-legend {
+    margin-left: 0;
+  }
 }

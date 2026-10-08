@@ -311,15 +311,33 @@ pre {
 .skip-link:focus {
   top: 10px;
 }
-@media (max-width: 1200px) {
+@media (width < 1200px) {
   :root {
     --sidebar-width: 215px;
     --page-padding: 24px;
   }
 }
-@media (max-width: 800px) {
+/* Narrow screens are mostly touch screens: everything tapped gets at least --tap-target. */
+@media (width < 900px) {
   :root {
     --page-padding: 18px;
+  }
+  .button,
+  .button.small {
+    min-height: var(--tap-target);
+  }
+  .icon-button {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+  input:not([type='checkbox'], [type='radio']),
+  select {
+    min-height: var(--tap-target);
+  }
+}
+@media (width < 640px) {
+  :root {
+    --page-padding: 14px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
