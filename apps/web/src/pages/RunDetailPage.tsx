@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Play, RefreshCw, Upload } from 'lucide-react';
-import type { Run } from '@mmt/contracts';
+import type { ChartPanelLayout, ChartXAxis, Run, RunResumeEventPage } from '@mmt/contracts';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
 import { StatusBadge } from '../components/StatusBadge';
-import { MetricsChart } from '../components/MetricsChart';
+import { ChartPanelGrid } from '../components/charts/ChartPanelGrid';
+import { RunResumeTimeline } from '../components/RunResumeTimeline';
+import { RunDescriptionEditor } from '../components/RunDescriptionEditor';
+import { CommentThread } from '../components/comments/CommentThread';
+import { RunMediaPanel } from '../components/media/RunMediaPanel';
 import { Tabs } from '../components/Tabs';
 import { RunLogs } from '../components/RunLogs';
 import { RunArtifacts } from '../components/RunArtifacts';
@@ -22,13 +26,30 @@ import { ArtifactUploadDialog } from '../dialogs/ArtifactUploadDialog';
 import { LaunchDialog } from '../dialogs/LaunchDialog';
 import { getFieldValue, parseStringMap } from '../lib/formValues';
 import { formatDate, formatDuration } from '../lib/format';
-import { isSystemMetric } from '../lib/metricSeries';
+import { resumeMarkers } from '../lib/metricSeries';
+import {
+  addPanel,
+  createDefaultLayout,
+  createPanelConfig,
+  emptyChartPanelLayout,
+  MAX_PANEL_METRIC_KEYS,
+} from '../lib/chartPanelLayout';
+import {
+  groupSystemMetricKeys,
+  isSystemMetricKey,
+  systemMetricValueScale,
+} from '../lib/systemMetricKeys';
+import { getRunChartKeys } from '../lib/runChartKeys';
+import { useChartPanelLayout } from '../hooks/useChartPanelLayout';
+import { useRunResumeEvents } from '../hooks/useRunResumeEvents';
 import { getRunParameters } from '../lib/runParameters';
 import { getResumeCheckpointRecord } from '../lib/checkpointResume';
 import { text, textTemplates } from '../i18n/catalog';
+import { systemMetricCategoryLabels, systemMetricUnitLabels } from '../i18n/runs';
 
 const tabs = [
   'metrics',
+  'media',
   'artifacts',
   'checkpoints',
   'systemMetrics',
@@ -36,6 +57,18 @@ const tabs = [
   'details',
   'executionSnapshot',
 ] as const;
+type RunTab = (typeof tabs)[number];
+const tabLabels: Record<RunTab, string> = {
+  metrics: text.metrics,
+  media: text.mediaTab,
+  artifacts: text.artifacts,
+  checkpoints: text.checkpoints,
+  systemMetrics: text.systemMetrics,
+  logs: text.logs,
+  details: text.details,
+  executionSnapshot: text.executionSnapshot,
+};
+
 export function RunDetailPage() {
   const { project, canEdit } = useProject();
   const { runId = '' } = useParams();
@@ -48,11 +81,7 @@ export function RunDetailPage() {
     (signal) => trackingApi.run(project.id, runId, signal),
     EXECUTION_POLL_MS,
   );
-  const metrics = useQuery(
-    tab === 'metrics' || tab === 'systemMetrics' ? `${runId}:metrics` : null,
-    (signal) => trackingApi.metrics(project.id, runId, signal),
-    EXECUTION_POLL_MS,
-  );
+  const resumeEvents = useRunResumeEvents(project.id, runId, run.value?.status);
   const logs = useQuery(
     tab === 'logs' ? `${runId}:logs` : null,
     (signal) => trackingApi.logs(project.id, runId, signal),
@@ -67,7 +96,7 @@ export function RunDetailPage() {
   );
   function reload() {
     run.reload();
-    metrics.reload();
+    resumeEvents.reload();
     logs.reload();
     artifacts.reload();
     setArtifactRevision((value) => value + 1);
@@ -126,36 +155,25 @@ export function RunDetailPage() {
                 {item.error}
               </div>
             )}
+            {resumeEvents.value && (
+              <RunResumeTimeline segments={resumeEvents.value.segments} now={Date.now()} />
+            )}
             <Tabs
-              tabs={tabs.map((key) => ({ key, label: text[key] }))}
+              tabs={tabs.map((key) => ({ key, label: tabLabels[key] }))}
               selected={tab}
               onSelect={(key) => setParams({ tab: key })}
             />
             <div
               id="run-tab-panel"
               role="tabpanel"
-              aria-label={text[tabs.find((key) => key === tab) ?? 'metrics']}
+              aria-label={tabLabels[tab]}
               className="detail-content"
             >
-              {(tab === 'metrics' || tab === 'systemMetrics') && (
-                <Resource query={metrics}>
-                  {(points) => (
-                    <MetricsChart
-                      series={[
-                        {
-                          id: item.id,
-                          label: item.name,
-                          points: points.filter((point) =>
-                            tab === 'systemMetrics'
-                              ? isSystemMetric(point.name)
-                              : !isSystemMetric(point.name),
-                          ),
-                        },
-                      ]}
-                    />
-                  )}
-                </Resource>
+              {tab === 'metrics' && (
+                <RunMetricCharts run={item} resumeEvents={resumeEvents.value} />
               )}
+              {tab === 'systemMetrics' && <RunSystemMetricCharts key={item.id} run={item} />}
+              {tab === 'media' && <RunMediaPanel projectId={project.id} runId={runId} />}
               {tab === 'logs' && (
                 <Resource query={logs}>{(entries) => <RunLogs entries={entries} />}</Resource>
               )}
@@ -178,6 +196,7 @@ export function RunDetailPage() {
               {tab === 'checkpoints' && <RunCheckpointList run={item} canEdit={canEdit} />}
               {tab === 'details' && (
                 <div className="details-grid">
+                  <RunDescriptionEditor projectId={project.id} run={item} />
                   <section>
                     <h2>{text.details}</h2>
                     <DetailsList
@@ -253,6 +272,7 @@ export function RunDetailPage() {
                     <h2>{text.environment}</h2>
                     <KeyValues values={item.environment} />
                   </section>
+                  <CommentThread projectId={project.id} targetType="run" targetId={runId} />
                 </div>
               )}
             </div>
@@ -323,4 +343,81 @@ function ResumedFromCheckpoint({ run }: { run: Run }) {
       </Link>
     </>
   );
+}
+
+const runLabelsOf = (run: Run) => ({ [run.id]: run.name });
+
+/** Metric panels of one Run, arranged per Project; resumed segments are marked on the x axis. */
+function RunMetricCharts({
+  run,
+  resumeEvents,
+}: {
+  run: Run;
+  resumeEvents: RunResumeEventPage | undefined;
+}) {
+  const metricKeys = useMemo(() => getRunChartKeys([run]).metricKeys, [run]);
+  const defaultLayout = useMemo(
+    () => createDefaultLayout(metricKeys, (index) => `default-${index}`),
+    [metricKeys],
+  );
+  const { layout, isCustomized, updateLayout, resetLayout } = useChartPanelLayout(
+    run.projectId,
+    'runDetail',
+    defaultLayout,
+  );
+  const markersFor = (xAxis: ChartXAxis) =>
+    resumeEvents ? resumeMarkers(xAxis, [{ label: text.chartResumeMarker, resumeEvents }]) : [];
+  return (
+    <ChartPanelGrid
+      projectId={run.projectId}
+      layout={layout}
+      source={{ runIds: [run.id] }}
+      runLabels={runLabelsOf(run)}
+      live={run.status === 'running'}
+      metricKeys={metricKeys}
+      markersFor={markersFor}
+      onLayoutChange={updateLayout}
+      {...(isCustomized ? { onResetLayout: resetLayout } : {})}
+    />
+  );
+}
+
+/**
+ * One panel per category, GPU and unit, the same for worker/SDK and MLflow names. The panels
+ * follow the Run's metrics; changes last while the tab is open.
+ */
+function RunSystemMetricCharts({ run }: { run: Run }) {
+  const metricKeys = useMemo(
+    () => Object.keys(run.latestMetrics).filter(isSystemMetricKey).sort(),
+    [run.latestMetrics],
+  );
+  const defaultLayout = useMemo(() => createSystemMetricLayout(metricKeys), [metricKeys]);
+  const [changedLayout, setChangedLayout] = useState<ChartPanelLayout | null>(null);
+  const layout = changedLayout ?? defaultLayout;
+  return (
+    <ChartPanelGrid
+      projectId={run.projectId}
+      layout={layout}
+      source={{ runIds: [run.id] }}
+      runLabels={runLabelsOf(run)}
+      live={run.status === 'running'}
+      metricKeys={metricKeys}
+      valueScale={systemMetricValueScale}
+      onLayoutChange={(change) => setChangedLayout(change(layout))}
+      {...(changedLayout ? { onResetLayout: () => setChangedLayout(null) } : {})}
+      emptyMessage={text.systemMetricsEmpty}
+    />
+  );
+}
+
+function createSystemMetricLayout(metricKeys: string[]): ChartPanelLayout {
+  return groupSystemMetricKeys(metricKeys).reduce((layout, group) => {
+    const title = textTemplates.systemMetricPanelTitle(
+      systemMetricCategoryLabels[group.category],
+      systemMetricUnitLabels[group.unit],
+      group.gpuIndex,
+    );
+    const panel = createPanelConfig(group.metricKeys.slice(0, MAX_PANEL_METRIC_KEYS), title);
+    return addPanel(layout, panel, { id: `system-${group.id}`, width: 'half' });
+  }, emptyChartPanelLayout());
 }

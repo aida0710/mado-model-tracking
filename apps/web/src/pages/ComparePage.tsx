@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Download } from 'lucide-react';
 import {
@@ -12,7 +12,12 @@ import { useRunComparison } from '../hooks/useRunComparison';
 import { trackingApi } from '../api/tracking';
 import { Empty, Resource } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
-import { MetricsChart } from '../components/MetricsChart';
+import { ChartPanelGrid } from '../components/charts/ChartPanelGrid';
+import { MediaCompare } from '../components/media/MediaCompare';
+import { RunAnalysisPanel } from '../components/analysis/RunAnalysisPanel';
+import { useChartPanelLayout } from '../hooks/useChartPanelLayout';
+import { createDefaultLayout } from '../lib/chartPanelLayout';
+import { getRunChartKeys } from '../lib/runChartKeys';
 import { ArtifactCompare } from '../components/ArtifactCompare';
 import { Tabs } from '../components/Tabs';
 import { StatusBadge } from '../components/StatusBadge';
@@ -21,7 +26,6 @@ import { formatDelta, formatRelativeDelta } from '../lib/evaluationComparisonDis
 import {
   buildComparisonTableRows,
   chooseBaselineRunId,
-  comparisonChartSeries,
   filterComparisonRows,
   isComparableRunCount,
   parseComparedRunIds,
@@ -32,6 +36,15 @@ import { text, textTemplates } from '../i18n/catalog';
 // URL parameters, so a comparison with its baseline can be shared as a link.
 const RUNS_PARAM = 'runs';
 const BASELINE_PARAM = 'baseline';
+const TAB_PARAM = 'tab';
+const compareTabs = ['details', 'artifacts', 'media', 'analysis'] as const;
+type CompareTab = (typeof compareTabs)[number];
+const compareTabLabels: Record<CompareTab, string> = {
+  details: text.details,
+  artifacts: text.artifacts,
+  media: text.mediaTab,
+  analysis: text.analysisTab,
+};
 
 const rowGroupLabels: Record<ComparisonTableRow['group'], string> = {
   modelVersion: text.comparisonModelVersion,
@@ -45,7 +58,7 @@ export function ComparePage() {
   const { project } = useProject();
   const [params, setParams] = useSearchParams();
   const [onlyDifferences, setOnlyDifferences] = useState(false);
-  const tab = params.get('tab') === 'artifacts' ? 'artifacts' : 'details';
+  const tab = compareTabs.find((key) => key === params.get(TAB_PARAM)) ?? 'details';
   const runIds = parseComparedRunIds(params.get(RUNS_PARAM));
   const baselineRunId = chooseBaselineRunId(runIds, params.get(BASELINE_PARAM));
   const comparison = useRunComparison({
@@ -86,12 +99,9 @@ export function ComparePage() {
         }
       />
       <Tabs
-        tabs={[
-          { key: 'details', label: text.details },
-          { key: 'artifacts', label: text.artifacts },
-        ]}
+        tabs={compareTabs.map((key) => ({ key, label: compareTabLabels[key] }))}
         selected={tab}
-        onSelect={(key) => updateParam('tab', key === 'artifacts' ? key : null)}
+        onSelect={(key) => updateParam(TAB_PARAM, key === 'details' ? null : key)}
         panelId="compare-tab-panel"
       />
       <div id="compare-tab-panel" role="tabpanel">
@@ -102,6 +112,10 @@ export function ComparePage() {
               RUN_COMPARISON_MAX_RUNS,
             )}
           </Empty>
+        ) : tab === 'media' ? (
+          <MediaCompare projectId={project.id} runIds={runIds} />
+        ) : tab === 'analysis' ? (
+          <RunAnalysisPanel projectId={project.id} runSet={{ runIds }} />
         ) : (
           <Resource query={comparison}>
             {(value) =>
@@ -141,7 +155,7 @@ function ComparisonDetails({
   const rows = filterComparisonRows(buildComparisonTableRows(comparison), onlyDifferences);
   return (
     <>
-      <MetricsChart series={comparisonChartSeries(comparison)} />
+      <ComparisonCharts projectId={projectId} runs={runs} />
       <div className="run-toolbar">
         <label className="toolbar-select">
           <span>{text.comparisonBaselineRun}</span>
@@ -219,5 +233,32 @@ function StatusRow({ runs }: { runs: Run[] }) {
         </td>
       ))}
     </tr>
+  );
+}
+
+/** Every compared Run drawn over each other, panel by panel; Runs can be grouped per panel. */
+function ComparisonCharts({ projectId, runs }: { projectId: string; runs: Run[] }) {
+  const keys = useMemo(() => getRunChartKeys(runs), [runs]);
+  const defaultLayout = useMemo(
+    () => createDefaultLayout(keys.metricKeys, (index) => `default-${index}`),
+    [keys.metricKeys],
+  );
+  const { layout, isCustomized, updateLayout, resetLayout } = useChartPanelLayout(
+    projectId,
+    'compare',
+    defaultLayout,
+  );
+  return (
+    <ChartPanelGrid
+      projectId={projectId}
+      layout={layout}
+      source={{ runIds: runs.map((run) => run.id) }}
+      runLabels={Object.fromEntries(runs.map((run) => [run.id, run.name]))}
+      live={runs.some((run) => run.status === 'running')}
+      metricKeys={keys.metricKeys}
+      grouping={keys}
+      onLayoutChange={updateLayout}
+      {...(isCustomized ? { onResetLayout: resetLayout } : {})}
+    />
   );
 }

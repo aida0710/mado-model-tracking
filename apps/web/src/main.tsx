@@ -24,6 +24,7 @@ import './styles/checkpoints.css';
 import './styles/connection.css';
 import './styles/operations.css';
 import './styles/charts.css';
+import './styles/chartPanels.css';
 
 // Keep the existing route tree while enabling blocked SPA navigation.
 const router = createBrowserRouter([{

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, RefreshCw } from 'lucide-react';
+import { ChartLine, Plus, RefreshCw } from 'lucide-react';
 import type { RunSearchRequest, RunStatus } from '@mmt/contracts';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
@@ -16,6 +16,7 @@ import { RunTable } from '../components/runs/RunTable';
 import { RunSelectionBar } from '../components/runs/RunSelectionBar';
 import { RunPagination } from '../components/runs/RunPagination';
 import { getRunColumnNames } from '../components/runs/runColumnNames';
+import { RunListCharts } from '../components/charts/RunListCharts';
 import { RunDialog } from '../dialogs/RunDialog';
 import { getFieldValue } from '../lib/formValues';
 import { downloadBlob } from '../lib/fileDownload';
@@ -32,6 +33,9 @@ const baseColumnNames = ['status', 'created', 'duration', 'user', 'kind'] as con
 // base64url, so a comma never appears inside one.
 const CURSOR_HISTORY_PARAM = 'cursors';
 const CURSOR_SEPARATOR = ',';
+// URL parameter that keeps the chart area open across reloads and shared links.
+const CHARTS_PARAM = 'charts';
+const CHARTS_OPEN = '1';
 
 export function ExperimentsPage() {
   const { project, canEdit } = useProject();
@@ -41,6 +45,7 @@ export function ExperimentsPage() {
   const searchText = params.get('q') ?? '';
   const status = params.get('status') ?? '';
   const sort = params.get('sort') ?? 'newest';
+  const isChartsOpen = params.get(CHARTS_PARAM) === CHARTS_OPEN;
   const cursorHistory = (params.get(CURSOR_HISTORY_PARAM) ?? '')
     .split(CURSOR_SEPARATOR)
     .filter(Boolean);
@@ -64,12 +69,12 @@ export function ExperimentsPage() {
     ...(cursor ? { cursor } : {}),
   };
   const runs = useRunSearch(project.id, search);
+  const { limit: _limit, cursor: _cursor, ...searchConditions } = search;
   async function exportSearchCsv() {
     setIsExportTruncated(false);
     // The export covers the whole search; paging fields would be ignored by the API anyway.
-    const { limit: _limit, cursor: _cursor, ...conditions } = search;
     const exported = await csvExport.run(() =>
-      trackingApi.exportRunSearchCsv(project.id, conditions),
+      trackingApi.exportRunSearchCsv(project.id, searchConditions),
     );
     if (!exported) return;
     downloadBlob(exported.blob, exported.fileName);
@@ -97,7 +102,8 @@ export function ExperimentsPage() {
         if (value) next.set(key, value);
         else next.delete(key);
       }
-      if (!(CURSOR_HISTORY_PARAM in updates)) next.delete(CURSOR_HISTORY_PARAM);
+      if (!(CURSOR_HISTORY_PARAM in updates) && !(CHARTS_PARAM in updates))
+        next.delete(CURSOR_HISTORY_PARAM);
       return next;
     });
   }
@@ -170,6 +176,25 @@ export function ExperimentsPage() {
           exportingCsv={csvExport.pending}
           onExportCsv={() => void exportSearchCsv()}
         />
+        <div className="section-actions run-chart-toggle">
+          <button
+            type="button"
+            className="button small"
+            aria-expanded={isChartsOpen}
+            onClick={() => updateParams({ [CHARTS_PARAM]: isChartsOpen ? '' : CHARTS_OPEN })}
+          >
+            <ChartLine size={14} />
+            {isChartsOpen ? text.hideCharts : text.showCharts}
+          </button>
+        </div>
+        {isChartsOpen && (
+          <RunListCharts
+            projectId={project.id}
+            conditions={searchConditions}
+            selectedIds={selectedIds}
+            pageRuns={shownRuns}
+          />
+        )}
         <ErrorNotice message={mutation.error} />
         <ErrorNotice message={csvExport.error} />
         {isExportTruncated && (
