@@ -30,9 +30,29 @@ export interface ExperimentTask {
   tags: Record<string, string>;
   targetId: string | null;
   gpuIds: string[];
+  /** Registration target for a successful training/finetuning Run; null means none. */
+  outputModel?: TaskOutputModel | null;
   revision: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Exactly one of modelId and createModel is set. */
+export interface TaskOutputModel {
+  modelId: string | null;
+  createModel: { name: string; family: string } | null;
+  artifactPath: string;
+  versionTemplate?: string;
+  defaultCodeVersionId?: string | null;
+  metadata?: JsonObject;
+}
+
+/** Result of the Task-side registration after the Run ends. */
+export interface RunOutputRegistration {
+  status: 'registered' | 'failed' | 'skipped';
+  modelVersionId: string | null;
+  error: string | null;
+  reason: 'already_registered_by_run' | null;
 }
 
 export interface TaskExecution {

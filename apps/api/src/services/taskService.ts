@@ -1,11 +1,21 @@
-import type { ExperimentTask, Run, TaskExecution, TaskRunPage } from '@mmt/contracts';
+import type {
+  CodeVersion,
+  ExperimentTask,
+  Run,
+  RunKind,
+  TaskExecution,
+  TaskOutputModel,
+  TaskRunPage,
+} from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { validateCodeCompatibility } from '../domain/compatibility.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
+import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import {
   MAX_TASK_REVISION,
   type TaskCreate,
+  type TaskDefaults,
   type TaskHistoryQuery,
   type TaskLaunch,
   type TaskPatch,
@@ -19,12 +29,18 @@ import {
 } from '../repositories/registryRepository.js';
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { runSummarySelect } from '../repositories/runListProjection.js';
+import {
+  findOutputModelById,
+  findOutputModelByName,
+} from '../repositories/runOutputRegistrationRepository.js';
 import { requireProject, requireScope } from './accessService.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
 // Task launch and ordinary Job creation share the same retry policy.
 const TASK_JOB_MAX_ATTEMPTS = 3;
+// Same kinds registerModelVersion accepts as an output model's source Run.
+const OUTPUT_MODEL_TASK_KINDS: readonly RunKind[] = ['training', 'finetuning'];
 
 export class TaskService {
   constructor(
@@ -91,7 +107,12 @@ export class TaskService {
       this.validateRevision(task, request.input.expectedRevision);
       if (task.revision === MAX_TASK_REVISION) conflict('Taskのrevision上限に達しました');
       const { expectedRevision: _expectedRevision, ...changes } = request.input;
-      const updated = { ...task, ...changes };
+      const updated = {
+        ...task,
+        ...changes,
+        outputModel:
+          changes.outputModel === undefined ? (task.outputModel ?? null) : changes.outputModel,
+      };
       await this.validateDefaults(connection, { projectId, input: updated });
       return updateTask(connection, updated);
     });
@@ -206,7 +227,7 @@ export class TaskService {
 
   private async validateDefaults(
     connection: Connection,
-    registration: { projectId: string; input: TaskCreate },
+    registration: { projectId: string; input: TaskDefaults },
   ): Promise<void> {
     const { projectId, input } = registration;
     const code = await findCodeVersion(connection, { projectId, id: input.codeVersionId });
@@ -215,6 +236,14 @@ export class TaskService {
       : null;
     validateCodeCompatibility(code, { model, kind: input.kind });
     await validateCodeArtifacts(connection, code);
+    assertNoReservedRunTags(input.tags);
+    if (input.outputModel)
+      await this.validateOutputModel(connection, {
+        projectId,
+        kind: input.kind,
+        code,
+        outputModel: input.outputModel,
+      });
     await assertProjectReferences(connection, {
       table: 'dataset_versions',
       projectId,
@@ -227,4 +256,58 @@ export class TaskService {
         runtime: code.runtime,
       });
   }
+
+  // The registration itself runs later as the Run's creator; checking here turns a Task that
+  // could never register into a 422 at save time instead of a failed record after training.
+  private async validateOutputModel(
+    connection: Connection,
+    request: { projectId: string; kind: RunKind; code: CodeVersion; outputModel: TaskOutputModel },
+  ): Promise<void> {
+    const { projectId, code, outputModel } = request;
+    if (!OUTPUT_MODEL_TASK_KINDS.includes(request.kind))
+      throw new DomainError(
+        422,
+        '出力モデルはtrainingまたはfinetuningのTaskでのみ設定できます',
+        'output_model_kind',
+      );
+    const family = outputModel.createModel
+      ? await familyForNewModel(connection, { projectId, createModel: outputModel.createModel })
+      : await familyOfExistingModel(connection, { projectId, id: outputModel.modelId! });
+    validateCodeCompatibility(code, { model: { family } });
+    if (outputModel.defaultCodeVersionId)
+      validateCodeCompatibility(
+        await findCodeVersion(connection, { projectId, id: outputModel.defaultCodeVersionId }),
+        { model: { family } },
+      );
+  }
+}
+
+async function familyOfExistingModel(
+  connection: Connection,
+  reference: { projectId: string; id: string },
+): Promise<string> {
+  const model = await findOutputModelById(connection, reference);
+  if (!model) notFound('Model');
+  if (model.deleted)
+    throw new DomainError(422, 'MLflowで削除したModelは登録先にできません', 'model_deleted');
+  return model.family;
+}
+
+// An existing Model with the same name is reused at registration, so its family must match.
+async function familyForNewModel(
+  connection: Connection,
+  request: { projectId: string; createModel: { name: string; family: string } },
+): Promise<string> {
+  const { createModel } = request;
+  const existing = await findOutputModelByName(connection, {
+    projectId: request.projectId,
+    name: createModel.name,
+  });
+  if (existing && existing.family !== createModel.family)
+    throw new DomainError(
+      422,
+      `同じ名前のModelが系列${existing.family}で登録されています`,
+      'model_family_mismatch',
+    );
+  return createModel.family;
 }

@@ -24,7 +24,13 @@ import { RegistryService } from './services/registryService.js';
 import { RunService } from './services/runService.js';
 import { TaskService } from './services/taskService.js';
 import { AuditService } from './services/auditService.js';
-import { RunCompletionService } from './services/runCompletionService.js';
+import {
+  RunCompletionService,
+  type RunCompletionHandler,
+} from './services/runCompletionService.js';
+import { OutputRegistrationHandler } from './services/outputRegistrationHandler.js';
+import { RunOutputRegistrationService } from './services/runOutputRegistrationService.js';
+import { runOutputRegistrationRoutes } from './routes/runOutputRegistrationRoutes.js';
 import { RepositoryFilesService } from './services/repositoryFilesService.js';
 import { GitRepositoryReader, type RepositoryReader } from './services/repositoryReader.js';
 import { ModelAutomationService } from './services/modelAutomationService.js';
@@ -70,7 +76,10 @@ export function createApplication(options: ApplicationOptions) {
   // Handlers run in this order inside the terminal-transition transaction. Output registration
   // must precede pending automation so versions it creates start in the same completion.
   // Plugin outbox events are not handlers: RunCompletionService enqueues them on every status change.
-  const runCompletion = new RunCompletionService([]);
+  // Handlers that need the registry are appended once it exists (it depends on runs, which
+  // depends on runCompletion); they are all registered before the application serves requests.
+  const runCompletionHandlers: RunCompletionHandler[] = [];
+  const runCompletion = new RunCompletionService(runCompletionHandlers);
   const runs = new RunService(database, runCompletion);
   const lineage = new LineageService(database);
   const artifacts = new ArtifactService(database, stores, {
@@ -86,6 +95,7 @@ export function createApplication(options: ApplicationOptions) {
   );
   const automation = new ModelAutomationService(database, runs, jobs);
   const registry = new RegistryService(database, automation);
+  runCompletionHandlers.push(new OutputRegistrationHandler(registry));
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const tokens = new TokenService(database);
   const plugins = new PluginService({
@@ -184,6 +194,10 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', modelAutomationRoutes(automation));
   app.route('/api/projects', runRoutes(runs, lineage));
   app.route('/api/projects', taskRoutes(tasks));
+  app.route(
+    '/api/projects',
+    runOutputRegistrationRoutes(new RunOutputRegistrationService(database)),
+  );
   app.route('/api/projects', repositoryRoutes(repositories));
   app.route('/api/projects', artifactRoutes(artifacts));
   app.route('/api/projects', jobRoutes(jobs));
