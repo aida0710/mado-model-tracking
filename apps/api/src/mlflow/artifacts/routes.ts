@@ -1,9 +1,9 @@
-import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Database } from '../../db/database.js';
 import { DomainError } from '../../domain/errors.js';
 import { uuidSchema } from '../../domain/validation.js';
+import { requestBodyStream } from '../../http/requestBodyStream.js';
 import {
   parse,
   principal,
@@ -75,13 +75,9 @@ export function mlflowArtifactRoutes(options: {
 
   routes.put(`${ARTIFACT_TRANSFER_ROOT}/*`, async (context) => {
     const location = transferLocation(context);
-    const requestBody = context.req.raw.body;
-    const body = requestBody
-      ? Readable.fromWeb(requestBody as import('node:stream/web').ReadableStream<Uint8Array>)
-      : Readable.from([]);
     await transfers.upload({
       ...artifactAccess(context, location),
-      body,
+      body: requestBodyStream(context),
       mimeType: context.req.header('Content-Type') ?? 'application/octet-stream',
     });
     return context.json({});

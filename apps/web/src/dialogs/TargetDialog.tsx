@@ -50,7 +50,7 @@ export function TargetDialog({
               max: 65535,
               defaultValue: '22',
             },
-            { name: 'username', label: text.username, required: true },
+            { name: 'username', label: text.sshUsername, required: true },
             {
               name: 'sshKeyPath',
               label: text.sshKeyPath,

@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { ArtifactService } from '../services/artifactService.js';
+import { requestBodyStream } from '../http/requestBodyStream.js';
 import {
   artifactContentHeaders,
   artifactValidatorHeaders,
@@ -41,17 +42,13 @@ function setResponseHeaders(context: ApiContext, headers: Record<string, string>
 export function artifactRoutes(artifacts: ArtifactService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   const upload = async (context: ApiContext, runId?: string) => {
-    const requestBody = context.req.raw.body;
-    const body = requestBody
-      ? Readable.fromWeb(requestBody as import('node:stream/web').ReadableStream<Uint8Array>)
-      : Readable.from([]);
     return context.json(
       await artifacts.upload(principal(context), uuidParam(context, 'p'), {
         runId,
         path: context.req.query('path') ?? '',
         mimeType: context.req.header('Content-Type'),
         declaredBytes: declaredContentLength(context),
-        body,
+        body: requestBodyStream(context),
       }),
       201,
     );

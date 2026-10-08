@@ -3,6 +3,7 @@ import type { Run } from '@mmt/contracts';
 import { useRunOutputRegistration } from '../hooks/useRunOutputRegistration';
 import type { RunOutputRegistrationState } from '../lib/runOutputRegistrationState';
 import { text } from '../i18n/catalog';
+import { outputRegistrationErrorLabels } from '../i18n/workbench';
 
 function VersionLink({ projectId, id }: { projectId: string; id: string }) {
   return <Link className="version-link mono" to={`/projects/${projectId}/models?version=${id}`}>{id}</Link>;
@@ -15,7 +16,8 @@ export function RunOutputRegistrationStatus({ projectId, state }: {
     case 'none': return null;
     case 'pending': return <p className="muted" data-testid="output-registration-pending">{text.outputRegistrationPending}</p>;
     case 'failed': return <div className="notice error" role="alert" data-testid="output-registration-failed">
-      {text.outputRegistrationFailed}{state.error && `: ${state.error}`}
+      {text.outputRegistrationFailed}
+      {state.error && `: ${outputRegistrationErrorLabels[state.error] ?? state.error}`}
     </div>;
     default: return <p data-testid={`output-registration-${state.kind}`}>
       {state.kind === 'skipped' ? text.outputRegistrationSkipped : text.outputRegistrationRegistered}:{' '}

@@ -181,3 +181,32 @@ HTTP fixtureはMadoのprotocol・metrics・Dataset importを確認するため�
 実APIとCPU workerの5 Jobで、Task改版、通常・失敗テスト、旧版の再実行、Git差分、実行前ZIP、2件ずつの履歴取得を確認しました。実ブラウザでは8 Jobを実行し、Monacoで編集した係数によるメトリクスの7→10の変化、学習モデルを別の推論コードで読み込んだ予測値の一致、Compute/plugin管理、manifest・metrics・Dataset importを確認しました。ブラウザ回帰5本では未保存編集の戻る・進む、ネストした編集、保存待ちと履歴ページ切替も検証しています。公式MLflow 3.17.0の実SDK結合は再確認済みです。
 
 実Authentik、SSH/GPU、実S3、実SIF runtime、本番Madoへの接続はこの結果に含みません。
+
+## Run検索をブラウザで確認する
+
+Experiments画面のサーバー側検索、cursorのページ送り、metricでの並べ替え、送信前の構文エラー、APIの400の表示を確かめます。スクリプトは`mmt_test`の一時schemaを使う独立したAPI（47100）を自分で起動し、80件のRunを用意します。WebはViteを47101で起動しておきます。
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47100 npx vite --port 47101 --strictPort --host 127.0.0.1) &
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55483/mmt_test \
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+npx tsx artifacts/verification/2026-10-08/run-search-browser/verify-run-search-browser.ts
+```
+
+このスクリプトはgitignoreした`artifacts/`の下にあり、リポジトリには含まれません。画像も同じディレクトリへ保存します。
+
+## 音声ビューア・評価サンプル表・Artifactの聴き比べを確認する
+
+APIはブラウザ内のmockで差し替えるので、Webの開発サーバーだけを起動します（開発用の5182とは別のport）。
+
+```bash
+cd apps/web
+MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47119 npx vite --port 47110 --strictPort --host 127.0.0.1 &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_WEB_URL=http://127.0.0.1:47110 \
+MMT_SCREENSHOT_DIR=../../artifacts/verification/<日付>/artifacts-web \
+node tests/browser-artifacts.mjs
+```
+
+WAV mono 16kHz・FLAC stereo 48kHz・MP3の波形とスペクトログラム（440Hz・1760Hzのbin位置、mel 80帯域）、クリックでのseek、ドラッグでのループ、64MiB超は再生だけになること、デコード失敗と再試行を確かめます。評価サンプル表（[評価サンプルの推奨形式](evaluation.md#評価サンプルの推奨形式)）ではページング、差分、`preload="none"`、壊れた行、別Projectの参照の拒否を、2つのRunの同じpathの聴き比べでは同じ位置からの切替を確認し、ライト/ダークの画像を保存します。fixtureは`apps/web/tests/fixtures/audio/`にあり、生成コマンドはスクリプト冒頭にあります。

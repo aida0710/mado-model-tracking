@@ -18,6 +18,8 @@ CREATE TABLE artifact_uploads (
   backend_upload_id text NOT NULL,
   created_by_user_id uuid NOT NULL REFERENCES users(id),
   created_by_token_id uuid REFERENCES api_tokens(id),
+  -- Job tokens live in job_tokens, so a session opened by Job code records that id instead.
+  created_by_job_token_id uuid REFERENCES job_tokens(id),
   -- MLflow multipart uploads record the artifact path owner here to map the completed Artifact.
   owner_kind text CHECK (owner_kind IN ('run','model')),
   owner_id text,
@@ -30,6 +32,7 @@ CREATE TABLE artifact_uploads (
   expires_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (created_by_token_id IS NULL OR created_by_job_token_id IS NULL),
   CHECK ((owner_kind IS NULL) = (owner_id IS NULL)),
   CHECK ((status = 'completed') = (artifact_id IS NOT NULL)),
   FOREIGN KEY(run_id,project_id) REFERENCES runs(id,project_id),

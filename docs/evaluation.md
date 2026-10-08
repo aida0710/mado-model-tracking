@@ -65,3 +65,26 @@ metric ごとに次の順で値を選び、どちらを使ったかを `source` 
 ## 画面
 
 `EvaluationComparisonPanel`（apps/web/src/components）が比較を表示する部品である。基準 alias を選ぶ（既定は `production`、無ければ名前順で最初の alias）と、metric ごとの候補・基準・差・相対差、値の出典、比較に使った正解セットと評価コード版、比べた評価 Run へのリンクを表示する。モデル版の画面への組み込みは model-version-page の担当。
+
+## 評価サンプルの推奨形式
+
+評価 Run がサンプルごとの結果を jsonl の Artifact として保存すると、Web の Artifacts タブで表として確認できる（音声の再生、参照と推論の文字単位の差分、score での並べ替え）。
+
+- 形式: 1行に1つの JSON オブジェクト（jsonl。拡張子 `.jsonl` / `.ndjson`、または MIME `application/x-ndjson`）。ヘッダー行付きの csv（RFC 4180）も読める。
+- 列名: `audio`、`reference`、`prediction`、`score`。`audio` 列か、`reference` と `prediction` の両方がある表を評価サンプルとして表示する。ほかの列は表示しない。
+  - `audio`・`reference`・`prediction` は文字列（無い場合は省略か null）。
+  - `score` は数値（csv では数値の文字列）。無い場合は省略か null。
+- 壊れた行（JSON として読めない、オブジェクトでない、型が違う、csv の列数が違う、引用符が閉じていない）は補完せず、「読み取れない行」として行番号と理由を表示する。
+- 表示は1ページ50行。音声は再生を押すまで取得しない（`preload="none"`）。波形とスペクトログラムは行の「波形」を開いたときだけ計算する。表の Artifact は16MiBまで表示する。
+
+```jsonl
+{"audio": "eval/audio/0001.wav", "reference": "今日は晴れです", "prediction": "今日は雨です", "score": 0.29}
+{"audio": "mmt-artifact://runs/<推論RunのID>/outputs/0002.wav", "reference": "こんにちは", "prediction": "こんにちは", "score": 0}
+```
+
+## audio 列のパスの書き方
+
+- 相対パス: 表を保存した Run の Artifact として、Run の保存パスの root から解決する（表のディレクトリからではない）。`./` と重複した `/` は無視する。`..` を含むパスと `/` から始まるパスはエラー行になる。
+- 別の Run の Artifact: `mmt-artifact://runs/<Run ID>/<保存パス>`。評価 Run の表が上流の推論 Run の音声を指す場合に使い、評価 Run へコピーしない。推論 Run の ID は、推論の出力にあたる入力 DatasetVersion の `sourceRunId` から取れる。解決は同じ Project の Run だけで、ほかの Project の Run や存在しない Run はエラー行になる。
+- `mmt-artifact://projects/<Project ID>/runs/<Run ID>/<保存パス>` も書けるが、表と同じ Project のときだけ解決する。
+- 保存パスはそのまま照合する（パーセントエンコードは解かない）。`s3://` や `https://` などほかの形式はエラー行になる。

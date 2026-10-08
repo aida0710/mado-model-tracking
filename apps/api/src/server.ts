@@ -7,12 +7,18 @@ import { applyIdleTimeout, serverTimeouts } from './http/serverTimeouts.js';
 const config = loadConfig();
 const database = createDatabase(config.databaseUrl);
 database.on('error', () => console.error(JSON.stringify({ event: 'database_pool_error' })));
-const { app, outbox, artifactUploadFinalizer, artifactUploadSweeper } = createApplication({
-  config,
-  database,
-});
+const { app, outbox, automationSweeper, artifactUploadFinalizer, artifactUploadSweeper } =
+  createApplication({
+    config,
+    database,
+  });
 // Background tasks share the server lifetime; stop() waits for the run in progress.
-const backgroundTasks = [outbox, artifactUploadFinalizer, artifactUploadSweeper];
+const backgroundTasks = [
+  outbox,
+  automationSweeper,
+  artifactUploadFinalizer,
+  artifactUploadSweeper,
+];
 const timeouts = serverTimeouts(config);
 const server = serve(
   {

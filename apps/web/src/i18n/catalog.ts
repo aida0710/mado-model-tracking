@@ -241,7 +241,7 @@ export const text = {
   newTarget: 'Compute targetを登録',
   host: 'Host',
   port: 'Port',
-  username: 'SSHユーザー',
+  sshUsername: 'SSHユーザー',
   sshKeyPath: 'SSH鍵のパス',
   knownHostsPath: 'known_hostsのパス',
   workDirectory: '作業ディレクトリ',

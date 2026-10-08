@@ -1,9 +1,9 @@
-import { Readable } from 'node:stream';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { MULTIPART_MAX_PART_COUNT } from '@mmt/platform';
 import type { ArtifactUploadService } from '../services/artifactUploadService.js';
 import { uuidSchema } from '../domain/validation.js';
+import { requestBodyStream } from '../http/requestBodyStream.js';
 import {
   jsonBody,
   parse,
@@ -36,17 +36,6 @@ const partNumberSchema = z.coerce.number().int().min(1).max(MULTIPART_MAX_PART_C
 function declaredContentLength(context: ApiContext): number | undefined {
   const header = context.req.header('Content-Length');
   return header && /^\d+$/.test(header) ? Number(header) : undefined;
-}
-
-function requestBody(context: ApiContext): Readable {
-  const body = context.req.raw.body;
-  const readable = body
-    ? Readable.fromWeb(body as import('node:stream/web').ReadableStream<Uint8Array>)
-    : Readable.from([]);
-  // A client that disconnects during the permission check destroys the stream before storage
-  // reads it. Without a listener that error is uncaught; storage still sees the destroyed stream.
-  readable.on('error', () => undefined);
-  return readable;
 }
 
 export function artifactUploadRoutes(uploads: ArtifactUploadService): Hono<ApiEnvironment> {
@@ -83,7 +72,7 @@ export function artifactUploadRoutes(uploads: ArtifactUploadService): Hono<ApiEn
         partNumber: parse(partNumberSchema, context.req.param('n')),
         declaredBytes: declaredContentLength(context),
         sha256: declaredSha256 === undefined ? undefined : parse(sha256Schema, declaredSha256),
-        body: requestBody(context),
+        body: requestBodyStream(context),
       }),
     );
   });

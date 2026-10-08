@@ -60,7 +60,7 @@ const buildTraining = (override: FormValues, task?: ExperimentTask) =>
 
 describe('Taskの出力モデル設定', () => {
   it('training・finetuningでは登録先を送り、それ以外の種別では送らない', () => {
-    expect(buildTraining({}).outputModel).toEqual({ modelId: 'qwen', createModel: null, artifactPath: 'model', defaultCodeVersionId: null });
+    expect(buildTraining({}).outputModel).toEqual({ modelId: 'qwen', createModel: null, artifactPath: 'model/weights.json', defaultCodeVersionId: null });
     const finetuningCatalog = { ...trainingCatalog, codeVersions: [{ ...trainingCode, taskTypes: ['finetuning' as const] }] };
     expect(buildTaskInput({ values: { ...trainingValues, kind: 'finetuning' }, catalog: finetuningCatalog, targets: [target] }).outputModel)
       .toMatchObject({ modelId: 'qwen' });
@@ -82,9 +82,10 @@ describe('Taskの出力モデル設定', () => {
     expect(() => buildTraining({ outputModelTarget: 'create', outputModelName: '', outputModelFamily: 'Qwen3' })).toThrow();
     expect(() => buildTraining({ outputModelId: '' })).toThrow();
   });
-  it('Artifactのパスは相対パスだけを受け付け、末尾の/は外して送る', () => {
-    expect(buildTraining({ outputModelArtifactPath: ' model/weights/ ' }).outputModel?.artifactPath).toBe('model/weights');
-    for (const outputModelArtifactPath of ['', '/model', '../model', 'model//weights', 'model\\weights'])
+  it('Artifactのパスはファイルの相対パスだけを受け付ける', () => {
+    expect(buildTraining({ outputModelArtifactPath: ' container/model/weights.bin ' }).outputModel?.artifactPath)
+      .toBe('container/model/weights.bin');
+    for (const outputModelArtifactPath of ['', '/model', '../model', 'model//weights', 'model\\weights', 'model/'])
       expect(() => buildTraining({ outputModelArtifactPath })).toThrow();
   });
   it('系列の候補は選択中の学習コード版の対応系列に絞り、対応外の系列は保存しない', () => {

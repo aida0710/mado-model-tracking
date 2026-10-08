@@ -336,6 +336,21 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
     ).toBe(404);
   });
 
+  it('ruleのtagsに予約tag（automation.・mmt.）があれば422 reserved_tagで拒否する', async () => {
+    const fixture = await containerFixture(harness);
+    for (const tags of [{ 'automation.ruleId': 'forged' }, { 'mmt.source': 'rule' }]) {
+      const response = await request(harness.app, `${fixture.basePath}/automation-rules`, {
+        method: 'POST',
+        cookie: fixture.administrator.cookie,
+        body: automationRuleInput(fixture, { tags }),
+      });
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { code: string }).code).toBe('reserved_tag');
+    }
+    const rules = await harness.database.query('SELECT id FROM model_automation_rules');
+    expect(rules.rows).toHaveLength(0);
+  });
+
   it('別ProjectのCodeVersion・Experiment・入力DatasetVersionをルールから参照できない', async () => {
     const fixture = await containerFixture(harness);
     const other = await entity<Project>(

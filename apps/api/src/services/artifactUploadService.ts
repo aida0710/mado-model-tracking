@@ -77,6 +77,7 @@ export class ArtifactUploadService {
     const backend = await projectArtifactBackend(this.database, projectId, this.stores);
     const multipart = this.multipartStore(backend);
     const id = randomUUID();
+    const credential = uploadCredential(principal);
     // The Artifact registered on completion reuses this id, so the key matches single uploads.
     const storageKey = `${projectId}/${id}/content`;
     const mimeType = resolveArtifactMimeType({
@@ -89,8 +90,8 @@ export class ArtifactUploadService {
         this.database,
         `INSERT INTO artifact_uploads(id,project_id,run_id,path,backend,storage_key,mime_type,
           expected_size,expected_sha256,part_size,part_count,backend_upload_id,created_by_user_id,
-          created_by_token_id,expires_at)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now()+make_interval(secs=>$15))
+          created_by_token_id,created_by_job_token_id,expires_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,now()+make_interval(secs=>$16))
         RETURNING ${artifactUploadColumns}`,
         [
           id,
@@ -106,7 +107,8 @@ export class ArtifactUploadService {
           partCount,
           backendUploadId,
           principal.user.id,
-          principal.token?.id ?? null,
+          credential.apiTokenId,
+          credential.jobTokenId,
           UPLOAD_SESSION_LIFETIME_MS / 1000,
         ],
       ))!;
@@ -124,12 +126,20 @@ export class ArtifactUploadService {
     filter: { status?: ArtifactUploadStatus },
   ): Promise<ArtifactUpload[]> {
     await requireProject(this.database, principal, { projectId, ...PERMISSION });
+    const credential = uploadCredential(principal);
     const uploads = await rows<ArtifactUploadRecord>(
       this.database,
       `SELECT ${artifactUploadColumns} FROM artifact_uploads
       WHERE project_id=$1 AND created_by_user_id=$2 AND created_by_token_id IS NOT DISTINCT FROM $3
-      AND ($4::text IS NULL OR status=$4) ORDER BY created_at DESC,id DESC`,
-      [projectId, principal.user.id, principal.token?.id ?? null, filter.status ?? null],
+      AND created_by_job_token_id IS NOT DISTINCT FROM $4
+      AND ($5::text IS NULL OR status=$5) ORDER BY created_at DESC,id DESC`,
+      [
+        projectId,
+        principal.user.id,
+        credential.apiTokenId,
+        credential.jobTokenId,
+        filter.status ?? null,
+      ],
     );
     return uploads.map(publicArtifactUpload);
   }
@@ -294,7 +304,19 @@ export class ArtifactUploadService {
   }
 }
 
-/** Only the creating user through the same credential (session or the same API token) may use it. */
+/** The token a session belongs to; a Job token's id refers to job_tokens, not api_tokens. */
+function uploadCredential(principal: Principal): {
+  apiTokenId: string | null;
+  jobTokenId: string | null;
+} {
+  const token = principal.token;
+  if (!token) return { apiTokenId: null, jobTokenId: null };
+  return token.job
+    ? { apiTokenId: null, jobTokenId: token.id }
+    : { apiTokenId: token.id, jobTokenId: null };
+}
+
+/** Only the creating user through the same credential (session, API token or Job token) may use it. */
 async function loadOwnUpload(
   connection: Connection,
   principal: Principal,
@@ -302,9 +324,11 @@ async function loadOwnUpload(
 ): Promise<ArtifactUploadRecord> {
   await requireProject(connection, principal, { projectId: reference.projectId, ...PERMISSION });
   const upload = await findArtifactUpload(connection, reference);
+  const credential = uploadCredential(principal);
   if (
     upload.createdByUserId !== principal.user.id ||
-    upload.createdByTokenId !== (principal.token?.id ?? null)
+    upload.createdByTokenId !== credential.apiTokenId ||
+    upload.createdByJobTokenId !== credential.jobTokenId
   )
     throw new DomainError(
       403,

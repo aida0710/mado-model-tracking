@@ -54,6 +54,8 @@ NaNは保存・読み出し時に保持します。数値検索では`!=`以外�
 
 SDKが表示するRunリンクはMLflow標準UIの形式です。画面での確認には本アプリのRunsを使うか、`/projects/PROJECT_ID/runs/RUN_ID`を開いてください。
 
+Runの説明文はMLflowと同じ`mlflow.note.content` tagに保存します。MLflowの`set_tag("mlflow.note.content", ...)`・標準UIのDescriptionと、nativeの`PUT /api/projects/:p/runs/:r/note`は同じ値を読み書きし、別の保存場所はありません。上限はMLflowのtag値と同じ8000文字で、nativeで空文字を保存するとtagを削除します。JobのRunが終わった後は、MLflowのset-tag・delete-tagが`INVALID_STATE`で拒否されます。nativeの説明文APIは説明文を実験結果として扱わないため、終了後もeditorが編集できます。終了後に説明文を直す場合はnative APIを使ってください。Job限定token（`mmtj_`）ではnativeの説明文APIは403 `job_token_forbidden`です。Webの説明文の画面はまだありません。
+
 ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデル版が参照するArtifactは保持します。
 
 SDKの`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`は設定したままで使えます。multipart uploadには未対応のため、`mpu/create`・`complete`・`abort`は501 `NOT_IMPLEMENTED`を返します。SDKはこの応答を受けて、同じファイルを1回のストリーム転送でアップロードし直します。SDKはエラーmessageの先頭が自身の定数と一致するときだけ通常転送へ戻るので、サーバーはSDKと同じ英語の文言を返します。
@@ -171,7 +173,7 @@ autologはライブラリごとに使用するAPIとモデル形式が異なり�
 
 ## workerから記録する
 
-workerはPython・Docker・Singularity・Apptainerの実行環境にMLflowの接続先・token・Experiment ID・Run IDを渡します。PythonのrequirementsまたはコンテナにMLflow 3を含めてください。記録コードの`mlflow.start_run()`はJobが使用するRunに接続します。
+workerはPython・Docker・Singularity・Apptainerの実行環境にMLflowの接続先・token・Experiment ID・Run IDを渡します。tokenはそのRunに関わる記録だけを書けるJob限定tokenです（[worker手順](worker.md#実行コードにはjob限定tokenを渡す)）。PythonのrequirementsまたはコンテナにMLflow 3を含めてください。記録コードの`mlflow.start_run()`はJobが使用するRunに接続します。
 
 Jobの終了はworkerが管理します。SDKの`end_run()`が呼ばれても、子プロセスが動いている間はJobとRunを完了しません。プロセスの終了、出力の回収、停止確認を終えた後にworkerが最終状態を確定します。実行条件の既存paramsを違う値で書き換えることはできません。
 

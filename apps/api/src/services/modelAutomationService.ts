@@ -27,6 +27,7 @@ import {
   findSavedArtifact,
   validateCodeArtifacts,
 } from '../repositories/runtimeArtifactRepository.js';
+import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import { requireProject } from './accessService.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
@@ -71,6 +72,8 @@ export class ModelAutomationService {
   ): Promise<ModelAutomationRule> {
     return transaction(this.database, async (connection) => {
       await this.requireRuleAdmin(connection, principal, projectId);
+      // Rule tags are copied onto every Run the rule starts, so they obey the Run tag rule.
+      assertNoReservedRunTags(input.tags);
       await assertProjectReference(connection, {
         table: 'experiments',
         projectId,

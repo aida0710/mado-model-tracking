@@ -73,6 +73,12 @@ SDKを使うコードは、RunのメトリクスやArtifactを既存APIへ保存
 
 manifestのSHA256とbyte数は実ファイルと一致させます。すべての出力を書き終えてからmanifestを置きます。workerは終了後にmanifestと出力を検証し、metricsとArtifactsをRunへ回収します。詳細な制限と、停止・worker再接続の動作は[worker手順](worker.md)を参照してください。
 
+### 評価コンテナが書く結果ファイル
+
+評価の自動実行で動くコンテナは、サンプルごとの結果を`eval/results.jsonl`のようなjsonlで出力すると、Webで音声を聴きながら確認できます。列名は`audio`・`reference`・`prediction`・`score`です。形式は[評価サンプルの推奨形式](evaluation.md#評価サンプルの推奨形式)を参照してください。
+
+推論Runが出力した音声を評価Runの表から指すときは、評価Runへコピーせず`mmt-artifact://runs/<推論RunのID>/<保存パス>`と書きます。推論RunのIDは、入力DatasetVersion（`MMT_DATASET_VERSIONS_FILE`）のうち推論の出力にあたる版の`sourceRunId`から取れます。同じProjectのRunだけ解決します。`/mmt/outputs`から回収したファイルの保存パスは`container/<path>`です。
+
 ## モデル登録後に自動実行する
 
 Modelsの自動実行画面で、Project管理者がルールを作ります。対象のモデル系列、Experiment、推論または評価、CodeVersion、DatasetVersion、ComputeTarget、GPU、parametersを指定します。各設定は固定し、有効・無効だけを切り替えます。設定変更は新しいルールとして登録します。

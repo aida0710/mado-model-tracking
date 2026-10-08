@@ -81,3 +81,13 @@ def test_remote_runtime_bundle_imports_telemetry_with_the_shared_collector(tmp_p
         [sys.executable, "-I", "-c", f"import sys;sys.path.insert(0, {str(tmp_path)!r});{probe}"]
     )
     assert b'"system.memory.used_bytes"' in output
+
+
+def test_host_runner_polls_keep_counters_between_processes_for_rates(tmp_path):
+    from mado_tracking.worker import host_runner
+
+    host_runner.write_json(tmp_path / "state.json", {"status": "running", "processPid": 0})
+    first = host_runner.poll(tmp_path, {"telemetry": True, "step": 0})
+    assert not any(point["name"].startswith("system.network.") for point in first["metrics"])
+    second = host_runner.poll(tmp_path, {"telemetry": True, "step": 1})
+    assert "system.network.sent_bytes_per_second" in {point["name"] for point in second["metrics"]}

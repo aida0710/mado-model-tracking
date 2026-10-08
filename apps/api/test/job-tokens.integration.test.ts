@@ -132,6 +132,43 @@ describe.skipIf(!testDatabaseUrl)('Job限定token（独立PostgreSQL）', () => 
     expect((await request(harness.app, `${fixture.basePath}/runs/${run.id}`, { token: jobToken })).status).toBe(200);
   });
 
+  it('自分のRunへ再開可能なuploadを作って完了でき、そのsessionは同じJob tokenだけが使える', async () => {
+    const fixture = await executionFixture(harness);
+    const { jobToken, run } = await startedJob(fixture);
+    const content = 'checkpoint';
+    const created = await request(harness.app, `${fixture.basePath}/artifact-uploads`, {
+      method: 'POST',
+      token: jobToken,
+      body: { path: 'outputs/checkpoint.bin', runId: run.id, expectedSize: content.length },
+    });
+    const upload = await entity<{ id: string }>(created, 201);
+    const stored = await harness.database.query(
+      'SELECT created_by_token_id, created_by_job_token_id FROM artifact_uploads WHERE id=$1',
+      [upload.id],
+    );
+    expect(stored.rows[0].created_by_token_id).toBeNull();
+    expect(stored.rows[0].created_by_job_token_id).not.toBeNull();
+    const uploadPath = `${fixture.basePath}/artifact-uploads/${upload.id}`;
+    // The Run creator's own session did not open it, so it cannot continue the upload.
+    const byCreator = await request(harness.app, uploadPath, { cookie: fixture.editor.cookie });
+    expect(await errorCode(byCreator)).toBe('upload_forbidden');
+    const part = await request(harness.app, `${uploadPath}/parts/1`, {
+      method: 'PUT',
+      token: jobToken,
+      headers: { 'Content-Length': String(content.length) },
+      binary: content,
+    });
+    expect(part.status).toBe(200);
+    expect((await request(harness.app, `${uploadPath}/complete`, { method: 'POST', token: jobToken })).status).toBe(202);
+    const other = await fixture.newRun('Other Run', 'training');
+    const refused = await request(harness.app, `${fixture.basePath}/artifact-uploads`, {
+      method: 'POST',
+      token: jobToken,
+      body: { path: 'outputs/other.bin', runId: other.id, expectedSize: content.length },
+    });
+    expect(refused.status).toBe(403);
+  });
+
   it('MLflow経路でset-tag・log-batch・Artifact・Logged Model・版登録ができる', async () => {
     const fixture = await executionFixture(harness);
     const { jobToken, run } = await startedJob(fixture);

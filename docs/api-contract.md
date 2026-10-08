@@ -172,8 +172,8 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
 - 接頭辞`mmtj_`＋32 byteの乱数。DBにはSHA-256 hashだけを保存する（`job_tokens`）。principalはRunの作成者（`users.status='active'`）、`method='token'`、scopeは`read`,`runs:write`,`artifacts:write`,`registry:write`。Project権限はRun作成者の現在のmembershipで判定する（外されると403）。
 - 有効なのは、失効しておらず、Jobが発行時と同じleaseのまま`claimed`/`running`の間だけ。終端（finished/failed/canceled）やleaseの変更で401。
 - 読み出しはtokenのProject配下（`GET|HEAD /projects/:p/*`、`/mlflow/projects/:p/*`）と、読むだけのsearch（`POST /projects/:p/runs/search`、MLflowの`runs/search`・`experiments/search`・`logged-models/search`・`registered-models/get-latest-versions`）。
-- 書き込みは次の許可表に一致したものだけ。それ以外（`/worker/*`、Run作成、他Runへの書き込み、token発行、Project設定、自動実行rule等）は403 `job_token_forbidden`（MLflowは`PERMISSION_DENIED`）。許可表に無いrouteは追加されても既定で拒否される。
-  - native: `PATCH /projects/:p/runs/:r`、`POST .../runs/:r/metrics`、`POST .../runs/:r/logs`、`PUT .../runs/:r/artifacts`（`:r`がtokenのRun）。`POST /projects/:p/artifact-uploads`（`body.runId`がtokenのRun）と、そのsessionの`PUT .../parts/:n`・`POST .../complete`・`POST .../abort`・`DELETE /artifact-uploads/:u`（sessionの`run_id`がtokenのRun）。`POST /projects/:p/models`。`POST .../models/:m/versions`と`POST .../datasets/:d/versions`（`body.sourceRunId`がtokenのRun）。
+- 書き込みは次の許可表に一致したものだけ。それ以外（`/worker/*`、Run作成、他Runへの書き込み、token発行、Project設定、自動実行rule、Runの説明文、コメント等）は403 `job_token_forbidden`（MLflowは`PERMISSION_DENIED`）。許可表に無いrouteは追加されても既定で拒否される。
+  - native: `PATCH /projects/:p/runs/:r`、`POST .../runs/:r/metrics`、`POST .../runs/:r/logs`、`PUT .../runs/:r/artifacts`（`:r`がtokenのRun）。`POST /projects/:p/artifact-uploads`（`body.runId`がtokenのRun）と、そのsessionの`PUT .../parts/:n`・`POST .../complete`・`DELETE /artifact-uploads/:u`（sessionの`run_id`がtokenのRun）。`POST /projects/:p/models`。`POST .../models/:m/versions`と`POST .../datasets/:d/versions`（`body.sourceRunId`がtokenのRun）。
   - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
 - workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
 
@@ -181,12 +181,13 @@ Runは`upstreamDatasetVersionIds:string[]`を持つ。`inputDatasetVersionIds`�
 
 単一PUTは失敗すると全量を送り直すので、大きなArtifactはupload sessionで分割して送る。API経由の独自sessionで、S3ではmultipart upload、filesystemでは`<ARTIFACT_FILESYSTEM_ROOT>/.uploads/<uploadId>/<n>.part`にpartを置く。presigned URLでの直接転送は今回作らない。
 
-- 権限はeditor＋`artifacts:write`。sessionを使える（一覧・取得・part・complete・abort）のは作成したUserが同じ認証情報（sessionまたは同じAPI token）で呼ぶときだけで、それ以外は403 `upload_forbidden`。
+- 権限はeditor＋`artifacts:write`。sessionを使える（一覧・取得・part・complete・abort）のは作成したUserが同じ認証情報（session、同じAPI token、または同じJob限定token）で呼ぶときだけで、それ以外は403 `upload_forbidden`。
 - `POST /projects/:p/artifact-uploads` ({path,runId?,mimeType?,expectedSize,expectedSha256?,partSize?}) → 201 ArtifactUpload。保存先はProjectの`artifactBackend`。`partSize`は既定16MiB、5MiB〜5GiB（範囲外は422 `invalid_part_size`）。part数`ceil(expectedSize/partSize)`は10000以下（超えると422 `too_many_parts`）。`expectedSize`が`MMT_ARTIFACT_MAX_BYTES`を超えると413 `artifact_too_large`。削除済みRunは409 `run_deleted`。期限（`expiresAt`）は作成から7日。
 - `GET /projects/:p/artifact-uploads?status=` → `{items:ArtifactUpload[]}`。自分のsessionだけを返す。
 - `GET /projects/:p/artifact-uploads/:u` → ArtifactUploadDetail（`receivedParts:{partNumber,size,sha256,receivedAt}[]`）。再開時は欠けたpartだけを送る。
 - `PUT /projects/:p/artifact-uploads/:u/parts/:n` (raw body) → ArtifactUploadPart。part番号は1〜`partCount`。最後以外のpartは`partSize`、最後は残りのbyte数ちょうどで、`Content-Length`が一致しなければ422 `part_size_mismatch`。任意の`X-Part-SHA256`（hex）が一致しなければ422 `part_checksum_mismatch`。どちらもpartを受け取り済みにしない。同じ番号の再送は上書きする。`open`以外は409 `upload_not_open`、期限切れは409 `upload_expired`。
 - `POST /projects/:p/artifact-uploads/:u/complete` → 202 ArtifactUpload（`status:'verifying'`）。全partが揃っていなければ409 `upload_incomplete`、削除済みRunは409 `run_deleted`。`verifying`・`completed`のsessionへの再送は現在の状態を202で返す。
+- Job限定tokenは自分のRun（`runId`）のsessionだけを作れる。Job tokenで作ったsessionは、Runの作成者本人のbrowser sessionやAPI tokenからも使えない（leaseが終わると続きを送れない）。
 - `DELETE /projects/:p/artifact-uploads/:u` → ArtifactUpload（`status:'aborted'`）。受け取ったpartを捨てる。`open`以外（abort済み・期限切れを除く）は409 `upload_not_open`。
 - `status`は`open`→`verifying`→`completed`、または`aborted`/`expired`/`failed`。API内のfinalizerがpartを連結し、組み立てたobjectを1回streamingで読んで全体のsize・SHA-256を計算する。`expectedSha256`と違えば`failed`（`error:'sha256_mismatch'`）で、Artifactもblobも残さない。検証中にRunが削除されたら`failed`（`run_deleted`）。成功すると`completed`で、登録したArtifactのidはupload idと同じ（`artifactId`）。completeを何度送ってもArtifactは1件。finalizerはleaseを持ち、APIが途中で止まってもleaseの失効後に別のprocessが続きから完了させる。
 - 期限切れの`open` sessionは定期処理で`expired`にし、保存先のmultipart uploadをabortする。sessionの無い7日以上前の未完了multipart uploadと、24時間更新の無いfilesystemの書きかけstagingも消す。

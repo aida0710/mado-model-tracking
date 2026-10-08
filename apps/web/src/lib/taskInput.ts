@@ -13,7 +13,9 @@ import { text } from '../i18n/catalog';
 // Only these kinds produce weights, so only they may carry Task.outputModel.
 export const OUTPUT_MODEL_KINDS: readonly RunKind[] = ['training', 'finetuning'];
 // The conventional directory for weights, also used by the training code sample.
-export const DEFAULT_OUTPUT_MODEL_ARTIFACT_PATH = 'model/';
+// The API registers one Artifact file. This is where the training sample logs its weights;
+// files a Job leaves in MMT_OUTPUTS_DIR are stored under `container/` instead.
+export const DEFAULT_OUTPUT_MODEL_ARTIFACT_PATH = 'model/weights.json';
 
 export const hasOutputModel = (kind: RunKind) => OUTPUT_MODEL_KINDS.includes(kind);
 
@@ -85,9 +87,8 @@ function buildEnabledOutputModel({ values, catalog, code, previous }: {
   if (isCreating ? !name || !family : !catalog.models.some((model) => model.id === modelId))
     throw new Error(text.outputModelTargetError);
   if (!families.includes(family)) throw new Error(text.outputModelFamilyError);
-  // The API checks the same relative-path rule as code files, which has no trailing slash, so
-  // the directory `model/` is sent as `model`.
-  const artifactPath = getFieldValue(values, 'outputModelArtifactPath').trim().replace(/\/$/, '');
+  // A version holds one Artifact file, so a directory path such as `model/` is refused.
+  const artifactPath = getFieldValue(values, 'outputModelArtifactPath').trim();
   validateFilePath(artifactPath);
   const defaultCodeVersionId = getFieldValue(values, 'outputModelDefaultCodeVersionId') || null;
   if (defaultCodeVersionId && !getDefaultCodeCandidates(catalog.codeVersions, family)

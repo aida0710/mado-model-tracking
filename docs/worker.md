@@ -80,7 +80,7 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 ## workerを起動する
 
-管理者がproject限定のservice tokenを作る。workerには`read`、`worker:execute`、実行前のコードを保存するための`artifacts:write`が必要。実行コードがSDKで記録・登録する場合は前節のscopeも付ける。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
+管理者がproject限定のservice tokenを作る。workerには`read`、`worker:execute`、実行前のコードと出力ファイル（`/mmt/outputs`・`MMT_OUTPUTS_DIR`）をRun Artifactへ保存するための`artifacts:write`が必要。出力のmetricsはworker APIで送るため、ほかのscopeは要らない。実行コードの記録・登録にはworker tokenを使わない（次節）ので、そのためにscopeを足す必要もない。tokenとSSH秘密鍵はworkerマシンに置き、tokenをコードやコマンド引数へ埋め込まない。
 
 ```bash
 export MMT_API_URL=http://127.0.0.1:4182
@@ -101,6 +101,17 @@ SSH targetの`sshKeyPath`と`knownHostsPath`はworkerマシンの既存ファイ
 local executorは開発用で、API側のdevelopment設定とworker側の`MMT_ALLOW_LOCAL_EXECUTOR=true`の両方が必要。jobに`gpuIds=[]`を指定すればCPUだけで実行する。`--once`は保持中のjobを回収するか、1件をclaimして終了まで処理する。
 
 compute targetからも`MMT_API_URL`に到達できる必要がある。SSH targetでworkerマシンの`127.0.0.1`を指定しても、そのAPIには接続できない。
+
+## 実行コードにはJob限定tokenを渡す
+
+実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`には、APIがJobごとに発行するJob限定token（`mmtj_`で始まる）が入る。worker自身のtokenは実行コードの環境変数に入らない。
+
+- 権限はRunの作成者のもの。scopeは`read`・`runs:write`・`artifacts:write`・`registry:write`で、Project権限は作成者の現在のmembershipで決まる（editorが投入したコードはeditorの権限で動く。作成者をProjectから外すと403）。
+- 書けるのは対象Run（metrics・params・tags・logs・入力Dataset・Artifact）、そのRunをsourceとするモデル・データセットの版、そのRunのLogged Model、出力先Modelの作成だけ。同じProjectの別Run、worker API、token発行、Project設定、自動実行rule、Runの説明文とコメントは403。読み出しは同じProject内なら可能（上流RunのArtifact取得など）。
+- Jobが終わる（成功・失敗・cancel）かleaseが変わると401になる。
+- tokenはworkerのstate directory（mode 700、ファイルは600）のjournalに保存し、worker再起動後の実行中Jobはその値を使い続ける。state directoryを失った場合、実行中Jobの新しい起動はしない。
+- workerは実行開始の直後に`running`のheartbeatを送る。`claimed`のままworkerが再起動するとAPIはtokenを再発行するため、実行中processのtokenが失効しないようにする。
+- claimが一時的に失敗するとworkerはresumeで回復し、準備中（`claimed`）のJobのtokenはそのとき再発行される。workerは実行コードを起動する直前に新しいtokenへ切り替える。
 
 ## CodeVersionのruntimeとargvを固定する
 
@@ -160,7 +171,7 @@ workerは以下をファイルと環境変数で供給する。ファイルの�
 | `MMT_PARAMETERS_FILE`, `MMT_PARAMETERS_JSON` | parametersのJSON |
 | `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデル版ID |
 | `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONと版ID配列のJSON |
-| `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報 |
+| `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報。tokenはJob限定token |
 | `MMT_PROJECT_ID`, `MMT_EXPERIMENT_ID`, `MMT_RUN_ID`, `MMT_JOB_ID` | 実行対象のID |
 | `MMT_JOB_KIND` | 実行するRunのkind。CodeVersionの環境変数より優先する |
 | `MMT_OUTPUTS_DIR`, `MMT_RESULT_FILE` | 出力ディレクトリ（workspaceの`outputs`）と`result.json`のpath。コンテナと同じ形式で回収する |
@@ -232,6 +243,8 @@ client.create_task(
 )
 ```
 
+Webの**コード**で選べる学習サンプルはSDKの登録処理を持たず、SDKで重みをRun Artifactの`model/weights.json`へ保存するだけで、この出力設定で登録する形になっている。`artifactPath`はファイルpathと完全一致で照合する。画面の既定値はこのサンプルに合わせた`model/weights.json`で、`MMT_OUTPUTS_DIR`へ書くコードでは`container/`で始まるpathに変える。
+
 各fileとmetricsの保存成功はjournalへ残す。復帰時は未保存項目から再開する。APIが保存した後に応答が失われた場合は再送され得るため、Artifactを含めて少なくとも1回送る方式になる。
 
 ## モデル登録後の自動推論・評価をSDKで設定する
@@ -290,6 +303,16 @@ API/SSHの一時障害は指数backoffで再接続する。claimの応答が失�
 
 logsとmetricsは少なくとも1回送る方式。APIの保存成功後に応答だけ失われた場合、同じchunkが再送されることがある。completeは同じlease/statusで再送でき、workerも未送信の完了状態をjournalへ保存する。
 
+## workerの在籍と応答途絶を確認する
+
+workerはclaimとresumeで`workerInfo`（パッケージ`mado-tracking`の版とホスト名）をAPIへ送る。APIはtoken IDとworkerIdの組で`workers`へ記録し、Compute画面の「Workers」に接続状態、版、ホスト名、最終応答、担当Job数を出す。一覧は`GET /projects/:p/workers`（viewer）と`GET /workers`（全体管理者）でも読める。
+
+- workerは120秒応答がないと「オフライン」になる。idleでも毎秒claimするので、通常はオンラインのまま。
+- claimは毎秒届くため、最終応答の書き込みは15秒ごとにまとめる。表示される最終応答は最大15秒古い。
+- Jobのheartbeatが60秒途絶すると、Jobs画面に「応答なし」を出す。Jobの状態、GPUの予約、leaseは変えず、再claimや自動再実行もしない（前節の方針）。止まったままのJobは、workerホストで状態を確認してからcancelやretryを手で行う。
+- 版は`importlib.metadata`で読む。インストールせずに動かしている場合は版を送らず、画面は「—」になる。
+- `parallelJobs`はAPIでは受け付けるが、現在のworkerはまだ送らない。
+
 ## ジョブを止めるとprocess groupが終了する
 
 APIの`POST /projects/:p/jobs/:j/cancel`を使う。heartbeatは実行・ログ転送と並行し、cancelRequestedを受け取るとjob workspaceへ停止要求を保存する。runnerは実行中のprocess groupへSIGTERMを送り、10秒以内に終了しなければSIGKILLする。setup中のGit/pipも停止対象。子processも終了してから`canceled`を同じleaseでcompleteする。
@@ -304,7 +327,59 @@ DockerはJob IDに対応するcontainer名と、Job/CodeVersion/project/lease/wo
 
 Dockerのログthreadを作成・開始できない場合やjoinが失敗した場合も、所有containerの停止・削除と不在確認を行う。`unknown`状態は、supervisor・process group・起動途中のprocess・未解放containerのいずれかが残る可能性があれば完了しない。supervisor生存中の`unknown`や、生存情報が欠けた応答でもleaseとGPU予約を保持する。既存Python実行は、supervisorとprocess groupが消失し、起動途中でもないことを確認できた場合にfailed完了する。
 
-system metricsはCPU・memoryと、指定GPUの`nvidia-smi`値を採取する。`psutil`が無いtargetではLinuxのmemoryとCPU loadを使う。GPUなしのjobではnvidia-smiを呼ばない。取得できないGPU値を架空の数値で埋めない。
+## system metricsを採取する
+
+SDKとworkerは同じ収集処理`mado_tracking.system_metrics`を使う。名前は従来のworkerの名前を変えず、追加分も同じ規則で付ける。
+
+| 名前 | 内容 |
+|---|---|
+| `system.cpu.percent` | 計算機全体のCPU使用率。前回値との差分で求める |
+| `system.cpu.load1` | 1分のload average。`psutil`が無い環境だけで出す（従来の記録との互換） |
+| `system.memory.used_bytes`・`system.memory.percent` | 計算機全体のmemory |
+| `system.process.memory_bytes` | 対象PIDと子孫processのRSS合計（PIDを指定したときだけ） |
+| `system.disk.used_bytes`・`system.disk.percent` | 作業ディレクトリのファイルシステム |
+| `system.disk.read_bytes_per_second`・`system.disk.write_bytes_per_second` | 物理disk全体の読み書き量 |
+| `system.network.sent_bytes_per_second`・`system.network.received_bytes_per_second` | loopbackを除く全interfaceの送受信量 |
+| `system.gpu.<index>.utilization_percent`・`memory_used_bytes`・`memory_total_bytes`・`temperature_celsius`・`power_watts` | GPUごとの値。`<index>`はnvidia-smi/NVMLの番号 |
+
+- disk・networkの毎秒量は前回値との差分を経過時間で割る。初回の採取では出さず、counterが巻き戻ったときもその回は出さない。
+- workerはpollごとにrunnerのprocessが変わるため、前回値をJobのworkspaceの`telemetry-state.json`へ残し、2回目のpollから毎秒量を出す。
+- GPUは (1) NVML（`nvidia-ml-py`の`pynvml`）、(2) `nvidia-smi`（timeout 3秒）、(3) なし、の順に試す。使えなかった理由は最初の1回だけ`logging.debug`に出し、同じ採取器では使えなかった方法を再試行しない。`nvidia-smi`のtimeoutはその回だけGPU値を省く。
+- 対象GPU: workerはJobに割り当てたGPU（番号またはUUID）だけ。GPUなしのJobではNVMLもnvidia-smiも呼ばない。SDKのRunでGPUを指定しない場合は全GPUを読み、`CUDA_VISIBLE_DEVICES`があればその番号・UUIDに絞る（空・`-1`はGPUなし）。番号はnvidia-smiの番号として解釈する（`CUDA_DEVICE_ORDER=PCI_BUS_ID`でCUDAの番号と揃う）。
+- `psutil`が無い環境では`/proc`からCPU（`/proc/stat`の差分）、memory（`/proc/meminfo`）、network（`/proc/net/dev`）、disk（`/proc/diskstats`。`/sys/block`にある物理diskだけを数え、partition・loop・dm・mdは二重計上を避けて除く）を読む。Linux以外では出せる分だけ出す。どの段階で失敗しても例外を外へ出さず、取得できない値を架空の数値で埋めない。
+- 間隔: workerは`telemetry_seconds`（既定10秒）。SDKの`SystemMetricsMonitor`は既定15秒、下限1秒（毎秒だとmetricsの行数が増えすぎるため）。stepは0からの連番。monitorの`stop()`はthreadの終了を待ち、停止後に採取した値は送らない。送信先（sink）の例外は数えて警告し、採取は続ける。
+- `pip install 'mado-tracking[telemetry]'`で`psutil`と`nvidia-ml-py`が入る。どちらも無くても動く。
+
+### MLflowの`system/`名との対応
+
+公式MLflow 3（`mlflow.enable_system_metrics_logging()`）は`system/`接頭辞で記録する。MadoのMLflow APIはこの名前をそのまま保存し、get-historyで読める（2026-10-08、MLflow 3.0.0と3.17.0で確認。`artifacts/verification/2026-10-08/system-metrics/`）。Webで両方の名前を同じ図にまとめる表示は未実装（第5波のchart-panels-and-pages-webで対応予定）。
+
+| Mado | MLflow | 単位の違い |
+|---|---|---|
+| `system.cpu.percent` | `system/cpu_utilization_percentage` | 同じ |
+| `system.memory.used_bytes` | `system/system_memory_usage_megabytes` | MLflowはMB（10^6） |
+| `system.memory.percent` | `system/system_memory_usage_percentage` | 同じ |
+| `system.disk.used_bytes` | `system/disk_usage_megabytes` | MLflowはMB |
+| `system.disk.percent` | `system/disk_usage_percentage` | 同じ |
+| （なし） | `system/disk_available_megabytes` | |
+| `system.network.received_bytes_per_second` | `system/network_receive_megabytes` | MLflowは監視開始からの累積MB。毎秒量ではない |
+| `system.network.sent_bytes_per_second` | `system/network_transmit_megabytes` | 同上 |
+| `system.gpu.<i>.utilization_percent` | `system/gpu_<i>_utilization_percentage` | 同じ |
+| `system.gpu.<i>.memory_used_bytes` | `system/gpu_<i>_memory_usage_megabytes` | MLflowはMB |
+| （`memory_used_bytes`/`memory_total_bytes`から算出） | `system/gpu_<i>_memory_usage_percentage` | |
+| `system.gpu.<i>.power_watts` | `system/gpu_<i>_power_usage_watts` | 同じ |
+| `system.gpu.<i>.temperature_celsius` | （なし） | |
+
+MLflowのGPU値は`pynvml`が入っているときだけ出る。GPUの無い環境ではGPU系は出ない（上記の確認もGPUなしの計算機で行った）。
+
+公式MLflowでの確認は次で行う。
+
+```bash
+<MLflow 3の検証用venv>/bin/python -I scripts/mlflow3_checks/system_metrics.py
+<MLflow 3の検証用venv>/bin/python -I scripts/mlflow3_checks/system_metrics.py --mado-api-url http://127.0.0.1:<検証API>
+```
+
+venvには`mlflow`・`psutil`・`httpx`が要る（MLflow 3.0.0は`sqlalchemy<2.1`も）。既定は一時的なローカルMLflow storeへ記録する。`--mado-api-url`ではdev-loginでProjectと1時間の一時tokenを作ってMadoのMLflow APIへ記録し、最後にtokenを失効する。結果は`artifacts/verification/<日付>/system-metrics/mlflow-<版>-<local|mado>.json`。
 
 ## テストと型検証を実行する
 

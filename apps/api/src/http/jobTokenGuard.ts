@@ -129,7 +129,6 @@ export const JOB_TOKEN_WRITE_RULES: readonly JobTokenRule[] = [
     route: `${NATIVE}/artifact-uploads/:u/complete`,
     allows: ownArtifactUpload,
   },
-  { methods: ['POST'], route: `${NATIVE}/artifact-uploads/:u/abort`, allows: ownArtifactUpload },
   { methods: ['DELETE'], route: `${NATIVE}/artifact-uploads/:u`, allows: ownArtifactUpload },
   // Creating the output Model lets a Task register into a model name that does not exist yet.
   { methods: ['POST'], route: `${NATIVE}/models`, allows: allowWithinProject },

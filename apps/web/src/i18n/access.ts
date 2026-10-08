@@ -36,4 +36,10 @@ export const accessText = {
   auditActionProjectMemberSet: 'メンバーの権限変更',
   auditActionTokenCreate: 'API tokenの発行',
   auditActionTokenRevoke: 'API tokenの失効',
+  auditActionOidcSync: 'SSOのgroupと権限の同期',
+  auditActionOidcDenied: 'SSOログインの拒否',
+  auditActionRunNoteUpdate: 'Runの説明文の変更',
+  auditActionCommentCreate: 'コメントの投稿',
+  auditActionCommentUpdate: 'コメントの編集',
+  auditActionCommentDelete: 'コメントの削除',
 } as const;

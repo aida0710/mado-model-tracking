@@ -8,13 +8,15 @@ export interface ArtifactUploadRecord extends ArtifactUpload {
   backendUploadId: string;
   createdByUserId: string;
   createdByTokenId: string | null;
+  createdByJobTokenId: string | null;
   finalizerAttempts: number;
 }
 
 // bigint columns are cast so the mapped record holds numbers; sizes stay below 2^53.
 export const artifactUploadColumns = `id,project_id,run_id,path,backend,storage_key,mime_type,
   expected_size::float8 AS expected_size,expected_sha256,part_size::float8 AS part_size,part_count,
-  status,backend_upload_id,created_by_user_id,created_by_token_id,artifact_id,error,
+  status,backend_upload_id,created_by_user_id,created_by_token_id,created_by_job_token_id,artifact_id,
+  error,
   finalizer_attempts,expires_at,created_at,updated_at`;
 
 export async function findArtifactUpload(

@@ -96,3 +96,15 @@ export const workbenchText = {
   outputRegistrationFailed: '出力モデルの登録に失敗しました',
   outputRegistrationLoadError: '出力モデルの登録結果を取得できませんでした',
 } as const;
+
+// Keys are the stable codes the API stores in RunOutputRegistration.error.
+export const outputRegistrationErrorLabels: Record<string, string> = {
+  model_not_found: '登録先のモデルが見つかりません',
+  model_deleted: '登録先のモデルは削除されています',
+  model_family_mismatch: '同じ名前のモデルが別の系列で既にあります',
+  artifact_not_found: '指定したパスのArtifactがRunにありません',
+  invalid_version: '版名のテンプレートから有効な版名を作れませんでした',
+  version_conflict: '同じ版名の版が既にあります',
+  creator_access_revoked: 'Runの作成者がこのプロジェクトの権限を失っています',
+  registration_failed: '登録中にエラーが発生しました',
+};

@@ -266,6 +266,8 @@ def poll(workspace: Path, request: dict[str, Any]) -> dict[str, Any]:
             pid=int(state.get("container", {}).get("pid", state.get("processPid", 0))),
             gpu_ids=context.get("gpuIds", []),
             step=int(request.get("step", 0)),
+            # Each poll is a new process; disk/network rates need the previous counters.
+            state_path=workspace / "telemetry-state.json",
         )
     return {"state": state, "logs": logs, "metrics": metrics}
 

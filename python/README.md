@@ -62,6 +62,24 @@ Taskは`list_tasks`、`get_task`、`update_task`、`list_task_runs`で一覧・�
 
 `list_task_runs`は履歴APIの全ページを取得してlistを返す。`nextCursor`がnull、またはページ分割前のAPIで省略されたときに終了する。同じcursorの繰り返しや不正なcursorは`ConfigurationError`にする。
 
+Runの検索は`search_runs`を使う。
+
+```python
+from mado_tracking import Client
+
+with Client() as client:
+    for run in client.search_runs(
+        "project-id",
+        filter="metrics.loss < 0.1 AND params.lr = '0.01'",
+        order_by=["metrics.loss ASC"],
+        experiment_ids=["experiment-id"],
+        page_size=200,
+    ):
+        print(run["id"], run["name"], run["latestMetrics"].get("loss"))
+```
+
+`search_runs`は`POST /projects/:p/runs/search`を`nextCursor`が無くなるまで辿るiteratorで、ページは使う分だけ取得する。filterとorder_byはMLflowの`search_runs`と同じ構文。paramsは文字列として比べる（`params.batch_size = '32'`）。`page_size`は1〜500（既定100）。cursorの扱いは`list_task_runs`と同じ。
+
 workerはRunの`executionMode`と`executionSnapshot`をコード版へ照合し、固定されたcommandを実行する。コードを実行する前に、Run Artifactsの`.mmt/source.zip`と`.mmt/source-manifest.json`用のファイルを作成する。ZIPには実行前のsource、manifestにはjob/run/code版ID、版名、mode、検証したcommit、runtime、command、各ファイルのSHA256とsizeを記録する。コードがsourceを書き換えた場合や通常・テスト実行が失敗した場合も、同じsnapshotを回収する。sourceなしのコンテナは、固定されたimage digestまたはSIFのArtifact/hashをmanifestに保存する。environmentの値はmanifestに含めない。
 
 ZIPは空ディレクトリも保持する。manifestには既存の`files`に加えて`directories: [{path, mode}]`を記録し、modeはPOSIX権限の整数値。復元時は権限の特殊bitを除き、所有者の読み取り・検索権限を確保する。read-onlyディレクトリは子ファイルを展開した後で権限を適用する。containerのsource mountはread-onlyのまま。

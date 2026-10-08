@@ -10,6 +10,12 @@ const actionTextKeys: Record<string, AuditTextKey> = {
   'project.member.set': 'auditActionProjectMemberSet',
   'token.create': 'auditActionTokenCreate',
   'token.revoke': 'auditActionTokenRevoke',
+  'auth.oidc.sync': 'auditActionOidcSync',
+  'auth.oidc.denied': 'auditActionOidcDenied',
+  'run.note.update': 'auditActionRunNoteUpdate',
+  'comment.create': 'auditActionCommentCreate',
+  'comment.update': 'auditActionCommentUpdate',
+  'comment.delete': 'auditActionCommentDelete',
 };
 
 const outcomeTextKeys: Record<AuditEvent['outcome'], AuditTextKey> = {
