@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { inClauseSql, type InListOperator } from '../../domain/search/inClauseSql.js';
 import { invalidParameter } from './validation.js';
 
 export class SqlParameters {
@@ -15,6 +16,8 @@ export class SqlParameters {
 export interface SearchField {
   expression: string;
   numeric: boolean;
+  // MLflow accepts IN / NOT IN only for string attributes of model version search.
+  acceptsInList?: boolean;
   compileComparison?: (comparison: { operator: string; valueParameter: string }) => string;
 }
 type ResolveField = (field: string) => SearchField;
@@ -26,8 +29,86 @@ export function timestampInMillisecondsSql(column: string): string {
 }
 
 // Tokenize one clause at a time so AND inside a quoted tag value remains a literal.
-const CLAUSE_PATTERN =
-  /\s*([A-Za-z_][A-Za-z_0-9]*(?:\.(?:`[^`]+`|"[^"]+"|'[^']+'|[A-Za-z_0-9./-]+))?)\s*(!=|>=|<=|=|>|<|ILIKE\b|LIKE\b)\s*('(?:[^']|'')*'|"(?:[^"]|"")*"|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/iy;
+const FIELD_AND_OPERATOR_PATTERN =
+  /\s*([A-Za-z_][A-Za-z_0-9]*(?:\.(?:`[^`]+`|"[^"]+"|'[^']+'|[A-Za-z_0-9./-]+))?)\s*(!=|>=|<=|=|>|<|ILIKE\b|LIKE\b|NOT\s+IN\b|IN\b)\s*/iy;
+const LITERAL_PATTERN =
+  /('(?:[^']|'')*'|"(?:[^"]|"")*"|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/y;
+const LIST_START_PATTERN = /\(\s*/y;
+const LIST_ITEM_PATTERN = /('(?:[^']|'')*'|"(?:[^"]|"")*")\s*(,\s*|\))/y;
+
+interface CompiledComparison {
+  sql: string;
+  end: number;
+}
+interface ComparisonInput {
+  filter: string;
+  offset: number;
+  field: SearchField;
+  parameters: SqlParameters;
+}
+
+function readPattern(pattern: RegExp, text: string, offset: number): RegExpExecArray | null {
+  pattern.lastIndex = offset;
+  return pattern.exec(text);
+}
+
+function unquote(literal: string): string {
+  return literal.slice(1, -1).replace(literal[0] === "'" ? /''/g : /""/g, literal[0]!);
+}
+
+function readValueList(filter: string, offset: number): { values: string[]; end: number } {
+  if (!readPattern(LIST_START_PATTERN, filter, offset))
+    invalidParameter('IN/NOT INには括弧で囲んだ値一覧が必要です');
+  const values: string[] = [];
+  let position = LIST_START_PATTERN.lastIndex;
+  for (;;) {
+    const item = readPattern(LIST_ITEM_PATTERN, filter, position);
+    if (!item) invalidParameter('IN/NOT INの値一覧は引用符付きの文字列をカンマで区切ってください');
+    values.push(unquote(item[1]!));
+    position = LIST_ITEM_PATTERN.lastIndex;
+    if (item[2] === ')') return { values, end: position };
+  }
+}
+
+function compileListComparison(
+  input: ComparisonInput & { operator: InListOperator },
+): CompiledComparison {
+  if (!input.field.acceptsInList)
+    invalidParameter('IN/NOT INはModel versionの文字列属性だけに対応しています');
+  const list = readValueList(input.filter, input.offset);
+  return {
+    sql: inClauseSql({
+      expression: input.field.expression,
+      operator: input.operator,
+      valuesParameter: input.parameters.add(list.values),
+    }),
+    end: list.end,
+  };
+}
+
+function compileValueComparison(input: ComparisonInput & { operator: string }): CompiledComparison {
+  const match = readPattern(LITERAL_PATTERN, input.filter, input.offset);
+  if (!match) invalidParameter('検索filterの構文に対応していません');
+  const { field, operator } = input;
+  const literal = match[1]!;
+  const isQuoted = literal.startsWith("'") || literal.startsWith('"');
+  const value = isQuoted ? unquote(literal) : literal;
+  if (
+    field.numeric
+      ? isQuoted || !Number.isFinite(Number(value)) || ['LIKE', 'ILIKE'].includes(operator)
+      : !isQuoted || !['=', '!=', 'LIKE', 'ILIKE'].includes(operator)
+  ) {
+    invalidParameter('検索fieldの型と比較演算子が一致しません');
+  }
+  // Preserve integer precision; PostgreSQL infers the numeric type from the compared field.
+  const valueParameter = input.parameters.add(value);
+  return {
+    sql: field.compileComparison
+      ? field.compileComparison({ operator, valueParameter })
+      : `${field.expression} ${operator} ${valueParameter}`,
+    end: LITERAL_PATTERN.lastIndex,
+  };
+}
 
 export function compileFilter(input: {
   filter: string;
@@ -38,31 +119,21 @@ export function compileFilter(input: {
   let offset = 0;
   const comparisons: string[] = [];
   while (offset < input.filter.length) {
-    CLAUSE_PATTERN.lastIndex = offset;
-    const clause = CLAUSE_PATTERN.exec(input.filter);
+    const clause = readPattern(FIELD_AND_OPERATOR_PATTERN, input.filter, offset);
     if (!clause) invalidParameter('検索filterの構文に対応していません');
-    const field = input.resolveField(clause[1]!);
-    const operator = clause[2]!.toUpperCase();
-    const literal = clause[3]!;
-    const isQuoted = literal.startsWith("'") || literal.startsWith('"');
-    const value = isQuoted
-      ? literal.slice(1, -1).replace(literal[0] === "'" ? /''/g : /""/g, literal[0]!)
-      : literal;
-    if (
-      field.numeric
-        ? isQuoted || !Number.isFinite(Number(value)) || ['LIKE', 'ILIKE'].includes(operator)
-        : !isQuoted || !['=', '!=', 'LIKE', 'ILIKE'].includes(operator)
-    ) {
-      invalidParameter('検索fieldの型と比較演算子が一致しません');
-    }
-    // Preserve integer precision; PostgreSQL infers the numeric type from the compared field.
-    const valueParameter = input.parameters.add(value);
-    comparisons.push(
-      field.compileComparison
-        ? field.compileComparison({ operator, valueParameter })
-        : `${field.expression} ${operator} ${valueParameter}`,
-    );
-    offset = CLAUSE_PATTERN.lastIndex;
+    const comparisonInput: ComparisonInput = {
+      filter: input.filter,
+      offset: FIELD_AND_OPERATOR_PATTERN.lastIndex,
+      field: input.resolveField(clause[1]!),
+      parameters: input.parameters,
+    };
+    const operator = clause[2]!.toUpperCase().replace(/\s+/g, ' ');
+    const comparison =
+      operator === 'IN' || operator === 'NOT IN'
+        ? compileListComparison({ ...comparisonInput, operator })
+        : compileValueComparison({ ...comparisonInput, operator });
+    comparisons.push(comparison.sql);
+    offset = comparison.end;
     const remainder = input.filter.slice(offset);
     if (!remainder.trim()) break;
     const separator = /^\s+AND\s+/i.exec(remainder);

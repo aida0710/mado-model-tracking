@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { inClauseSql } from '../../domain/search/inClauseSql.js';
 import type { TrackingSearch } from './trackingTypes.js';
 import { invalidParameter } from './trackingValidation.js';
 
@@ -196,7 +197,11 @@ class SearchCompiler {
       const values: unknown[] = [this.literal(field)];
       while (this.accept(',')) values.push(this.literal(field));
       if (!this.accept(')')) invalidParameter('INの閉じ括弧が必要です');
-      comparison = `(${field.expression}) ${operator === 'IN' ? '= ANY' : '<> ALL'}(${this.bind(values)}::text[])`;
+      comparison = inClauseSql({
+        expression: field.expression,
+        operator,
+        valuesParameter: this.bind(values),
+      });
     } else {
       const allowed =
         field.kind === 'number' ? ['=', '!=', '>', '>=', '<', '<='] : ['=', '!=', 'LIKE', 'ILIKE'];

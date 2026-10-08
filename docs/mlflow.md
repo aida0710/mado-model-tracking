@@ -56,6 +56,8 @@ SDKが表示するRunリンクはMLflow標準UIの形式です。画面での確
 
 ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデル版が参照するArtifactは保持します。
 
+SDKの`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`は設定したままで使えます。multipart uploadには未対応のため、`mpu/create`・`complete`・`abort`は501 `NOT_IMPLEMENTED`を返します。SDKはこの応答を受けて、同じファイルを1回のストリーム転送でアップロードし直します。SDKはエラーmessageの先頭が自身の定数と一致するときだけ通常転送へ戻るので、サーバーはSDKと同じ英語の文言を返します。
+
 ## モデルと入力Datasetを記録する
 
 MLflow 3のLogged Modelを作り、必要に応じてModel Registryへ登録します。重み・`MLmodel`・依存関係・入出力signatureはモデルのArtifactとして保存します。
@@ -99,6 +101,24 @@ client.create_registered_model("qwen3", tags={"mmt.model_family": "qwen3"})
 
 複数ファイルを使うモデルは、`MLmodel`のflavorが示す保存済みディレクトリをモデル本体として扱います。この場合のモデル版は`MLmodel`と一式のArtifactを保持します。推論コードでは`mlflow.pyfunc.load_model()`で版を読み込んでください。単一の重みファイルを読むコードには`mmt.weights_path`を明示します。Hugging Face・TensorFlowなどの実モデルでの確認は別途必要です。
 
+## 検索で使える条件
+
+検索条件は`AND`でつなぎます。`OR`と括弧によるグループ化には対応していません。
+
+| 対象 | 使える条件 |
+| --- | --- |
+| `search_runs` | 属性・`params`・`tags`・`metrics`・`datasets`の比較。`IN`/`NOT IN`は`run_id`と`datasets`の属性。`IS NULL`/`IS NOT NULL`は`params`と`tags` |
+| `search_model_versions` | `name`・`run_id`・`model_id`・`source_path`・`version`・時刻・`tags`の比較。`IN`/`NOT IN`は`name`・`run_id`・`model_id`・`source_path` |
+| `search_registered_models` | `name`・時刻・`tags`の比較。`IN`/`NOT IN`は使えません |
+
+`IN`/`NOT IN`の値は`run_id IN ('a', 'b')`のように括弧で囲み、引用符付きの文字列をカンマで区切ります。括弧のない値や空の一覧はエラーになります。`NOT IN`はSQLの規則に従い、値が無い版（生成元Runの無い版の`run_id`など）には一致しません。
+
+`get_latest_versions`は使えます。stageごとに最新の版を返し、削除した版は含めません。
+
+## 認証方式の対応状況
+
+SDKからはAPI tokenを`MLFLOW_TRACKING_TOKEN`（Bearer）で渡します。passwordにAPI tokenを入れるBasic認証（`MLFLOW_TRACKING_USERNAME`/`MLFLOW_TRACKING_PASSWORD`）は社内ツールとの互換のために受け付ける方針で、第4波のService Accountの実装（auth-service-accounts）で追加します。それまではBearerを使ってください。
+
 ## autologを使う
 
 scikit-learnの実行では次のように自動記録できます。
@@ -132,6 +152,8 @@ uv pip install --python artifacts/verification/mlflow3-venv/bin/python \
   'mlflow==3.17.0' 'scikit-learn==1.9.1' -e ./python
 artifacts/verification/mlflow3-venv/bin/python scripts/verify_mlflow3.py
 ```
+
+multipart uploadの通常転送への切り替えも確かめる場合は、`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`と、検証用ファイルより小さい`MLFLOW_MULTIPART_UPLOAD_MINIMUM_FILE_SIZE`（例: `1048576`）を付けて実行します。このとき検証は、しきい値を超えるArtifactのアップロード・ダウンロード結果と、`mpu/create`の501応答を確認します。
 
 検証用Project・token・CPU target・自動実行ルールを作り、終了時にtokenを失効しルールを無効化します。Runとモデルは確認用に残します。結果は`artifacts/verification/<日付>/mlflow3/sdk-integration.json`へ保存します。
 

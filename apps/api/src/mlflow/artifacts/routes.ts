@@ -21,6 +21,7 @@ import {
 } from './artifactPath.js';
 import { artifactContentResponse } from './artifactResponse.js';
 import { ArtifactTransferService } from './artifactTransferService.js';
+import { multipartUnsupportedRoutes } from './multipartUnsupported.js';
 import type { ArtifactAccess, ArtifactLocation } from './artifactTypes.js';
 
 const proxyListQuery = z.strictObject({ path: z.string() });
@@ -115,6 +116,8 @@ export function mlflowArtifactRoutes(options: {
     );
     return context.json({ root_uri: artifactRootUri(owner), files });
   });
+
+  routes.route('/', multipartUnsupportedRoutes());
 
   // The official UI uses the files query route; SDK downloads use the transfer GET above.
   routes.get('/api/2.0/mlflow/logged-models/:model_id/artifacts/files', async (context) => {
