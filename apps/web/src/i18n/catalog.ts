@@ -1,5 +1,6 @@
 import { accessText } from './access';
 import { artifactsText } from './artifacts';
+import { runsText, runsTextTemplates } from './runs';
 import { workbenchText } from './workbench';
 
 export const lineageNodeKindLabels = {
@@ -24,6 +25,7 @@ export const lineageRelationLabels: Record<string, string> = {
 
 // Text that embeds values. Kept apart from `text` so every `text` entry stays a plain string.
 export const textTemplates = {
+  ...runsTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このトークンを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -33,6 +35,7 @@ export const text = {
   ...workbenchText,
   ...accessText,
   ...artifactsText,
+  ...runsText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
@@ -112,9 +115,6 @@ export const text = {
   addTag: 'タグを追加',
   tagKey: 'タグ名',
   tagValue: '値',
-  queryHint: '名前、または metrics.loss < 0.1 and params.batch_size = 32',
-  invalidFilter:
-    'フィルタの形式を確認してください。metrics / params / tagsの比較をandでつなげます。',
   page: 'ページ',
   previousPage: '前のページ',
   nextPage: '次のページ',
@@ -313,7 +313,6 @@ export const text = {
   failed: 'Failed',
   canceled: 'Canceled',
   logsLevel: 'Level',
-  resultsLimit: 'APIの一覧取得上限に達しました。絞り込み条件を追加してください。',
   tokenScopesError: 'Scopeを1つ以上選択してください',
   automationRules: '自動実行ルール',
   newAutomationRule: '自動実行ルールを作成',

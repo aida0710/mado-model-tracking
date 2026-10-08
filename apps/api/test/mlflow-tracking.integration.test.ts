@@ -729,6 +729,48 @@ describe.skipIf(!testDatabaseUrl)('公式MLflow 3 tracking契約（隔離Postgre
     ).toBe(400);
   });
 
+  it('MLflow検索とnative検索は同じdataset・params・属性filterで同じRunを返す', async () => {
+    const withDataset = await client.createRun({ run_name: 'with-dataset' });
+    await entity(
+      await client.post('/runs/log-inputs', {
+        run_id: withDataset.info.run_id,
+        datasets: [{ dataset, tags: [{ key: 'mlflow.data.context', value: 'training' }] }],
+      }),
+      200,
+    );
+    await entity(
+      await client.post('/runs/log-parameter', {
+        run_id: withDataset.info.run_id,
+        key: 'lr',
+        value: '0.01',
+      }),
+      200,
+    );
+    await client.createRun({ run_name: 'without-dataset' });
+    for (const filter of [
+      "datasets.name = 'training-data' AND datasets.context = 'training'",
+      "datasets.digest NOT IN ('abc123')",
+      "params.lr = '0.01' AND attributes.run_name LIKE 'with-%'",
+      `attributes.run_id IN ('${withDataset.info.run_id}')`,
+    ]) {
+      const mlflow = await entity<{ runs?: WireRun[] }>(
+        await client.post('/runs/search', { experiment_ids: [fixture.experiment.id], filter }),
+        200,
+      );
+      const native = await entity<{ items: Run[] }>(
+        await request(harness.app, `${fixture.basePath}/runs/search`, {
+          method: 'POST',
+          cookie: fixture.viewer.cookie,
+          body: { experimentIds: [fixture.experiment.id], filter },
+        }),
+        200,
+      );
+      expect(native.items.map((run) => run.id).sort()).toEqual(
+        (mlflow.runs ?? []).map((run) => run.info.run_id).sort(),
+      );
+    }
+  });
+
   it('Dataset入力batchは途中の保存失敗でもnative版・Run参照を残さない', async () => {
     const run = await client.createRun();
     await harness.database.query(

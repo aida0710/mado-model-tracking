@@ -3,8 +3,9 @@ import { registryApi } from '../api/registry';
 import { trackingApi } from '../api/tracking';
 import { useQuery } from './useQuery';
 
-// Registry selectors use the same bounded list as the Run browser.
-export const RUN_LIST_LIMIT = 500;
+// Selectors offer the newest Runs, one search page at the API maximum; older Runs are reached
+// through the Run search on the Experiments page.
+const SELECTABLE_RUN_LIMIT = 500;
 export function useExecutionCatalog(projectId: string) {
   return useQuery<ExecutionCatalog>(`${projectId}:execution-catalog`, async (signal) => {
     const [experiments, models, codes, datasets, runs] = await Promise.all([
@@ -12,7 +13,9 @@ export function useExecutionCatalog(projectId: string) {
       registryApi.models(projectId, signal),
       registryApi.codes(projectId, signal),
       registryApi.datasets(projectId, signal),
-      trackingApi.runs(projectId, { limit: String(RUN_LIST_LIMIT) }, signal),
+      trackingApi
+        .searchRuns(projectId, { limit: SELECTABLE_RUN_LIMIT }, signal)
+        .then((page) => page.items),
     ]);
     const [modelVersions, codeVersions, datasetVersions] = await Promise.all([
       Promise.all(models.map((model) => registryApi.modelVersions(projectId, model.id, signal))),
