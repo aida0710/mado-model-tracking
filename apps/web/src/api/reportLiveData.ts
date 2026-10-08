@@ -7,9 +7,9 @@ import {
   type RunSet,
 } from '@mmt/contracts';
 import { metricSeriesApi } from './metricSeries';
-import { reportsApi } from './reports';
 import { runAnalysisApi } from './runAnalysis';
 import { runMediaApi } from './runMedia';
+import { savedViewsApi } from './savedViews';
 import { sweepsApi } from './sweeps';
 import { trackingApi } from './tracking';
 import {
@@ -28,7 +28,7 @@ type LiveBlock = Exclude<ReportEmbedBlock, { type: 'media_table' }>;
 /** The block's Run set with a saved view replaced by its current search. */
 async function resolveRunSet(projectId: string, runSet: ReportRunSet, signal: AbortSignal): Promise<RunSet> {
   if (!('savedViewId' in runSet)) return runSet;
-  const view = await reportsApi.savedView(projectId, runSet.savedViewId, signal);
+  const view = await savedViewsApi.get(projectId, runSet.savedViewId, signal);
   return toAnalysisRunSet(runSet, view.state);
 }
 

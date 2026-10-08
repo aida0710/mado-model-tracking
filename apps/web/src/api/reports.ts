@@ -6,9 +6,9 @@ import type {
   ReportRevisionSummary,
   ReportSnapshotList,
   ReportUpdate,
-  SavedView,
 } from '@mmt/contracts';
-import { assertCursorPage, encodeId, invalidResponseError, jsonRequest, projectPath, request, RequestError } from './http';
+import { assertCursorPage, encodeId, invalidResponseError, jsonRequest, projectPath, request, RequestError, requestItems } from './http';
+import { savedViewsApi } from './savedViews';
 
 /** The API's answer when the edit started from a revision that is no longer current. */
 export const REPORT_REVISION_CONFLICT_CODE = 'report_revision_conflict';
@@ -51,11 +51,8 @@ export const reportsApi = {
         { signal },
       ),
     ),
-  revisions: async (projectId: string, reportId: string, signal?: AbortSignal) => {
-    const list = await request<{ items: ReportRevisionSummary[] }>(`${reportPath(projectId, reportId)}/revisions`, { signal });
-    if (!Array.isArray(list.items)) throw invalidResponseError();
-    return list.items;
-  },
+  revisions: (projectId: string, reportId: string, signal?: AbortSignal) =>
+    requestItems<ReportRevisionSummary>(`${reportPath(projectId, reportId)}/revisions`, signal),
   snapshots: async (projectId: string, reportId: string, revision: number, signal?: AbortSignal) => {
     const list = await request<ReportSnapshotList>(
       `${reportPath(projectId, reportId)}/snapshots?revision=${revision}`,
@@ -81,11 +78,6 @@ export const reportsApi = {
    * Saved Run list views a report may embed. A private view is left out: other readers of the
    * report could not open it, so the API rejects it.
    */
-  shareableSavedViews: async (projectId: string, signal?: AbortSignal) => {
-    const list = await request<{ items: SavedView[] }>(`${projectPath(projectId)}/saved-views?page=runs`, { signal });
-    if (!Array.isArray(list.items)) throw invalidResponseError();
-    return list.items.filter((view) => view.visibility === 'project');
-  },
-  savedView: (projectId: string, savedViewId: string, signal?: AbortSignal) =>
-    request<SavedView>(`${projectPath(projectId)}/saved-views/${encodeId(savedViewId)}`, { signal }),
+  shareableSavedViews: async (projectId: string, signal?: AbortSignal) =>
+    (await savedViewsApi.list(projectId, 'runs', signal)).filter((view) => view.visibility === 'project'),
 };

@@ -23,8 +23,6 @@ import { text, textTemplates } from '../../i18n/catalog';
 // Chart and analysis heights inside a report, which is narrower than the Run list's chart grid.
 const REPORT_CHART_HEIGHT_PX = 2 * CHART_ROW_HEIGHT_PX;
 const REPORT_ANALYSIS_HEIGHT_PX = 360;
-// Run list column keys that are not metrics or params (components/runs/RunTable).
-const RUN_NAME_COLUMN = 'name';
 
 /**
  * Where an embed's data comes from. `preview` is the editor's: a snapshot block whose stored data
@@ -163,15 +161,13 @@ function EmbedContent({ projectId, block, data }: { projectId: string; block: Re
     }
     case 'run_table': {
       if (block.type !== 'run_table') return null;
-      const columnNames = (prefix: string) =>
-        block.columns.filter((column) => column.startsWith(prefix)).map((column) => column.slice(prefix.length));
       return (
         <RunTable
           projectId={projectId}
           runs={data.runs}
-          metricNames={columnNames('metrics.')}
-          parameterNames={columnNames('params.')}
-          isColumnVisible={(column) => column === RUN_NAME_COLUMN || block.columns.includes(column)}
+          columns={block.columns.map((key) => ({ key }))}
+          // The columns belong to the saved report; the editor's picker changes them, not the table.
+          onColumnsChange={() => undefined}
           selectedIds={[]}
           onSelectedIdsChange={() => undefined}
         />
