@@ -138,33 +138,42 @@ export class JobService {
         role: 'editor',
         scope: 'jobs:write',
       });
-      const job = await findJob(connection, { projectId, id: jobId, lock: true });
-      if (isTerminalStatus(job.status)) return job;
-      if (job.status !== 'queued') {
-        // Even a silent worker may still own a live remote process. Only completion releases its reservation.
-        return (await first<Job>(
-          connection,
-          `UPDATE jobs SET cancel_requested=true WHERE id=$1 RETURNING ${jobColumns()}`,
-          [job.id],
-        ))!;
-      }
-      const previousRun = await findRun(connection, { projectId, id: job.runId, lock: true });
-      const canceled = (await first<Job>(
+      return this.requestCancelInTransaction(connection, { projectId, jobId });
+    });
+  }
+
+  // Shared by the cancel API and server-side cancellation (sweeps); authorization is the caller's.
+  async requestCancelInTransaction(
+    connection: Connection,
+    reference: { projectId: string; jobId: string },
+  ): Promise<Job> {
+    const { projectId } = reference;
+    const job = await findJob(connection, { projectId, id: reference.jobId, lock: true });
+    if (isTerminalStatus(job.status)) return job;
+    if (job.status !== 'queued') {
+      // Even a silent worker may still own a live remote process. Only completion releases its reservation.
+      return (await first<Job>(
         connection,
-        `UPDATE jobs SET status='canceled',cancel_requested=true,ended_at=now() WHERE id=$1 RETURNING ${jobColumns()}`,
+        `UPDATE jobs SET cancel_requested=true WHERE id=$1 RETURNING ${jobColumns()}`,
         [job.id],
       ))!;
-      const run = (await first<Run>(
-        connection,
-        `UPDATE runs SET status='canceled',ended_at=now() WHERE id=$1 RETURNING ${runColumns}`,
-        [job.runId],
-      ))!;
-      await this.runCompletion.recordStatusChange(connection, {
-        previousStatus: previousRun.status,
-        run,
-      });
-      return canceled;
+    }
+    const previousRun = await findRun(connection, { projectId, id: job.runId, lock: true });
+    const canceled = (await first<Job>(
+      connection,
+      `UPDATE jobs SET status='canceled',cancel_requested=true,ended_at=now() WHERE id=$1 RETURNING ${jobColumns()}`,
+      [job.id],
+    ))!;
+    const run = (await first<Run>(
+      connection,
+      `UPDATE runs SET status='canceled',ended_at=now() WHERE id=$1 RETURNING ${runColumns}`,
+      [job.runId],
+    ))!;
+    await this.runCompletion.recordStatusChange(connection, {
+      previousStatus: previousRun.status,
+      run,
     });
+    return canceled;
   }
 
   async retry(

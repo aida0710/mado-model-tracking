@@ -42,6 +42,9 @@ const TASK_JOB_MAX_ATTEMPTS = 3;
 // Same kinds registerModelVersion accepts as an output model's source Run.
 const OUTPUT_MODEL_TASK_KINDS: readonly RunKind[] = ['training', 'finetuning'];
 
+/** Launch overrides once the revision check is done. */
+export type TaskLaunchOptions = Omit<TaskLaunch, 'expectedRevision'>;
+
 export class TaskService {
   constructor(
     private readonly database: Database,
@@ -131,41 +134,63 @@ export class TaskService {
       });
       requireScope(principal, 'jobs:write');
       const task = await this.lockTask(connection, { projectId, id: request.taskId });
-      const input = request.input;
-      this.validateRevision(task, input.expectedRevision);
-      const targetId = input.targetId ?? task.targetId;
-      if (!targetId)
-        throw new DomainError(422, '実行するComputeTargetを指定してください', 'target_required');
-      const run = await this.runs.insertRun(connection, {
-        projectId,
+      const { expectedRevision, ...input } = request.input;
+      this.validateRevision(task, expectedRevision);
+      return this.launchTaskInTransaction(connection, {
+        task,
+        input,
         createdBy: principal.user.id,
-        task: { id: task.id, revision: task.revision },
-        input: {
-          experimentId: task.experimentId,
-          name: input.name ?? task.name,
-          kind: task.kind,
-          codeVersionId: task.codeVersionId,
-          executionMode: input.executionMode,
-          modelVersionId:
-            input.modelVersionId === undefined ? task.modelVersionId : input.modelVersionId,
-          inputDatasetVersionIds: input.inputDatasetVersionIds ?? task.inputDatasetVersionIds,
-          parameters: { ...task.parameters, ...input.parameters },
-          tags: task.tags,
-          environment: {},
-        },
       });
-      const job = await this.jobs.insertJob(connection, {
-        run,
-        input: {
-          runId: run.id,
-          targetId,
-          gpuIds: input.gpuIds ?? task.gpuIds,
-          maxAttempts: TASK_JOB_MAX_ATTEMPTS,
-        },
-        attempt: 1,
-      });
-      return { run, job };
     });
+  }
+
+  /**
+   * Creates the Run and Job of one Task launch. The caller has authorized the launch, locked the
+   * Task's Experiment and checked its revision. serverTags are reserved tags (mmt.*) that only
+   * server-side launchers such as sweeps set; they are added on top of the Task's tags.
+   */
+  async launchTaskInTransaction(
+    connection: Connection,
+    launch: {
+      task: ExperimentTask;
+      input: TaskLaunchOptions;
+      createdBy: string;
+      serverTags?: Record<string, string>;
+    },
+  ): Promise<TaskExecution> {
+    const { task, input } = launch;
+    const targetId = input.targetId ?? task.targetId;
+    if (!targetId)
+      throw new DomainError(422, '実行するComputeTargetを指定してください', 'target_required');
+    const run = await this.runs.insertRun(connection, {
+      projectId: task.projectId,
+      createdBy: launch.createdBy,
+      task: { id: task.id, revision: task.revision },
+      input: {
+        experimentId: task.experimentId,
+        name: input.name ?? task.name,
+        kind: task.kind,
+        codeVersionId: task.codeVersionId,
+        executionMode: input.executionMode,
+        modelVersionId:
+          input.modelVersionId === undefined ? task.modelVersionId : input.modelVersionId,
+        inputDatasetVersionIds: input.inputDatasetVersionIds ?? task.inputDatasetVersionIds,
+        parameters: { ...task.parameters, ...input.parameters },
+        tags: { ...task.tags, ...launch.serverTags },
+        environment: {},
+      },
+    });
+    const job = await this.jobs.insertJob(connection, {
+      run,
+      input: {
+        runId: run.id,
+        targetId,
+        gpuIds: input.gpuIds ?? task.gpuIds,
+        maxAttempts: TASK_JOB_MAX_ATTEMPTS,
+      },
+      attempt: 1,
+    });
+    return { run, job };
   }
 
   async history(

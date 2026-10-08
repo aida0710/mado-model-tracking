@@ -62,6 +62,10 @@ import { RunNoteService } from './services/runNoteService.js';
 import { RunResumeService } from './services/runResumeService.js';
 import { CommentService } from './services/commentService.js';
 import { createCommentTargetRegistry } from './services/commentTargets.js';
+import { SweepController } from './services/sweepController.js';
+import { SweepScheduler } from './services/sweepScheduler.js';
+import { SweepService } from './services/sweepService.js';
+import { SweepTrialCompletionHandler } from './services/sweepTrialCompletionHandler.js';
 import { requireScope } from './services/accessService.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { currentTokenRoutes } from './routes/currentTokenRoutes.js';
@@ -96,6 +100,7 @@ import { UserDirectoryService } from './services/userDirectoryService.js';
 import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
+import { sweepRoutes } from './routes/sweepRoutes.js';
 
 export interface ApplicationOptions {
   config: ApiConfig;
@@ -182,6 +187,11 @@ export function createApplication(options: ApplicationOptions) {
   // Promotion follows automation chaining (wave-wide order: outputs, pending, chain, promotion).
   const promotion = new PromotionService(database);
   terminalHandlers.push(new PromotionRunHandler(promotion));
+  // Sweep trials follow chaining, promotion and automatic retry, and precede notifications.
+  const sweepController = new SweepController(tasks, jobs);
+  terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));
+  const sweeps = new SweepService(database, jobs, sweepController);
+  const sweepScheduler = new SweepScheduler(database, sweepController);
   const worker = new WorkerService({ database, jobs, config, runCompletion });
   const outputDeclarations = new RunOutputDeclarationService(registry);
   const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
@@ -309,6 +319,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', runNoteRoutes(runNotes));
   app.route('/api/projects', runResumeRoutes(runResumes));
   app.route('/api/projects', commentRoutes(comments));
+  app.route('/api/projects', sweepRoutes(sweeps));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
   app.route('/api', workerPresenceRoutes(worker));
@@ -341,6 +352,7 @@ export function createApplication(options: ApplicationOptions) {
     automationSweeper,
     artifactUploadFinalizer,
     artifactUploadSweeper,
+    sweepScheduler,
     services: {
       auth,
       audit,
@@ -371,6 +383,8 @@ export function createApplication(options: ApplicationOptions) {
       comments,
       storageBackends,
       artifactStores: stores,
+      sweeps,
+      sweepController,
     },
   };
 }

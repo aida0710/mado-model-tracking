@@ -84,6 +84,24 @@ export {
 } from './metricSeries.js';
 export type { RunResumeEvent, RunResumeEventPage, RunResumeRequest, RunResumeResult, RunResumeSource, RunSegment } from './runResume.js';
 export { RUN_RESUME_REASON_MAX_LENGTH } from './runResume.js';
+export type {
+  Sweep,
+  SweepCancel,
+  SweepCreate,
+  SweepEarlyStopping,
+  SweepMethod,
+  SweepObjective,
+  SweepPage,
+  SweepParameterDefinition,
+  SweepParameterValue,
+  SweepPatch,
+  SweepStatus,
+  SweepStatusReason,
+  SweepTrial,
+  SweepTrialCounts,
+  SweepTrialPage,
+  SweepTrialState,
+} from './sweeps.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
