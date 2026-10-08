@@ -6,7 +6,7 @@ import { reportsApi } from '../api/reports';
 import { useProject } from '../hooks/useProject';
 import { useReportList } from '../hooks/useReports';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { ErrorNotice, Loading } from '../components/Feedback';
 import { FormDialog } from '../components/FormDialog';
 import { formatDate } from '../lib/format';
@@ -26,7 +26,7 @@ export function ReportsPage() {
   const reportPath = (report: Report) => `/projects/${project.id}/reports/${report.id}`;
 
   return (
-    <section className="page reports-page" data-testid="reports-page">
+    <section className="page reports-page touch-targets" data-testid="reports-page">
       <PageHeader
         title={text.reports}
         eyebrow={project.name}
@@ -56,26 +56,35 @@ export function ReportsPage() {
       {reports.loading && !reports.items.length ? (
         <Loading />
       ) : (
-        <DataTable
-          items={reports.items}
+        <ResponsiveTable
+          rows={reports.items}
           rowKey={(report) => report.id}
           empty={text.reportNone}
           columns={[
             {
               key: 'title',
-              label: text.reportTitle,
+              header: text.reportTitle,
+              priority: 'primary',
+              className: 'break-word',
               render: (report) => <Link to={reportPath(report)}>{report.title}</Link>,
             },
-            { key: 'updatedBy', label: text.reportUpdatedBy, render: (report) => report.updatedBy.displayName },
+            {
+              key: 'updatedBy',
+              header: text.reportUpdatedBy,
+              priority: 'secondary',
+              render: (report) => report.updatedBy.displayName,
+            },
             {
               key: 'updatedAt',
-              label: text.reportUpdatedAt,
+              header: text.reportUpdatedAt,
+              priority: 'primary',
               className: 'nowrap',
               render: (report) => formatDate(report.updatedAt),
             },
             {
               key: 'revision',
-              label: text.reportRevision,
+              header: text.reportRevision,
+              priority: 'secondary',
               className: 'mono',
               render: (report) => textTemplates.reportRevisionLabel(report.currentRevision),
             },
@@ -83,7 +92,8 @@ export function ReportsPage() {
               ? [
                   {
                     key: 'state',
-                    label: text.reportState,
+                    header: text.reportState,
+                    priority: 'secondary' as const,
                     render: (report: Report) => (report.archivedAt ? text.reportArchived : text.reportActive),
                   },
                 ]
@@ -99,6 +109,7 @@ export function ReportsPage() {
       {isCreating && (
         <FormDialog
           title={text.reportNew}
+          fullScreenOnNarrow
           submitLabel={text.create}
           fields={[{ name: 'title', label: text.reportTitle, required: true, maxLength: REPORT_TITLE_MAX_LENGTH }]}
           onSubmit={(values) => reportsApi.create(project.id, { title: String(values.title).trim(), blocks: [] })}

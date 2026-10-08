@@ -128,7 +128,7 @@ export function AudioArtifactViewer({
   if (analysis.status === 'too_large') {
     const headerSummary = summarizeAudioMedia(null, headerMediaInfo);
     return (
-      <div className="audio-viewer">
+      <div className="audio-viewer touch-targets">
         {serverPreview.status === 'ready' ? (
           <AudioPreviewOverview
             waveform={serverPreview.waveform}
@@ -160,7 +160,7 @@ export function AudioArtifactViewer({
   const percent = (seconds: number) => `${fractionOfTime(seconds, range) * 100}%`;
 
   return (
-    <div className="audio-viewer">
+    <div className="audio-viewer touch-targets">
       <div className="audio-viewer-toolbar">
         <button
           type="button"

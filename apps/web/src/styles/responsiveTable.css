@@ -1,0 +1,38 @@
+/* ResponsiveTable: on a narrow screen each row keeps its primary cells and opens the rest below. */
+.responsive-table-toggle-cell {
+  width: 1%;
+  padding-left: 0;
+  padding-right: 4px;
+  text-align: right;
+}
+.responsive-table-toggle {
+  width: 40px;
+  height: 40px;
+}
+.responsive-table.narrow td {
+  padding: 8px 10px;
+}
+.responsive-table.narrow th {
+  padding: 8px 10px;
+}
+.responsive-table-details > td {
+  padding-top: 0;
+}
+.responsive-table-details dl {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.responsive-table-details dl > div {
+  display: grid;
+  grid-template-columns: minmax(6em, 30%) minmax(0, 1fr);
+  gap: 10px;
+}
+.responsive-table-details dt {
+  color: var(--muted);
+}
+.responsive-table-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

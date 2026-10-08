@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { MediaCompareGrid as MediaCompareGridData, RunMedia } from '@mmt/contracts';
 import { AudioLines, Film, Table2 } from 'lucide-react';
 import { trackingApi } from '../../api/tracking';
@@ -13,6 +13,7 @@ import {
   type PlaybackHandoff,
 } from '../../lib/mediaSteps';
 import { runMediaArtifact } from '../../lib/mediaPreviewArtifact';
+import { useIsNarrow } from '../../lib/useMediaQuery';
 import { AudioArtifactViewer } from '../preview/AudioArtifactViewer';
 import { ImagePreview } from '../preview/ImagePreview';
 import { VideoPreview } from '../preview/VideoPreview';
@@ -93,7 +94,21 @@ function useAudioHandoff() {
  * plays, and moving to another audio cell continues from the same position (A/B listening).
  * It only displays the data it is given, so a report can show a grid fixed when it was made.
  */
-export function MediaCompareGrid({ projectId, grid, runLabels }: MediaCompareGridProps) {
+export function MediaCompareGrid(props: MediaCompareGridProps) {
+  const isNarrow = useIsNarrow();
+  return <MediaCompareGridView {...props} isNarrow={isNarrow} />;
+}
+
+/**
+ * The grid for a known width. A narrow screen stacks the Runs: each Run's steps in a block of its
+ * own, with the chosen cell's player right under the Run it belongs to.
+ */
+export function MediaCompareGridView({
+  projectId,
+  grid,
+  runLabels,
+  isNarrow,
+}: MediaCompareGridProps & { isNarrow: boolean }) {
   const table = useMemo(() => compareTableOf(grid), [grid]);
   const [selected, setSelected] = useState<GridPosition>(() => firstFilledCell(table));
   const cellButtons = useRef(new Map<string, HTMLButtonElement>());
@@ -111,25 +126,75 @@ export function MediaCompareGrid({ projectId, grid, runLabels }: MediaCompareGri
     setSelected(next);
     cellButtons.current.get(positionKey(next))?.focus();
   };
-  const selectedMedia = cellAt(selected);
-  const selectedRunId = table.runIds[selected.row];
-  const selectedStep = table.steps[selected.column];
-  const selectedCount = cellCountAt(selected);
+  const moveWithKeyboard = (event: KeyboardEvent) => {
+    const next = gridPositionAfterKey(size, selected, event.key);
+    if (!next) return;
+    event.preventDefault();
+    select(next);
+  };
+  const isSelectedCell = (position: GridPosition) => position.row === selected.row && position.column === selected.column;
+  const cellButton = (position: GridPosition) => {
+    const runId = table.runIds[position.row]!;
+    const step = table.steps[position.column]!;
+    const media = cellAt(position);
+    const state = media ? mediaKindLabels[media.kind] : text.mediaCompareMissing;
+    return (
+      <button
+        type="button"
+        ref={(element) => {
+          const key = positionKey(position);
+          if (element) cellButtons.current.set(key, element);
+          else cellButtons.current.delete(key);
+        }}
+        className={`media-compare-cell ${media ? '' : 'missing'}`}
+        tabIndex={isSelectedCell(position) ? 0 : -1}
+        aria-label={textTemplates.mediaCompareCell(runLabel(runId), step, state)}
+        aria-pressed={isNarrow ? isSelectedCell(position) : undefined}
+        onClick={() => select(position)}
+      >
+        <CellSummary projectId={projectId} media={media} />
+      </button>
+    );
+  };
+  const detail = (
+    <SelectedCellDetail
+      projectId={projectId}
+      runLabel={table.runIds[selected.row] === undefined ? undefined : runLabel(table.runIds[selected.row]!)}
+      step={table.steps[selected.column]}
+      media={cellAt(selected)}
+      count={cellCountAt(selected)}
+      attachAudio={attachAudio}
+    />
+  );
+
+  if (isNarrow)
+    return (
+      <div className="media-compare-grid stacked">
+        <p className="muted media-hint">{text.mediaCompareHint}</p>
+        <div className="media-compare-runs" aria-label={text.mediaCompareGrid} onKeyDown={moveWithKeyboard}>
+          {table.runIds.map((runId, row) => (
+            <RunStack key={runId} label={runLabel(runId)}>
+              {table.steps.map((step, column) => (
+                <div key={step} className={`media-compare-run-step ${isSelectedCell({ row, column }) ? 'selected' : ''}`}>
+                  <span className="mono">
+                    {text.mediaStep} {step}
+                  </span>
+                  {cellButton({ row, column })}
+                </div>
+              ))}
+              {row === selected.row && detail}
+            </RunStack>
+          ))}
+          {table.runIds.length === 0 && detail}
+        </div>
+      </div>
+    );
 
   return (
     <div className="media-compare-grid">
       <p className="muted media-hint">{text.mediaCompareHint}</p>
       <div className="table-scroll">
-        <table
-          role="grid"
-          aria-label={text.mediaCompareGrid}
-          onKeyDown={(event) => {
-            const next = gridPositionAfterKey(size, selected, event.key);
-            if (!next) return;
-            event.preventDefault();
-            select(next);
-          }}
-        >
+        <table role="grid" aria-label={text.mediaCompareGrid} onKeyDown={moveWithKeyboard}>
           <thead>
             <tr>
               <th scope="col">{text.mediaRun}</th>
@@ -144,70 +209,74 @@ export function MediaCompareGrid({ projectId, grid, runLabels }: MediaCompareGri
             {table.runIds.map((runId, row) => (
               <tr key={runId}>
                 <th scope="row">{runLabel(runId)}</th>
-                {table.steps.map((step, column) => {
-                  const media = cellAt({ row, column });
-                  const isSelected = row === selected.row && column === selected.column;
-                  const state = media ? mediaKindLabels[media.kind] : text.mediaCompareMissing;
-                  return (
-                    <td key={step} role="gridcell" aria-selected={isSelected} className={isSelected ? 'selected' : ''}>
-                      <button
-                        type="button"
-                        ref={(element) => {
-                          const key = positionKey({ row, column });
-                          if (element) cellButtons.current.set(key, element);
-                          else cellButtons.current.delete(key);
-                        }}
-                        className={`media-compare-cell ${media ? '' : 'missing'}`}
-                        tabIndex={isSelected ? 0 : -1}
-                        aria-label={textTemplates.mediaCompareCell(runLabel(runId), step, state)}
-                        onClick={() => select({ row, column })}
-                      >
-                        <CellSummary projectId={projectId} media={media} />
-                      </button>
-                    </td>
-                  );
-                })}
+                {table.steps.map((step, column) => (
+                  <td
+                    key={step}
+                    role="gridcell"
+                    aria-selected={isSelectedCell({ row, column })}
+                    className={isSelectedCell({ row, column }) ? 'selected' : ''}
+                  >
+                    {cellButton({ row, column })}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <section className="media-compare-detail" aria-live="polite">
-        {selectedRunId !== undefined && selectedStep !== undefined && (
-          <h4>
-            {runLabel(selectedRunId)} · {text.mediaStep} {selectedStep}
-          </h4>
-        )}
-        {!selectedMedia ? (
-          <p className="muted">{selectedRunId === undefined ? text.mediaCompareNoSelection : text.mediaCompareMissing}</p>
-        ) : (
-          <>
-            {selectedCount > 1 && <p className="muted">{textTemplates.mediaCompareFirstOfMany(selectedCount)}</p>}
-            {selectedMedia.caption && <p className="media-caption">{selectedMedia.caption}</p>}
-            {selectedMedia.kind === 'audio' && (
-              <AudioArtifactViewer
-                key={selectedMedia.id}
-                artifact={runMediaArtifact(projectId, selectedMedia)}
-                onAudioElement={attachAudio}
-              />
-            )}
-            {selectedMedia.kind === 'image' && (
-              <ImagePreview key={selectedMedia.id} artifact={runMediaArtifact(projectId, selectedMedia)} />
-            )}
-            {selectedMedia.kind === 'video' && (
-              <VideoPreview key={selectedMedia.id} artifact={runMediaArtifact(projectId, selectedMedia)} />
-            )}
-            {selectedMedia.kind === 'table' && (
-              <MediaTableView
-                key={selectedMedia.id}
-                projectId={projectId}
-                runId={selectedMedia.runId}
-                mediaId={selectedMedia.id}
-              />
-            )}
-          </>
-        )}
-      </section>
+      {detail}
     </div>
+  );
+}
+
+/** One Run's steps on a narrow screen, laid out as a wrapping row of cells under the Run's name. */
+function RunStack({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <section className="media-compare-run" aria-label={label}>
+      <h5>{label}</h5>
+      <div className="media-compare-run-steps">{children}</div>
+    </section>
+  );
+}
+
+function SelectedCellDetail({
+  projectId,
+  runLabel,
+  step,
+  media,
+  count,
+  attachAudio,
+}: {
+  projectId: string;
+  runLabel: string | undefined;
+  step: number | undefined;
+  media: RunMedia | null;
+  count: number;
+  attachAudio: (element: HTMLAudioElement | null) => void;
+}) {
+  return (
+    <section className="media-compare-detail" aria-live="polite">
+      {runLabel !== undefined && step !== undefined && (
+        <h4>
+          {runLabel} · {text.mediaStep} {step}
+        </h4>
+      )}
+      {!media ? (
+        <p className="muted">{runLabel === undefined ? text.mediaCompareNoSelection : text.mediaCompareMissing}</p>
+      ) : (
+        <>
+          {count > 1 && <p className="muted">{textTemplates.mediaCompareFirstOfMany(count)}</p>}
+          {media.caption && <p className="media-caption">{media.caption}</p>}
+          {media.kind === 'audio' && (
+            <AudioArtifactViewer key={media.id} artifact={runMediaArtifact(projectId, media)} onAudioElement={attachAudio} />
+          )}
+          {media.kind === 'image' && <ImagePreview key={media.id} artifact={runMediaArtifact(projectId, media)} />}
+          {media.kind === 'video' && <VideoPreview key={media.id} artifact={runMediaArtifact(projectId, media)} />}
+          {media.kind === 'table' && (
+            <MediaTableView key={media.id} projectId={projectId} runId={media.runId} mediaId={media.id} />
+          )}
+        </>
+      )}
+    </section>
   );
 }

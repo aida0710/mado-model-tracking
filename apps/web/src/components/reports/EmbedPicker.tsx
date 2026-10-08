@@ -75,6 +75,7 @@ export function EmbedPicker({
       title={isNew ? text.reportEmbedTitleNew : text.reportEmbedTitleEdit}
       onClose={onClose}
       wide
+      fullScreenOnNarrow
       className="report-embed-picker"
     >
       {/* Not a form: the chart editor opened from here has its own form, and nested forms submit

@@ -9,7 +9,7 @@ import { useRegistry } from '../hooks/useRegistry';
 import { useQuery } from '../hooks/useQuery';
 import { useDatasetVersionsById } from '../hooks/useDatasetVersionsById';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
 import { RegistryLayout } from '../components/RegistryLayout';
 import { Empty, ErrorNotice, Resource } from '../components/Feedback';
 import { DetailsList, JsonDetails } from '../components/JsonDetails';
@@ -31,7 +31,7 @@ export function DatasetsPage() {
   });
   const base = `/projects/${project.id}`;
   return (
-    <section className="page">
+    <section className="page datasets-page touch-targets">
       <PageHeader
         title={text.datasets}
         eyebrow={project.name}
@@ -58,26 +58,28 @@ export function DatasetsPage() {
         {(items) => (
           <RegistryLayout
             list={
-              <DataTable
-                items={items}
+              <ResponsiveTable
+                rows={items}
                 rowKey={(item) => item.id}
                 selectedKey={registry.selected?.id}
                 columns={[
                   {
                     key: 'name',
-                    label: text.name,
+                    header: text.name,
+                    priority: 'primary',
                     render: (item) => (
                       <button className="link-button" onClick={() => registry.selectItem(item.id)}>
                         {item.name}
                       </button>
                     ),
                   },
-                  { key: 'namespace', label: text.namespace, render: (item) => item.namespace },
+                  { key: 'namespace', header: text.namespace, priority: 'secondary', render: (item) => item.namespace },
                   {
                     key: 'version',
-                    label: text.latestVersion,
+                    header: text.latestVersion,
+                    priority: 'primary',
                     render: (item) => item.latestVersion ?? '—',
-                    className: 'mono',
+                    className: 'mono break-word',
                   },
                 ]}
               />
@@ -92,7 +94,7 @@ export function DatasetsPage() {
                 <div className="section-heading">
                   <h2>{registry.selected.name}</h2>
                   {canEdit && (
-                    <div>
+                    <div className="section-heading-actions">
                       <button className="button small" onClick={() => setDialog('folder')}>
                         {text.datasetVersionFromFolder}
                       </button>
@@ -105,14 +107,15 @@ export function DatasetsPage() {
                 <Resource query={registry.versions}>
                   {(versions) => (
                     <>
-                      <DataTable
-                        items={versions}
+                      <ResponsiveTable
+                        rows={versions}
                         rowKey={(version) => version.id}
                         selectedKey={registry.selectedVersion?.id}
                         columns={[
                           {
                             key: 'version',
-                            label: text.version,
+                            header: text.version,
+                            priority: 'primary',
                             render: (version) => (
                               <button
                                 className="link-button mono"
@@ -124,7 +127,8 @@ export function DatasetsPage() {
                           },
                           {
                             key: 'content',
-                            label: text.datasetContentKind,
+                            header: text.datasetContentKind,
+                            priority: 'primary',
                             render: (version) =>
                               version.contentKind === 'artifacts'
                                 ? textTemplates.datasetContentArtifacts(
@@ -135,14 +139,16 @@ export function DatasetsPage() {
                           },
                           {
                             key: 'uri',
-                            label: text.uri,
+                            header: text.uri,
+                            priority: 'secondary',
                             render: (version) => (
                               <span className="mono break-word">{version.uri}</span>
                             ),
                           },
                           {
                             key: 'digest',
-                            label: text.digest,
+                            header: text.digest,
+                            priority: 'secondary',
                             render: (version) => (
                               <span className="mono break-word">{version.digest}</span>
                             ),
@@ -211,6 +217,7 @@ export function DatasetsPage() {
       {dialog === 'dataset' && (
         <FormDialog
           title={text.newDataset}
+          fullScreenOnNarrow
           onClose={() => setDialog(null)}
           fields={[
             { name: 'name', label: text.name, required: true },

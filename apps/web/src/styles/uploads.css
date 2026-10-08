@@ -148,3 +148,16 @@
 .dataset-folder-choice p {
   margin: 0;
 }
+/* Below --bp-sm a long path wraps instead of hiding the part that tells files apart. */
+@media (width < 640px) {
+  .upload-queue-title {
+    flex-wrap: wrap;
+  }
+  .upload-queue-title .mono {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .upload-dropzone {
+    padding: 16px 12px;
+  }
+}

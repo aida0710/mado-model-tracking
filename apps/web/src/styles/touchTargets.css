@@ -1,0 +1,35 @@
+/* Screens marked `touch-targets` make every control at least 40px tall below --bp-md, where
+   they are likely used with a finger. Wide screens keep the compact sizes. */
+@media (width < 900px) {
+  .touch-targets :is(.button, select, input:not([type='checkbox'], [type='radio'], [type='range'])) {
+    min-height: 40px;
+  }
+  .touch-targets .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .touch-targets .button {
+    min-width: 40px;
+  }
+  /* Padding rather than flex, so the summary keeps its disclosure marker. */
+  .touch-targets summary {
+    padding-block: 11px;
+  }
+  /* Short labels such as a version "v2" still get a finger-wide target. */
+  .touch-targets .link-button {
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+  }
+  /* The checkbox itself stays small; its label is the 40px target. */
+  .touch-targets label:has(> input[type='checkbox']) {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .touch-targets input[type='range'] {
+    min-height: 40px;
+  }
+}

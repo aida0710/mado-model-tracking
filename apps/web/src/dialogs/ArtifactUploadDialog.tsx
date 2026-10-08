@@ -62,9 +62,9 @@ export function ArtifactUploadDialog({
   const totalSize = sources.reduce((total, source) => total + source.file.size, 0);
   const canStart = sources.length > 0 && (sources.length > 1 || joinArtifactPath('', singlePath) !== '');
   return (
-    <Dialog title={text.uploadArtifact} onClose={onClose} busy={queue.isActive} wide>
+    <Dialog title={text.uploadArtifact} onClose={onClose} busy={queue.isActive} wide fullScreenOnNarrow>
       <form
-        className="artifact-upload-form"
+        className="artifact-upload-form touch-targets"
         onSubmit={(event) => {
           event.preventDefault();
           if (canStart) start();

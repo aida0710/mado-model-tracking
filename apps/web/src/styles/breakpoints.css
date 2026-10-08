@@ -1,0 +1,8 @@
+/* Width breakpoints shared by every screen. `@media` cannot read custom properties, so media
+   queries write the same numbers as `(width < 640px)` and so on, and scripts use the matching
+   queries in lib/useMediaQuery.ts. Change all three places together. */
+:root {
+  --bp-sm: 640px;
+  --bp-md: 900px;
+  --bp-lg: 1200px;
+}

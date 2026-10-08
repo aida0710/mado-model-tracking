@@ -9,7 +9,7 @@
 .report-layout.with-history {
   grid-template-columns: minmax(0, 1fr) 280px;
 }
-@media (max-width: 1100px) {
+@media (width < 1200px) {
   .report-layout.with-history {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -145,6 +145,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  /* Not a form (see EmbedPicker), so the dialog's form margin does not reach it. */
+  margin: 22px;
 }
 .report-run-set,
 .report-checklist,
@@ -261,4 +263,37 @@
 .report-page .comment-thread {
   margin-top: 32px;
   max-width: 1100px;
+}
+/* Below --bp-sm the picker's fields stack, and its choices grow to finger-sized rows. */
+@media (width < 640px) {
+  .report-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .report-embed-picker-body {
+    margin: 16px;
+  }
+  .report-embed-header {
+    flex-wrap: wrap;
+  }
+  /* The block's name keeps its own line width; the actions move under it when they do not fit. */
+  .report-block-toolbar {
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .report-block-toolbar > :first-child {
+    flex: 1 0 auto;
+  }
+  .report-block-actions {
+    margin-left: auto;
+  }
+}
+@media (width < 900px) {
+  .report-segmented label,
+  .report-run-checklist li label,
+  .report-checklist label {
+    min-height: 40px;
+  }
+  .report-embed-picker :is(.button, select, input:not([type='checkbox'], [type='radio'])) {
+    min-height: 40px;
+  }
 }

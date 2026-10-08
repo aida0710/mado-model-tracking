@@ -11,7 +11,9 @@ import {
   type ProjectArtifactFilter,
 } from '../hooks/useProjectArtifacts';
 import { PageHeader } from '../components/PageHeader';
-import { DataTable } from '../components/DataTable';
+import { ResponsiveTable } from '../components/ResponsiveTable';
+import { ArtifactBackToListButton } from '../components/ArtifactBackToListButton';
+import { useArtifactBrowserPanes } from '../hooks/useArtifactBrowserPanes';
 import { ErrorNotice } from '../components/Feedback';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 import { ARTIFACT_SEARCH_MAX_LENGTH } from '../lib/artifactCatalog';
@@ -31,7 +33,10 @@ const mimeTypeOptions = [
   ['application/*', text.artifactMimeApplication],
 ] as const;
 
-/** Project-wide Artifact search with type, Run and model version filters, kept in the URL. */
+/**
+ * Project-wide Artifact search with type, Run and model version filters, kept in the URL. A
+ * narrow screen shows the results or the chosen file's preview, one at a time.
+ */
 export function ArtifactsPage() {
   const { project } = useProject();
   const [params, setParams] = useSearchParams();
@@ -46,6 +51,7 @@ export function ArtifactsPage() {
   const { modelId } = filter;
   const [searchInput, setSearchInput] = useState(filter.query);
   const [selected, setSelected] = useState<Artifact>();
+  const { panes, containerRef, scrollBrowserIntoView } = useArtifactBrowserPanes(selected !== undefined);
   const catalog = useProjectArtifactCatalog(project.id, filter);
   const runs = useQuery(`${project.id}:artifact-filter-runs`, (signal) =>
     trackingApi.searchRuns(project.id, { limit: RUN_FILTER_OPTION_LIMIT }, signal),
@@ -60,6 +66,11 @@ export function ArtifactsPage() {
   const runNames = new Map(runs.value?.items.map((run) => [run.id, run.name]));
   const base = `/projects/${project.id}`;
 
+  function showArtifact(artifact: Artifact | undefined) {
+    setSelected(artifact);
+    scrollBrowserIntoView();
+  }
+
   function updateParams(values: Record<string, string>) {
     setParams((previous) => {
       const updated = new URLSearchParams(previous);
@@ -71,7 +82,7 @@ export function ArtifactsPage() {
   }
 
   return (
-    <section className="page artifact-catalog">
+    <section className="page artifact-catalog touch-targets">
       <PageHeader
         title={text.artifacts}
         eyebrow={project.name}
@@ -179,79 +190,89 @@ export function ArtifactsPage() {
         message={runs.error ?? models.error}
         retry={runs.error ? runs.reload : models.reload}
       />
-      <div className="artifact-layout">
-        <div>
-          <DataTable
-            items={catalog.items}
-            rowKey={(item) => item.id}
-            selectedKey={selected?.id}
-            empty={catalog.loading ? text.loading : text.artifactNoCatalogResults}
-            columns={[
-              {
-                key: 'path',
-                label: text.artifactPath,
-                render: (item) => (
-                  <button className="link-button mono break-word" onClick={() => setSelected(item)}>
-                    {item.path}
-                  </button>
-                ),
-              },
-              {
-                key: 'run',
-                label: text.artifactRun,
-                render: (item) =>
-                  item.runId ? (
-                    <Link to={`${base}/runs/${item.runId}?tab=artifacts`}>
-                      {runNames.get(item.runId) ?? item.runId.slice(0, SHORT_RUN_ID_LENGTH)}
-                    </Link>
-                  ) : (
-                    <span className="muted">{text.artifactNoRun}</span>
+      <div ref={containerRef} className="artifact-layout">
+        {panes.showList && (
+          <div>
+            <ResponsiveTable
+              rows={catalog.items}
+              rowKey={(item) => item.id}
+              selectedKey={selected?.id}
+              empty={catalog.loading ? text.loading : text.artifactNoCatalogResults}
+              columns={[
+                {
+                  key: 'path',
+                  header: text.artifactPath,
+                  priority: 'primary',
+                  render: (item) => (
+                    <button className="link-button mono break-word" onClick={() => showArtifact(item)}>
+                      {item.path}
+                    </button>
                   ),
-              },
-              {
-                key: 'mimeType',
-                label: text.artifactMimeType,
-                className: 'mono',
-                render: (item) => item.mimeType.split(';')[0],
-              },
-              {
-                key: 'size',
-                label: text.size,
-                className: 'mono nowrap',
-                render: (item) => formatBytes(item.size),
-              },
-              {
-                key: 'created',
-                label: text.created,
-                className: 'mono',
-                render: (item) => formatDate(item.createdAt),
-              },
-            ]}
-          />
-          <ErrorNotice message={catalog.error} retry={catalog.reload} />
-          {catalog.hasMore && (
-            <button
-              className="button artifact-load-more"
-              disabled={catalog.loading}
-              onClick={catalog.loadMore}
-            >
-              {text.artifactLoadMore}
-            </button>
-          )}
-        </div>
-        <section className="artifact-preview">
-          {selected ? (
-            <>
-              <h3>{selected.path}</h3>
-              <p className="mono muted">
-                {selected.mimeType} · {formatBytes(selected.size)}
-              </p>
-              <ArtifactPreview key={selected.id} artifact={selected} />
-            </>
-          ) : (
-            <p className="muted">{text.artifactSelectFile}</p>
-          )}
-        </section>
+                },
+                {
+                  key: 'run',
+                  header: text.artifactRun,
+                  priority: 'secondary',
+                  render: (item) =>
+                    item.runId ? (
+                      <Link to={`${base}/runs/${item.runId}?tab=artifacts`}>
+                        {runNames.get(item.runId) ?? item.runId.slice(0, SHORT_RUN_ID_LENGTH)}
+                      </Link>
+                    ) : (
+                      <span className="muted">{text.artifactNoRun}</span>
+                    ),
+                },
+                {
+                  key: 'mimeType',
+                  header: text.artifactMimeType,
+                  priority: 'secondary',
+                  className: 'mono',
+                  render: (item) => item.mimeType.split(';')[0],
+                },
+                {
+                  key: 'size',
+                  header: text.size,
+                  priority: 'primary',
+                  className: 'mono nowrap',
+                  render: (item) => formatBytes(item.size),
+                },
+                {
+                  key: 'created',
+                  header: text.created,
+                  priority: 'secondary',
+                  className: 'mono',
+                  render: (item) => formatDate(item.createdAt),
+                },
+              ]}
+            />
+            <ErrorNotice message={catalog.error} retry={catalog.reload} />
+            {catalog.hasMore && (
+              <button
+                className="button artifact-load-more"
+                disabled={catalog.loading}
+                onClick={catalog.loadMore}
+              >
+                {text.artifactLoadMore}
+              </button>
+            )}
+          </div>
+        )}
+        {panes.showBackToList && <ArtifactBackToListButton onClick={() => showArtifact(undefined)} />}
+        {panes.showPreview && (
+          <section className="artifact-preview">
+            {selected ? (
+              <>
+                <h3>{selected.path}</h3>
+                <p className="mono muted">
+                  {selected.mimeType} · {formatBytes(selected.size)}
+                </p>
+                <ArtifactPreview key={selected.id} artifact={selected} />
+              </>
+            ) : (
+              <p className="muted">{text.artifactSelectFile}</p>
+            )}
+          </section>
+        )}
       </div>
     </section>
   );

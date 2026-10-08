@@ -145,9 +145,9 @@ function FolderVersionDialog({
   }
   const totalSize = sources.reduce((total, chosen) => total + chosen.file.size, 0);
   return (
-    <Dialog title={title} onClose={onClose} busy={busy} wide>
+    <Dialog title={title} onClose={onClose} busy={busy} wide fullScreenOnNarrow>
       <form
-        className="artifact-upload-form"
+        className="artifact-upload-form touch-targets"
         onSubmit={(event) => {
           event.preventDefault();
           if (sources.length > 0 && !folder.hasStarted) start();
