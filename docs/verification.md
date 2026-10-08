@@ -20,6 +20,48 @@ MMT_TEST_S3_ENDPOINT=http://127.0.0.1:4569 npm test -- packages/platform/src
 
 S3テストは専用bucketを作り、multipart upload、保存byte数とSHA-256、Range取得、失敗upload、削除を確認してbucketを消します。emulatorの結果は実際のS3権限やネットワークの確認を含みません。
 
+## 実S3の保存・取得を確認する
+
+`scripts/verify_s3_artifacts.ts`は、`.env`のS3設定（`S3_BUCKET`、`S3_ENDPOINT`、`S3_REGION`、`S3_PREFIX`、`S3_FORCE_PATH_STYLE`、`S3_ACCESS_KEY_ID`、`S3_SECRET_ACCESS_KEY`）を使い、APIと同じ`createS3ArtifactStore`で既存bucketを検証します。bucketは作成しません。書き込みは`<S3_PREFIX>/verification/<JSTの日付>/<uuid>/`の下に限り、最後にそのprefixのobjectと未完了のmultipart uploadを消します。
+
+実bucketで実行する前に、利用者がbucket、`S3_PREFIX`、認証情報を置く.envの変数名、書き込み・削除してよい範囲を決めます。決まったら、確認の印として`MMT_VERIFY_S3_CONFIRM=write-and-delete`を付けて実行します。付けない場合は何もせず終了コード2で止まります。
+
+```bash
+MMT_VERIFY_S3_CONFIRM=write-and-delete MMT_VERIFY_S3_LABEL=<検証対象の呼び名> \
+node_modules/.bin/tsx scripts/verify_s3_artifacts.ts
+```
+
+| 段階 | 確認すること |
+|---|---|
+| `small-put-get` | 小さいobjectの保存byte数・SHA-256と全体取得 |
+| `range-and-suffix-range` | 明示Range、suffix range（`bytes=-500`）、末尾指定なし、範囲外の終端の切り詰め、満たせないRangeの拒否 |
+| `multipart-over-16mib` | 17MiB超をmultipartで保存し、digest、partの境界をまたぐRange、ETagのpart数を照合 |
+| `interrupted-multipart-cleanup` | 2 part送った後に送信元を中断し、objectが見えないことと、ListMultipartUploadsから消えることを確認 |
+| `outside-prefix-denied` | `S3_PREFIX`の外へのPut/Getが拒否されるか（IAMの範囲確認） |
+| `remove` | 削除後に読めないことと、2回目の削除が成功すること |
+| `cleanup-run-prefix` | 検証prefixの残りを消し、空になったことを確認 |
+
+結果は`artifacts/verification/<日付>/s3/s3-integration.json`に保存します（`MMT_VERIFY_S3_OUTPUT`でファイル名を変更可）。bucket名、endpoint、object key、認証情報は書きません。SDKのエラーは、名前、HTTP status、ネットワークのエラーコードだけを残します。失敗が1件でもあれば終了コードは1です。
+
+warningは「失敗ではないが、利用者が判断すること」を示します。
+
+- `outside-prefix-denied`: prefixの外へ書けた・読めた。書けた場合はすぐ削除し、`outsideObjectRemoved`に記録します。外側のprefixは`MMT_VERIFY_S3_OUTSIDE_PREFIX`（既定`mmt-verification-outside-prefix`）で、不要なら`MMT_VERIFY_S3_SKIP_OUTSIDE_PREFIX=true`で省きます。書き込みを拒否された場合、Getは存在しないkeyへ送ります（`getTarget=missing-key`）。存在しないkeyへのGetは、読み取りと一覧の両方の権限があると404、どちらかが無いと403になります。404ならprefixの外を読めます。403は一覧の権限が無いだけでも返るので、読み取りの拒否を厳密には示しません。`S3_PREFIX`が空なら比較できないのでskipします。
+- `interrupted-multipart-cleanup`: `abortFinishedBeforeReject=false`は、保存の失敗が返った時点ではAbortMultipartUploadが終わっておらず、後から消えたことを示します（`pendingUploadGoneAfterMs`）。その間にprocessが落ちると未完了のpartが残るので、実bucketにはAbortIncompleteMultipartUploadのlifecycle ruleを設定してください。ListMultipartUploadsの権限が無い場合もwarningです。
+- `multipart-over-16mib`: ETagにpart数が無いS3互換サービスではwarningにします。
+
+Motoで試す場合は、別terminalで起動したemulatorにbucketを作ってから、環境変数で接続先を渡します。`MMT_VERIFY_ENV_FILE=none`で`.env`を読みません（環境変数は常に`.env`より優先します）。
+
+```bash
+uv tool run --from 'moto[server]==5.2.1' moto_server -H 127.0.0.1 -p 4569
+MMT_VERIFY_ENV_FILE=none MMT_VERIFY_S3_CONFIRM=write-and-delete MMT_VERIFY_S3_LABEL=moto \
+MMT_VERIFY_S3_OUTPUT=s3-integration-moto.json \
+S3_BUCKET=<作成したbucket> S3_ENDPOINT=http://127.0.0.1:4569 S3_FORCE_PATH_STYLE=true \
+S3_PREFIX=mado-model-tracking S3_ACCESS_KEY_ID=testing S3_SECRET_ACCESS_KEY=testing \
+node_modules/.bin/tsx scripts/verify_s3_artifacts.ts
+```
+
+2026-10-08にMoto 5.2.1で実行し、失敗0件でした。MotoはIAMを評価しないため`outside-prefix-denied`はwarningになります。`interrupted-multipart-cleanup`もwarningで、未完了uploadは保存の失敗が返ってから約0.2秒後に消えました。実bucketでの実行は未確認です。
+
 ローカルJobの結合検証では、実APIにコード・モデル・データセットを登録してPython workerで実行します。Runの完了、メトリクス、Artifact、モデル登録、data/model lineage、親の重みからのfine-tuning、2 Jobの並列実行、停止、再実行、worker復帰を確認します。CPUの小さいfixtureはモデル学習の精度やGPU性能を検証するものではありません。
 
 OIDCテストは署名鍵を持つローカルproviderでAuthorization Code＋PKCEを実行し、state/nonce/署名、ブラウザbinding、scope/Project権限を確認します。実際のAuthentik設定は[運用手順](operations.md)で確認します。
