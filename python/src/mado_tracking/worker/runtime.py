@@ -61,6 +61,7 @@ def build_runtime_bundle() -> bytes:
         archive.write(package_directory / "execution_runtime.py", "runtime/execution_runtime.py")
         archive.write(package_directory / "code_source.py", "runtime/code_source.py")
         archive.write(package_directory / "execution_snapshot.py", "runtime/execution_snapshot.py")
+        archive.write(package_directory / "system_metrics.py", "runtime/system_metrics.py")
         for name in (
             "host_runner",
             "host_state",
@@ -84,7 +85,8 @@ def build_runtime_bundle() -> bytes:
                 .replace("from ..timestamps", "from .timestamps")
                 .replace("from ..execution_runtime", "from .execution_runtime")
                 .replace("from ..code_source", "from .code_source")
-                .replace("from ..execution_snapshot", "from .execution_snapshot"),
+                .replace("from ..execution_snapshot", "from .execution_snapshot")
+                .replace("from ..system_metrics", "from .system_metrics"),
             )
         for path in package_directory.glob("*.py"):
             archive.write(path, f"sdk/mado_tracking/{path.name}")
