@@ -1,4 +1,7 @@
 import type {
+  ComputeTarget,
+  CpuArch,
+  SiteSubmissionMode,
   TargetCheckItemCode,
   TargetCheckItemName,
   TargetCheckItemStatus,
@@ -59,6 +62,50 @@ export const computeText = {
   targetCheckCurrent: '現在',
   saveTargetCandidates: '選んだ候補を保存',
   targetCheckCandidatesSaved: 'targetの設定を保存しました',
+  // Sites: tracking only describes them; the launcher's site.yaml and job shell hold the rest.
+  siteExecutor: 'Site（launcherかmado-tracking submitで投入）',
+  submissionMode: '投入方式',
+  submissionModeAutomatic: '自動（launcherが投入）',
+  submissionModeManual: '手動（依頼した本人がmado-tracking submitで投入）',
+  cpuArch: 'CPUアーキテクチャ',
+  supportsArray: 'job shellがarrayを1回の投入で扱える',
+  queueTimeout: '待ち行列の上限時間（HH:MM:SS・任意）',
+  // Three days is a common upper bound of batch queues.
+  queueTimeoutPlaceholder: '72:00:00',
+  siteRuntimeKinds: '対応Runtime（siteはコンテナだけ）',
+  siteTargetNotice:
+    'siteの接続先、鍵、スケジューラの指定はtrackingに保存しません。launcherのsite.yamlとjob shellに書きます。',
+  targetLocationSite: 'サイト側の設定',
+  targetGpuPerJob: 'Jobごとに数を指定',
+  submissionAutomaticBadge: '自動投入',
+  submissionManualBadge: '手動投入',
+  supportsArrayBadge: 'array対応',
+  targetCheckSite:
+    'siteにはtrackingのworkerが接続しないため、ここでは接続を確認できません。launcher（手動投入のsiteでは依頼した本人のmado-tracking submit）がsiteのjob shellを動かし、計算ノードのrunnerがJobの状態を報告します。投入に失敗したJobは「投入失敗」で終わります。',
+  siteRuntimeKindsError:
+    'siteの対応RuntimeはDocker・Singularity・Apptainerから1つ以上選択してください。',
+};
+
+// Text that embeds values.
+export const computeTextTemplates = {
+  queueTimeoutError: (minMinutes: number, maxDays: number) =>
+    `待ち行列の上限時間は${minMinutes}分から${maxDays}日までを、HH:MM:SSの形で指定してください。`,
+};
+
+export const computeTargetExecutorLabels: Record<ComputeTarget['executor'], string> = {
+  ssh: 'SSH',
+  local: 'Local',
+  site: 'Site',
+};
+
+export const submissionModeBadgeLabels: Record<SiteSubmissionMode, string> = {
+  automatic: computeText.submissionAutomaticBadge,
+  manual: computeText.submissionManualBadge,
+};
+
+export const cpuArchLabels: Record<CpuArch, string> = {
+  amd64: 'amd64（x86_64）',
+  arm64: 'arm64（AArch64）',
 };
 
 export const targetCheckItemLabels = {

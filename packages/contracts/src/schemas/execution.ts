@@ -1,10 +1,16 @@
 import { z } from 'zod';
 import type { ComputeTarget, Job, JobListItem, WorkerPresence } from '../index.js';
+import { CPU_ARCHES, JOB_END_REASONS, JOB_PHASES, SITE_SUBMISSION_MODES } from '../siteExecution.js';
 import { idSchema, jobStatusSchema, runKindSchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
 import type { Expect, MutuallyAssignable } from './typeAssertions.js';
 
 export const executionRuntimeKindSchema = z.enum(['python', 'docker', 'singularity', 'apptainer']);
+export const computeTargetExecutorSchema = z.enum(['ssh', 'local', 'site']);
+export const siteSubmissionModeSchema = z.enum(SITE_SUBMISSION_MODES);
+export const cpuArchSchema = z.enum(CPU_ARCHES);
+export const jobPhaseSchema = z.enum(JOB_PHASES);
+export const jobEndReasonSchema = z.enum(JOB_END_REASONS);
 export const computeTargetSchema = namedContractSchema(
   'ComputeTarget',
   z.strictObject({
@@ -21,9 +27,13 @@ export const computeTargetSchema = namedContractSchema(
     gpuIds: z.array(z.string()),
     maxConcurrentJobs: z.number().int(),
     enabled: z.boolean(),
-    executor: z.enum(['ssh', 'local']),
+    executor: computeTargetExecutorSchema,
     datasetCacheMaxBytes: z.number().int(),
     datasetTransfer: z.enum(['relay', 'direct']),
+    submissionMode: siteSubmissionModeSchema,
+    cpuArch: cpuArchSchema,
+    supportsArray: z.boolean(),
+    queueTimeoutSeconds: z.number().int().nullable(),
   }),
 );
 export const jobSchema = namedContractSchema(
@@ -47,6 +57,23 @@ export const jobSchema = namedContractSchema(
     exitCode: z.number().int().nullable(),
     error: z.string().nullable(),
     heartbeatStale: z.boolean(),
+    phase: jobPhaseSchema.nullable(),
+    gpuCount: z.number().int(),
+    walltimeSeconds: z.number().int().nullable(),
+    schedulerJobId: z.string().nullable(),
+    submittedAt: timestampSchema.nullable(),
+    runnerHost: z.string().nullable(),
+    arrayGroupId: idSchema.nullable(),
+    arrayIndex: z.number().int().nullable(),
+    arraySize: z.number().int().nullable(),
+    endReason: jobEndReasonSchema.nullable(),
+    parentJobId: idSchema.nullable(),
+    chainDepth: z.number().int(),
+    hookId: idSchema.nullable(),
+    allowChildJobs: z.boolean(),
+    retryOnFailure: z.boolean(),
+    retryOnTimeout: z.boolean(),
+    datasetPartitionVersionId: idSchema.nullable(),
   }),
 );
 export const jobListItemSchema = namedContractSchema(

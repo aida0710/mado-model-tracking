@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from .container_layout import ContainerMount, container_environment
+from .container_layout import ContainerMount, container_environment, host_runtime
 from .host_execution import CommandExecution
 from .host_state import write_json
 from .runtime_capability import RuntimeUnavailable, runtime_binary
@@ -21,7 +21,7 @@ def execute_sif(
     mounts: list[ContainerMount],
     execution: CommandExecution,
 ) -> int:
-    runtime = specification["codeVersion"]["runtime"]
+    runtime = host_runtime(specification)
     kind = runtime["kind"]
     binary = runtime_binary(kind)
     if execution.run([binary, "--version"])[0]:

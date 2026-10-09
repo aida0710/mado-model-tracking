@@ -1,7 +1,7 @@
 """Prepare only the container's input, context, optional source, and output mounts.
 
-Also places the resume checkpoint, which sits under inputs for every runtime, and exposes the
-staged input datasets (MMT_INPUT_DATASET_DIRS) to every runtime.
+Also places the resume and input checkpoints, which sit under inputs for every runtime, and
+exposes the staged input datasets (MMT_INPUT_DATASET_DIRS) to every runtime.
 """
 
 from __future__ import annotations
@@ -31,6 +31,22 @@ UPSTREAM_RUN_FILENAME = "upstream-run.json"
 RESUME_CHECKPOINT_DIRECTORY = "checkpoint"
 RESUME_CHECKPOINT_FILENAME = "resume-checkpoint.json"
 RESUME_CHECKPOINT_ARCHIVE = "checkpoint.tar"
+# A checkpoint handed to the code as an input (checkpoint_saved hooks) takes the same place,
+# /mmt/inputs/checkpoint. A Job that also resumes keeps that place for its resume checkpoint and
+# reads the input checkpoint from inputs/input-checkpoint; MMT_INPUT_CHECKPOINT_DIR names either.
+INPUT_CHECKPOINT_FALLBACK_DIRECTORY = "input-checkpoint"
+INPUT_CHECKPOINT_FILENAME = "input-checkpoint.json"
+INPUT_CHECKPOINT_ARCHIVE = "input-checkpoint.tar"
+# The manual trigger payload or webhook body that started the Job (hooks).
+TRIGGER_PAYLOAD_FILENAME = "trigger-payload.json"
+# Where each staged input file sits in the Job workspace; `upload-<kind>` writes it there.
+STAGED_INPUT_PATHS = {
+    "source": "source.archive",
+    "sif": "runtime.sif",
+    "weights": "inputs/weights",
+    "checkpoint": RESUME_CHECKPOINT_ARCHIVE,
+    "input-checkpoint": INPUT_CHECKPOINT_ARCHIVE,
+}
 # Containers get each dataset as its own read-only bind. It is not nested below the read-only
 # /mmt/inputs bind, whose host directory could not hold the mount points.
 INPUT_DATASETS_PATH = "/mmt/datasets"
@@ -43,6 +59,18 @@ class ContainerMount:
     host_path: Path
     container_path: str
     readonly: bool
+
+
+def host_runtime(specification: dict[str, Any]) -> dict[str, Any]:
+    """The runtime this host executes: the registered one, or the SIF a site converted it to.
+
+    The executionSnapshot keeps the registered runtime either way, so the Run records what was
+    registered while the host runs its local equivalent (a Docker image pulled into a SIF).
+    """
+    converted = specification.get("hostRuntime")
+    if converted is not None:
+        return dict(converted)
+    return dict(specification["codeVersion"].get("runtime") or {"kind": "python"})
 
 
 def host_environment() -> dict[str, str]:
@@ -113,6 +141,31 @@ def resume_checkpoint_environment(
     }
 
 
+def input_checkpoint_directory(context: dict[str, Any]) -> str:
+    """Directory under inputs that holds the input checkpoint (see INPUT_CHECKPOINT_FALLBACK_DIRECTORY)."""
+    if context.get("resumeCheckpoint") is not None:
+        return INPUT_CHECKPOINT_FALLBACK_DIRECTORY
+    return RESUME_CHECKPOINT_DIRECTORY
+
+
+def input_checkpoint_environment(
+    context: dict[str, Any], *, inputs_directory: str, document_file: str
+) -> dict[str, str]:
+    # A Job without an input checkpoint gets no variables, so code can test for their presence.
+    if context.get("inputCheckpoint") is None:
+        return {}
+    return {
+        "MMT_INPUT_CHECKPOINT_DIR": f"{inputs_directory}/{input_checkpoint_directory(context)}",
+        "MMT_INPUT_CHECKPOINT_FILE": document_file,
+    }
+
+
+def trigger_payload_environment(context: dict[str, Any], *, document_file: str) -> dict[str, str]:
+    if context.get("triggerPayload") is None:
+        return {}
+    return {"MMT_TRIGGER_PAYLOAD_FILE": document_file}
+
+
 def staged_dataset_paths(workspace: Path, specification: dict[str, Any]) -> dict[str, Path] | None:
     """Target paths of the staged input datasets, checked again right before launch.
 
@@ -155,19 +208,53 @@ def link_input_datasets(workspace: Path, paths: dict[str, Path]) -> dict[str, st
 
 def install_resume_checkpoint(workspace: Path, specification: dict[str, Any]) -> None:
     """Extract the staged checkpoint tar, verifying it again on the target, as read-only files."""
-    document = specification["context"].get("resumeCheckpoint")
+    _install_checkpoint(
+        workspace,
+        specification,
+        document_key="resumeCheckpoint",
+        staged_key="checkpoint",
+        archive_name=RESUME_CHECKPOINT_ARCHIVE,
+        directory_name=RESUME_CHECKPOINT_DIRECTORY,
+        label="Resume checkpoint",
+    )
+
+
+def install_input_checkpoint(workspace: Path, specification: dict[str, Any]) -> None:
+    """Extract the staged input checkpoint the same way, beside a resume checkpoint if any."""
+    _install_checkpoint(
+        workspace,
+        specification,
+        document_key="inputCheckpoint",
+        staged_key="inputCheckpoint",
+        archive_name=INPUT_CHECKPOINT_ARCHIVE,
+        directory_name=input_checkpoint_directory(specification["context"]),
+        label="Input checkpoint",
+    )
+
+
+def _install_checkpoint(
+    workspace: Path,
+    specification: dict[str, Any],
+    *,
+    document_key: str,
+    staged_key: str,
+    archive_name: str,
+    directory_name: str,
+    label: str,
+) -> None:
+    document = specification["context"].get(document_key)
     if document is None:
         return
-    archive = workspace / RESUME_CHECKPOINT_ARCHIVE
-    expected = specification.get("stagedInputs", {}).get("checkpoint")
+    archive = workspace / archive_name
+    expected = specification.get("stagedInputs", {}).get(staged_key)
     if expected is None or not archive.exists():
-        raise ValueError("Resume checkpoint was not staged")
+        raise ValueError(f"{label} was not staged")
     verify_staged_file(archive, expected)
     inputs = workspace / "inputs"
     if inputs.is_symlink():
         raise ValueError("Container mount directory must not be a symlink")
     inputs.mkdir(mode=0o700, exist_ok=True)
-    extract_checkpoint_archive(archive, inputs / RESUME_CHECKPOINT_DIRECTORY, document["files"])
+    extract_checkpoint_archive(archive, inputs / directory_name, document["files"])
     archive.unlink()
 
 
@@ -195,6 +282,10 @@ def prepare_container_layout(workspace: Path, specification: dict[str, Any]) -> 
         context_files[UPSTREAM_RUN_FILENAME] = context["upstreamRun"]
     if context.get("resumeCheckpoint") is not None:
         context_files[RESUME_CHECKPOINT_FILENAME] = context["resumeCheckpoint"]
+    if context.get("inputCheckpoint") is not None:
+        context_files[INPUT_CHECKPOINT_FILENAME] = context["inputCheckpoint"]
+    if context.get("triggerPayload") is not None:
+        context_files[TRIGGER_PAYLOAD_FILENAME] = context["triggerPayload"]
     for name, document in context_files.items():
         write_json(workspace / "context" / name, document)
     if specification["codeVersion"]["source"] is not None:
@@ -236,7 +327,7 @@ def verify_container_inputs(workspace: Path, specification: dict[str, Any]) -> N
             stage_local_weights(workspace, model_version)
         verify_staged_file(weights, expected)
         weights.chmod(0o400)
-    runtime = specification["codeVersion"].get("runtime", {"kind": "python"})
+    runtime = host_runtime(specification)
     if runtime["kind"] in {"singularity", "apptainer"}:
         verify_staged_file(workspace / "runtime.sif", {"sha256": runtime["sha256"]})
         (workspace / "runtime.sif").chmod(0o400)
@@ -289,9 +380,17 @@ def container_environment(specification: dict[str, Any]) -> dict[str, str]:
             document_file=f"{CONTEXT_PATH}/{RESUME_CHECKPOINT_FILENAME}",
         )
     )
+    environment.update(
+        input_checkpoint_environment(
+            context, inputs_directory=INPUTS_PATH, document_file=f"{CONTEXT_PATH}/{INPUT_CHECKPOINT_FILENAME}"
+        )
+    )
+    environment.update(
+        trigger_payload_environment(context, document_file=f"{CONTEXT_PATH}/{TRIGGER_PAYLOAD_FILENAME}")
+    )
     # A Docker-selected GPU UUID/index is remapped to a container-local CUDA ordinal.
     gpu_ids = specification["gpuIds"]
-    runtime_kind = specification["codeVersion"].get("runtime", {}).get("kind")
+    runtime_kind = host_runtime(specification).get("kind")
     environment["CUDA_VISIBLE_DEVICES"] = (
         ",".join(str(index) for index in range(len(gpu_ids)))
         if runtime_kind == "docker"

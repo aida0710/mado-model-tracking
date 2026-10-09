@@ -13,10 +13,9 @@ from typing import Any, TypeVar
 from ..errors import ConfigurationError, TransportError
 from ..security import SecretMasker, secret_values
 from .config import WorkerSettings
-from .container_layout import resume_checkpoint_document, upstream_run_document
 from .contracts import WorkerJob
+from .execution_specification import build_execution_specification
 from .output_archive import ARCHIVE_REJECTED_EXIT_CODE, OUTPUT_ARCHIVE_COMMAND
-from .tracking_environment import build_tracking_environment
 from .transport import CONTROL_TIMEOUT_SECONDS, CommandTransport, create_target_transport
 
 StreamResult = TypeVar("StreamResult")
@@ -126,35 +125,15 @@ def build_runtime_bundle() -> bytes:
 
 
 def execution_specification(job: WorkerJob, settings: WorkerSettings) -> dict[str, Any]:
-    snapshot = job.execution_snapshot
-    return {
-        "jobId": job.id,
-        "leaseId": job.lease_id,
-        "codeVersion": {**job.code_version, "runtime": snapshot["runtime"]},
-        "executionSnapshot": snapshot,
-        "runExecution": {
-            name: job.run[name] for name in ("executionMode", "executionSnapshot") if name in job.run
-        },
-        "gpuIds": job.job["gpuIds"],
-        "context": {
-            "jobId": job.id,
-            "runId": job.run["id"],
-            "projectId": job.job["projectId"],
-            "kind": job.run["kind"],
-            "parameters": job.run["parameters"],
-            "modelVersion": job.model_version,
-            "inputDatasets": job.input_datasets,
-            "codeVersionId": job.code_version["id"],
-            "gpuIds": job.job["gpuIds"],
-            "executionMode": snapshot["mode"],
-            "upstreamRun": upstream_run_document(job.run, job.model_version),
-            "resumeCheckpoint": resume_checkpoint_document(job.resume_checkpoint),
-        },
-        "sdkEnvironment": build_tracking_environment(job, settings.api),
-        "installDependencies": settings.install_dependencies,
-        "cancelGraceSeconds": settings.cancel_grace_seconds,
-        "maxOutputFiles": settings.max_output_files,
-    }
+    """The worker's spec.json: the Job runs on the GPUs the API reserved for it."""
+    return build_execution_specification(
+        job,
+        api=settings.api,
+        gpu_ids=job.job["gpuIds"],
+        install_dependencies=settings.install_dependencies,
+        cancel_grace_seconds=settings.cancel_grace_seconds,
+        max_output_files=settings.max_output_files,
+    )
 
 
 class JobExecutor:

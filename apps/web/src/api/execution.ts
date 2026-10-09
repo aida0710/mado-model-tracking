@@ -7,7 +7,7 @@ import type {
   RunCheckpointPage,
   WorkerPresence,
 } from '@mmt/contracts';
-import type { CreateTarget } from './inputs';
+import type { CreateJob, CreateTarget } from './inputs';
 import {
   encodeId,
   invalidResponseError,
@@ -48,10 +48,8 @@ export const executionApi = {
   updateTarget: (id: string, body: Partial<CreateTarget>) =>
     request<ComputeTarget>(`/targets/${encodeId(id)}`, jsonRequest('PATCH', body)),
   jobs: (projectId: string, signal?: AbortSignal) => requestItems<JobListItem>(jobPath(projectId), signal),
-  createJob: (
-    projectId: string,
-    body: { runId: string; targetId: string; gpuIds: string[]; maxAttempts: number },
-  ) => request<Job>(jobPath(projectId), jsonRequest('POST', body)),
+  createJob: (projectId: string, body: CreateJob) =>
+    request<Job>(jobPath(projectId), jsonRequest('POST', body)),
   cancelJob: (projectId: string, id: string) =>
     request<unknown>(`${jobPath(projectId, id)}/cancel`, { method: 'POST' }),
   /** An empty request starts the new Run from scratch; see JobRetryRequest for a checkpoint. */

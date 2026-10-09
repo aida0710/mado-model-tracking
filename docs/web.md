@@ -34,7 +34,7 @@
 
 ## 権限判定
 
-画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canCreateProject`、`canChangeOwnPassword`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
+画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canManageHooks`、`canCreateProject`、`canChangeOwnPassword`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
 
 ## 画面の枠
 

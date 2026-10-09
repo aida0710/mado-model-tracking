@@ -20,7 +20,7 @@ from mado_tracking.artifact_uploads import (
     upload_file_sync,
 )
 from mado_tracking.run import Run
-from mado_tracking.worker import api as worker_api
+from mado_tracking.worker import artifact_transfer
 from mado_tracking.worker.api import WorkerApi
 from mado_tracking.worker.contracts import WorkerJob
 
@@ -302,7 +302,7 @@ def test_worker_uploads_large_run_artifacts_through_a_session(weights, job_paylo
     job_payload["job"]["runId"] = job_payload["run"]["id"] = RUN_ID
     job = WorkerJob.parse(job_payload)
     api = FakeUploadApi()
-    monkeypatch.setattr(worker_api, "SESSION_UPLOAD_THRESHOLD_BYTES", weights.stat().st_size)
+    monkeypatch.setattr(artifact_transfer, "SESSION_UPLOAD_THRESHOLD_BYTES", weights.stat().st_size)
     monkeypatch.setattr(artifact_uploads, "choose_part_size", lambda _size: PART_SIZE)
     content = weights.read_bytes()
     descriptor = {

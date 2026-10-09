@@ -193,6 +193,9 @@ export class TaskService {
         runId: run.id,
         targetId,
         gpuIds: input.gpuIds ?? task.gpuIds,
+        gpuCount: input.gpuCount ?? task.gpuCount,
+        walltimeSeconds:
+          input.walltimeSeconds === undefined ? task.walltimeSeconds : input.walltimeSeconds,
         maxAttempts: TASK_JOB_MAX_ATTEMPTS,
       },
       attempt: 1,
@@ -285,6 +288,7 @@ export class TaskService {
       await this.jobs.validateTarget(connection, {
         targetId: input.targetId,
         gpuIds: input.gpuIds,
+        gpuCount: input.gpuCount,
         runtime: code.runtime,
       });
   }

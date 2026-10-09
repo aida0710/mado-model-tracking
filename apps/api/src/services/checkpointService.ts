@@ -1,4 +1,4 @@
-import type { Artifact, RunCheckpoint, RunCheckpointManifest } from '@mmt/contracts';
+import type { Artifact, Run, RunCheckpoint, RunCheckpointManifest } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, transaction, type Connection, type Database } from '../db/database.js';
 import {
@@ -21,14 +21,30 @@ import {
 } from '../repositories/checkpointRepository.js';
 import { findRun } from '../repositories/registryRepository.js';
 import { requireProject } from './accessService.js';
+import { notifyListener } from './eventListeners.js';
 import { assertRunRecordsWritable } from './runService.js';
 
 type RunReference = { projectId: string; runId: string };
+
+/**
+ * Told about a checkpoint saved through POST /runs/:r/checkpoints (hooks with trigger
+ * checkpoint_saved). MLflow checkpoints are not announced: their files arrive one by one and
+ * nothing tells when the last one has arrived.
+ */
+export interface CheckpointListener {
+  readonly name: string;
+  onCheckpointSaved(
+    connection: Connection,
+    saved: { checkpoint: RunCheckpoint; run: Run },
+  ): Promise<void>;
+}
 
 export class CheckpointService {
   constructor(
     private readonly database: Database,
     private readonly retention: { keepCount: number },
+    // Kept by reference: app.ts adds the hooks once they are built.
+    private readonly listeners: readonly CheckpointListener[] = [],
   ) {}
 
   async list(
@@ -88,7 +104,14 @@ export class CheckpointService {
         runId: run.id,
         keepCount: this.retention.keepCount,
       });
-      return findCheckpoint(connection, { projectId: reference.projectId, id });
+      const checkpoint = await findCheckpoint(connection, { projectId: reference.projectId, id });
+      for (const listener of this.listeners)
+        await notifyListener(connection, {
+          listener: listener.name,
+          subjectId: checkpoint.id,
+          notify: () => listener.onCheckpointSaved(connection, { checkpoint, run }),
+        });
+      return checkpoint;
     });
   }
 

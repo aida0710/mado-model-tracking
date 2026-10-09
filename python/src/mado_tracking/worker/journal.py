@@ -19,6 +19,8 @@ LOGGER = logging.getLogger(__name__)
 # Input dataset staging (dataset_staging.py): a request, a relayed archive, or one downloaded file
 # for the input at this index.
 DATASET_TRANSFER_KIND = re.compile(r"^dataset-(?:request|archive|file)-\d+$")
+# Temporary files of one Job: inputs before they are relayed, and outputs before they are saved.
+TRANSFER_KINDS = {"source", "weights", "sif", "output", "snapshot", "checkpoint", "input-checkpoint"}
 
 
 def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
@@ -31,6 +33,8 @@ def snapshot_payload(job: WorkerJob) -> dict[str, Any]:
         "inputDatasets": job.input_datasets,
         # The state directory is private (0700/0600); the token is stored nowhere else.
         "jobToken": job.job_token,
+        "inputCheckpoint": job.input_checkpoint,
+        "triggerPayload": job.trigger_payload,
     }
 
 
@@ -123,9 +127,7 @@ class JobJournal:
         return self.transfer_path(job_id, "source")
 
     def transfer_path(self, job_id: str, kind: str) -> Path:
-        if kind not in {"source", "weights", "sif", "output", "snapshot", "checkpoint"} and not (
-            DATASET_TRANSFER_KIND.fullmatch(kind)
-        ):
+        if kind not in TRANSFER_KINDS and not DATASET_TRANSFER_KIND.fullmatch(kind):
             raise ValueError("Unknown transfer kind")
         path = self.directory / f"{job_id}.{kind}"
         descriptor = os.open(path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)

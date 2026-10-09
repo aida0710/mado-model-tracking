@@ -139,6 +139,13 @@ const environmentSchema = z.object({
     .default(DEFAULT_UPLOAD_FINALIZE_WAIT_MS),
   // base64 of 32 bytes. Without it, storage backends that need a secret cannot be created.
   MMT_STORAGE_SECRET_KEY: optionalSetting,
+  // base64 of 32 bytes. Without it, webhook hooks cannot be created (their secrets are encrypted).
+  MMT_HOOK_SECRET_KEY: optionalSetting,
+  // enforce: a site Job's docker image must be built for the site's CPU (registry manifest).
+  MMT_IMAGE_PLATFORM_CHECK: z.enum(['off', 'enforce']).default('off'),
+  // Read access to private images for that check; both or neither.
+  MMT_REGISTRY_USERNAME: optionalSetting,
+  MMT_REGISTRY_PASSWORD: optionalSetting,
   MMT_TOKEN_MAX_LIFETIME_DAYS: z.coerce
     .number()
     .int()
@@ -203,6 +210,11 @@ export interface ApiConfig {
   uploadFinalizeWaitMs: number;
   // Encrypts storage backend secrets in the DB; null when MMT_STORAGE_SECRET_KEY is unset.
   storageSecretKey: SecretKey | null;
+  // Encrypts webhook hook secrets; null when MMT_HOOK_SECRET_KEY is unset.
+  hookSecretKey: SecretKey | null;
+  // Whether a site Job's image is checked against the site's CPU before it is queued.
+  imagePlatformCheck: 'off' | 'enforce';
+  registryCredentials: { username: string; password: string } | null;
   // Upper limit and default for the lifetime of a new API token.
   tokenMaxLifetimeDays: number;
   // Checkpoints per Run shown by default; older ones get retained=false (their files are kept).
@@ -253,6 +265,16 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
       throw new Error('MMT_STORAGE_SECRET_KEY must be base64 of 32 bytes');
     }
   }
+  let hookSecretKey: SecretKey | null = null;
+  if (settings.MMT_HOOK_SECRET_KEY) {
+    try {
+      hookSecretKey = parseSecretKey(settings.MMT_HOOK_SECRET_KEY);
+    } catch {
+      throw new Error('MMT_HOOK_SECRET_KEY must be base64 of 32 bytes');
+    }
+  }
+  if (!settings.MMT_REGISTRY_USERNAME !== !settings.MMT_REGISTRY_PASSWORD)
+    throw new Error('MMT_REGISTRY_USERNAME and MMT_REGISTRY_PASSWORD must be set together');
   let oidc: ApiConfig['oidc'] = null;
   // local mode ignores OIDC_* so a leftover SSO setting cannot open a second login path.
   if (settings.AUTH_MODE === 'oidc' || settings.AUTH_MODE === 'hybrid') {
@@ -342,6 +364,12 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): ApiCon
     },
     uploadFinalizeWaitMs: settings.MMT_UPLOAD_FINALIZE_WAIT_MS,
     storageSecretKey,
+    hookSecretKey,
+    imagePlatformCheck: settings.MMT_IMAGE_PLATFORM_CHECK,
+    registryCredentials:
+      settings.MMT_REGISTRY_USERNAME && settings.MMT_REGISTRY_PASSWORD
+        ? { username: settings.MMT_REGISTRY_USERNAME, password: settings.MMT_REGISTRY_PASSWORD }
+        : null,
     tokenMaxLifetimeDays: settings.MMT_TOKEN_MAX_LIFETIME_DAYS,
     checkpointKeepCount: settings.MMT_CHECKPOINT_KEEP_COUNT,
     csvExportMaxRows: settings.MMT_CSV_EXPORT_MAX_ROWS,

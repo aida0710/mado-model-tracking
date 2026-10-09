@@ -183,6 +183,11 @@ export function createBrowserApi() {
     // The API defaults of migration 047.
     datasetCacheMaxBytes: 107374182400,
     datasetTransfer: 'relay',
+    // The API defaults of migration 051 (sites).
+    submissionMode: 'automatic',
+    cpuArch: 'amd64',
+    supportsArray: false,
+    queueTimeoutSeconds: null,
   };
   const plugin = {
     id: id(),
@@ -565,6 +570,24 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         const job = {
           id: id(),
           projectId: project.id,
+          // The Job fields of sites, arrays, hooks and drivers that an ssh Job leaves at their defaults.
+          phase: null,
+          gpuCount: body.gpuIds?.length ?? 0,
+          walltimeSeconds: null,
+          schedulerJobId: null,
+          submittedAt: null,
+          runnerHost: null,
+          arrayGroupId: null,
+          arrayIndex: null,
+          arraySize: null,
+          endReason: null,
+          parentJobId: null,
+          chainDepth: 0,
+          hookId: null,
+          allowChildJobs: false,
+          retryOnFailure: false,
+          retryOnTimeout: false,
+          datasetPartitionVersionId: null,
           ...body,
           status: 'queued',
           cancelRequested: false,

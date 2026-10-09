@@ -180,6 +180,90 @@ export type {
 export { ANALYSIS_MAX_METRICS, ANALYSIS_MAX_PARAMS, ANALYSIS_MAX_RUNS } from './runAnalysis.js';
 export type { ComparedDatasetVersion, ComparedModelVersion, RunComparison, RunComparisonNamespace, RunComparisonRequest, RunComparisonRow, RunComparisonValue } from './runComparison.js';
 export { RUN_COMPARISON_MAX_METRIC_KEYS, RUN_COMPARISON_MAX_RUNS, RUN_COMPARISON_MIN_RUNS, RUN_EXPORT_TRUNCATED_HEADER } from './runComparison.js';
+export type {
+  CpuArch,
+  JobArrayCreate,
+  JobArrayCreated,
+  JobArrayGroup,
+  JobEndReason,
+  JobPhase,
+  ManualSubmissionClaim,
+  ManualSubmissionReport,
+  ManualSubmissionWaiting,
+  RunnerFinish,
+  RunnerFinishResult,
+  RunnerHeartbeat,
+  RunnerLogs,
+  RunnerMetrics,
+  RunnerOutputs,
+  RunnerPhase,
+  RunnerStart,
+  RunnerState,
+  SiteSchedulerCancellation,
+  SiteSchedulerCancellationReport,
+  SiteSubmission,
+  SiteSubmissionClaim,
+  SiteSubmissionMode,
+  SiteSubmissionReport,
+  SiteSubmissionRequester,
+  SiteSubmissionResult,
+} from './siteExecution.js';
+export {
+  CPU_ARCHES,
+  JOB_END_REASONS,
+  JOB_PHASES,
+  MAX_JOB_ARRAY_SIZE,
+  MAX_JOB_GPU_COUNT,
+  MAX_JOB_WALLTIME_SECONDS,
+  SITE_CLAIM_MAX_SUBMISSIONS,
+  MAX_QUEUE_TIMEOUT_SECONDS,
+  MIN_QUEUE_TIMEOUT_SECONDS,
+  SITE_SUBMISSION_MODES,
+  SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS,
+} from './siteExecution.js';
+export type {
+  ChildJobCreate,
+  ChildJobCreated,
+  ChildJobWait,
+  Hook,
+  HookCheckpointMode,
+  HookConcurrency,
+  HookCreate,
+  HookCreated,
+  HookExecution,
+  HookExecutionPage,
+  HookExecutionStatus,
+  HookExecutionSubject,
+  HookFilter,
+  HookJobTemplate,
+  HookJobTemplateInput,
+  HookSkipReason,
+  HookToggle,
+  HookTrigger,
+  HookTriggerRequest,
+  HookWebhookSignature,
+  JobStatusCounts,
+} from './hooks.js';
+export {
+  CHILD_JOB_WAIT_MAX_SECONDS,
+  DEFAULT_HOOK_MAX_STARTS_PER_HOUR,
+  HOOK_CHECKPOINT_MODES,
+  HOOK_CONCURRENCY_MODES,
+  HOOK_FILTER_FIELDS,
+  HOOK_PAYLOAD_MAX_BYTES,
+  HOOK_PENDING_MAX_AGE_HOURS,
+  HOOK_SKIP_REASONS,
+  HOOK_TRIGGERS,
+  HOOK_WEBHOOK_SIGNATURES,
+  HOOK_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS,
+  MAX_ACTIVE_CHILD_JOBS,
+  MAX_CHILD_JOBS_PER_PARENT,
+  MAX_HOOK_CHECKPOINT_EVERY,
+  MAX_HOOK_MAX_STARTS_PER_HOUR,
+  MAX_JOB_CHAIN_DEPTH,
+  hookWebhookPath,
+} from './hooks.js';
+import type { CpuArch, JobEndReason, JobPhase, SiteSubmissionMode } from './siteExecution.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
@@ -390,6 +474,12 @@ export interface Artifact {
   /** Set once the Artifact is deleted; deleted Artifacts are not listed and their content is 404. */
   deletedAt?: string | null;
 }
+/**
+ * ssh and local targets are driven by the worker over SSH. A site is only described here: its
+ * launcher (or `mado-tracking submit`) and job shell hold the connection and scheduler settings,
+ * so a site's host, username, key paths, work directory and Python are empty strings.
+ */
+export type ComputeTargetExecutor = 'ssh' | 'local' | 'site';
 export interface ComputeTarget {
   id: string;
   name: string;
@@ -404,10 +494,18 @@ export interface ComputeTarget {
   gpuIds: string[];
   maxConcurrentJobs: number;
   enabled: boolean;
-  executor: 'ssh' | 'local';
+  executor: ComputeTargetExecutor;
   /** Upper bound of the target's dataset cache (<workDirectory>/.mmt-cache/datasets). */
   datasetCacheMaxBytes: number;
   datasetTransfer: DatasetTransferMode;
+  /** Sites: 'manual' when the requester submits with `mado-tracking submit` (logins with OTP). */
+  submissionMode: SiteSubmissionMode;
+  /** CPU of the compute nodes; images and SIFs must be built for it. */
+  cpuArch: CpuArch;
+  /** Sites: the job shell submits an array in one call (MMT_ARRAY_SIZE). */
+  supportsArray: boolean;
+  /** Sites: a Job still in the scheduler queue after this many seconds fails as queue_timeout. */
+  queueTimeoutSeconds: number | null;
 }
 export interface Job {
   id: string;
@@ -428,7 +526,29 @@ export interface Job {
   exitCode: number | null;
   error: string | null;
   // Derived: claimed/running with no heartbeat for 60 seconds. Display only; status is unchanged.
+  // Site Jobs that wait for submission or in a scheduler queue send no heartbeat and are not stale.
   heartbeatStale: boolean;
+  /** Site Jobs only: where the Job is between queued and its end. */
+  phase: JobPhase | null;
+  /** GPUs requested; for ssh/local Jobs the number of gpuIds. */
+  gpuCount: number;
+  walltimeSeconds: number | null;
+  schedulerJobId: string | null;
+  submittedAt: string | null;
+  runnerHost: string | null;
+  arrayGroupId: string | null;
+  arrayIndex: number | null;
+  arraySize: number | null;
+  endReason: JobEndReason | null;
+  /** The driver Job that created this one with its Job token. */
+  parentJobId: string | null;
+  /** Links from the first manual start through hooks and drivers to this Job. */
+  chainDepth: number;
+  hookId: string | null;
+  allowChildJobs: boolean;
+  retryOnFailure: boolean;
+  retryOnTimeout: boolean;
+  datasetPartitionVersionId: string | null;
 }
 /**
  * A row of GET /projects/:p/jobs: the Job with the names of its Run and Task, so the list reads
@@ -469,6 +589,10 @@ export interface WorkerJob {
   jobToken: string | null;
   // Set when the Run continues from a checkpoint; the worker verifies it before the entrypoint.
   resumeCheckpoint?: WorkerResumeCheckpoint | null;
+  // A checkpoint handed to the code as an input (checkpoint_saved hooks); not a resume.
+  inputCheckpoint?: WorkerResumeCheckpoint | null;
+  // The webhook body or manual trigger payload of the hook start; trigger-payload.json in the Job.
+  triggerPayload?: JsonObject | null;
 }
 export interface TokenSummary {
   id: string;

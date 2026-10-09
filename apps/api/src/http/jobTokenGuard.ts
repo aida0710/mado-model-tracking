@@ -45,6 +45,7 @@ function sameId(value: unknown, expected: string): boolean {
 // Allowed for any request inside the token's Project (no Run to compare).
 export const allowWithinProject = () => true;
 const ownRunInPath = (request: JobTokenRequest) => sameId(request.params.r, request.job.runId);
+const ownJobInPath = (request: JobTokenRequest) => sameId(request.params.j, request.job.jobId);
 const ownRunInBody = (field: string) => async (request: JobTokenRequest) =>
   sameId((await request.body())?.[field], request.job.runId);
 // MLflow accepts run_uuid as an alias; the tracking validation rejects a mismatched pair.
@@ -118,8 +119,18 @@ const MLFLOW_RUN_WRITES = [
   'log-model',
 ];
 
+// The runner of a site Job reports for its own Job (RunnerService checks the instance ID).
+const RUNNER_REPORTS = ['start', 'heartbeat', 'logs', 'metrics', 'outputs', 'finish'];
+
 export const JOB_TOKEN_WRITE_RULES: readonly JobTokenRule[] = [
   { methods: ['PATCH'], route: `${NATIVE}/runs/:r`, allows: ownRunInPath },
+  ...RUNNER_REPORTS.map((report) => ({
+    methods: ['POST'],
+    route: `${NATIVE}/jobs/:j/runner/${report}`,
+    allows: ownJobInPath,
+  })),
+  // A driver creates child Jobs under its own Job (ChildJobService checks allowChildJobs).
+  { methods: ['POST'], route: `${NATIVE}/jobs/:j/children`, allows: ownJobInPath },
   { methods: ['POST'], route: `${NATIVE}/runs/:r/metrics`, allows: ownRunInPath },
   { methods: ['POST'], route: `${NATIVE}/runs/:r/logs`, allows: ownRunInPath },
   { methods: ['PUT'], route: `${NATIVE}/runs/:r/artifacts`, allows: ownRunInPath },

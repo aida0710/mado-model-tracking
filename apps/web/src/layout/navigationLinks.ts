@@ -15,6 +15,7 @@ const PROJECT_SCREENS = [
   'artifacts',
   'lineage',
   'jobs',
+  'hooks',
   'compute',
   'plugins',
   'settings',

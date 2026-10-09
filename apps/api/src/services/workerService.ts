@@ -36,6 +36,8 @@ import { runColumns } from '../repositories/runListProjection.js';
 
 // A busy target should not block claims for other targets in the same queue.
 const CLAIM_CANDIDATE_LIMIT = 100;
+// Site Jobs (executor 'site', a phase once claimed) belong to launchers and runners
+// (SiteSubmissionService, RunnerService); a worker neither claims nor reports for them.
 
 export class WorkerService {
   private readonly database: Database;
@@ -67,7 +69,8 @@ export class WorkerService {
       const activeJobs = await rows<Job>(
         connection,
         `SELECT ${jobColumns()} FROM jobs WHERE project_id=$1 AND worker_token_id=$2 AND worker_id=$3
-        AND status IN ('claimed','running') AND ($4::uuid[] IS NULL OR target_id=ANY($4::uuid[])) ORDER BY created_at`,
+        AND status IN ('claimed','running') AND phase IS NULL
+        AND ($4::uuid[] IS NULL OR target_id=ANY($4::uuid[])) ORDER BY created_at`,
         [worker.projectId, worker.tokenId, request.workerId, request.targetIds ?? null],
       );
       const resumed: WorkerJob[] = [];
@@ -107,7 +110,8 @@ export class WorkerService {
       const active = await first<Job>(
         connection,
         `SELECT ${jobColumns()} FROM jobs WHERE project_id=$1 AND worker_token_id=$2 AND worker_id=$3
-        AND status IN ('claimed','running') AND NOT(id=ANY($4::uuid[])) ORDER BY created_at LIMIT 1 FOR UPDATE`,
+        AND status IN ('claimed','running') AND phase IS NULL AND NOT(id=ANY($4::uuid[]))
+        ORDER BY created_at LIMIT 1 FOR UPDATE`,
         [worker.projectId, worker.tokenId, request.workerId, activeJobIds],
       );
       if (active) {
@@ -124,7 +128,8 @@ export class WorkerService {
           `SELECT ${jobColumns('j')} FROM jobs j JOIN compute_targets t ON t.id=j.target_id
           JOIN runs r ON r.id=j.run_id AND r.project_id=j.project_id
           JOIN code_versions c ON c.id=r.code_version_id AND c.project_id=r.project_id
-          WHERE j.project_id=$1 AND j.status='queued' AND t.enabled AND ($2::uuid[] IS NULL OR j.target_id=ANY($2::uuid[]))
+          WHERE j.project_id=$1 AND j.status='queued' AND t.enabled AND t.executor<>'site'
+          AND ($2::uuid[] IS NULL OR j.target_id=ANY($2::uuid[]))
           AND c.runtime->>'kind'=ANY(t.runtime_kinds)
           AND ($4 OR t.executor<>'local') AND NOT(j.id=ANY($3::uuid[]))
           AND (SELECT count(*) FROM jobs active WHERE active.target_id=t.id AND active.status IN ('claimed','running')) < t.max_concurrent_jobs
@@ -305,7 +310,8 @@ export class WorkerService {
     const worker = await requireWorker(connection, principal);
     const job = await first<Job>(
       connection,
-      `SELECT ${jobColumns()} FROM jobs WHERE id=$1 AND project_id=$2 AND worker_token_id=$3 AND lease_id=$4 FOR UPDATE`,
+      `SELECT ${jobColumns()} FROM jobs WHERE id=$1 AND project_id=$2 AND worker_token_id=$3 AND lease_id=$4
+      AND phase IS NULL FOR UPDATE`,
       [lease.jobId, worker.projectId, worker.tokenId, lease.leaseId],
     );
     if (!job) throw new DomainError(409, 'Jobのleaseが無効です', 'invalid_lease');

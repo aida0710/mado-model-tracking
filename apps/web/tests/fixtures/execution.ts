@@ -1,4 +1,4 @@
-import type { Artifact, CodeVersion, ComputeTarget } from '@mmt/contracts';
+import type { Artifact, CodeVersion, ComputeTarget, Job } from '@mmt/contracts';
 import type { ExecutionCatalog } from '../../src/types/executionCatalog';
 
 const createdAt = '2026-10-08T00:00:00Z';
@@ -33,6 +33,68 @@ export const computeTarget: ComputeTarget = {
   executor: 'ssh',
   datasetCacheMaxBytes: 107374182400,
   datasetTransfer: 'relay',
+  submissionMode: 'automatic',
+  cpuArch: 'amd64',
+  supportsArray: false,
+  queueTimeoutSeconds: null,
+};
+// A site as the API stores it: connection settings empty, containers only.
+export const siteTarget: ComputeTarget = {
+  ...computeTarget,
+  id: 'site',
+  name: 'Supercomputer',
+  host: '',
+  username: '',
+  sshKeyPath: '',
+  knownHostsPath: '',
+  workDirectory: '',
+  pythonExecutable: '',
+  runtimeKinds: ['docker', 'apptainer'],
+  gpuIds: [],
+  executor: 'site',
+  datasetTransfer: 'direct',
+  submissionMode: 'manual',
+  cpuArch: 'arm64',
+  supportsArray: true,
+  queueTimeoutSeconds: 3600,
+};
+// An ssh Job without site fields; site tests override phase, array and scheduler fields.
+export const queuedJob: Job = {
+  id: 'job',
+  projectId: 'project',
+  runId: 'run',
+  targetId: 'target',
+  status: 'queued',
+  gpuIds: [],
+  workerId: null,
+  leaseId: null,
+  cancelRequested: false,
+  attempt: 1,
+  maxAttempts: 3,
+  createdAt,
+  startedAt: null,
+  endedAt: null,
+  heartbeatAt: null,
+  exitCode: null,
+  error: null,
+  heartbeatStale: false,
+  phase: null,
+  gpuCount: 0,
+  walltimeSeconds: null,
+  schedulerJobId: null,
+  submittedAt: null,
+  runnerHost: null,
+  arrayGroupId: null,
+  arrayIndex: null,
+  arraySize: null,
+  endReason: null,
+  parentJobId: null,
+  chainDepth: 0,
+  hookId: null,
+  allowChildJobs: false,
+  retryOnFailure: false,
+  retryOnTimeout: false,
+  datasetPartitionVersionId: null,
 };
 export const sifArtifact: Artifact = {
   id: 'artifact',

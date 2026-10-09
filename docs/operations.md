@@ -366,6 +366,17 @@ SSH targetだけを使うworkerは `docker compose --profile worker up -d worker
 - local executorのJobはcontainerと一緒に止まるため、composeでは使わない。
 - 確認は `docker compose --profile worker run --rm worker doctor`。
 
+## 外部の計算機（site）とフック
+
+siteの考え方と手順は[sites.md](sites.md)、フックは[hooks.md](hooks.md)。ここではサーバー側で用意するものをまとめる。
+
+- launcher: `docker compose --profile launcher up -d launcher`。設定（`launcher.toml`と各siteの`job.sh`）は`MMT_LAUNCHER_CONFIG_DIR`、ProjectごとのService Accountのtoken（`read`と`worker:execute`、mode 600）は`MMT_LAUNCHER_SECRETS_DIR`、鍵とknown_hostsは`MMT_LAUNCHER_SSH_DIR`にread-onlyでmountする。投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せない）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。
+- runner用の公開hostname: LANの外の計算ノードが報告するhostnameは、画面やSSOと分けて、Job tokenの要求と署名付きwebhookだけを通す（[deploy/edge](../deploy/edge/README.md)）。
+- Forgejo（ジョブのgit repoとcontainer registry）: `docker compose --profile forge up -d forgejo`。`SECRET_KEY`は先に作ったファイル（`MMT_FORGEJO_SECRET_KEY_FILE`）から読む。鍵が無いとForgejoは公開されている既定値を使うので、必ず作り、backupにも含める（[deploy/forgejo](../deploy/forgejo/README.md)）。公式のbase imageは[images/base](../images/base/README.md)。
+- `MMT_HOOK_SECRET_KEY`（base64の32 byte、`openssl rand -base64 32`）: webhookのフックのsecretを暗号化する。無いとwebhookのフックを作れない。鍵を替えると、それまでのwebhookのフックは503 `hook_secret_key_missing`になるので、作り直して送り手のsecretも替える。
+- `MMT_IMAGE_PLATFORM_CHECK=enforce`: dockerのimageがtargetの`cpuArch`向けかをregistryで確かめてからJobを保存する。registryに届かないと503で保存できないので、registryの止まる時間帯がある環境では`off`（既定）のままにする。非公開のimageには`MMT_REGISTRY_USERNAME`・`MMT_REGISTRY_PASSWORD`（読み取りだけの利用者）を置く。
+- API serverの中で、siteのJobの期限（待ち行列の上限、15分届かない投入の結果）を30秒ごと、フックの待ちの期限（7日）と終わったarrayを10分ごとに確かめる。複数のAPI processがあっても1つだけが動く。別に動かすprocessは無い。
+
 ## Run終端の後処理が失敗したとき
 
 Runが終端（finished/failed/canceled）になったときの後処理（出力モデルの登録、保留中の自動実行など。handlerは今後追加します）は、handlerごとにSAVEPOINTを張って実行します。handlerが例外を出すと、そのhandlerの変更だけを戻し、Run/Jobの終端とGPU予約の解放は確定し、後続のhandlerも実行します。

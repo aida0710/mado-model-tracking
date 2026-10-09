@@ -1,0 +1,40 @@
+# One [[sites]] entry of launcher.toml (../launcher.toml): a Slurm cluster used through one shared
+# account. Every value is an example. Paste it below the launcher's own settings; relative paths
+# start from the directory of launcher.toml.
+
+[[sites]]
+# ComputeTarget (executor "site") this entry submits for; copy the ID from the Compute screen.
+target_id = "00000000-0000-4000-8000-000000000002"
+# "shared": every Job runs as connection.user. "personal": each Job runs as the requester's own
+# account, found by email in [sites.accounts].
+account_mode = "shared"
+# The launcher copies the job shell into work_dir (.mmt-job-shells/<content hash>/job.sh) and
+# runs it on the login node for each submission.
+job_shell = "slurm/job.sh"
+# Shared directory that the login and compute nodes see at the same path. Spec directories, the
+# runner and caches go below it.
+work_dir = "/shared/mmt"
+# Python 3.11 or later that runs the runner on the compute nodes.
+runner_python = "/shared/mmt/python/bin/python3"
+# The tracking API as the compute nodes reach it. A cluster inside the LAN can use the tracking
+# hostname itself.
+runner_api_url = "https://tracking.example.internal"
+# Removes a Job canceled while it waits in the queue. MMT_SCHEDULER_JOB_ID is the ID job.sh
+# printed; for an array it is the array's ID, which removes every task.
+cancel_command = 'scancel "$MMT_SCHEDULER_JOB_ID"'
+# Submissions claimed for this site per poll (1 to 50; an array counts once).
+max_active_submissions = 50
+# MMT_VAR_<name> for every Job here: the shared account's Slurm account (--account).
+variables = { ACCOUNT = "lab-a" }
+# Optional: a read-only registry token for pulling images into SIFs, as JSON
+# {"username": ..., "password": ...} in a mode-600 file.
+# registry_secret_file = "/run/secrets/mado-tracking-launcher/forge-pull.json"
+
+[sites.connection]
+host = "slurm-login.example.internal"
+port = 22
+user = "mmt-launcher"
+# Mode 600, owned by the launcher's user.
+identity_file = "/home/launcher/.ssh/slurm_ed25519"
+known_hosts = "/home/launcher/.ssh/known_hosts"
+jump_hosts = []

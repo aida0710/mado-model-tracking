@@ -149,6 +149,57 @@
 .job-run-cell {
   min-width: 180px;
 }
+/* Several short facts in one Jobs cell: runner host and scheduler ID, or hook, parent and array. */
+.job-cell-lines {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.job-arrays {
+  margin-bottom: 20px;
+}
+.job-arrays > p {
+  margin: 0 0 8px;
+}
+/* Jobs waiting for `mado-tracking submit`: the sites and the command to run on their login node. */
+.manual-submission {
+  flex-direction: column;
+  align-items: stretch;
+  border-left-color: #c58a00;
+}
+.manual-submission p,
+.manual-submission ul {
+  margin: 0;
+}
+.manual-submission ul {
+  padding-left: 18px;
+}
+.manual-submission li + li {
+  margin-top: 6px;
+}
+/* Hooks: the one-time webhook secret and a hook's start form. */
+.dialog > .hook-webhook-values {
+  margin: 0 22px;
+}
+.hook-start {
+  margin-top: 20px;
+}
+/* A value to paste elsewhere (a command, a webhook secret) with its copy button. */
+.copyable-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.copyable-value code {
+  padding: 4px 8px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
 .lineage-legend {
   color: var(--muted);
   margin: 0 0 16px;
@@ -224,5 +275,8 @@
 @media (width < 640px) {
   .details-list > div {
     grid-template-columns: 112px minmax(0, 1fr);
+  }
+  .dialog > .hook-webhook-values {
+    margin: 0 16px;
   }
 }

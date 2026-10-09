@@ -3,6 +3,7 @@ import type { ProjectRole } from '@mmt/contracts';
 import {
   canChangeOwnPassword,
   canControlSweep,
+  canManageHooks,
   canCreateProject,
   canEditProject,
   canManageAutomationRules,
@@ -69,5 +70,15 @@ describe('Projectの権限判定', () => {
     ['admin', 'other', true],
   ] as const)('Sweepの操作は%s（%s）なら%sになる', (role, userId, expected) => {
     expect(canControlSweep(role, userId, { createdBy: 'creator' })).toBe(expected);
+  });
+});
+
+describe('フックの権限判定', () => {
+  it.each([
+    ['viewer', false],
+    ['editor', true],
+    ['admin', true],
+  ] as const)('%sのフックの作成・有効と無効の切り替え・手動の起動は%sになる', (role, expected) => {
+    expect(canManageHooks(role)).toBe(expected);
   });
 });

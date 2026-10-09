@@ -1,11 +1,32 @@
 import type { ComputeTarget } from '@mmt/contracts';
 import { ResponsiveTable } from './ResponsiveTable';
-import { formatTargetLocation } from '../lib/computeTargetDisplay';
+import { formatTargetGpus, formatTargetLocation } from '../lib/computeTargetDisplay';
 import { text } from '../i18n/catalog';
+import { computeTargetExecutorLabels, submissionModeBadgeLabels } from '../i18n/compute';
 import { runtimeLabels } from '../i18n/runtime';
 
 const toggleLabel = (target: ComputeTarget) =>
   target.enabled ? text.disableTarget : text.enableTarget;
+
+/** The executor with the CPU, and for a site how it is submitted and whether it takes arrays. */
+function TargetKind({ target }: { target: ComputeTarget }) {
+  return (
+    <span className="badge-group">
+      {computeTargetExecutorLabels[target.executor]}
+      <span className="status-badge status-queued">{target.cpuArch}</span>
+      {target.executor === 'site' && (
+        <span
+          className={`status-badge ${target.submissionMode === 'manual' ? 'status-attention' : 'status-queued'}`}
+        >
+          {submissionModeBadgeLabels[target.submissionMode]}
+        </span>
+      )}
+      {target.executor === 'site' && target.supportsArray && (
+        <span className="status-badge status-queued">{text.supportsArrayBadge}</span>
+      )}
+    </span>
+  );
+}
 
 /** Compute targets of the Compute page. Only global administrators get the editing controls. */
 export function ComputeTargetsTable({
@@ -42,7 +63,7 @@ export function ComputeTargetsTable({
           key: 'executor',
           priority: 'secondary',
           header: text.executor,
-          render: (target) => target.executor,
+          render: (target) => <TargetKind target={target} />,
         },
         {
           key: 'runtime',
@@ -55,7 +76,7 @@ export function ComputeTargetsTable({
           priority: 'secondary',
           header: text.gpuIds,
           className: 'mono',
-          render: (target) => target.gpuIds.join(', ') || text.cpuOnly,
+          render: (target) => formatTargetGpus(target),
         },
         {
           key: 'concurrent',
@@ -95,6 +116,7 @@ export function ComputeTargetsTable({
                     >
                       {text.editTarget}
                     </button>
+                    {/* The panel of a site explains that its launcher, not a worker, reaches it. */}
                     <button
                       className="button small"
                       data-testid={`target-check-${target.id}`}

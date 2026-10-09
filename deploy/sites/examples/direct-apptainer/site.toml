@@ -1,0 +1,41 @@
+# One [[sites]] entry of launcher.toml (../launcher.toml): a GPU host without a scheduler that
+# runs containers with Apptainer. Every value is an example. Paste it below the launcher's own
+# settings; relative paths start from the directory of launcher.toml.
+
+[[sites]]
+# ComputeTarget (executor "site", runtime apptainer) this entry submits for; copy the ID from the
+# Compute screen. Leave its supportsArray off, so array members come one by one (README.md).
+target_id = "00000000-0000-4000-8000-000000000006"
+# One shared account runs every Job here. Its users are not isolated from each other: job.sh and
+# the runner run outside the container as that account (../../README.md).
+account_mode = "shared"
+# The launcher copies the job shell into work_dir (.mmt-job-shells/<content hash>/job.sh) and
+# runs it on the host for each submission; it returns at once.
+job_shell = "direct-apptainer/job.sh"
+# Directory on the host for spec directories, the runner, the SIF cache and GPU leases.
+work_dir = "/data/mmt"
+# Python 3.11 or later that runs the runner on the host.
+runner_python = "/usr/bin/python3"
+# The tracking API as the host reaches it. A host inside the LAN can use the tracking hostname
+# itself.
+runner_api_url = "https://tracking.example.internal"
+# No scheduler: each runner leases free GPUs on the host under a host-wide lock. gpu_ids limits
+# the choice (empty: every GPU nvidia-smi lists).
+gpu_assignment = "lease"
+gpu_ids = []
+# No cancel_command: there is no queue. A canceled Job's runner sees the cancellation in its
+# heartbeat and stops the container.
+# Submissions claimed for this host per poll (1 to 50).
+max_active_submissions = 4
+# Optional: a read-only registry token for pulling images into SIFs, as JSON
+# {"username": ..., "password": ...} in a mode-600 file.
+# registry_secret_file = "/run/secrets/mado-tracking-launcher/forge-pull.json"
+
+[sites.connection]
+host = "gpu-host-2.example.internal"
+port = 22
+user = "mmt"
+# Mode 600, owned by the launcher's user.
+identity_file = "/home/launcher/.ssh/gpu_hosts_ed25519"
+known_hosts = "/home/launcher/.ssh/known_hosts"
+jump_hosts = []

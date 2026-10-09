@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { Job, Run, RunKind } from '@mmt/contracts';
+import { MAX_JOB_GPU_COUNT, type Job, type Run, type RunKind } from '@mmt/contracts';
 import { useProject } from '../hooks/useProject';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
 import { useQuery } from '../hooks/useQuery';
@@ -25,14 +25,28 @@ import {
   RUN_KINDS,
   MAX_JOB_ATTEMPTS,
   DEFAULT_JOB_ATTEMPTS,
-  parseMaxAttempts,
 } from '../lib/executionValidation';
-import {
-  isTargetCompatible,
-  validateTargetGpuIds,
-  validateTargetRuntime,
-} from '../lib/runtimeValidation';
+import { isTargetCompatible, validateTargetRuntime } from '../lib/runtimeValidation';
+import { buildJobRequest, isSiteTarget } from '../lib/siteExecutionInput';
+import { targetChoiceLabel } from '../lib/computeTargetDisplay';
+import { formatAutoRetries } from '../lib/jobDisplay';
 import { text } from '../i18n/catalog';
+import { jobsTextTemplates } from '../i18n/jobs';
+
+/** The resources the review step lists: GPU IDs, or a site's GPU count, time limit and retries. */
+function reviewResources(values: FormValues, isSite: boolean): Array<[string, ReactNode]> {
+  if (!isSite)
+    return [[text.gpuIds, getSelectedValues(values, 'gpuIds').join(', ') || text.cpuOnly]];
+  const retries = formatAutoRetries({
+    retryOnFailure: getFieldValue(values, 'retryOnFailure') === 'true',
+    retryOnTimeout: getFieldValue(values, 'retryOnTimeout') === 'true',
+  });
+  return [
+    [text.gpuCount, jobsTextTemplates.gpuCount(Number(getFieldValue(values, 'gpuCount') || 0))],
+    [text.walltimeShort, getFieldValue(values, 'walltime').trim() || text.walltimeUnset],
+    [text.jobAutoRetry, retries],
+  ];
+}
 
 export function LaunchDialog({
   existingRun,
@@ -61,7 +75,12 @@ export function LaunchDialog({
     environment: JSON.stringify(existingRun?.environment ?? {}, null, 2),
     targetId: '',
     gpuIds: [],
+    gpuCount: '0',
+    walltime: '',
     maxAttempts: String(DEFAULT_JOB_ATTEMPTS),
+    retryOnFailure: 'false',
+    retryOnTimeout: 'false',
+    allowChildJobs: 'false',
   });
   function changeValues(next: FormValues) {
     if (next.kind !== values.kind || next.modelVersionId !== values.modelVersionId)
@@ -97,6 +116,8 @@ export function LaunchDialog({
               const compatibleTargets = computeTargets.filter(
                 (item) => selectedCode && isTargetCompatible(item, selectedCode),
               );
+              // Sites take a GPU count, a time limit and automatic retries instead of GPU IDs.
+              const isSite = isSiteTarget(target);
               const setupFields: FormField[] = [
                 { name: 'name', label: text.runName, required: true },
                 {
@@ -149,7 +170,7 @@ export function LaunchDialog({
                   options: withEmptyOption(
                     compatibleTargets.map((item) => ({
                       value: item.id,
-                      label: `${item.name} · ${item.host}`,
+                      label: targetChoiceLabel(item),
                     })),
                   ),
                 },
@@ -158,6 +179,21 @@ export function LaunchDialog({
                   label: `${text.gpuIds} · ${text.cpuOnly}`,
                   type: 'multiselect',
                   options: (target?.gpuIds ?? []).map((id) => ({ value: id, label: id })),
+                  visible: () => !isSite,
+                },
+                {
+                  name: 'gpuCount',
+                  label: text.gpuCount,
+                  type: 'number',
+                  min: 0,
+                  max: MAX_JOB_GPU_COUNT,
+                  visible: () => isSite,
+                },
+                {
+                  name: 'walltime',
+                  label: text.walltime,
+                  placeholder: text.walltimePlaceholder,
+                  visible: () => isSite,
                 },
                 {
                   name: 'maxAttempts',
@@ -167,6 +203,19 @@ export function LaunchDialog({
                   max: MAX_JOB_ATTEMPTS,
                   required: true,
                 },
+                {
+                  name: 'retryOnFailure',
+                  label: text.jobRetryOnFailure,
+                  type: 'checkbox',
+                  visible: () => isSite,
+                },
+                {
+                  name: 'retryOnTimeout',
+                  label: text.jobRetryOnTimeout,
+                  type: 'checkbox',
+                  visible: () => isSite,
+                },
+                { name: 'allowChildJobs', label: text.jobAllowChildJobs, type: 'checkbox' },
               ];
               function validateSetup() {
                 const code = compatibleCodes.find(
@@ -190,8 +239,7 @@ export function LaunchDialog({
                       }
                       validateTargetRuntime(target, selectedCode);
                       if (!target) throw new Error(text.runtimeTargetError);
-                      validateTargetGpuIds(target, getSelectedValues(values, 'gpuIds'));
-                      const maxAttempts = parseMaxAttempts(getFieldValue(values, 'maxAttempts'));
+                      const job = buildJobRequest(target, values);
                       if (stage === 1) {
                         setStage(2);
                         return;
@@ -213,12 +261,10 @@ export function LaunchDialog({
                             tags: parseStringMap(getFieldValue(values, 'tags')),
                             environment: parseJsonObject(getFieldValue(values, 'environment')),
                           },
-                          targetId: target.id,
-                          gpuIds: getSelectedValues(values, 'gpuIds'),
-                          maxAttempts,
+                          job,
                         })
-                        .then((job) => {
-                          if (job) onSaved(job);
+                        .then((created) => {
+                          if (created) onSaved(created);
                         });
                     } catch (error) {
                       setValidationError((error as Error).message);
@@ -281,10 +327,7 @@ export function LaunchDialog({
                               .join(', '),
                           ],
                           [text.target, target?.name],
-                          [
-                            text.gpuIds,
-                            getSelectedValues(values, 'gpuIds').join(', ') || text.cpuOnly,
-                          ],
+                          ...reviewResources(values, isSite),
                           [text.maxAttempts, getFieldValue(values, 'maxAttempts')],
                         ]}
                       />

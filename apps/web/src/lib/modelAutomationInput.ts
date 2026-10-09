@@ -6,7 +6,8 @@ import type {
   AutomationTrigger,
 } from '../types/modelAutomation';
 import type { FormValues } from '../types/form';
-import { getFieldValue, getSelectedValues, parseJsonObject, parseStringMap } from './formValues';
+import { getFieldValue, getSelectedValues, parseJsonObject } from './formValues';
+import { parseUserRunTags } from './reservedRunTags';
 import { parseMaxAttempts } from './executionValidation';
 import { validateTargetGpuIds, validateTargetRuntime } from './runtimeValidation';
 import { text } from '../i18n/catalog';
@@ -19,9 +20,6 @@ export const AUTOMATION_TRIGGERS: AutomationTrigger[] = [
   'model_registered',
   'upstream_run_finished',
 ];
-// Mirrors RESERVED_RUN_TAG_PREFIXES in the API (domain/reservedRunTags.ts): the server sets these
-// tags on automatic Runs, so a rule may not carry them.
-const RESERVED_TAG_PREFIXES = ['automation.', 'mmt.'] as const;
 
 /** Enabled rules of the Project that may start this rule; a rule never follows itself. */
 export function upstreamRuleCandidates(
@@ -117,14 +115,6 @@ function parseTrigger(values: FormValues, catalog: AutomationCatalog) {
     throw new Error(automationText.upstreamInvalid);
   return { trigger, upstreamRuleId };
 }
-function parseRuleTags(values: FormValues): Record<string, string> {
-  const tags = parseStringMap(getFieldValue(values, 'tags'));
-  const reserved = Object.keys(tags).find((key) =>
-    RESERVED_TAG_PREFIXES.some((prefix) => key.startsWith(prefix)),
-  );
-  if (reserved !== undefined) throw new Error(automationText.reservedTag(reserved));
-  return tags;
-}
 export function buildAutomationRuleInput(
   values: FormValues,
   catalog: AutomationCatalog,
@@ -163,7 +153,7 @@ export function buildAutomationRuleInput(
     gpuIds,
     inputDatasetVersionIds: getSelectedValues(values, 'inputDatasetVersionIds'),
     parameters: parseJsonObject(getFieldValue(values, 'parameters')),
-    tags: parseRuleTags(values),
+    tags: parseUserRunTags(getFieldValue(values, 'tags')),
     maxAttempts: parseMaxAttempts(getFieldValue(values, 'maxAttempts')),
   };
 }

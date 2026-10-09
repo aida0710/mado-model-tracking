@@ -33,7 +33,14 @@ export class TargetCheckService {
   async request(principal: Principal, targetId: string): Promise<TargetCheck> {
     requireGlobalAdmin(principal);
     return transaction(this.database, async (connection) => {
-      await this.findTarget(connection, targetId);
+      const target = await this.findTarget(connection, targetId);
+      // No worker connects to a site, so a check would only wait and fail as no_worker.
+      if (target.executor === 'site')
+        throw new DomainError(
+          422,
+          'siteにはtrackingから接続しないため、接続確認はできません',
+          'site_check_unsupported',
+        );
       await expireStaleChecks(connection);
       const created = await first<TargetCheck>(
         connection,

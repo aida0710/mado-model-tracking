@@ -21,6 +21,11 @@ import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository
 import { isTerminalStatus } from '../domain/runTransitions.js';
 import type { JobCreate } from '../domain/validation.js';
 import {
+  initialJobPhase,
+  SUBMISSION_PHASES,
+  validateSiteJobOptions,
+} from '../domain/siteJobs.js';
+import {
   findCodeVersion,
   findDatasetVersions,
   findModelVersion,
@@ -30,16 +35,40 @@ import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
 import { requireProject } from './accessService.js';
 import { JobTokenService } from './jobTokenService.js';
+import { NO_IMAGE_PLATFORM_CHECK, type ImagePlatformChecker } from './imagePlatformChecker.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
 import { runColumns } from '../repositories/runListProjection.js';
 import { SWEEP_EARLY_STOPPED_TAG } from './sweepController.js';
 import type { JobRetryInput } from '../domain/checkpointValidation.js';
 import {
+  findWorkerInputCheckpoint,
   findWorkerResumeCheckpoint,
   pinResumeCheckpoint,
   selectRetryCheckpoint,
 } from './checkpointResume.js';
+import { findTriggerPayload } from '../repositories/hookExecutionRepository.js';
+
+/** The Job fields a caller chooses: a JobCreate request, or a Task, rule, hook or driver launch. */
+export type JobInsert = Pick<JobCreate, 'runId' | 'targetId' | 'gpuIds' | 'maxAttempts'> &
+  Partial<
+    Pick<
+      JobCreate,
+      'gpuCount' | 'walltimeSeconds' | 'retryOnFailure' | 'retryOnTimeout' | 'allowChildJobs'
+    >
+  >;
+
+/** Where a Job stands among others. Only the server sets these (arrays, hooks, drivers). */
+export interface JobPlacement {
+  arrayGroupId?: string;
+  arrayIndex?: number;
+  hookId?: string | null;
+  hookChain?: string[];
+  parentJobId?: string | null;
+  chainDepth?: number;
+  datasetPartitionVersionId?: string | null;
+  idempotencyKey?: string | null;
+}
 
 function assertRetryable(job: Job): void {
   if (!isTerminalStatus(job.status)) conflict('実行中または状態未確認のJobは再実行できません');
@@ -65,18 +94,21 @@ export class JobService {
   private readonly config: ApiConfig;
   private readonly runCompletion: RunCompletionService;
   private readonly jobTokens: JobTokenService;
+  private readonly imagePlatforms: ImagePlatformChecker;
   constructor(options: {
     database: Database;
     runs: RunService;
     config: ApiConfig;
     runCompletion: RunCompletionService;
     jobTokens?: JobTokenService;
+    imagePlatforms?: ImagePlatformChecker;
   }) {
     this.database = options.database;
     this.runs = options.runs;
     this.config = options.config;
     this.runCompletion = options.runCompletion;
     this.jobTokens = options.jobTokens ?? new JobTokenService(options.database);
+    this.imagePlatforms = options.imagePlatforms ?? NO_IMAGE_PLATFORM_CHECK;
   }
 
   async list(principal: Principal, projectId: string): Promise<JobListItem[]> {
@@ -107,9 +139,10 @@ export class JobService {
 
   async insertJob(
     connection: Connection,
-    registration: { run: Run; input: JobCreate; attempt: number },
+    registration: { run: Run; input: JobInsert; attempt: number; placement?: JobPlacement },
   ): Promise<Job> {
     const { run, input, attempt } = registration;
+    const placement = registration.placement ?? {};
     const activeRun = await first(
       connection,
       "SELECT id FROM runs WHERE id=$1 AND project_id=$2 AND lifecycle_stage='active'",
@@ -137,15 +170,44 @@ export class JobService {
       projectId: run.projectId,
       ids: run.inputDatasetVersionIds,
     });
-    await this.validateTarget(connection, {
+    const target = await this.validateTarget(connection, {
       targetId: input.targetId,
       gpuIds: input.gpuIds,
+      gpuCount: input.gpuCount,
+      retryOnFailure: input.retryOnFailure,
+      retryOnTimeout: input.retryOnTimeout,
       runtime: code.runtime,
     });
+    // ssh and local Jobs name their GPUs; a site Job asks only for a number.
+    const gpuCount = target.executor === 'site' ? (input.gpuCount ?? 0) : input.gpuIds.length;
     return (await first<Job>(
       connection,
-      `INSERT INTO jobs(project_id,run_id,target_id,gpu_ids,max_attempts,attempt) VALUES($1,$2,$3,$4,$5,$6) RETURNING ${jobColumns()}`,
-      [run.projectId, run.id, input.targetId, input.gpuIds, input.maxAttempts, attempt],
+      `INSERT INTO jobs(project_id,run_id,target_id,gpu_ids,max_attempts,attempt,phase,gpu_count,walltime_seconds,
+        retry_on_failure,retry_on_timeout,allow_child_jobs,array_group_id,array_index,hook_id,hook_chain,
+        parent_job_id,chain_depth,dataset_partition_version_id,idempotency_key)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING ${jobColumns()}`,
+      [
+        run.projectId,
+        run.id,
+        input.targetId,
+        input.gpuIds,
+        input.maxAttempts,
+        attempt,
+        initialJobPhase(target),
+        gpuCount,
+        input.walltimeSeconds ?? null,
+        input.retryOnFailure ?? false,
+        input.retryOnTimeout ?? false,
+        input.allowChildJobs ?? false,
+        placement.arrayGroupId ?? null,
+        placement.arrayIndex ?? null,
+        placement.hookId ?? null,
+        placement.hookChain ?? [],
+        placement.parentJobId ?? null,
+        placement.chainDepth ?? 0,
+        placement.datasetPartitionVersionId ?? null,
+        placement.idempotencyKey ?? null,
+      ],
     ))!;
   }
 
@@ -155,8 +217,11 @@ export class JobService {
       targetId: string;
       gpuIds: string[];
       runtime: ExecutionRuntime;
+      gpuCount?: number;
+      retryOnFailure?: boolean;
+      retryOnTimeout?: boolean;
     },
-  ): Promise<void> {
+  ): Promise<ComputeTarget> {
     const target = await first<ComputeTarget>(
       connection,
       'SELECT * FROM compute_targets WHERE id=$1 AND enabled=true FOR SHARE',
@@ -164,9 +229,18 @@ export class JobService {
     );
     if (!target) notFound('ComputeTarget');
     validateTargetCompatibility(target, {
-      ...execution,
+      runtime: execution.runtime,
+      gpuIds: execution.gpuIds,
       allowLocalExecutor: this.config.allowLocalExecutor,
     });
+    validateSiteJobOptions(target, {
+      gpuCount: execution.gpuCount ?? 0,
+      retryOnFailure: execution.retryOnFailure ?? false,
+      retryOnTimeout: execution.retryOnTimeout ?? false,
+    });
+    // An image for another CPU would fail only on the compute node, after the queue wait.
+    await this.imagePlatforms.assertRunsOn(execution.runtime, target);
+    return target;
   }
 
   async cancel(principal: Principal, projectId: string, jobId: string): Promise<Job> {
@@ -180,15 +254,41 @@ export class JobService {
     });
   }
 
-  // Shared by the cancel API and server-side cancellation (sweeps); authorization is the caller's.
+  /**
+   * Shared by the cancel API and server-side cancellation (sweeps); authorization is the caller's.
+   * A driver's unfinished child Jobs are canceled with it, so nothing keeps running for a parent
+   * that was stopped.
+   */
   async requestCancelInTransaction(
+    connection: Connection,
+    reference: { projectId: string; jobId: string },
+  ): Promise<Job> {
+    const job = await this.cancelOne(connection, reference);
+    const children = await rows<{ id: string }>(
+      connection,
+      `SELECT id FROM jobs WHERE parent_job_id=$1 AND status IN ('queued','claimed','running')
+      ORDER BY created_at,id`,
+      [job.id],
+    );
+    for (const child of children)
+      await this.requestCancelInTransaction(connection, {
+        projectId: reference.projectId,
+        jobId: child.id,
+      });
+    return job;
+  }
+
+  private async cancelOne(
     connection: Connection,
     reference: { projectId: string; jobId: string },
   ): Promise<Job> {
     const { projectId } = reference;
     const job = await findJob(connection, { projectId, id: reference.jobId, lock: true });
     if (isTerminalStatus(job.status)) return job;
-    if (job.status !== 'queued') {
+    // A site Job that is being submitted or waits in the scheduler queue runs nothing yet, so it
+    // ends now; the launcher removes the queued scheduler job (scheduler_cancel_state).
+    const waitsInSchedulerQueue = !!job.phase && SUBMISSION_PHASES.includes(job.phase);
+    if (job.status !== 'queued' && !waitsInSchedulerQueue) {
       // Even a silent worker may still own a live remote process. Only completion releases its reservation.
       return (await first<Job>(
         connection,
@@ -199,7 +299,9 @@ export class JobService {
     const previousRun = await findRun(connection, { projectId, id: job.runId, lock: true });
     const canceled = (await first<Job>(
       connection,
-      `UPDATE jobs SET status='canceled',cancel_requested=true,ended_at=now() WHERE id=$1 RETURNING ${jobColumns()}`,
+      `UPDATE jobs SET status='canceled',cancel_requested=true,ended_at=now(),
+        scheduler_cancel_state=CASE WHEN scheduler_job_id IS NULL THEN NULL ELSE 'pending' END
+      WHERE id=$1 RETURNING ${jobColumns()}`,
       [job.id],
     ))!;
     const run = (await first<Run>(
@@ -297,15 +399,42 @@ export class JobService {
     const run = checkpointId
       ? await pinResumeCheckpoint(connection, { run: insertedRun, checkpointId })
       : insertedRun;
+    const previous = (await first<{ hookChain: string[]; executor: ComputeTarget['executor'] }>(
+      connection,
+      'SELECT j.hook_chain,t.executor FROM jobs j JOIN compute_targets t ON t.id=j.target_id WHERE j.id=$1',
+      [previousJob.id],
+    ))!;
+    const isSiteJob = previous.executor === 'site';
     const job = await this.insertJob(connection, {
       run,
       input: {
         runId: run.id,
         targetId: previousJob.targetId,
-        gpuIds: previousJob.gpuIds,
+        // A site Job's gpuIds are what its runner was given, not what the Job asked for.
+        gpuIds: isSiteJob ? [] : previousJob.gpuIds,
         maxAttempts: previousJob.maxAttempts,
+        ...(isSiteJob
+          ? {
+              gpuCount: previousJob.gpuCount,
+              retryOnFailure: previousJob.retryOnFailure,
+              retryOnTimeout: previousJob.retryOnTimeout,
+            }
+          : {}),
+        walltimeSeconds: previousJob.walltimeSeconds,
+        allowChildJobs: previousJob.allowChildJobs,
       },
       attempt: previousJob.attempt + 1,
+      // A retry keeps its array index, hook and driver, so the group and the chain still see it.
+      placement: {
+        ...(previousJob.arrayGroupId !== null && previousJob.arrayIndex !== null
+          ? { arrayGroupId: previousJob.arrayGroupId, arrayIndex: previousJob.arrayIndex }
+          : {}),
+        hookId: previousJob.hookId,
+        hookChain: previous.hookChain,
+        parentJobId: previousJob.parentJobId,
+        chainDepth: previousJob.chainDepth,
+        datasetPartitionVersionId: previousJob.datasetPartitionVersionId,
+      },
     });
     await connection.query('UPDATE jobs SET retry_of_job_id=$2 WHERE id=$1', [
       job.id,
@@ -359,6 +488,8 @@ export class JobService {
       ids: run.inputDatasetVersionIds,
     });
     const resumeCheckpoint = await findWorkerResumeCheckpoint(connection, run);
+    const inputCheckpoint = await findWorkerInputCheckpoint(connection, run);
+    const triggerPayload = await findTriggerPayload(connection, job);
     const jobToken = await this.jobTokens.issueForWorker(connection, job);
     return {
       job,
@@ -369,6 +500,8 @@ export class JobService {
       inputDatasets,
       jobToken,
       resumeCheckpoint,
+      inputCheckpoint,
+      triggerPayload,
     };
   }
 

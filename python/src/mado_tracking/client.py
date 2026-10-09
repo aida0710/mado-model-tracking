@@ -9,7 +9,7 @@ from typing import Any, BinaryIO, Literal, cast
 
 import httpx
 
-from . import aliases, automation, evaluation, exports, service_accounts
+from . import aliases, automation, driver, evaluation, exports, hooks, job_arrays, service_accounts
 from .api_paths import path_id
 from .artifact_downloads import download_resumable_sync
 from .code_version import build_code_version_payload
@@ -63,6 +63,13 @@ class Client(ExperimentTasksClient):
     create_service_account = service_accounts.create_service_account
     create_service_account_token = service_accounts.create_service_account_token
     list_project_tokens = service_accounts.list_project_tokens
+    submit_child_job = driver.submit_child_job
+    list_child_jobs = driver.list_child_jobs
+    wait_for_child_jobs = driver.wait_for_child_jobs
+    map_shards = driver.map_shards
+    trigger_hook = hooks.trigger_hook
+    create_job_array = job_arrays.create_job_array
+    get_job_array = job_arrays.get_job_array
 
     def __init__(
         self,

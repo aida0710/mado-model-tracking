@@ -1,0 +1,17 @@
+# Job template for `mado-tracking code register --job-file mmt-job.toml --project <id>`.
+# The image tag is resolved to its digest at registration, so the CodeVersion pins the image.
+name = "tts-gen"
+image = "forge.example.org/team/tts-gen:2026-10"
+command = ["python", "-m", "gen.run", "--config", "configs/base.yaml"]
+working_directory = "/mmt/source"
+task_types = ["processing"]
+model_families = []
+description = "Synthetic speech generation"
+
+# The git commit mounted read-only at /mmt/source (optional).
+[source]
+url = "https://forge.example.org/team/tts-gen.git"
+commit = "0123456789abcdef0123456789abcdef01234567"
+
+[environment]
+HF_HUB_OFFLINE = "1"

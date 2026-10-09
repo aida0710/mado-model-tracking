@@ -29,6 +29,8 @@ function taskValues(task: TaskDefaults): unknown[] {
     task.targetId,
     task.gpuIds,
     task.outputModel ? JSON.stringify(task.outputModel) : null,
+    task.gpuCount,
+    task.walltimeSeconds,
   ];
 }
 
@@ -38,8 +40,8 @@ export async function insertTask(
 ): Promise<ExperimentTask> {
   return (await first<ExperimentTask>(
     connection,
-    `INSERT INTO experiment_tasks(project_id,experiment_id,name,description,kind,code_version_id,model_version_id,input_dataset_version_ids,parameters,tags,target_id,gpu_ids,output_model)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb) RETURNING *`,
+    `INSERT INTO experiment_tasks(project_id,experiment_id,name,description,kind,code_version_id,model_version_id,input_dataset_version_ids,parameters,tags,target_id,gpu_ids,output_model,gpu_count,walltime_seconds)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,$15) RETURNING *`,
     [registration.projectId, registration.input.experimentId, ...taskValues(registration.input)],
   ))!;
 }
@@ -52,7 +54,7 @@ export async function updateTask(
     connection,
     `UPDATE experiment_tasks SET name=$2,description=$3,kind=$4,code_version_id=$5,model_version_id=$6,
     input_dataset_version_ids=$7,parameters=$8::jsonb,tags=$9::jsonb,target_id=$10,gpu_ids=$11,
-    output_model=$12::jsonb,revision=revision+1
+    output_model=$12::jsonb,gpu_count=$13,walltime_seconds=$14,revision=revision+1
     WHERE id=$1 RETURNING *`,
     [task.id, ...taskValues(task)],
   ))!;

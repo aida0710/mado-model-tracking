@@ -163,16 +163,8 @@ async def _write_verified_member(
         raise ConfigurationError(f"Run Artifact sha256 mismatch during collection: {artifact['path']}")
 
 
-async def forward_source_snapshot(
-    job: WorkerJob,
-    snapshot: dict[str, Any],
-    *,
-    api: WorkerApi,
-    executor: JobExecutor,
-    acknowledgments: dict[str, Any],
-    persist: Callable[[], None],
-    temporary_path: Path,
-) -> None:
+def validated_snapshot_artifacts(job: WorkerJob, snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    """The snapshot's ZIP and manifest descriptors, or an error when either is missing or invalid."""
     artifacts = snapshot.get("artifacts")
     expected_paths = (
         set(SNAPSHOT_FILENAMES) if job.execution_snapshot["source"] is not None else {SOURCE_MANIFEST_PATH}
@@ -195,6 +187,20 @@ async def forward_source_snapshot(
             or artifact.get("mimeType") not in {"application/zip", "application/json"}
         ):
             raise ConfigurationError("Source snapshot Artifact descriptor is invalid")
+    return artifacts
+
+
+async def forward_source_snapshot(
+    job: WorkerJob,
+    snapshot: dict[str, Any],
+    *,
+    api: WorkerApi,
+    executor: JobExecutor,
+    acknowledgments: dict[str, Any],
+    persist: Callable[[], None],
+    temporary_path: Path,
+) -> None:
+    artifacts = validated_snapshot_artifacts(job, snapshot)
     await forward_artifacts(
         artifacts,
         executor=executor,

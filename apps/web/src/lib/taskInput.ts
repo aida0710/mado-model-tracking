@@ -6,8 +6,10 @@ import type { ExecutionCatalog } from '../types/executionCatalog';
 import type { FormValues } from '../types/form';
 import { getFieldValue, getSelectedValues, parseJsonObject, parseStringMap } from './formValues';
 import { isCodeCompatible, RUN_KINDS } from './executionValidation';
-import { validateTargetGpuIds, validateTargetRuntime } from './runtimeValidation';
+import { validateTargetRuntime } from './runtimeValidation';
 import { validateFilePath } from './codeWorkspace';
+import { formatClockDuration } from './clockDuration';
+import { buildJobResources, isSiteTarget } from './siteExecutionInput';
 import { text } from '../i18n/catalog';
 
 // Only these kinds produce weights, so only they may carry Task.outputModel.
@@ -52,7 +54,25 @@ export function createTaskValues(task?: ExperimentTask, experimentId = ''): Form
     parameters: JSON.stringify(task?.parameters ?? {}, null, 2),
     tags: JSON.stringify(task?.tags ?? {}, null, 2),
     targetId: task?.targetId ?? '', gpuIds: task?.gpuIds ?? [],
+    gpuCount: String(task?.gpuCount ?? 0), walltime: formatClockDuration(task?.walltimeSeconds ?? null),
   };
+}
+
+type TaskResources = Pick<CreateTask, 'gpuIds' | 'gpuCount' | 'walltimeSeconds'>;
+
+/**
+ * A Task stores GPU IDs for ssh/local targets and a GPU count and time limit for sites; the kind
+ * its target does not take stays empty, as the API stores it.
+ */
+function buildTaskResources(target: ComputeTarget | undefined, values: FormValues): TaskResources {
+  if (!target) {
+    if (getSelectedValues(values, 'gpuIds').length) throw new Error(text.gpuSelectionError);
+    return { gpuIds: [], gpuCount: 0, walltimeSeconds: null };
+  }
+  const resources = buildJobResources(target, values);
+  return 'gpuIds' in resources
+    ? { ...resources, gpuCount: 0, walltimeSeconds: null }
+    : { ...resources, gpuIds: [] };
 }
 
 function validateTaskVersions(input: CreateTask, catalog: ExecutionCatalog) {
@@ -137,18 +157,36 @@ export function buildTaskInput({ values, catalog, targets, task }: {
     codeVersionId: getFieldValue(values, 'codeVersionId'), modelVersionId: getFieldValue(values, 'modelVersionId') || null,
     inputDatasetVersionIds: getSelectedValues(values, 'inputDatasetVersionIds'),
     parameters: parseJsonObject(getFieldValue(values, 'parameters')), tags: parseStringMap(getFieldValue(values, 'tags')),
-    targetId: getFieldValue(values, 'targetId') || null, gpuIds: getSelectedValues(values, 'gpuIds'),
+    targetId: getFieldValue(values, 'targetId') || null,
+    gpuIds: [], gpuCount: 0, walltimeSeconds: null,
   };
   if (!input.name || !RUN_KINDS.includes(kind)) throw new Error(text.required);
   const code = validateTaskVersions(input, catalog);
   const outputModel = buildTaskOutputModel({ values, catalog, code, kind, previous: task?.outputModel });
   if (outputModel !== undefined) input.outputModel = outputModel;
-  if (input.targetId) {
-    const target = targets.find((item) => item.id === input.targetId);
-    validateTargetRuntime(target, code);
-    validateTargetGpuIds(target!, input.gpuIds);
-  } else if (input.gpuIds.length) throw new Error(text.gpuSelectionError);
-  return input;
+  const target = input.targetId ? targets.find((item) => item.id === input.targetId) : undefined;
+  if (input.targetId) validateTargetRuntime(target, code);
+  return { ...input, ...buildTaskResources(target, values) };
+}
+
+/**
+ * The resource fields of a launch; the API fills omitted ones from the Task. On a site the Task's
+ * count and time limit apply unless they were changed here, and GPU IDs saved for an ssh target are
+ * cleared (sites refuse them); an ssh/local launch clears a count and limit saved for a site.
+ */
+function buildLaunchResources(task: ExperimentTask, chosen: TaskResources, isSite: boolean):
+  Pick<LaunchTask, 'gpuIds' | 'gpuCount' | 'walltimeSeconds'> {
+  if (!isSite)
+    return {
+      gpuIds: chosen.gpuIds,
+      ...(task.gpuCount > 0 && { gpuCount: 0 }),
+      ...(task.walltimeSeconds !== null && { walltimeSeconds: null }),
+    };
+  return {
+    ...(task.gpuIds.length > 0 && { gpuIds: [] }),
+    ...(chosen.gpuCount !== task.gpuCount && { gpuCount: chosen.gpuCount }),
+    ...(chosen.walltimeSeconds !== task.walltimeSeconds && { walltimeSeconds: chosen.walltimeSeconds }),
+  };
 }
 
 export function buildTaskLaunchInput({ task, mode, values, catalog, targets }: {
@@ -164,9 +202,10 @@ export function buildTaskLaunchInput({ task, mode, values, catalog, targets }: {
   if (!launchDefaults.targetId) throw new Error(text.runtimeTargetError);
   const code = catalog.codeVersions.find((version) => version.id === task.codeVersionId)!;
   if (mode === 'test' && !code.testEntrypoint?.length) throw new Error(text.testCommandRequired);
+  const target = targets.find((item) => item.id === launchDefaults.targetId);
   return {
     expectedRevision: task.revision, executionMode: mode, targetId: launchDefaults.targetId,
-    gpuIds: launchDefaults.gpuIds, name: launchDefaults.name,
+    ...buildLaunchResources(task, launchDefaults, isSiteTarget(target)), name: launchDefaults.name,
     parameters: launchDefaults.parameters, modelVersionId: launchDefaults.modelVersionId,
     inputDatasetVersionIds: launchDefaults.inputDatasetVersionIds,
   };

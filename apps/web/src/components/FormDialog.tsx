@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog';
 import { FormFields } from './FormFields';
 import { createInitialValues } from '../lib/formValues';
@@ -15,6 +15,7 @@ export function FormDialog<T>({
   onSaved,
   onClose,
   submitLabel = text.save,
+  notice,
 }: {
   title: string;
   fields: FormField[];
@@ -22,6 +23,8 @@ export function FormDialog<T>({
   onSaved: (value: T) => void;
   onClose: () => void;
   submitLabel?: string;
+  /** A note under the fields that depends on what is entered (for example the chosen kind). */
+  notice?: (values: FormValues) => ReactNode;
 }) {
   const [values, setValues] = useState(() => createInitialValues(fields));
   const mutation = useMutation();
@@ -40,6 +43,7 @@ export function FormDialog<T>({
         <fieldset disabled={mutation.pending}>
           <FormFields fields={fields} values={values} onChange={setValues} />
         </fieldset>
+        {notice?.(values)}
         <ErrorNotice message={mutation.error} />
         <footer>
           <button type="button" className="button" onClick={onClose} disabled={mutation.pending}>

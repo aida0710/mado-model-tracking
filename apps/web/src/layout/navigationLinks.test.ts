@@ -10,6 +10,8 @@ describe('navigationLinks', () => {
     );
     expect(links[0]).toBe('/projects/p1/experiments');
     expect(links).toContain('/projects/p1/settings');
+    // Every member may read the hooks; creating and switching them is checked on the page.
+    expect(links).toContain('/projects/p1/hooks');
     expect(links).not.toContain('/projects/p1/plugins');
     expect(links).not.toContain(ADMIN_PATH);
   });

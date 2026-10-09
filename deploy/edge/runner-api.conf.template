@@ -1,0 +1,185 @@
+# Edge nginx server blocks for the public runner API hostname. Runners on compute nodes outside
+# the LAN reach tracking through it with their Job token (mmtj_): only the routes a Job token can
+# use pass, plus signed hook webhooks. The browser UI, SSO, admin and every other API route stay
+# on the intranet hostname. See deploy/edge/README.md.
+#
+# Rendered by the nginx image's template step (/etc/nginx/templates/*.template, envsubst):
+#   MMT_RUNNER_API_HOSTNAME   the public hostname, also the name of its Let's Encrypt certificate
+#   MMT_RUNNER_API_UPSTREAM   host:port of the tracking web nginx (compose: 127.0.0.1:5182), which
+#                             forwards /api/ to the API
+# Limit the substitution to these names (NGINX_ENVSUBST_FILTER=^MMT_RUNNER_API_), so that nginx's
+# own $variables stay as they are. The maps and zones below belong to the http block, which
+# includes conf.d/*.conf.
+
+# A Job token: "Authorization: Bearer mmtj_<base64url>". API tokens (mmt_) and sessions never pass.
+map $http_authorization $mmt_runner_job_token {
+    default                             0;
+    "~^Bearer mmtj_[A-Za-z0-9_-]+$"     1;
+}
+
+# Raw paths that nginx and the API could split differently: encoded '.', '/' or '\', a backslash
+# (URL parsers read it as '/'), empty segments and dot segments. The SDK and the runner never send
+# them. Only the part before '?' is checked.
+map $request_uri $mmt_runner_ambiguous_path {
+    default                             0;
+    "~*^[^?]*%(2e|2f|5c)"               1;
+    "~^[^?]*\\\\"                       1;
+    "~^[^?]*//"                         1;
+    "~^[^?]*/\.\.?(/|\?|$)"             1;
+}
+
+# Routes by method and normalized path ($uri). "job" lines follow the Job token rules of
+# apps/api/src/http/jobTokenGuard.ts and the runner routes; the API still checks that the token's
+# own Project, Job and Run are the ones named. Anything else is not published here.
+map "$request_method $uri" $mmt_runner_route {
+    default                                                                             "";
+    # Liveness, and the token's description (scopes, Job token or not).
+    "~^(GET|HEAD) /api/health$"                                                         job;
+    "~^(GET|HEAD) /api/auth/token$"                                                     job;
+    # Reads inside a Project: inputs, files, upstream Runs, child Jobs, upload sessions.
+    "~^(GET|HEAD) /api/projects/[^/]+(/.*)?$"                                           job;
+    "~^POST /api/projects/[^/]+/runs/search$"                                           job;
+    "~^POST /api/projects/[^/]+/media/compare$"                                         job;
+    # The runner protocol, and child Jobs of a driver Job.
+    "~^POST /api/projects/[^/]+/jobs/[^/]+/runner/(start|heartbeat|logs|metrics|outputs|finish)$" job;
+    "~^POST /api/projects/[^/]+/jobs/[^/]+/children$"                                   job;
+    # Writes to the Job's own Run: the Run, metrics, logs, media, checkpoints and artifacts.
+    "~^PATCH /api/projects/[^/]+/runs/[^/]+$"                                           job;
+    "~^POST /api/projects/[^/]+/runs/[^/]+/(metrics|logs|media|checkpoints)$"           job;
+    "~^PUT /api/projects/[^/]+/runs/[^/]+/artifacts$"                                   job;
+    "~^POST /api/projects/[^/]+/artifact-uploads$"                                      job;
+    "~^PUT /api/projects/[^/]+/artifact-uploads/[^/]+/parts/[^/]+$"                     job;
+    "~^POST /api/projects/[^/]+/artifact-uploads/[^/]+/complete$"                       job;
+    "~^DELETE /api/projects/[^/]+/artifact-uploads/[^/]+$"                              job;
+    # Outputs registered from the Run: models and their versions, dataset versions.
+    "~^POST /api/projects/[^/]+/models$"                                                job;
+    "~^POST /api/projects/[^/]+/(models|datasets)/[^/]+/versions$"                      job;
+    # The MLflow-compatible API, which the Job's code reaches through MLFLOW_TRACKING_URI.
+    # Multipart part uploads (mlflow-artifacts/mpu) carry no Authorization and stay closed.
+    "~^(GET|HEAD) /api/mlflow/projects/[^/]+/.+$"                                       job;
+    "~^POST /api/mlflow/projects/[^/]+/api/2\.0/mlflow/runs/(update|log-parameter|log-metric|log-batch|set-tag|delete-tag|log-inputs|outputs|log-model|search)$" job;
+    "~^POST /api/mlflow/projects/[^/]+/api/2\.0/mlflow/(experiments/search|model-versions/create|registered-models/create|registered-models/get-latest-versions|logged-models|logged-models/search)$" job;
+    "~^PATCH /api/mlflow/projects/[^/]+/api/2\.0/mlflow/logged-models/[^/]+(/tags)?$"  job;
+    "~^DELETE /api/mlflow/projects/[^/]+/api/2\.0/mlflow/logged-models/[^/]+/tags/[^/]+$" job;
+    "~^POST /api/mlflow/projects/[^/]+/api/2\.0/mlflow/logged-models/[^/]+/params$"    job;
+    "~^PUT /api/mlflow/projects/[^/]+/api/2\.0/mlflow-artifacts/artifacts/.+$"          job;
+    # Hook webhooks carry no token: the API checks the sender's signature (X-Hub-Signature-256 or
+    # X-MMT-Signature).
+    "~^POST /api/hooks/[^/]+/webhook$"                                                  webhook;
+}
+
+# 1 for a Job route without a Job token.
+map "$mmt_runner_route:$mmt_runner_job_token" $mmt_runner_token_missing {
+    default                             0;
+    "job:0"                             1;
+}
+
+# A webhook never forwards an Authorization header, so no token can ride along with it.
+map $mmt_runner_route $mmt_runner_forwarded_authorization {
+    default                             $http_authorization;
+    webhook                             "";
+}
+
+limit_req_zone $binary_remote_addr zone=mmt_runner_webhooks:10m rate=10r/s;
+
+# Query strings stay out of the access log.
+log_format mmt_runner_no_query '$remote_addr - [$time_local] "$request_method $uri $server_protocol" '
+                               '$status $body_bytes_sent $request_time "$http_user_agent"';
+
+# Plain HTTP answers Let's Encrypt only. It neither serves nor redirects the API: a Job token sent
+# over http:// has already crossed the network in the clear, so the runner's URL must say https://.
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${MMT_RUNNER_API_HOSTNAME};
+    server_tokens off;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files $uri =404;
+    }
+
+    location / {
+        return 403;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name ${MMT_RUNNER_API_HOSTNAME};
+    server_tokens off;
+
+    ssl_certificate /etc/letsencrypt/live/${MMT_RUNNER_API_HOSTNAME}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${MMT_RUNNER_API_HOSTNAME}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:MmtRunnerTLS:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+    add_header Cache-Control "no-store" always;
+    access_log /dev/stdout mmt_runner_no_query;
+    # The JSON error bodies below; responses of the API keep their own type.
+    default_type application/json;
+
+    # Optional: accept only the sites' outgoing addresses (and the webhook senders, if used).
+    # allow 203.0.113.0/24;
+    # deny all;
+
+    # Bodies stream to the API, which applies its own limits (MMT_ARTIFACT_MAX_BYTES, JSON size)
+    # and answers with its own errors. Timeouts are idle intervals, as on the intranet hostname.
+    client_max_body_size 0;
+    client_body_timeout 120s;
+    client_header_timeout 30s;
+
+    proxy_http_version 1.1;
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_connect_timeout 5s;
+    proxy_send_timeout 120s;
+    # Waits for the API to store a large artifact after the last byte, and for long polls.
+    proxy_read_timeout 3600s;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Request-Id $request_id;
+    proxy_set_header Connection "";
+    proxy_set_header Authorization $mmt_runner_forwarded_authorization;
+    # A browser session never counts on this hostname.
+    proxy_set_header Cookie "";
+
+    if ($mmt_runner_ambiguous_path) {
+        return 400 '{"error":"このpathは受け付けません","code":"invalid_path"}\n';
+    }
+
+    location /api/ {
+        if ($mmt_runner_route = "") {
+            return 404 '{"error":"APIが見つかりません","code":"not_found"}\n';
+        }
+        if ($mmt_runner_token_missing) {
+            return 401 '{"error":"このhostnameではJob tokenだけを受け付けます","code":"job_token_required"}\n';
+        }
+        proxy_pass http://${MMT_RUNNER_API_UPSTREAM};
+    }
+
+    # The API caps a webhook body at 256 KiB (HOOK_PAYLOAD_MAX_BYTES) and limits starts per hook;
+    # the edge only bounds the size and the rate per sender.
+    location ~ ^/api/hooks/[^/]+/webhook$ {
+        if ($mmt_runner_route = "") {
+            return 404 '{"error":"APIが見つかりません","code":"not_found"}\n';
+        }
+        client_max_body_size 1m;
+        limit_req zone=mmt_runner_webhooks burst=20 nodelay;
+        limit_req_status 429;
+        proxy_read_timeout 30s;
+        proxy_pass http://${MMT_RUNNER_API_UPSTREAM};
+    }
+
+    location / {
+        return 404 '{"error":"APIが見つかりません","code":"not_found"}\n';
+    }
+}

@@ -20,6 +20,7 @@ test = ["pytest>=8,<10", "mypy>=1.11,<2", "ruff>=0.9,<1", "numpy>=1.24", "Pillow
 [project.scripts]
 mado-tracking = "mado_tracking.cli:main"
 mado-tracking-worker = "mado_tracking.worker.cli:main"
+mado-tracking-launcher = "mado_tracking.site.launcher_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

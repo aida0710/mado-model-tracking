@@ -309,6 +309,22 @@ tr.selected td {
   background: #3c4149;
   color: #d7dbe1;
 }
+/* Waits for a person: a site Job to submit by hand, or a site submitted by hand. */
+.status-attention {
+  background: #fde7b0;
+  color: #6b4500;
+}
+[data-theme='dark'] .status-attention {
+  background: #5a4413;
+  color: #ffd98a;
+}
+/* Badges beside a label in one cell, such as a target's executor with its CPU and submission. */
+.badge-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
 @media (width < 1200px) {
   .run-toolbar {
     flex-wrap: wrap;
