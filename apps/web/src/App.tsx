@@ -49,6 +49,9 @@ const LineagePage = lazy(() =>
 const JobsPage = lazy(() =>
   import('./pages/JobsPage').then((module) => ({ default: module.JobsPage })),
 );
+const HooksPage = lazy(() =>
+  import('./pages/HooksPage').then((module) => ({ default: module.HooksPage })),
+);
 const TasksPage = lazy(() =>
   import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })),
 );
@@ -98,6 +101,7 @@ export function App() {
             <Route path="artifacts" element={<ArtifactsPage />} />
             <Route path="lineage" element={<LineagePage />} />
             <Route path="jobs" element={<JobsPage />} />
+            <Route path="hooks" element={<HooksPage />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="compute" element={<ComputePage />} />
             <Route path="plugins" element={<PluginsPage />} />

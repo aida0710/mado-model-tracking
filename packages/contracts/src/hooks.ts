@@ -33,6 +33,9 @@ export const HOOK_CHECKPOINT_MODES: readonly HookCheckpointMode[] = [
   'skip_if_running',
 ];
 
+/** k of checkpointMode 'every_k'; also the database bound of hooks.checkpoint_every. */
+export const MAX_HOOK_CHECKPOINT_EVERY = 100000;
+
 /** queue: start every event; skip_if_running: skip while a Job of the hook has not ended. */
 export type HookConcurrency = 'queue' | 'skip_if_running';
 export const HOOK_CONCURRENCY_MODES: readonly HookConcurrency[] = ['queue', 'skip_if_running'];
@@ -59,6 +62,26 @@ export interface HookFilter {
   runKinds?: RunKind[];
   runStatuses?: ('finished' | 'failed' | 'canceled')[];
   tags?: Record<string, string>;
+}
+
+/**
+ * The conditions each trigger's event can be filtered on; a hook with another condition is
+ * refused at creation, since it could never match. A model registration is described by its
+ * training Run (no end status yet), a checkpoint by the Run that is still training, an array by
+ * its first member and the status of all members; manual and webhook starts are not filtered.
+ */
+export const HOOK_FILTER_FIELDS: Readonly<Record<HookTrigger, readonly (keyof HookFilter)[]>> = {
+  manual: [],
+  webhook: [],
+  model_registered: ['modelFamilies', 'experimentIds', 'runKinds', 'tags'],
+  run_finished: ['modelFamilies', 'experimentIds', 'runKinds', 'runStatuses', 'tags'],
+  array_finished: ['modelFamilies', 'experimentIds', 'runKinds', 'runStatuses', 'tags'],
+  checkpoint_saved: ['modelFamilies', 'experimentIds', 'runKinds', 'tags'],
+};
+
+/** Where a webhook hook receives deliveries (unauthenticated POST, checked by its signature). */
+export function hookWebhookPath(hookId: string): string {
+  return `/api/hooks/${encodeURIComponent(hookId)}/webhook`;
 }
 
 /** What one start creates. ssh/local targets take gpuIds; sites take gpuCount. */

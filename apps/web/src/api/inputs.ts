@@ -89,12 +89,30 @@ export interface LaunchTask {
   executionMode: ExecutionMode;
   targetId?: string;
   gpuIds?: string[];
+  /** Sites only: replaces the Task's GPU count or time limit for this launch. */
+  gpuCount?: number;
+  walltimeSeconds?: number | null;
   name?: string;
   parameters?: JsonObject;
   modelVersionId?: string | null;
   inputDatasetVersionIds?: string[];
   /** Starts the new Run from this checkpoint; the API checks it matches the Task's code. */
   resumeCheckpointId?: string;
+}
+/**
+ * POST /projects/:p/jobs. ssh/local targets take gpuIds; sites take gpuCount, walltimeSeconds and
+ * the retry flags (the API answers site_gpu_ids and site_only_setting otherwise).
+ */
+export interface CreateJob {
+  runId: string;
+  targetId: string;
+  maxAttempts: number;
+  gpuIds?: string[];
+  gpuCount?: number;
+  walltimeSeconds?: number | null;
+  retryOnFailure?: boolean;
+  retryOnTimeout?: boolean;
+  allowChildJobs?: boolean;
 }
 export interface UpdateRun {
   name?: string;

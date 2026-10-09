@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { ComputeTarget, ExperimentTask, TaskOutputModel } from '@mmt/contracts';
 import type { ExecutionCatalog } from '../types/executionCatalog';
@@ -6,6 +7,8 @@ import { DetailsList, KeyValues } from './JsonDetails';
 import { CodeRuntimeDetails } from './CodeRuntimeDetails';
 import { hasOutputModel, outputModelLabel } from '../lib/taskInput';
 import { buildCatalogOptions } from '../lib/catalogOptions';
+import { formatClockDuration } from '../lib/clockDuration';
+import { isSiteTarget } from '../lib/siteExecutionInput';
 import { text } from '../i18n/catalog';
 
 function OutputModelDetails({ outputModel, catalog, base }: {
@@ -33,6 +36,12 @@ export function TaskDetails({ task, catalog, targets }: {
   const base = `/projects/${task.projectId}`;
   const code = catalog.codeVersions.find((item) => item.id === task.codeVersionId);
   const options = buildCatalogOptions(catalog);
+  const target = targets.find((item) => item.id === task.targetId);
+  // A site Task asks for a GPU count and a time limit; other Tasks name their GPU IDs.
+  const resourceEntries: Array<[string, ReactNode]> = isSiteTarget(target)
+    ? [[text.gpuCount, task.gpuCount],
+      [text.walltimeShort, formatClockDuration(task.walltimeSeconds) || text.walltimeUnset]]
+    : [[text.gpuIds, task.gpuIds.join(', ') || text.cpuOnly]];
   return <div className="task-details" data-testid="task-details">
     {task.description && <p>{task.description}</p>}
     <DetailsList entries={[
@@ -44,8 +53,8 @@ export function TaskDetails({ task, catalog, targets }: {
       [text.inputDatasets, task.inputDatasetVersionIds.length
         ? task.inputDatasetVersionIds.map((id) => <Link key={id} className="version-link" to={`${base}/datasets?version=${id}`}>{optionLabel(options.datasets, id)}</Link>)
         : null],
-      [text.target, targets.find((target) => target.id === task.targetId)?.name ?? task.targetId],
-      [text.gpuIds, task.gpuIds.join(', ') || text.cpuOnly],
+      [text.target, target?.name ?? task.targetId],
+      ...resourceEntries,
     ]} />
     {hasOutputModel(task.kind) && <section data-testid="task-output-model-details">
       <h3>{text.outputModelSettings}</h3>

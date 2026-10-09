@@ -52,6 +52,12 @@ export const MAX_JOB_WALLTIME_SECONDS = 30 * 24 * 60 * 60;
 export const SITE_CLAIM_MAX_SUBMISSIONS = 50;
 /** A claimed submission without a report for this long is failed as submit_failed. */
 export const SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS = 15 * 60;
+/**
+ * Bounds of ComputeTarget.queueTimeoutSeconds. A shorter limit would fail Jobs before a
+ * scheduler reports them; the longest matches MAX_JOB_WALLTIME_SECONDS.
+ */
+export const MIN_QUEUE_TIMEOUT_SECONDS = 60;
+export const MAX_QUEUE_TIMEOUT_SECONDS = 30 * 24 * 60 * 60;
 
 export interface JobArrayGroup {
   id: string;

@@ -65,3 +65,11 @@ export function canManageAliasProtections(role: ProjectRole, globalAdmin: boolea
 export function canControlSweep(role: ProjectRole, userId: string, sweep: { createdBy: string }): boolean {
   return canManageProject(role) || (canEditProject(role) && sweep.createdBy === userId);
 }
+
+/**
+ * Hooks: every researcher (editor) may create one, switch one on or off and start a 'manual' one
+ * (hookService checks the editor role with jobs:write); a hook runs with its owner's authority.
+ */
+export function canManageHooks(role: ProjectRole): boolean {
+  return canEditProject(role);
+}

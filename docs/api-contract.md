@@ -520,7 +520,7 @@ runnerはsiteの計算ノードでJob token（`mmtj_`）を使って報告する
 
 ### 起動の判定
 
-- フィルタ（`filter`）は`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`で、全部の条件に合う出来事だけが起動する（合わなければ記録も残さない）。`manual`と`webhook`はフィルタを使わない。
+- フィルタ（`filter`）は`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`で、全部の条件に合う出来事だけが起動する（合わなければ記録も残さない）。triggerごとに使える条件はcontractsの`HOOK_FILTER_FIELDS`で、`manual`と`webhook`は条件なし、`model_registered`と`checkpoint_saved`は`runStatuses`なし（登録と保存の時点で学習Runは終わっていない）。使えない条件は作成時に422 `invalid_request`。
 - 出来事ごとに1回だけ起動する（`model_version:<id>`・`run:<id>`・`array_group:<id>`・`checkpoint:<id>`・配信ID）。
 - 起動しない理由（`status='skipped'`の`reason`）: `hook_disabled`（待っている間に無効にされた）、`owner_access_revoked`、`loop_detected`（同じ連鎖に同じフックがもういる）、`chain_too_deep`（連鎖が10段を超える。`MAX_JOB_CHAIN_DEPTH`）、`rate_limited`（直近1時間の起動が`maxStartsPerHour`に達した）、`already_running`（`concurrency='skip_if_running'`か`checkpointMode='skip_if_running'`で、このフックのJobが終わっていない）、`superseded`（`checkpointMode='latest'`で新しいcheckpointが来た）、`source_run_unsuccessful`（学習Runが成功しなかった）、`source_run_timeout`（7日待っても学習Runが終わらない）。JobやRunを作れなかったときは`status='failed'`で`error`に理由を残し、出来事そのもの（登録・checkpoint・Runの終了）は取り消さない。
 - `pending`: 学習中に登録された版（`model_registered`）は学習Runの終了を待ち、`checkpointMode='latest'`では評価中に来た最新のcheckpointだけが前の評価Runの終了を待つ（`waitingRunId`）。

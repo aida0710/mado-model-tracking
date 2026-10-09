@@ -6,7 +6,9 @@ import {
   DEFAULT_DATASET_CACHE_MAX_BYTES,
   MAX_JOB_GPU_COUNT,
   MAX_JOB_WALLTIME_SECONDS,
+  MAX_QUEUE_TIMEOUT_SECONDS,
   MIN_DATASET_CACHE_MAX_BYTES,
+  MIN_QUEUE_TIMEOUT_SECONDS,
   SITE_SUBMISSION_MODES,
 } from '@mmt/contracts';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
@@ -203,9 +205,6 @@ export const maxAttemptsSchema = z
   .min(1)
   .max(MAX_JOB_ATTEMPTS)
   .default(DEFAULT_JOB_ATTEMPTS);
-// A scheduler queue shorter than a minute would fail Jobs before any scheduler reports them.
-const MIN_QUEUE_TIMEOUT_SECONDS = 60;
-const MAX_QUEUE_TIMEOUT_SECONDS = 30 * 24 * 60 * 60;
 export const walltimeSecondsSchema = z.number().int().min(1).max(MAX_JOB_WALLTIME_SECONDS);
 export const gpuCountSchema = z.number().int().min(0).max(MAX_JOB_GPU_COUNT);
 // Connection settings are for ssh and local targets; a site leaves them empty, and

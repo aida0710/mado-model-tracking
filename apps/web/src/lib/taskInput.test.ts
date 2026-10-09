@@ -11,13 +11,14 @@ const code = { ...dockerCodeVersion, taskTypes: ['inference' as const], testEntr
 const target: ComputeTarget = { id: 'target', name: 'Compute', host: 'example.invalid', port: 22,
   username: 'test', sshKeyPath: '', knownHostsPath: '', workDirectory: '/work', pythonExecutable: 'python',
   runtimeKinds: ['docker'], gpuIds: ['0'], maxConcurrentJobs: 1, enabled: true, executor: 'ssh',
-  datasetCacheMaxBytes: 107374182400, datasetTransfer: 'relay' };
+  datasetCacheMaxBytes: 107374182400, datasetTransfer: 'relay', submissionMode: 'automatic',
+  cpuArch: 'amd64', supportsArray: false, queueTimeoutSeconds: null };
 const catalog = { experiments: [{ id: 'experiment' }], codes: [], models: [], datasets: [], runs: [],
   codeVersions: [code], modelVersions: [], datasetVersions: [] } as unknown as ExecutionCatalog;
 const task: ExperimentTask = { id: 'task', projectId: 'project', experimentId: 'experiment',
   name: 'Inference', description: '', kind: 'inference', codeVersionId: code.id, modelVersionId: null,
   inputDatasetVersionIds: [], parameters: { batch_size: 2 }, tags: {}, targetId: target.id, gpuIds: [],
-  revision: 4, createdAt: '', updatedAt: '' };
+  gpuCount: 0, walltimeSeconds: null, revision: 4, createdAt: '', updatedAt: '' };
 const values = createTaskValues(task);
 
 describe('Taskの保存と起動', () => {
@@ -115,5 +116,54 @@ describe('Taskの出力モデル設定', () => {
       outputModel: { modelId: 'deleted', createModel: null, artifactPath: 'model' } };
     const input = buildTaskLaunchInput({ task: saved, mode: 'run', values: createTaskValues(saved), catalog: trainingCatalog, targets: [target] });
     expect(input).not.toHaveProperty('outputModel');
+  });
+});
+
+const site: ComputeTarget = { ...target, id: 'site', name: 'Site', host: '', username: '',
+  workDirectory: '', pythonExecutable: '', gpuIds: [], executor: 'site', datasetTransfer: 'direct' };
+const siteTask: ExperimentTask = { ...task, targetId: site.id, gpuCount: 2, walltimeSeconds: 3600 };
+
+describe('siteで動かすTask', () => {
+  it('siteのTaskはGPU IDを持たず、GPU数と制限時間を保存する', () => {
+    const input = buildTaskInput({ values: { ...values, targetId: site.id, gpuCount: '4', walltime: '12:00:00' },
+      catalog, targets: [target, site] });
+    expect(input).toMatchObject({ targetId: 'site', gpuIds: [], gpuCount: 4, walltimeSeconds: 12 * 60 * 60 });
+  });
+  it('sshのTaskはGPU数と制限時間を未指定（0とnull）で保存する', () => {
+    const input = buildTaskInput({ values: { ...values, gpuIds: ['0'], gpuCount: '4', walltime: '12:00:00' },
+      catalog, targets: [target, site] });
+    expect(input).toMatchObject({ targetId: 'target', gpuIds: ['0'], gpuCount: 0, walltimeSeconds: null });
+  });
+  it('保存した値は編集フォームに戻り、制限時間はHH:MM:SSで表す', () => {
+    expect(createTaskValues(siteTask)).toMatchObject({ gpuCount: '2', walltime: '01:00:00' });
+  });
+  it('siteへの起動は、保存値と変えたGPU数・制限時間だけを上書きとして送る', () => {
+    const unchanged = buildTaskLaunchInput({ task: siteTask, mode: 'run', values: createTaskValues(siteTask),
+      catalog, targets: [target, site] });
+    expect(unchanged).toMatchObject({ targetId: 'site' });
+    expect(unchanged).not.toHaveProperty('gpuIds');
+    expect(unchanged).not.toHaveProperty('gpuCount');
+    expect(unchanged).not.toHaveProperty('walltimeSeconds');
+    const changed = buildTaskLaunchInput({ task: siteTask, mode: 'run',
+      values: { ...createTaskValues(siteTask), gpuCount: '8', walltime: '' }, catalog, targets: [target, site] });
+    expect(changed).toMatchObject({ gpuCount: 8, walltimeSeconds: null });
+  });
+  it('sshのTaskをsiteで起動するときは、保存済みのGPU IDを空にして送る', () => {
+    const sshTask = { ...task, gpuIds: ['0'] };
+    const input = buildTaskLaunchInput({ task: sshTask, mode: 'run',
+      values: { ...createTaskValues(sshTask), targetId: site.id, gpuIds: [], gpuCount: '1' }, catalog, targets: [target, site] });
+    expect(input).toMatchObject({ targetId: 'site', gpuIds: [], gpuCount: 1 });
+  });
+  it('sshへの起動は従来どおりGPU IDを送り、GPU数は送らない', () => {
+    const input = buildTaskLaunchInput({ task, mode: 'run', values: { ...values, gpuIds: ['0'] }, catalog, targets: [target] });
+    expect(input).toMatchObject({ gpuIds: ['0'] });
+    expect(input).not.toHaveProperty('gpuCount');
+    expect(input).not.toHaveProperty('walltimeSeconds');
+  });
+  it('siteのTaskをsshで起動するときは、保存済みのGPU数と制限時間を空にして送る', () => {
+    // The API takes omitted fields from the Task, and refuses a GPU count for an ssh Job.
+    const input = buildTaskLaunchInput({ task: siteTask, mode: 'run',
+      values: { ...createTaskValues(siteTask), targetId: target.id, gpuIds: ['0'] }, catalog, targets: [target, site] });
+    expect(input).toMatchObject({ targetId: 'target', gpuIds: ['0'], gpuCount: 0, walltimeSeconds: null });
   });
 });

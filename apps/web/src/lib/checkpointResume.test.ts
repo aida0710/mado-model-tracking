@@ -7,28 +7,10 @@ import {
   getCheckpointArtifactFileName,
   getResumeCheckpointRecord,
 } from './checkpointResume';
+import { queuedJob } from '../../tests/fixtures/execution';
 
 function job(id: string, runId: string): Job {
-  return {
-    id,
-    projectId: 'project',
-    runId,
-    targetId: 'target',
-    status: 'failed',
-    gpuIds: [],
-    workerId: null,
-    leaseId: null,
-    cancelRequested: false,
-    attempt: 1,
-    maxAttempts: 3,
-    createdAt: '2026-10-08T00:00:00Z',
-    startedAt: null,
-    endedAt: null,
-    heartbeatAt: null,
-    exitCode: 1,
-    error: null,
-    heartbeatStale: false,
-  };
+  return { ...queuedJob, id, runId, status: 'failed', exitCode: 1 };
 }
 
 describe('checkpointからの再開の可否', () => {

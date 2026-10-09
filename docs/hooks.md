@@ -39,7 +39,7 @@ curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
 | `checkpoint_saved` | `POST /projects/:p/runs/:r/checkpoints`でのcheckpointの保存 | そのcheckpoint（`/mmt/inputs/checkpoint`） |
 | `webhook` | 署名の合う外部からのPOST | 送られた本文 |
 
-`filter`の`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`は、全部に合う出来事だけで起動します。合わない出来事は記録も残しません。`template.arraySize`を指定するとarrayを起動します（siteだけ）。
+`filter`の`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`は、全部に合う出来事だけで起動します。合わない出来事は記録も残しません。`manual`と`webhook`には条件を付けられず、`model_registered`と`checkpoint_saved`には`runStatuses`を付けられません（その時点で学習Runは終わっていないため）。`template.arraySize`を指定するとarrayを起動します（siteだけ）。
 
 ## 起動の記録
 

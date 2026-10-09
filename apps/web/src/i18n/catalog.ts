@@ -27,6 +27,7 @@ import { artifactLifecycleText, artifactLifecycleTextTemplates } from './artifac
 import { reportsText, reportsTextTemplates } from './reports';
 import { savedViewsText, savedViewsTextTemplates } from './savedViews';
 import { jobsText } from './jobs';
+import { hooksText } from './hooks';
 import { shellText } from './shell';
 
 export const lineageNodeKindLabels = {
@@ -103,6 +104,7 @@ export const text = {
   ...reportsText,
   ...savedViewsText,
   ...jobsText,
+  ...hooksText,
   ...shellText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
@@ -285,7 +287,7 @@ export const text = {
   lineageEdgeTarget: 'つながり先',
   graphLegend: 'データセット版 / Run / MLflow記録モデル / モデル版 / コード版',
   launch: 'ジョブを起動',
-  launchTitle: 'SSH GPUジョブを起動',
+  launchTitle: 'ジョブを起動',
   launchSetup: '実行内容',
   launchResources: '実行先',
   launchReview: '確認',

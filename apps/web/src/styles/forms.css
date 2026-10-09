@@ -153,3 +153,15 @@
 .form-details {
   margin-bottom: 16px;
 }
+/* A heading that splits a long dialog form into parts (a hook's trigger, its Job, its limits). */
+.form-section-heading {
+  margin: 8px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.form-section-heading:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

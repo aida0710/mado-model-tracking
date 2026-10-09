@@ -12,6 +12,7 @@ import {
 } from '../lib/modelAutomationInput';
 import { MAX_JOB_ATTEMPTS } from '../lib/executionValidation';
 import { isTargetCompatible } from '../lib/runtimeValidation';
+import { targetChoiceLabel } from '../lib/computeTargetDisplay';
 import { text } from '../i18n/catalog';
 import { automationText, automationTriggerLabels } from '../i18n/automation';
 
@@ -107,7 +108,7 @@ export function AutomationRuleFields({
       type: 'select',
       required: true,
       options: withEmptyOption(
-        compatibleTargets.map((item) => ({ value: item.id, label: `${item.name} · ${item.host}` })),
+        compatibleTargets.map((item) => ({ value: item.id, label: targetChoiceLabel(item) })),
       ),
     },
     {

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
   HOOK_PAYLOAD_MAX_BYTES,
+  hookWebhookPath,
   type Hook,
   type HookCreated,
   type HookExecution,
@@ -47,10 +48,6 @@ const WEBHOOK_SECRET_BYTES = 32;
 
 function webhookSecretContext(hookId: string): string {
   return `hook-webhook:${hookId}`;
-}
-
-export function webhookPath(hookId: string): string {
-  return `/api/hooks/${hookId}/webhook`;
 }
 
 function payloadTooLarge(): never {
@@ -149,7 +146,7 @@ export class HookService {
       return {
         hook: (await findHook(connection, { projectId, id }))!,
         webhookSecret,
-        webhookPath: webhookSecret ? webhookPath(id) : null,
+        webhookPath: webhookSecret ? hookWebhookPath(id) : null,
       };
     });
   }

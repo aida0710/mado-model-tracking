@@ -218,6 +218,19 @@ describe.skipIf(!testDatabaseUrl)('フック・webhook・ドライバー（独�
   });
 
   it('学習中に登録された版は学習Runの成功を待ってから起動する', async () => {
+    // A registration has no end status, so this condition could never match.
+    const unusable = await request(harness.app, `${fixture.basePath}/hooks`, {
+      method: 'POST',
+      cookie: fixture.editor.cookie,
+      body: {
+        name: 'Never',
+        trigger: 'model_registered',
+        filter: { runStatuses: ['finished'] },
+        template: template({ modelVersionId: null }),
+      },
+    });
+    expect(unusable.status).toBe(422);
+    expect(await unusable.json()).toMatchObject({ code: 'invalid_request' });
     const { hook } = await createHook({
       trigger: 'model_registered',
       filter: { modelFamilies: ['qwen2'] },

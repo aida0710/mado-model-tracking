@@ -19,7 +19,7 @@ import { NavigationLinkList } from './NavigationLinkList';
 export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
 export { ADMIN_PATH } from './navigationLinks';
 
-// Below --bp-lg the thirteen Project screens no longer fit beside the brand and actions, so the
+// Below --bp-lg the fourteen Project screens no longer fit beside the brand and actions, so the
 // navigation moves into the drawer.
 const DRAWER_NAVIGATION_QUERY = narrowerThan('lg');
 

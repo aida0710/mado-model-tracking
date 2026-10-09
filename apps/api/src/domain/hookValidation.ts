@@ -4,10 +4,13 @@ import {
   DEFAULT_HOOK_MAX_STARTS_PER_HOUR,
   HOOK_CHECKPOINT_MODES,
   HOOK_CONCURRENCY_MODES,
+  HOOK_FILTER_FIELDS,
   HOOK_TRIGGERS,
   HOOK_WEBHOOK_SIGNATURES,
+  MAX_HOOK_CHECKPOINT_EVERY,
   MAX_HOOK_MAX_STARTS_PER_HOUR,
   MAX_JOB_ARRAY_SIZE,
+  type HookFilter,
 } from '@mmt/contracts';
 import { DomainError } from './errors.js';
 import {
@@ -28,7 +31,6 @@ import {
 const DEFAULT_EXECUTION_PAGE_SIZE = 50;
 const MAX_EXECUTION_PAGE_SIZE = 200;
 const DEFAULT_CHILD_WAIT_SECONDS = 30;
-const MAX_CHECKPOINT_EVERY = 100000;
 // Chosen by the caller (a driver's loop counter, a CI build ID); bounded like other keys.
 const idempotencyKeySchema = z.string().min(1).max(200);
 const arraySizeSchema = z.number().int().min(1).max(MAX_JOB_ARRAY_SIZE);
@@ -79,7 +81,7 @@ export const hookCreateSchema = z.strictObject({
   filter: hookFilterSchema.default({}),
   template: hookJobTemplateSchema,
   checkpointMode: z.enum(HOOK_CHECKPOINT_MODES).default('every'),
-  checkpointEvery: z.number().int().min(1).max(MAX_CHECKPOINT_EVERY).nullable().default(null),
+  checkpointEvery: z.number().int().min(1).max(MAX_HOOK_CHECKPOINT_EVERY).nullable().default(null),
   concurrency: z.enum(HOOK_CONCURRENCY_MODES).default('queue'),
   maxStartsPerHour: z
     .number()
@@ -157,4 +159,11 @@ export function validateHookSettings(input: HookCreateInput): void {
     invalidHook('model_registeredのフックでは、登録された版を使うのでmodelVersionIdを指定しません');
   if (input.template.datasetPartitionVersionId && input.template.arraySize === null)
     invalidHook('datasetPartitionVersionIdはarraySizeと一緒に指定します');
+  // A condition on a fact the trigger's event does not have would never match.
+  const allowed = HOOK_FILTER_FIELDS[input.trigger];
+  const unusable = (Object.keys(input.filter) as (keyof HookFilter)[]).filter(
+    (field) => input.filter[field] !== undefined && !allowed.includes(field),
+  );
+  if (unusable.length)
+    invalidHook(`trigger ${input.trigger}では絞り込みに${unusable.join('・')}を使えません`);
 }
