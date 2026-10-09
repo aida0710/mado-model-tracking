@@ -18,14 +18,18 @@ from ..execution_runtime import validate_runtime
 from ..execution_snapshot import resolve_runner_execution_snapshot
 from ..security import SecretMasker, secret_values
 from .container_layout import (
-    RESUME_CHECKPOINT_ARCHIVE,
+    INPUT_CHECKPOINT_FILENAME,
     RESUME_CHECKPOINT_DIRECTORY,
     RESUME_CHECKPOINT_FILENAME,
+    STAGED_INPUT_PATHS,
+    TRIGGER_PAYLOAD_FILENAME,
     UPSTREAM_RUN_FILENAME,
     host_environment,
+    input_checkpoint_environment,
     link_input_datasets,
     resume_checkpoint_environment,
     staged_dataset_paths,
+    trigger_payload_environment,
     upstream_environment,
 )
 from .container_outputs import RESULT_FILENAME, read_output_chunk, validate_results
@@ -45,6 +49,8 @@ PROTOCOL_MAX_INPUT_BYTES = 32 * 1024**2
 ORPHAN_CANCEL_GRACE_SECONDS = 10.0
 # These read their own stdin framing (a JSON line, then the relayed tar).
 DATASET_COMMANDS = {"dataset-materialize", "dataset-release"}
+# `upload` receives the source archive; `upload-<kind>` the other staged inputs.
+UPLOAD_COMMANDS = {"upload", *(f"upload-{kind}" for kind in STAGED_INPUT_PATHS if kind != "source")}
 
 
 def launch(workspace: Path, specification: dict[str, Any], runtime_path: Path) -> dict[str, Any]:
@@ -246,6 +252,18 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
             document_file=str(resume_checkpoint_file),
         )
     )
+    input_checkpoint_file = workspace / INPUT_CHECKPOINT_FILENAME
+    environment.update(
+        input_checkpoint_environment(
+            specification["context"],
+            inputs_directory=str(workspace / "inputs"),
+            document_file=str(input_checkpoint_file),
+        )
+    )
+    trigger_payload_file = workspace / TRIGGER_PAYLOAD_FILENAME
+    environment.update(
+        trigger_payload_environment(specification["context"], document_file=str(trigger_payload_file))
+    )
     write_json(workspace / "context.json", specification["context"])
     write_json(workspace / "parameters.json", specification["context"]["parameters"])
     # Separate JSON files are objects even when a Run has no model / datasets.
@@ -258,6 +276,10 @@ def _execution_environment(specification: dict[str, Any], workspace: Path) -> di
         write_json(upstream_run_file, specification["context"]["upstreamRun"])
     if specification["context"].get("resumeCheckpoint") is not None:
         write_json(resume_checkpoint_file, specification["context"]["resumeCheckpoint"])
+    if specification["context"].get("inputCheckpoint") is not None:
+        write_json(input_checkpoint_file, specification["context"]["inputCheckpoint"])
+    if specification["context"].get("triggerPayload") is not None:
+        write_json(trigger_payload_file, specification["context"]["triggerPayload"])
     return environment
 
 
@@ -324,13 +346,7 @@ def cancel(workspace: Path) -> dict[str, Any]:
 
 
 def receive_archive(workspace: Path, *, kind: str = "source") -> dict[str, Any]:
-    destinations = {
-        "source": workspace / "source.archive",
-        "sif": workspace / "runtime.sif",
-        "weights": workspace / "inputs/weights",
-        "checkpoint": workspace / RESUME_CHECKPOINT_ARCHIVE,
-    }
-    path = destinations[kind]
+    path = workspace / STAGED_INPUT_PATHS[kind]
     path.parent.mkdir(mode=0o700, exist_ok=True)
     with (workspace / "upload.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -360,7 +376,7 @@ def main() -> None:
     if command == "serve":
         serve(workspace)
         return
-    if command in {"upload", "upload-sif", "upload-weights", "upload-checkpoint"}:
+    if command in UPLOAD_COMMANDS:
         response = receive_archive(
             workspace, kind=command.removeprefix("upload-") if command != "upload" else "source"
         )

@@ -14,7 +14,7 @@ import json
 import os
 import tarfile
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import quote, urlsplit
@@ -24,15 +24,16 @@ import httpx
 from ..dataset_upload import manifest_entries_digest
 from ..errors import ApiError, ConfigurationError
 from ..http import REQUEST_TIMEOUT_SECONDS, request_async
-from .api import WorkerApi
+from .artifact_transfer import ArtifactTransferApi
 from .dataset_downloads import (
     DatasetFetchError,
     expected_reference_sha256,
     reference_file_name,
     validate_https_uri,
 )
+from .dataset_partition import DatasetPartition, partition_cache_key, partition_files
 from .download_content import DOWNLOAD_ACCEPT_ENCODING, write_downloaded_content
-from .runtime import JobExecutor
+from .runner_commands import RunnerCommands
 
 # Same as the API's migration default, for claims from an API without the target setting.
 DEFAULT_DATASET_CACHE_MAX_BYTES = 100 * 1024**3
@@ -97,7 +98,7 @@ def dataset_cache_max_bytes(target: dict[str, Any]) -> int:
     return int(target.get("datasetCacheMaxBytes", DEFAULT_DATASET_CACHE_MAX_BYTES))
 
 
-async def list_dataset_files(api: WorkerApi, dataset: dict[str, Any]) -> list[dict[str, Any]]:
+async def list_dataset_files(api: ArtifactTransferApi, dataset: dict[str, Any]) -> list[dict[str, Any]]:
     path = "projects/{}/datasets/{}/versions/{}/files".format(
         *(quote(dataset[name], safe="") for name in ("projectId", "datasetId", "id"))
     )
@@ -115,7 +116,7 @@ async def list_dataset_files(api: WorkerApi, dataset: dict[str, Any]) -> list[di
             return files
 
 
-async def plan_dataset(api: WorkerApi, dataset: dict[str, Any]) -> DatasetSource | None:
+async def plan_dataset(api: ArtifactTransferApi, dataset: dict[str, Any]) -> DatasetSource | None:
     """How to obtain one version, or None when it is a descriptor only."""
     version_id, uri, digest = dataset["id"], str(dataset.get("uri") or ""), str(dataset.get("digest") or "")
     content_kind = dataset.get("contentKind")
@@ -149,14 +150,33 @@ async def plan_dataset(api: WorkerApi, dataset: dict[str, Any]) -> DatasetSource
     return DatasetSource(version_id, scheme, key, uri, digest)
 
 
+def partition_source(source: DatasetSource, partition: DatasetPartition) -> DatasetSource:
+    """The array member's share of a verified 'artifacts' version, as its own cache entry."""
+    if source.kind != "artifacts" or source.files is None:
+        raise DatasetStagingError(
+            f"DatasetVersion {source.version_id} is split among array members, so it must hold Artifacts"
+        )
+    files = partition_files(source.files, array_size=partition.array_size, array_index=partition.array_index)
+    return replace(
+        source,
+        key=partition_cache_key(
+            source.digest, array_size=partition.array_size, array_index=partition.array_index
+        ),
+        files=files,
+        total_size=sum(int(file["size"]) for file in files),
+    )
+
+
 async def stage_input_datasets(
     job: Any,
     *,
-    api: WorkerApi,
-    executor: JobExecutor,
+    api: ArtifactTransferApi,
+    executor: RunnerCommands,
     transfer_path: Callable[[str], Path],
     api_url: str,
+    partition: DatasetPartition | None = None,
 ) -> StagedDatasets:
+    """Stage every input; the version named by `partition` brings only the member's share."""
     staged = StagedDatasets()
     for index, dataset in enumerate(job.input_datasets):
         source = await plan_dataset(api, dataset)
@@ -166,6 +186,13 @@ async def stage_input_datasets(
                 "the Job's code reads its data"
             )
             continue
+        if partition is not None and source.version_id == partition.version_id:
+            whole_count = len(source.files or [])
+            source = partition_source(source, partition)
+            staged.notices.append(
+                f"DatasetVersion {source.version_id} is split among {partition.array_size} array members; "
+                f"member {partition.array_index} reads {len(source.files or [])} of {whole_count} files"
+            )
         staging = _DatasetStaging(
             job,
             api=api,
@@ -189,8 +216,8 @@ class _DatasetStaging:
         self,
         job: Any,
         *,
-        api: WorkerApi,
-        executor: JobExecutor,
+        api: ArtifactTransferApi,
+        executor: RunnerCommands,
         transfer_path: Callable[[str], Path],
         api_url: str,
     ):

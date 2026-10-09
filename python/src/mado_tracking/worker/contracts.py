@@ -14,6 +14,12 @@ from ..execution_snapshot import resolve_execution_snapshot
 
 RUN_KINDS = {"inference", "evaluation", "training", "finetuning", "processing"}
 TERMINAL_STATUSES = {"finished", "failed", "canceled"}
+# The worker drives ssh/local targets; a site's runner (mado_tracking.site) parses site Jobs.
+WORKER_EXECUTORS = frozenset({"local", "ssh"})
+SITE_EXECUTORS = frozenset({"site"})
+SIF_RUNTIME_KINDS = frozenset({"singularity", "apptainer"})
+# The Run tag the API sets on a Job started for a saved checkpoint (checkpoint_saved hooks).
+INPUT_CHECKPOINT_TAG = "mmt.inputCheckpointId"
 ENVIRONMENT_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 # Job tokens are what the Job's own code authenticates with; the worker token never reaches it.
 JOB_TOKEN = re.compile(r"^mmtj_[A-Za-z0-9_-]+$")
@@ -45,9 +51,13 @@ class WorkerJob:
     job_token: str | None = field(default=None, repr=False)
     # The checkpoint the Run continues from; staged and verified before the entrypoint starts.
     resume_checkpoint: dict[str, Any] | None = None
+    # A checkpoint handed to the code as an input (checkpoint_saved hooks); not a resume.
+    input_checkpoint: dict[str, Any] | None = None
+    # The manual trigger payload or webhook body of the hook start (trigger-payload.json).
+    trigger_payload: dict[str, Any] | None = None
 
     @classmethod
-    def parse(cls, payload: dict[str, Any]) -> WorkerJob:
+    def parse(cls, payload: dict[str, Any], *, executors: frozenset[str] = WORKER_EXECUTORS) -> WorkerJob:
         try:
             snapshot = cls(
                 payload["job"],
@@ -58,8 +68,10 @@ class WorkerJob:
                 payload["inputDatasets"],
                 payload.get("jobToken"),
                 payload.get("resumeCheckpoint"),
+                payload.get("inputCheckpoint"),
+                payload.get("triggerPayload"),
             )
-            snapshot.validate()
+            snapshot.validate(executors=executors)
         except (KeyError, TypeError, AttributeError):
             raise ConfigurationError("API returned an incomplete WorkerJob") from None
         return snapshot
@@ -83,7 +95,7 @@ class WorkerJob:
         except ValueError as error:
             raise ConfigurationError(str(error)) from None
 
-    def validate(self) -> None:
+    def validate(self, *, executors: frozenset[str] = WORKER_EXECUTORS) -> None:
         for entity_name, entity in (
             ("job", self.job),
             ("run", self.run),
@@ -137,7 +149,7 @@ class WorkerJob:
         snapshot = self.execution_snapshot
         if "runtime" in self.run and self.run["runtime"] != snapshot["runtime"]:
             raise ConfigurationError("Run.runtime does not match its immutable executionSnapshot")
-        if self.target["executor"] not in {"local", "ssh"}:
+        if self.target["executor"] not in executors:
             raise ConfigurationError("Unknown compute executor")
         validate_target_dataset_settings(self.target)
         runtime_kinds = self.target.get("runtimeKinds", ["python"])
@@ -145,7 +157,7 @@ class WorkerJob:
             not isinstance(runtime_kinds, list)
             or not runtime_kinds
             or not all(isinstance(kind, str) and kind in RUNTIME_KINDS for kind in runtime_kinds)
-            or self.runtime["kind"] not in runtime_kinds
+            or not target_runs_runtime(self.target["executor"], runtime_kinds, self.runtime["kind"])
         ):
             raise ConfigurationError("Compute target does not support the CodeVersion runtime")
         for name, value in self.code_version["environment"].items():
@@ -153,6 +165,21 @@ class WorkerJob:
                 raise ConfigurationError("Invalid CodeVersion environment")
         if self.resume_checkpoint is not None:
             validate_resume_checkpoint(self.resume_checkpoint, run=self.run)
+        if self.input_checkpoint is not None:
+            validate_input_checkpoint(self.input_checkpoint, run=self.run)
+        if self.trigger_payload is not None and not isinstance(self.trigger_payload, dict):
+            raise ConfigurationError("WorkerJob triggerPayload must be a JSON object")
+
+
+def target_runs_runtime(executor: str, runtime_kinds: list[str], runtime_kind: str) -> bool:
+    """A target runs its registered runtimes; a site also runs a Docker image as a converted SIF."""
+    if executor != "site":
+        return runtime_kind in runtime_kinds
+    if runtime_kind == "python":
+        return False
+    if runtime_kind == "docker":
+        return "docker" in runtime_kinds or bool(SIF_RUNTIME_KINDS & set(runtime_kinds))
+    return runtime_kind in runtime_kinds
 
 
 def _is_positive_integer(value: Any) -> bool:
@@ -206,31 +233,43 @@ def _is_file_entry(entry: Any) -> bool:
 
 def validate_resume_checkpoint(checkpoint: dict[str, Any], *, run: dict[str, Any]) -> None:
     """The checkpoint must be the one pinned to the Run, with Artifacts the worker can verify."""
-    if not isinstance(checkpoint, dict):
-        raise ConfigurationError("WorkerJob resumeCheckpoint must be an object")
-    require_uuid(checkpoint.get("id"), "resumeCheckpoint.id")
-    require_uuid(checkpoint.get("runId"), "resumeCheckpoint.runId")
+    _validate_checkpoint_files(checkpoint, label="resumeCheckpoint")
     if checkpoint["id"] != run.get("resumeCheckpointId"):
         raise ConfigurationError("WorkerJob resumeCheckpoint is not the Run's pinned checkpoint")
+
+
+def validate_input_checkpoint(checkpoint: dict[str, Any], *, run: dict[str, Any]) -> None:
+    """An input checkpoint is verifiable like a resume one; the Run's tag, when set, names it."""
+    _validate_checkpoint_files(checkpoint, label="inputCheckpoint")
+    tagged = (run.get("tags") or {}).get(INPUT_CHECKPOINT_TAG)
+    if tagged is not None and tagged != checkpoint["id"]:
+        raise ConfigurationError("WorkerJob inputCheckpoint is not the checkpoint the Run was started for")
+
+
+def _validate_checkpoint_files(checkpoint: dict[str, Any], *, label: str) -> None:
+    if not isinstance(checkpoint, dict):
+        raise ConfigurationError(f"WorkerJob {label} must be an object")
+    require_uuid(checkpoint.get("id"), f"{label}.id")
+    require_uuid(checkpoint.get("runId"), f"{label}.runId")
     step = checkpoint.get("step")
     if isinstance(step, bool) or not isinstance(step, int) or step < 0:
-        raise ConfigurationError("resumeCheckpoint.step must be a non-negative integer")
+        raise ConfigurationError(f"{label}.step must be a non-negative integer")
     source, artifacts = checkpoint.get("source"), checkpoint.get("artifacts")
     if source not in {"native", "mlflow"} or not isinstance(artifacts, list) or not artifacts:
-        raise ConfigurationError("resumeCheckpoint has an unknown source or no Artifacts")
+        raise ConfigurationError(f"{label} has an unknown source or no Artifacts")
     if source == "native" and len(artifacts) != 1:
         raise ConfigurationError("A native checkpoint is exactly one archive Artifact")
     for artifact in artifacts:
         if not _is_file_entry(artifact):
-            raise ConfigurationError("resumeCheckpoint has an invalid Artifact")
-        require_uuid(artifact.get("id"), "resumeCheckpoint.artifacts.id")
+            raise ConfigurationError(f"{label} has an invalid Artifact")
+        require_uuid(artifact.get("id"), f"{label}.artifacts.id")
     manifest = checkpoint.get("manifest")
     files = manifest.get("files") if isinstance(manifest, dict) else None
     if not isinstance(files, list) or not files or not all(_is_file_entry(file) for file in files):
-        raise ConfigurationError("resumeCheckpoint has an invalid manifest")
+        raise ConfigurationError(f"{label} has an invalid manifest")
     if source == "mlflow" and sorted((a["path"], a["sha256"], a["size"]) for a in artifacts) != sorted(
         (file["path"], file["sha256"], file["size"]) for file in files
     ):
         raise ConfigurationError("MLflow checkpoint Artifacts do not match its manifest")
     if not isinstance(checkpoint.get("metadata", {}), dict):
-        raise ConfigurationError("resumeCheckpoint.metadata must be an object")
+        raise ConfigurationError(f"{label}.metadata must be an object")

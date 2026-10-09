@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from .client import Client, ResumeMode, start_run_offline
+from .driver import ChildJobSpec, list_child_jobs, map_shards, submit_child_job, wait_for_child_jobs
 from .errors import ApiError, ConfigurationError
 from .execution_runtime import (
     DockerRuntime,
@@ -22,6 +23,7 @@ from .upstream import download_upstream_artifacts, list_upstream_artifacts, upst
 __all__ = [
     "ApiError",
     "Audio",
+    "ChildJobSpec",
     "Client",
     "ConfigurationError",
     "DockerRuntime",
@@ -39,10 +41,14 @@ __all__ = [
     "Video",
     "artifact_reference",
     "download_upstream_artifacts",
+    "list_child_jobs",
     "list_upstream_artifacts",
+    "map_shards",
     "start_run",
+    "submit_child_job",
     "trial_parameters",
     "upstream_run_id",
+    "wait_for_child_jobs",
 ]
 
 

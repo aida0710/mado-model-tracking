@@ -1,16 +1,23 @@
-"""`mado-tracking` command line: `mado-tracking sync [DIR...]` sends offline Runs to the API."""
+"""`mado-tracking` command line.
+
+`sync` sends offline Runs to the API, `submit` submits Jobs waiting for a manual site, `site-run`
+is the runner a site's job shell starts, and `code register` registers a job template's image.
+"""
 
 from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
+from . import code_cli
 from .client import Client
 from .errors import ConfigurationError
 from .offline.spool import default_offline_directory
 from .offline.sync import RunSyncReport, sync_offline_directories
+from .site import runner_cli, submit_cli
 
 EXIT_OK = 0
 EXIT_SYNC_FAILED = 1
@@ -20,6 +27,14 @@ EXIT_CONFIGURATION_ERROR = 2
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mado-tracking", description="Mado Model Tracking SDK commands")
     commands = parser.add_subparsers(dest="command", required=True)
+    add_sync_parser(commands)
+    code_cli.add_parser(commands)
+    submit_cli.add_parser(commands)
+    runner_cli.add_parser(commands)
+    return parser
+
+
+def add_sync_parser(commands: Any) -> None:
     sync = commands.add_parser(
         "sync",
         help="send offline Runs to the API (MMT_API_URL, MMT_API_TOKEN)",
@@ -38,11 +53,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sync.add_argument("--project-id", help="only sync Runs recorded for this Project")
     sync.add_argument("--prune", action="store_true", help="delete each Run's spool once it is fully synced")
-    return parser
+    sync.set_defaults(handler=run_sync)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
+    handler: Callable[[argparse.Namespace], int] = arguments.handler
+    return handler(arguments)
+
+
+def run_sync(arguments: argparse.Namespace) -> int:
     directories = arguments.directories or [default_offline_directory()]
     try:
         reports = sync_offline_directories(

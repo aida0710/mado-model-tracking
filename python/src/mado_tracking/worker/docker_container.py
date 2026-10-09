@@ -28,6 +28,8 @@ INSPECT_FORMAT = (
     '"labels":{{json .Config.Labels}},"state":{{json .State}}}'
 )
 DaemonResponse = TypeVar("DaemonResponse")
+# Every container a runner creates carries the Job's ID; a site's GPU leases look for it.
+JOB_ID_LABEL = "io.mado-tracking.job-id"
 
 
 class DockerContainer:
@@ -40,7 +42,7 @@ class DockerContainer:
         self.image: str = specification["codeVersion"]["runtime"]["image"]
         self.name = f"mmt-job-{specification['jobId']}"
         self.labels = {
-            "io.mado-tracking.job-id": specification["jobId"],
+            JOB_ID_LABEL: specification["jobId"],
             "io.mado-tracking.code-version-id": specification["codeVersion"]["id"],
             "io.mado-tracking.project-id": specification["context"]["projectId"],
             "io.mado-tracking.lease": hashlib.sha256(specification["leaseId"].encode()).hexdigest(),

@@ -306,3 +306,62 @@ snapshotの回収は既存のArtifact upload経路を使い、各保存のackを
 不正なclaimはJob/leaseのUUIDとworkerの所有を確認でき、claimedかつjournal・監視・recoveryの記録が無い場合に限り、実行せずfailedとして完了する。不正なresume、running状態、既存journalまたは監視中のJobは診断を残し、leaseを解放しない。保存済み正常snapshotがあればその監視を継続し、復帰できないJobは以後のclaim対象から外して他のJobの処理を続ける。対象Jobの状況とjournalを確認し、復旧または停止確認後の処理を行う。ID/lease/所有を確認できないclaim応答は`ConfigurationError`、resumeではその行を診断して他の行を処理する。
 
 sourceはパストラバーサル、`.git`への編集・追加・削除、symlink、hardlink、特殊ファイル、重複削除、追加と削除の衝突を拒否する。sourceは一時ディレクトリで完成後に確定する。worker側の上限は、UTF-8のinline/overlayが16MiB、source全体が4GiB、1ファイルが256MiB、ファイルとディレクトリの合計が100,000、manifestが16MiB。archiveとsnapshot ZIPは、source上限にUTF-8名・ZIP64・圧縮増分の予算を加えた同じ上限を使い、上限内のZIPを復元できる。上限の定数は`src/mado_tracking/worker/source_tree.py`に集約する。APIで登録するinline/overlayは、全体3MiB、1ファイル2,000,000 bytes、1,000ファイルまで。snapshot作成・転送・uploadは分割して処理する。
+
+### 外部の計算機（site）: runner・launcher・手動投入
+
+siteは、trackingが名前・CPU・runtime・投入方式だけを持つ計算機（`ComputeTarget.executor='site'`）です。launcher（OTPのサイトでは本人の`mado-tracking submit`）がsiteのjob shellを動かし、計算ノードのrunnerがJob tokenでAPIへ直接報告します。設計は`docs/design/external-execution.md`、job shellとsiteの設定例は`deploy/sites/`にあります。
+
+**runner（`mado-tracking site-run <spec dir>`）**
+
+- launcherと`submit`は、作業ディレクトリ（`work_dir`）に`.mmt-runner/<版>/mmt-runner.pyz`（このpackageとhttpxを含むzipapp）と`mmt-runner`（起動用のshell script）を版ごとに一度だけ置きます。job shellは`"$MMT_RUNNER" "$MMT_SPEC_DIR"`を起動します。計算ノードにはPython 3.11以上だけが要ります（`runner_python`、または環境変数`MMT_RUNNER_PYTHON`）。
+- 仕様の置き場（`.mmt-submissions/<最初のJob ID>/`、700）には`submission.json`（tokenなし）、`api.json`（`apiUrl`）、`runner.json`（作業ディレクトリ、GPUの割り当て方など）、`jobs/<i>.json`（WorkerJobとJob token、600）、任意の`secrets.json`（`registry`）があります。runnerは`MMT_ARRAY_INDEX`（無ければ0）番目のJobを動かします。
+- 流れは`runner/start`（phase `waiting_resources`）→ 入力の用意 → GPUの割り当て → heartbeatでphase `running` → コンテナ → 出力の検証とupload（`container/<path>`、64MiB以上はupload session）→ metrics・宣言 → `runner/finish`です。heartbeatは5秒ごとで、`cancelRequested`ならコンテナを止めて`canceled`で終えます。heartbeatが拒否された（401・410など）ときは、コンテナを止めてfinishを送らずに終わります。SIGTERMでは、コンテナを止めて`endReason: timed_out`で終えます。
+- 入力はworkerの直接転送（`datasetTransfer='direct'`）と同じ処理で用意します。`datasetPartitionVersionId`の版は、path順で`位置 % arraySize == arrayIndex`のファイルだけを取ります。SIFのArtifactと、Dockerのimageを変換したSIF（`apptainer pull --arch <cpuArch>`、registryの認証は`secrets.json`から`APPTAINER_DOCKER_USERNAME`・`APPTAINER_DOCKER_PASSWORD`で渡します）は、`<work_dir>/.mmt-cache/sif/`にdigestとCPUの組ごとに1つ置き、lockで1回だけ取得します。
+- フックの入力: `inputCheckpoint`は`/mmt/inputs/checkpoint`（read-only、`MMT_INPUT_CHECKPOINT_DIR`・`MMT_INPUT_CHECKPOINT_FILE`）、`triggerPayload`は`/mmt/context/trigger-payload.json`（`MMT_TRIGGER_PAYLOAD_FILE`）に置きます。再開のcheckpointもあるJobでは、入力のcheckpointは`/mmt/inputs/input-checkpoint`になります。SSHのworkerも同じ変数とファイルを渡します。
+- GPU: スケジューラのあるsiteでは、スケジューラが渡した`CUDA_VISIBLE_DEVICES`を使います。直実行のホスト（`gpu_assignment = "lease"`）では、`nvidia-smi`で空いたGPUを選びます。他のrunnerがleaseしているGPUと、Madoのlabelが付いた動いているDockerコンテナが持つGPUは使いません。足りない間はphase `waiting_resources`のまま待ちます。
+- 終了コードは、成功で0、失敗・取消・時間切れで1、設定の誤りで2、APIがJobを受け付けなかった（終了済み・別のrunner・tokenの失効）ときに3です。
+
+**launcher（`mado-tracking-launcher --config launcher.toml`）**
+
+- 設定はTOMLで、`[[projects]]`（`api_url`と、project worker tokenを入れたmode 600の`token_file`）と`[[sites]]`（`target_id`、`job_shell`、`work_dir`、`account_mode`、`cancel_command`、`[sites.connection]`、本人のアカウント`[sites.accounts."<email>"]`など）を並べます。例は`deploy/sites/examples/launcher.toml`と各`site.toml`です。tokenはファイルからだけ読み、コマンドの引数に出しません。
+- 1回の巡回で、siteごとに`claim`し、作業ディレクトリへrunnerとjob shellを入れ、仕様の置き場を書き、job shellを1回だけ動かして、標準出力の最後の行をスケジューラのジョブIDとして`report`します。job shellが0以外で終わったら、tokenを伏せた短いエラーで`failed`を報告します。届かなかった報告は`state_directory`に残し、次の巡回で送り直します。
+- 待ち行列で取り消されたJobは`cancellations`で受け取り、投入したアカウントで`cancel_command`（`MMT_SCHEDULER_JOB_ID`を渡します）を動かしてから報告します。
+- SSHは`BatchMode=yes`・`StrictHostKeyChecking=yes`で、`state_directory/ssh/`に置く専用のssh_configを使います。経由するホスト（`jump_hosts`、`ssh -J`）にも同じ鍵とknown_hostsが効きます。接続は（site, アカウント）ごとにControlMasterで1本を共有し、60秒使わなければ閉じます。
+
+**手動投入（`mado-tracking submit --site <siteのID>`）**
+
+本人のAPI token（`MMT_API_URL`・`MMT_API_TOKEN`）で、siteのログインノードから実行します。自分の手動投入待ちのJobを受け取り、仕様の置き場を書き、手元のjob shellで投入して報告したら終わります。何も常駐しません。
+
+```bash
+mado-tracking submit --site <siteのID> --dry-run      # 待っている件数だけ表示
+mado-tracking submit --site <siteのID> --job-shell ~/mmt/job.sh --work-dir /work/gxx/me/mmt --var GROUP=gxx50000
+```
+
+siteごとの既定値は`~/.config/mado-tracking/submit.toml`（`MMT_SUBMIT_CONFIG`）の`[sites."<siteのID>"]`に、launcherの`[[sites]]`と同じ名前（`job_shell`、`work_dir`、`runner_python`、`runner_api_url`、`variables`など）で書けます。
+
+**ドライバー・フック・array（SDK）**
+
+```python
+from mado_tracking import ChildJobSpec, Client, map_shards
+
+with Client() as client:  # Jobの中ではJob token（MMT_API_TOKEN）と MMT_PROJECT_ID・MMT_JOB_ID を使う
+    spec = ChildJobSpec(name="shard", kind="processing", code_version_id="code-version-id", target_id="site-id", gpu_count=1)
+    jobs = map_shards(client, spec, [{"shard": index} for index in range(64)], key="generate-v1")
+    client.trigger_hook("project-id", "hook-id", {"ref": "refs/heads/main"}, idempotency_key="deploy-42")
+    client.create_job_array(
+        "project-id", experiment_id="experiment-id", name="generate", kind="processing",
+        code_version_id="code-version-id", target_id="site-id", size=64,
+        input_dataset_version_ids=["version-id"], dataset_partition_version_id="version-id",
+    )
+```
+
+- 子Jobは`submit_child_job(client, spec, key=...)`で作ります。同じkeyの再送（ドライバーの再起動を含む）は、最初に作った子Jobを返します。`wait_for_child_jobs`は最長60秒のlong pollを、全部終わるまで繰り返します。`map_shards`はshardごとに`<key>:<番号>`の子Jobを作り、parametersにshardの値を足して、終わるまで待ちます。親Jobは`allowChildJobs`で作っておきます。
+- `trigger_hook`はtrigger `manual`のフックを起動します。keyを省くとSDKがUUIDを付けるので、応答が失われた再送でも起動は1回です。
+
+**ジョブの雛形から登録（`mado-tracking code register`）**
+
+```bash
+mado-tracking code register --job-file mmt-job.toml --project <Project ID> [--code <名前>] [--version <版>]
+```
+
+`mmt-job.toml`（例: `examples/mmt-job.toml`）の`image`のtagを、OCI distribution APIでdigestに解決してから、DockerのCodeVersionとして登録します。registryには匿名で、または`MMT_REGISTRY_USERNAME`・`MMT_REGISTRY_PASSWORD`でBearer tokenを受け取って問い合わせます。同じ名前のCodeがあれば、そこに版を足します。版を省くと、`version`、無ければcommitとdigestの先頭から決めます。

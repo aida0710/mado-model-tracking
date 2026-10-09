@@ -7,6 +7,8 @@ from typing import Any
 
 from ..execution_snapshot import resolve_runner_execution_snapshot
 from .container_layout import (
+    host_runtime,
+    install_input_checkpoint,
     install_resume_checkpoint,
     prepare_container_layout,
     verify_container_inputs,
@@ -28,6 +30,7 @@ def execute_registered_code(
         return DockerContainer(workspace, specification, execution).run([], recover_only=True)
     # A checkpoint that fails verification fails the Job before any of its code runs.
     install_resume_checkpoint(workspace, specification)
+    install_input_checkpoint(workspace, specification)
     source_directory = workspace / "source"
     source_directory.mkdir(mode=0o700, exist_ok=True)
     source = specification["codeVersion"]["source"]
@@ -55,7 +58,7 @@ def execute_registered_code(
         write_json(workspace / "state.json", execution.state)
     except (OSError, ValueError) as error:
         raise ValueError(f"Source snapshot creation failed: {error}") from error
-    runtime_kind = specification["codeVersion"]["runtime"]["kind"]
+    runtime_kind = host_runtime(specification)["kind"]
     if runtime_kind == "python":
         return _execute_python(specification, execution, source_directory=source_directory)
     mounts = prepare_container_layout(workspace, specification)
