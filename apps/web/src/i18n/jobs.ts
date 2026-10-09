@@ -55,7 +55,7 @@ export const jobPhaseLabels: Record<JobPhase, string> = {
   waiting_manual: '手動投入待ち',
   submitting: '投入中',
   submitted: '待ち行列',
-  waiting_resources: 'GPU待ち',
+  waiting_resources: '準備・GPU待ち',
   running: '実行中',
 };
 

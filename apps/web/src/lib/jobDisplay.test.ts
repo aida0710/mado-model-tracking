@@ -15,7 +15,7 @@ describe('Jobの段階と終了の理由', () => {
     ['queued', 'waiting_manual', '手動投入待ち', 'status-attention'],
     ['claimed', 'submitting', '投入中', 'status-claimed'],
     ['claimed', 'submitted', '待ち行列', 'status-claimed'],
-    ['claimed', 'waiting_resources', 'GPU待ち', 'status-claimed'],
+    ['claimed', 'waiting_resources', '準備・GPU待ち', 'status-claimed'],
   ] as const)('%s・%sのJobには「%s」を添える', (status, phase, label, className) => {
     expect(jobDetailBadge({ status, phase, endReason: null })).toEqual({ label, className });
   });
@@ -45,7 +45,7 @@ describe('Jobの段階と終了の理由', () => {
       '手動投入待ち',
       '投入中',
       '待ち行列',
-      'GPU待ち',
+      '準備・GPU待ち',
       '実行中',
     ]);
   });

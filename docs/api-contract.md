@@ -462,7 +462,7 @@ API serverはSSH鍵を持たないので、Compute targetの接続確認はそ�
 
 siteは、trackingが名前・CPU・runtime・投入方式だけを持つ計算機（`ComputeTarget.executor='site'`）。接続先・スケジューラのoption・鍵はsiteの側（launcherの`site.yaml`とjob shell）にあり、trackingは持たない（docs/sites.md）。型はcontractsの`siteExecution.ts`。
 
-- siteのJobは`phase`で段階を表す: `queued`/null（launcherの投入待ち）、`queued`/`waiting_manual`（本人の`mado-tracking submit`待ち）、`claimed`/`submitting`（job shellを実行中）、`claimed`/`submitted`（スケジューラの待ち行列。`schedulerJobId`・`submittedAt`）、`claimed`/`waiting_resources`（runnerが空きGPUを待つ）、`running`/`running`（コンテナが動いている）。終わったJobは最後の段階のままで、`endReason`は`timed_out`・`queue_timeout`・`submit_failed`かnull。ssh/localのJobの`phase`はnull。
+- siteのJobは`phase`で段階を表す: `queued`/null（launcherの投入待ち）、`queued`/`waiting_manual`（本人の`mado-tracking submit`待ち）、`claimed`/`submitting`（job shellを実行中）、`claimed`/`submitted`（スケジューラの待ち行列。`schedulerJobId`・`submittedAt`）、`claimed`/`waiting_resources`（runnerが入力を用意し、空きGPUを待つ）、`running`/`running`（コンテナが動いている）。終わったJobは最後の段階のままで、`endReason`は`timed_out`・`queue_timeout`・`submit_failed`かnull。ssh/localのJobの`phase`はnull。
 - Runは、runnerが`phase='running'`を報告した時点で`running`になる（claimしただけでは`queued`のまま）。`heartbeatStale`は`waiting_manual`・`submitting`・`submitted`のJobには立たない。
 - workerの`/worker/claim`・`/worker/resume`はsiteのJobを返さず、worker protocolでsiteのJobへ報告もできない（409 `invalid_lease`）。
 - 再実行（`POST /projects/:p/jobs/:j/retry`、自動の再実行）はsiteの項目（gpuCount、walltime、array、フック、親Job、連鎖、各フラグ）を引き継ぐ。runnerが報告した`gpuIds`は引き継がない。

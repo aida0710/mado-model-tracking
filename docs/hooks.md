@@ -66,7 +66,7 @@ curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
 
 ## 学習中のcheckpointで評価する
 
-`checkpoint_saved`のフックは、学習Runが保存したcheckpointごとにJobを起動します。評価のJobにはcheckpointが`/mmt/inputs/checkpoint`（read-only）に置かれ、`MMT_INPUT_CHECKPOINT_DIR`・`MMT_INPUT_CHECKPOINT_FILE`で場所が分かります。
+`checkpoint_saved`のフックは、学習Runが保存したcheckpointごとにJobを起動します。評価のJobにはcheckpointがread-onlyで置かれ、場所は`MMT_INPUT_CHECKPOINT_DIR`（ふつうは`/mmt/inputs/checkpoint`、再開のcheckpointも持つJobでは`/mmt/inputs/input-checkpoint`）、内容の説明は`MMT_INPUT_CHECKPOINT_FILE`で分かります。
 
 | checkpointMode | 動き |
 |---|---|
@@ -114,3 +114,17 @@ Jobを`allowChildJobs: true`で作ると、そのJobのコードは自分のJob 
 - 親Jobを取り消すと、終わっていない子Jobも取り消されます。
 
 `allowChildJobs`の無いJobのtokenでは子Jobを作れません（403 `child_jobs_not_allowed`）。
+
+SDKでは`ChildJobSpec`と`submit_child_job`・`wait_for_child_jobs`・`map_shards`を使います（[python/README.md](../python/README.md)の「ドライバー・フック・array」）。Jobの中では`Client()`がJob token（`MMT_API_TOKEN`）と`MMT_PROJECT_ID`・`MMT_JOB_ID`を読むので、IDを渡す必要はありません。
+
+```python
+from mado_tracking import ChildJobSpec, Client, map_shards
+
+with Client() as client:
+    spec = ChildJobSpec(name="generate", kind="processing", code_version_id="<CodeVersion ID>",
+                        target_id="<site ID>", gpu_count=1)
+    # shardごとに子Jobを作り（keyは "<key>:<番号>"）、全部終わるまで待つ
+    jobs = map_shards(client, spec, [{"shard": index} for index in range(64)], key="generate-v1")
+```
+
+フックの手動起動（`client.trigger_hook`）は、人のAPI tokenで使います。Job tokenではフックを起動できません。Jobが起動したフックは新しい連鎖になり、循環の判定が効かなくなるためです。

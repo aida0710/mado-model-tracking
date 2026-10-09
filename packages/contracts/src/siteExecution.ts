@@ -17,8 +17,8 @@ export const CPU_ARCHES: readonly CpuArch[] = ['amd64', 'arm64'];
 /**
  * Where a site Job is between queued and its end:
  * waiting_manual (queued; the requester submits it by hand), submitting (claimed for submission),
- * submitted (in the scheduler queue), waiting_resources (the runner waits for free GPUs),
- * running (the container runs). ssh and local Jobs have no phase.
+ * submitted (in the scheduler queue), waiting_resources (the runner prepares the inputs and waits
+ * for free GPUs), running (the container runs). ssh and local Jobs have no phase.
  */
 export type JobPhase =
   | 'waiting_manual'
