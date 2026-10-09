@@ -14,6 +14,7 @@ import {
   pinRunResumeCheckpoint,
 } from '../repositories/checkpointRepository.js';
 import { findRun } from '../repositories/registryRepository.js';
+import { INPUT_CHECKPOINT_TAG } from '../domain/serverRunTags.js';
 
 // Continuing a new Run from a saved checkpoint. Callers run these inside the transaction that
 // creates the Run, after their own authorization and before the Run's Job is inserted.
@@ -77,10 +78,27 @@ export async function findWorkerResumeCheckpoint(
   run: Run,
 ): Promise<WorkerResumeCheckpoint | null> {
   if (!run.resumeCheckpointId) return null;
-  const checkpoint = await findCheckpoint(connection, {
-    projectId: run.projectId,
-    id: run.resumeCheckpointId,
-  });
+  return workerCheckpoint(connection, { projectId: run.projectId, id: run.resumeCheckpointId });
+}
+
+/**
+ * WorkerJob.inputCheckpoint: the checkpoint a checkpoint_saved hook started this Run for (the
+ * reserved tag), handed to the container as an input rather than a state to resume.
+ */
+export async function findWorkerInputCheckpoint(
+  connection: Connection,
+  run: Run,
+): Promise<WorkerResumeCheckpoint | null> {
+  const checkpointId = run.tags[INPUT_CHECKPOINT_TAG];
+  if (!checkpointId) return null;
+  return workerCheckpoint(connection, { projectId: run.projectId, id: checkpointId });
+}
+
+async function workerCheckpoint(
+  connection: Connection,
+  reference: { projectId: string; id: string },
+): Promise<WorkerResumeCheckpoint> {
+  const checkpoint = await findCheckpoint(connection, reference);
   assertCheckpointArtifactsSaved(checkpoint);
   return {
     id: checkpoint.id,

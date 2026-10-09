@@ -298,6 +298,22 @@ outputs:
 
 M3をM4より先にするのは、フックやドライバーが作るJobも、arrayとshardの上で動くためです。
 
+## 実装の状況（2026-10-09）
+
+M1・M3・M4の大部分と、M2・M5の一部を実装しました（APIの詳細は[api-contract.md](../api-contract.md)の「外部の計算機（site）」「フックとドライバー」、フックの使い方は[hooks.md](../hooks.md)）。実機（M0）ではまだ確かめていません。
+
+設計から変えたこと:
+
+| 設計 | 実装 | 理由 |
+|---|---|---|
+| ComputeTargetを実行側へ移す | ComputeTargetに`executor='site'`を足し、接続設定を持たないsiteとして残す | ssh/localの実行先と同じ一覧・権限・Job画面を使えます。siteは名前・CPU・runtime・投入方式だけを持ちます |
+| SIFへの変換はtracking側 | runnerがsiteの上で`apptainer pull --arch`し、cacheを使い回す | 全部のスパコンが外へ通信できるので、変換したSIFを運ぶより速く、trackingに大きいファイルが溜まりません |
+| ジョブの雛形はYAML | TOML（`mmt-job.toml`） | Python標準のtomllibで読め、依存を増やしません |
+| 署名付きURLでの直接upload | 既存のupload session（再開可能、part単位）をJob tokenで使う | 保存先ごとの署名を作る仕組みが要るので後回しにしました |
+| Python runtimeをbase imageへ置き換える | ssh/localではPython runtimeを残し、siteはコンテナだけ | 今のworkerの利用者を壊さないためです |
+
+まだ作っていないもの: 署名付きURL、pilot job、MLflowの`checkpoints/step-N/`でのフック、手動投入のsiteで待ち行列から外す仕組み（取り消したJobのrunnerは起動してもtokenが401になるのですぐ終わります）、arrayの一括作成（今は1件ずつ検証して作るので、数千件では作成に数十秒かかります）。
+
 ## 残るリスクと確認すること
 
 - OTPのサイトでは、投入のたびに人の操作が要ります。arrayにまとめて、回数を減らします。

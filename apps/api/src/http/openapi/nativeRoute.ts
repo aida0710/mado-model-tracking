@@ -19,8 +19,12 @@ export type RouteAccess =
   | { kind: 'project'; role: ProjectRole; scope: TokenScope; sessionOnly?: boolean }
   // A global administrator; an API token needs `admin` and no Project restriction.
   | { kind: 'globalAdmin'; sessionOnly?: boolean }
-  // A Project-bound API token with `worker:execute` (the worker process).
-  | { kind: 'worker' };
+  // A Project-bound API token with `worker:execute` (the worker process, a site's launcher).
+  | { kind: 'worker' }
+  // The Job token (mmtj_) of the Job in the path: a site's runner, or driver code in the Job.
+  | { kind: 'jobToken' }
+  // The requester's own API token with `scope`; browser sessions and Job tokens get 403.
+  | { kind: 'apiToken'; scope: TokenScope };
 
 /** A body that is not JSON: raw bytes, CSV, a redirect target. */
 export interface NonJsonContent {
@@ -63,6 +67,7 @@ export const PROJECT_VIEWER: RouteAccess = { kind: 'project', role: 'viewer', sc
 export const PROJECT_ADMIN: RouteAccess = { kind: 'project', role: 'admin', scope: 'admin' };
 export const GLOBAL_ADMIN: RouteAccess = { kind: 'globalAdmin' };
 export const WORKER: RouteAccess = { kind: 'worker' };
+export const JOB_TOKEN: RouteAccess = { kind: 'jobToken' };
 
 export function projectEditor(scope: TokenScope): RouteAccess {
   return { kind: 'project', role: 'editor', scope };

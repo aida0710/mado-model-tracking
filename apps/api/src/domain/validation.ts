@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import { isValidStorageBackendName } from '@mmt/platform';
 import {
+  CPU_ARCHES,
   DATASET_TRANSFER_MODES,
   DEFAULT_DATASET_CACHE_MAX_BYTES,
+  MAX_JOB_GPU_COUNT,
+  MAX_JOB_WALLTIME_SECONDS,
   MIN_DATASET_CACHE_MAX_BYTES,
+  SITE_SUBMISSION_MODES,
 } from '@mmt/contracts';
 import { executionRuntimeSchema, runtimeKindSchema } from './runtimeValidation.js';
 import { codeSourceSchema } from './codeSourceValidation.js';
@@ -199,19 +203,25 @@ export const maxAttemptsSchema = z
   .min(1)
   .max(MAX_JOB_ATTEMPTS)
   .default(DEFAULT_JOB_ATTEMPTS);
+// A scheduler queue shorter than a minute would fail Jobs before any scheduler reports them.
+const MIN_QUEUE_TIMEOUT_SECONDS = 60;
+const MAX_QUEUE_TIMEOUT_SECONDS = 30 * 24 * 60 * 60;
+export const walltimeSecondsSchema = z.number().int().min(1).max(MAX_JOB_WALLTIME_SECONDS);
+export const gpuCountSchema = z.number().int().min(0).max(MAX_JOB_GPU_COUNT);
+// Connection settings are for ssh and local targets; a site leaves them empty, and
+// validateTargetConfiguration checks which of them each executor needs.
 export const targetSchema = z.strictObject({
   name: nameSchema,
   host: z
     .string()
-    .min(1)
     .max(253)
     .refine((value) => !value.startsWith('-') && !/[\s\0]/.test(value)),
   port: z.number().int().min(1).max(65535),
-  username: z.string().regex(/^[a-zA-Z_][a-zA-Z0-9_.-]*$/),
+  username: z.string().regex(/^(?:[a-zA-Z_][a-zA-Z0-9_.-]*)?$/),
   sshKeyPath: z.string().max(4000),
   knownHostsPath: z.string().max(4000),
-  workDirectory: z.string().min(1).max(4000),
-  pythonExecutable: z.string().min(1).max(4000),
+  workDirectory: z.string().max(4000),
+  pythonExecutable: z.string().max(4000),
   runtimeKinds: z
     .array(runtimeKindSchema)
     .min(1)
@@ -221,25 +231,45 @@ export const targetSchema = z.strictObject({
   gpuIds: gpuIdsSchema,
   maxConcurrentJobs: z.number().int().min(1).max(128),
   enabled: z.boolean(),
-  executor: z.enum(['ssh', 'local']),
+  executor: z.enum(['ssh', 'local', 'site']),
   datasetCacheMaxBytes: z
     .number()
     .int()
     .min(MIN_DATASET_CACHE_MAX_BYTES)
     .max(Number.MAX_SAFE_INTEGER)
     .default(DEFAULT_DATASET_CACHE_MAX_BYTES),
-  datasetTransfer: z.enum(DATASET_TRANSFER_MODES).default('relay'),
+  // Omitted: relay for ssh and local, direct for a site (its runner downloads with the Job token).
+  datasetTransfer: z.enum(DATASET_TRANSFER_MODES).optional(),
+  submissionMode: z.enum(SITE_SUBMISSION_MODES).default('automatic'),
+  cpuArch: z.enum(CPU_ARCHES).default('amd64'),
+  supportsArray: z.boolean().default(false),
+  queueTimeoutSeconds: z
+    .number()
+    .int()
+    .min(MIN_QUEUE_TIMEOUT_SECONDS)
+    .max(MAX_QUEUE_TIMEOUT_SECONDS)
+    .nullable()
+    .default(null),
 });
+// gpuCount, retryOnFailure and retryOnTimeout are for site Jobs (validateSiteJobOptions).
 export const jobCreateSchema = z.strictObject({
   runId: uuidSchema,
   targetId: uuidSchema,
   gpuIds: gpuIdsSchema.default([]),
+  gpuCount: gpuCountSchema.default(0),
+  walltimeSeconds: walltimeSecondsSchema.nullable().default(null),
   maxAttempts: maxAttemptsSchema,
+  retryOnFailure: z.boolean().default(false),
+  retryOnTimeout: z.boolean().default(false),
+  allowChildJobs: z.boolean().default(false),
 });
 export const targetPatchSchema = targetSchema.partial().extend({
   runtimeKinds: targetSchema.shape.runtimeKinds.removeDefault().optional(),
   datasetCacheMaxBytes: targetSchema.shape.datasetCacheMaxBytes.removeDefault().optional(),
-  datasetTransfer: targetSchema.shape.datasetTransfer.removeDefault().optional(),
+  submissionMode: targetSchema.shape.submissionMode.removeDefault().optional(),
+  cpuArch: targetSchema.shape.cpuArch.removeDefault().optional(),
+  supportsArray: targetSchema.shape.supportsArray.removeDefault().optional(),
+  queueTimeoutSeconds: targetSchema.shape.queueTimeoutSeconds.removeDefault().optional(),
 });
 export const tokenCreateSchema = z.strictObject({
   name: nameSchema,
@@ -318,5 +348,6 @@ export type CodeVersionCreate = z.infer<typeof codeVersionSchema>;
 export type ModelVersionCreate = z.infer<typeof modelVersionSchema>;
 export type DatasetVersionCreate = z.infer<typeof datasetVersionSchema>;
 export type JobCreate = z.infer<typeof jobCreateSchema>;
+export type TargetCreate = z.infer<typeof targetSchema>;
 export type TargetPatch = z.infer<typeof targetPatchSchema>;
 export type PluginPatch = z.infer<typeof pluginPatchSchema>;

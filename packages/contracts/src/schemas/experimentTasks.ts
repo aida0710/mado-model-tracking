@@ -35,6 +35,8 @@ export const experimentTaskSchema = namedContractSchema(
     tags: stringMapSchema,
     targetId: idSchema.nullable(),
     gpuIds: z.array(z.string()),
+    gpuCount: z.number().int(),
+    walltimeSeconds: z.number().int().nullable(),
     outputModel: taskOutputModelSchema.nullable().optional(),
     revision: z.number().int(),
     createdAt: timestampSchema,

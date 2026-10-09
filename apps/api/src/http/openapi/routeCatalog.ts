@@ -127,6 +127,29 @@ import {
   targetCheckCompleteSchema,
 } from '../../domain/targetCheckValidation.js';
 import {
+  childJobCreateSchema,
+  childJobWaitQuerySchema,
+  hookCreateSchema,
+  hookExecutionQuerySchema,
+  hookToggleSchema,
+  hookTriggerRequestSchema,
+} from '../../domain/hookValidation.js';
+import {
+  jobArrayCreateSchema,
+  manualSubmissionClaimSchema,
+  manualSubmissionReportSchema,
+  runnerFinishSchema,
+  runnerHeartbeatSchema,
+  runnerLogsSchema,
+  runnerMetricsSchema,
+  runnerOutputsSchema,
+  runnerStartSchema,
+  siteCancellationQuerySchema,
+  siteCancellationReportSchema,
+  siteSubmissionClaimSchema,
+  siteSubmissionReportSchema,
+} from '../../domain/siteExecutionValidation.js';
+import {
   codeVersionSchema as codeVersionCreateSchema,
   completeSchema,
   datasetCreateSchema,
@@ -182,6 +205,7 @@ import { runSearchSchema } from '../../routes/runSearchRoutes.js';
 import { MAX_DATASET_VERSION_BODY_BYTES, SYNC_BATCH_MAX_BYTES } from '../requestBodyLimits.js';
 import {
   GLOBAL_ADMIN,
+  JOB_TOKEN,
   PROJECT_ADMIN,
   PROJECT_VIEWER,
   WORKER,
@@ -213,6 +237,10 @@ const artifactBytes: NonJsonContent = {
   contentType: 'application/octet-stream',
   description: 'Artifactの本体。Content-TypeはArtifactのmimeType',
 };
+const webhookBody: NonJsonContent = {
+  contentType: 'application/json',
+  description: '送り手の本文そのもの（JSON以外も可）。署名はこのbyte列に対して計算する',
+};
 const artifactUploadBody: NonJsonContent = {
   contentType: 'application/octet-stream',
   description: 'Artifactの本体（任意のMIME type）。Content-Typeがそのまま保存される',
@@ -243,6 +271,31 @@ const ARTIFACTS_WRITE = projectEditor('artifacts:write');
 // Deleting is for Project admins (decisions.md); a token needs artifacts:write (or admin).
 const ARTIFACTS_DELETE: RouteAccess = { kind: 'project', role: 'admin', scope: 'artifacts:write' };
 const JOBS_WRITE = projectEditor('jobs:write');
+// What a site Job asks of its target (gpuCount, retries), how it maps to the target's runtime,
+// and (MMT_IMAGE_PLATFORM_CHECK=enforce) whether its image is built for the target's CPU.
+const SITE_JOB_ERRORS = [
+  ...routeError(
+    422,
+    'site_gpu_ids',
+    'site_only_setting',
+    'incompatible_runtime',
+    'image_platform_mismatch',
+  ),
+  ...routeError(503, 'image_registry_unavailable'),
+];
+const TARGET_SETTING_ERRORS = routeError(
+  422,
+  'site_target_settings',
+  'site_only_setting',
+  'target_connection_required',
+  'ssh_config_required',
+  'local_executor_disabled',
+);
+// Runner reports name the instance that started the Job (RunnerService).
+const RUNNER_ERRORS = [
+  ...routeError(403, 'runner_token_required'),
+  ...routeError(409, 'runner_conflict', 'conflict'),
+];
 const SERVICE_ACCOUNT_ADMIN = { ...PROJECT_ADMIN, sessionOnly: true };
 
 // Saving a revision captures its snapshot blocks through the series, analysis and media services.
@@ -1577,6 +1630,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: JOBS_WRITE,
     body: jobCreateSchema,
     responses: { 201: contract.jobSchema },
+    errors: SITE_JOB_ERRORS,
   },
   {
     method: 'post',
@@ -1623,6 +1677,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: GLOBAL_ADMIN,
     body: targetSchema,
     responses: { 201: contract.computeTargetSchema },
+    errors: TARGET_SETTING_ERRORS,
   },
   {
     method: 'patch',
@@ -1632,6 +1687,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: GLOBAL_ADMIN,
     body: targetPatchSchema,
     responses: { 200: contract.computeTargetSchema },
+    errors: TARGET_SETTING_ERRORS,
   },
   {
     method: 'post',
@@ -1640,7 +1696,10 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     summary: '計算機の接続確認を依頼',
     access: GLOBAL_ADMIN,
     responses: { 201: contract.targetCheckSchema },
-    errors: routeError(409, 'target_check_in_progress'),
+    errors: [
+      ...routeError(409, 'target_check_in_progress'),
+      ...routeError(422, 'site_check_unsupported'),
+    ],
   },
   {
     method: 'get',
@@ -1768,6 +1827,272 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
       ...routeError(409, 'invalid_lease', 'target_check_finished'),
       ...routeError(422, 'target_check_result_too_large', 'target_check_secret_in_result'),
     ],
+  },
+
+  {
+    method: 'post',
+    path: '/api/worker/site-submissions/claim',
+    tag: 'worker',
+    summary: 'siteへの投入を受け取る（launcher）',
+    access: WORKER,
+    body: siteSubmissionClaimSchema,
+    responses: { 200: contract.itemsOf(contract.siteSubmissionSchema) },
+  },
+  {
+    method: 'post',
+    path: '/api/worker/site-submissions/report',
+    tag: 'worker',
+    summary: 'job shellの結果を報告（launcher）',
+    access: WORKER,
+    body: siteSubmissionReportSchema,
+    responses: { 200: contract.itemsOf(contract.jobSchema) },
+    errors: routeError(409, 'invalid_submission'),
+  },
+  {
+    method: 'post',
+    path: '/api/worker/site-submissions/cancellations',
+    tag: 'worker',
+    summary: 'スケジューラの待ち行列から外すJob（launcher）',
+    access: WORKER,
+    body: siteCancellationQuerySchema,
+    responses: { 200: contract.itemsOf(contract.siteSchedulerCancellationSchema) },
+  },
+  {
+    method: 'post',
+    path: '/api/worker/site-submissions/cancellations/report',
+    tag: 'worker',
+    summary: '待ち行列から外したことを報告（launcher）',
+    access: WORKER,
+    body: siteCancellationReportSchema,
+    responses: { 204: null },
+  },
+
+  // sites
+  {
+    method: 'post',
+    path: '/api/projects/:p/job-arrays',
+    tag: 'sites',
+    summary: 'arrayを作成（番号ごとにRunとJob）',
+    access: JOBS_WRITE,
+    body: jobArrayCreateSchema,
+    responses: { 201: contract.jobArrayCreatedSchema },
+    errors: [
+      ...SITE_JOB_ERRORS,
+      ...routeError(422, 'site_target_required', 'dataset_partition_invalid', 'reserved_tag'),
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/job-arrays/:g',
+    tag: 'sites',
+    summary: 'arrayと全員のJob',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.jobArrayCreatedSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/manual-submissions',
+    tag: 'sites',
+    summary: '手動投入を待つ自分のJobの数（siteごと）',
+    access: { kind: 'apiToken', scope: 'read' },
+    responses: { 200: contract.itemsOf(contract.manualSubmissionWaitingSchema) },
+  },
+  {
+    method: 'post',
+    path: '/api/manual-submissions/claim',
+    tag: 'sites',
+    summary: '手動投入する自分のJobを受け取る（mado-tracking submit）',
+    access: { kind: 'apiToken', scope: 'jobs:write' },
+    body: manualSubmissionClaimSchema,
+    responses: { 200: contract.itemsOf(contract.siteSubmissionSchema) },
+    errors: [...routeError(404, 'not_found'), ...routeError(422, 'site_not_manual')],
+  },
+  {
+    method: 'post',
+    path: '/api/manual-submissions/report',
+    tag: 'sites',
+    summary: '手動投入の結果を報告',
+    access: { kind: 'apiToken', scope: 'jobs:write' },
+    body: manualSubmissionReportSchema,
+    responses: { 200: contract.itemsOf(contract.jobSchema) },
+    errors: routeError(409, 'invalid_submission'),
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/start',
+    tag: 'sites',
+    summary: 'runnerの起動を報告',
+    access: JOB_TOKEN,
+    body: runnerStartSchema,
+    responses: { 200: contract.runnerStateSchema },
+    errors: [...RUNNER_ERRORS, ...routeError(409, 'job_not_startable')],
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/heartbeat',
+    tag: 'sites',
+    summary: 'runnerのheartbeat（取り消し要求を返す）',
+    access: JOB_TOKEN,
+    body: runnerHeartbeatSchema,
+    responses: { 200: contract.runnerStateSchema },
+    errors: RUNNER_ERRORS,
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/logs',
+    tag: 'sites',
+    summary: 'runnerからのlog',
+    access: JOB_TOKEN,
+    body: runnerLogsSchema,
+    responses: { 204: null },
+    errors: RUNNER_ERRORS,
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/metrics',
+    tag: 'sites',
+    summary: 'runnerからのmetrics',
+    access: JOB_TOKEN,
+    body: runnerMetricsSchema,
+    responses: { 204: null },
+    errors: RUNNER_ERRORS,
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/outputs',
+    tag: 'sites',
+    summary: '出力の宣言（result.json version 2）',
+    access: JOB_TOKEN,
+    body: runnerOutputsSchema,
+    responses: { 200: contract.workerOutputsResponseSchema },
+    errors: [
+      ...RUNNER_ERRORS,
+      ...routeError(409, 'output_declaration_mismatch'),
+      ...routeError(
+        422,
+        'output_artifact_not_found',
+        'output_declaration_limit',
+        'output_model_kind',
+        'output_model_conflict',
+        'output_model_required',
+        'model_deleted',
+      ),
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/runner/finish',
+    tag: 'sites',
+    summary: 'Jobの終了を報告（自動の再実行を含む）',
+    access: JOB_TOKEN,
+    body: runnerFinishSchema,
+    responses: { 200: contract.runnerFinishResultSchema },
+    errors: [...RUNNER_ERRORS, ...routeError(422, 'inconsistent_completion')],
+  },
+
+  // hooks
+  {
+    method: 'get',
+    path: '/api/projects/:p/hooks',
+    tag: 'hooks',
+    summary: 'フック一覧',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.itemsOf(contract.hookSchema) },
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/hooks',
+    tag: 'hooks',
+    summary: 'フックを作成（webhookのsecretはこの応答だけで返す）',
+    access: JOBS_WRITE,
+    body: hookCreateSchema,
+    responses: { 201: contract.hookCreatedSchema },
+    errors: [
+      ...SITE_JOB_ERRORS,
+      ...routeError(
+        422,
+        'hook_secret_key_missing',
+        'site_target_required',
+        'dataset_partition_invalid',
+        'reserved_tag',
+      ),
+    ],
+  },
+  {
+    method: 'patch',
+    path: '/api/projects/:p/hooks/:id',
+    tag: 'hooks',
+    summary: 'フックの有効・無効を切り替える',
+    access: JOBS_WRITE,
+    body: hookToggleSchema,
+    responses: { 200: contract.hookSchema },
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/hooks/:id/trigger',
+    tag: 'hooks',
+    summary: 'フックを手動で起動（triggerがmanualのフック）',
+    access: JOBS_WRITE,
+    body: hookTriggerRequestSchema,
+    responses: { 201: contract.hookExecutionSchema },
+    errors: [...routeError(409, 'hook_disabled'), ...routeError(422, 'hook_not_manual')],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/hook-executions',
+    tag: 'hooks',
+    summary: 'フックの起動の履歴',
+    access: PROJECT_VIEWER,
+    query: hookExecutionQuerySchema,
+    responses: { 200: contract.hookExecutionPageSchema },
+  },
+  {
+    method: 'post',
+    path: '/api/hooks/:id/webhook',
+    tag: 'hooks',
+    summary: '外部からのwebhookを受ける（署名で確かめる）',
+    access: { kind: 'public' },
+    body: webhookBody,
+    responses: { 202: z.strictObject({ accepted: z.literal(true), executionId: uuidSchema }) },
+    errors: [
+      ...routeError(401, 'invalid_signature'),
+      ...routeError(404, 'not_found'),
+      ...routeError(409, 'hook_disabled'),
+      ...routeError(413, 'body_too_large'),
+      ...routeError(503, 'hook_secret_key_missing'),
+    ],
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/jobs/:j/children',
+    tag: 'hooks',
+    summary: 'ドライバーが子Jobを作成（同じidempotencyKeyの再送は200）',
+    access: JOB_TOKEN,
+    body: childJobCreateSchema,
+    responses: { 200: contract.childJobCreatedSchema, 201: contract.childJobCreatedSchema },
+    errors: [
+      ...SITE_JOB_ERRORS,
+      ...routeError(403, 'driver_token_required', 'child_jobs_not_allowed'),
+      ...routeError(409, 'child_job_limit'),
+      ...routeError(422, 'chain_too_deep', 'site_target_required', 'reserved_tag'),
+    ],
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/jobs/:j/children',
+    tag: 'hooks',
+    summary: '子Job一覧（再実行を含む）',
+    access: PROJECT_VIEWER,
+    responses: { 200: contract.itemsOf(contract.jobSchema) },
+  },
+  {
+    method: 'get',
+    path: '/api/projects/:p/jobs/:j/children/wait',
+    tag: 'hooks',
+    summary: '子Jobがすべて終わるまで待つ（最長60秒）',
+    access: PROJECT_VIEWER,
+    query: childJobWaitQuerySchema,
+    responses: { 200: contract.childJobWaitSchema },
   },
 
   // plugins

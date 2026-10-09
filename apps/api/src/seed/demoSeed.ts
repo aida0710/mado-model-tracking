@@ -310,6 +310,10 @@ export async function seedDemo(
           enabled: true,
           datasetCacheMaxBytes: DEFAULT_DATASET_CACHE_MAX_BYTES,
           datasetTransfer: 'relay',
+          submissionMode: 'automatic',
+          cpuArch: 'amd64',
+          supportsArray: false,
+          queueTimeoutSeconds: null,
         });
     }
     await database.query('INSERT INTO demo_seed_history(name,project_id) VALUES($1,$2)', [

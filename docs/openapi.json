@@ -68,6 +68,14 @@
       "description": "worker専用のprotocol（Projectに限定された worker:execute token）"
     },
     {
+      "name": "sites",
+      "description": "site（外部の計算機）のarray・手動投入・runnerの報告"
+    },
+    {
+      "name": "hooks",
+      "description": "フック（任意のタイミングの自動実行）・webhook・ドライバーの子Job"
+    },
+    {
       "name": "plugins",
       "description": "Mado plugin接続"
     },
@@ -17830,6 +17838,25 @@
                       "maxLength": 100
                     }
                   },
+                  "gpuCount": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "outputModel": {
                     "default": null,
                     "anyOf": [
@@ -18329,6 +18356,23 @@
                       "maxLength": 100
                     }
                   },
+                  "gpuCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "outputModel": {
                     "anyOf": [
                       {
@@ -18638,6 +18682,23 @@
                       "minLength": 1,
                       "maxLength": 100
                     }
+                  },
+                  "gpuCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "name": {
                     "type": "string",
@@ -22086,11 +22147,42 @@
                       "maxLength": 100
                     }
                   },
+                  "gpuCount": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "maxAttempts": {
                     "default": 3,
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 100
+                  },
+                  "retryOnFailure": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "retryOnTimeout": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "allowChildJobs": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -22201,6 +22293,10 @@
           "422": {
             "description": "入力が不正",
             "x-mmt-error-codes": [
+              "site_gpu_ids",
+              "site_only_setting",
+              "incompatible_runtime",
+              "image_platform_mismatch",
               "invalid_request",
               "invalid_reference"
             ],
@@ -22215,6 +22311,7 @@
           "503": {
             "description": "一時的に処理できない",
             "x-mmt-error-codes": [
+              "image_registry_unavailable",
               "oidc_unavailable",
               "internal_error"
             ],
@@ -22701,7 +22798,6 @@
                   },
                   "host": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 253
                   },
                   "port": {
@@ -22711,7 +22807,7 @@
                   },
                   "username": {
                     "type": "string",
-                    "pattern": "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+                    "pattern": "^(?:[a-zA-Z_][a-zA-Z0-9_.-]*)?$"
                   },
                   "sshKeyPath": {
                     "type": "string",
@@ -22723,12 +22819,10 @@
                   },
                   "workDirectory": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 4000
                   },
                   "pythonExecutable": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 4000
                   },
                   "runtimeKinds": {
@@ -22769,7 +22863,8 @@
                     "type": "string",
                     "enum": [
                       "ssh",
-                      "local"
+                      "local",
+                      "site"
                     ]
                   },
                   "datasetCacheMaxBytes": {
@@ -22779,11 +22874,43 @@
                     "maximum": 9007199254740991
                   },
                   "datasetTransfer": {
-                    "default": "relay",
                     "type": "string",
                     "enum": [
                       "relay",
                       "direct"
+                    ]
+                  },
+                  "submissionMode": {
+                    "default": "automatic",
+                    "type": "string",
+                    "enum": [
+                      "automatic",
+                      "manual"
+                    ]
+                  },
+                  "cpuArch": {
+                    "default": "amd64",
+                    "type": "string",
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "supportsArray": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "queueTimeoutSeconds": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 60,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   }
                 },
@@ -22892,6 +23019,11 @@
           "422": {
             "description": "入力が不正",
             "x-mmt-error-codes": [
+              "site_target_settings",
+              "site_only_setting",
+              "target_connection_required",
+              "ssh_config_required",
+              "local_executor_disabled",
               "invalid_request",
               "invalid_reference"
             ],
@@ -22967,7 +23099,6 @@
                   },
                   "host": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 253
                   },
                   "port": {
@@ -22977,7 +23108,7 @@
                   },
                   "username": {
                     "type": "string",
-                    "pattern": "^[a-zA-Z_][a-zA-Z0-9_.-]*$"
+                    "pattern": "^(?:[a-zA-Z_][a-zA-Z0-9_.-]*)?$"
                   },
                   "sshKeyPath": {
                     "type": "string",
@@ -22989,12 +23120,10 @@
                   },
                   "workDirectory": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 4000
                   },
                   "pythonExecutable": {
                     "type": "string",
-                    "minLength": 1,
                     "maxLength": 4000
                   },
                   "runtimeKinds": {
@@ -23032,7 +23161,8 @@
                     "type": "string",
                     "enum": [
                       "ssh",
-                      "local"
+                      "local",
+                      "site"
                     ]
                   },
                   "datasetCacheMaxBytes": {
@@ -23045,6 +23175,35 @@
                     "enum": [
                       "relay",
                       "direct"
+                    ]
+                  },
+                  "submissionMode": {
+                    "type": "string",
+                    "enum": [
+                      "automatic",
+                      "manual"
+                    ]
+                  },
+                  "cpuArch": {
+                    "type": "string",
+                    "enum": [
+                      "amd64",
+                      "arm64"
+                    ]
+                  },
+                  "supportsArray": {
+                    "type": "boolean"
+                  },
+                  "queueTimeoutSeconds": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 60,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
                     ]
                   }
                 },
@@ -23139,6 +23298,11 @@
           "422": {
             "description": "入力が不正",
             "x-mmt-error-codes": [
+              "site_target_settings",
+              "site_only_setting",
+              "target_connection_required",
+              "ssh_config_required",
+              "local_executor_disabled",
               "invalid_request",
               "invalid_reference"
             ],
@@ -23261,6 +23425,7 @@
           "422": {
             "description": "入力が不正",
             "x-mmt-error-codes": [
+              "site_check_unsupported",
               "invalid_request",
               "invalid_reference"
             ],
@@ -25576,6 +25741,4886 @@
               "target_check_secret_in_result",
               "invalid_request",
               "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker/site-submissions/claim": {
+      "post": {
+        "operationId": "postWorkerSiteSubmissionsClaim",
+        "tags": [
+          "worker"
+        ],
+        "summary": "siteへの投入を受け取る（launcher）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "worker:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "worker"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "launcherId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "targetIds": {
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "limit": {
+                    "default": 50,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  }
+                },
+                "required": [
+                  "launcherId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteSubmission"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "worker_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker/site-submissions/report": {
+      "post": {
+        "operationId": "postWorkerSiteSubmissionsReport",
+        "tags": [
+          "worker"
+        ],
+        "summary": "job shellの結果を報告（launcher）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "worker:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "worker"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "launcherId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "results": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "jobIds": {
+                          "minItems": 1,
+                          "maxItems": 10000,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "submitted",
+                            "failed"
+                          ]
+                        },
+                        "schedulerJobId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "error": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 20000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "jobIds",
+                        "outcome"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "launcherId",
+                  "results"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "worker_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "invalid_submission",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker/site-submissions/cancellations": {
+      "post": {
+        "operationId": "postWorkerSiteSubmissionsCancellations",
+        "tags": [
+          "worker"
+        ],
+        "summary": "スケジューラの待ち行列から外すJob（launcher）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "worker:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "worker"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "launcherId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "targetIds": {
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "required": [
+                  "launcherId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteSchedulerCancellation"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "worker_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/worker/site-submissions/cancellations/report": {
+      "post": {
+        "operationId": "postWorkerSiteSubmissionsCancellationsReport",
+        "tags": [
+          "worker"
+        ],
+        "summary": "待ち行列から外したことを報告（launcher）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "worker:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "worker"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "launcherId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "jobIds": {
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "required": [
+                  "launcherId",
+                  "jobIds"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "worker_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/job-arrays": {
+      "post": {
+        "operationId": "postProjectsByPJobArrays",
+        "tags": [
+          "sites"
+        ],
+        "summary": "arrayを作成（番号ごとにRunとJob）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "editor",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "experimentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "inference",
+                      "evaluation",
+                      "training",
+                      "finetuning",
+                      "processing"
+                    ]
+                  },
+                  "codeVersionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "modelVersionId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inputDatasetVersionIds": {
+                    "default": [],
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "parameters": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/JsonValue"
+                    }
+                  },
+                  "tags": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "targetId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "gpuCount": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "maxAttempts": {
+                    "default": 3,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "retryOnFailure": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "retryOnTimeout": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "allowChildJobs": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "datasetPartitionVersionId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "experimentId",
+                  "name",
+                  "kind",
+                  "codeVersionId",
+                  "targetId",
+                  "size"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobArrayCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_gpu_ids",
+              "site_only_setting",
+              "incompatible_runtime",
+              "image_platform_mismatch",
+              "site_target_required",
+              "dataset_partition_invalid",
+              "reserved_tag",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "image_registry_unavailable",
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/job-arrays/{g}": {
+      "get": {
+        "operationId": "getProjectsByPJobArraysByG",
+        "tags": [
+          "sites"
+        ],
+        "summary": "arrayと全員のJob",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "g",
+            "in": "path",
+            "required": true,
+            "description": "Job array（JobArrayGroup）ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobArrayCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/manual-submissions": {
+      "get": {
+        "operationId": "getManualSubmissions",
+        "tags": [
+          "sites"
+        ],
+        "summary": "手動投入を待つ自分のJobの数（siteごと）",
+        "security": [
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "apiToken",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ManualSubmissionWaiting"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "api_token_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/manual-submissions/claim": {
+      "post": {
+        "operationId": "postManualSubmissionsClaim",
+        "tags": [
+          "sites"
+        ],
+        "summary": "手動投入する自分のJobを受け取る（mado-tracking submit）",
+        "security": [
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "apiToken",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "submitterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "limit": {
+                    "default": 50,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  }
+                },
+                "required": [
+                  "targetId",
+                  "submitterId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteSubmission"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "api_token_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_not_manual",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/manual-submissions/report": {
+      "post": {
+        "operationId": "postManualSubmissionsReport",
+        "tags": [
+          "sites"
+        ],
+        "summary": "手動投入の結果を報告",
+        "security": [
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "apiToken",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "submitterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "results": {
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "jobIds": {
+                          "minItems": 1,
+                          "maxItems": 10000,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "submitted",
+                            "failed"
+                          ]
+                        },
+                        "schedulerJobId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "error": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 20000
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "jobIds",
+                        "outcome"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "submitterId",
+                  "results"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "api_token_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "invalid_submission",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/start": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerStart",
+        "tags": [
+          "sites"
+        ],
+        "summary": "runnerの起動を報告",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "host": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 253
+                  },
+                  "gpuIds": {
+                    "default": [],
+                    "maxItems": 128,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "waiting_resources",
+                      "running"
+                    ]
+                  }
+                },
+                "required": [
+                  "instanceId",
+                  "host",
+                  "phase"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "job_not_startable",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/heartbeat": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerHeartbeat",
+        "tags": [
+          "sites"
+        ],
+        "summary": "runnerのheartbeat（取り消し要求を返す）",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "waiting_resources",
+                      "running"
+                    ]
+                  },
+                  "gpuIds": {
+                    "maxItems": 128,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  }
+                },
+                "required": [
+                  "instanceId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerState"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/logs": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerLogs",
+        "tags": [
+          "sites"
+        ],
+        "summary": "runnerからのlog",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "level": {
+                          "type": "string",
+                          "enum": [
+                            "info",
+                            "warning",
+                            "error"
+                          ]
+                        },
+                        "message": {
+                          "type": "string",
+                          "maxLength": 200000
+                        }
+                      },
+                      "required": [
+                        "timestamp",
+                        "level",
+                        "message"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "entries",
+                  "instanceId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/metrics": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerMetrics",
+        "tags": [
+          "sites"
+        ],
+        "summary": "runnerからのmetrics",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metrics": {
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "value": {
+                          "type": "number"
+                        },
+                        "step": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "value",
+                        "step",
+                        "timestamp"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "metrics",
+                  "instanceId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/outputs": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerOutputs",
+        "tags": [
+          "sites"
+        ],
+        "summary": "出力の宣言（result.json version 2）",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "declarations": {
+                    "minItems": 1,
+                    "maxItems": 80,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 79
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "model"
+                            },
+                            "path": {
+                              "type": "string",
+                              "maxLength": 1024
+                            },
+                            "modelId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "metadata": {
+                              "default": {},
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "additionalProperties": {
+                                "$ref": "#/components/schemas/JsonValue"
+                              }
+                            }
+                          },
+                          "required": [
+                            "index",
+                            "kind",
+                            "path"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "index": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 79
+                            },
+                            "kind": {
+                              "type": "string",
+                              "const": "dataset"
+                            },
+                            "datasetId": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "uri": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 4000
+                            },
+                            "path": {
+                              "type": "string",
+                              "maxLength": 1024
+                            },
+                            "digest": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1000
+                            },
+                            "schema": {
+                              "default": {},
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "additionalProperties": {
+                                "$ref": "#/components/schemas/JsonValue"
+                              }
+                            },
+                            "metadata": {
+                              "default": {},
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "maxLength": 200
+                              },
+                              "additionalProperties": {
+                                "$ref": "#/components/schemas/JsonValue"
+                              }
+                            }
+                          },
+                          "required": [
+                            "index",
+                            "kind",
+                            "datasetId",
+                            "digest"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "instanceId",
+                  "declarations"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerOutputsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "output_declaration_mismatch",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "output_artifact_not_found",
+              "output_declaration_limit",
+              "output_model_kind",
+              "output_model_conflict",
+              "output_model_required",
+              "model_deleted",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/runner/finish": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJRunnerFinish",
+        "tags": [
+          "sites"
+        ],
+        "summary": "Jobの終了を報告（自動の再実行を含む）",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "finished",
+                      "failed",
+                      "canceled"
+                    ]
+                  },
+                  "exitCode": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "error": {
+                    "type": "string",
+                    "maxLength": 20000
+                  },
+                  "endReason": {
+                    "type": "string",
+                    "const": "timed_out"
+                  }
+                },
+                "required": [
+                  "instanceId",
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunnerFinishResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "runner_token_required",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "runner_conflict",
+              "conflict",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "inconsistent_completion",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/hooks": {
+      "get": {
+        "operationId": "getProjectsByPHooks",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "フック一覧",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Hook"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postProjectsByPHooks",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "フックを作成（webhookのsecretはこの応答だけで返す）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "editor",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "trigger": {
+                    "type": "string",
+                    "enum": [
+                      "manual",
+                      "model_registered",
+                      "run_finished",
+                      "array_finished",
+                      "checkpoint_saved",
+                      "webhook"
+                    ]
+                  },
+                  "filter": {
+                    "default": {},
+                    "type": "object",
+                    "properties": {
+                      "modelFamilies": {
+                        "minItems": 1,
+                        "maxItems": 100,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        }
+                      },
+                      "experimentIds": {
+                        "minItems": 1,
+                        "maxItems": 1000,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "runKinds": {
+                        "minItems": 1,
+                        "maxItems": 5,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "inference",
+                            "evaluation",
+                            "training",
+                            "finetuning",
+                            "processing"
+                          ]
+                        }
+                      },
+                      "runStatuses": {
+                        "minItems": 1,
+                        "maxItems": 3,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "finished",
+                            "failed",
+                            "canceled"
+                          ]
+                        }
+                      },
+                      "tags": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "maxLength": 4000
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "template": {
+                    "type": "object",
+                    "properties": {
+                      "experimentId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "inference",
+                          "evaluation",
+                          "training",
+                          "finetuning",
+                          "processing"
+                        ]
+                      },
+                      "codeVersionId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "modelVersionId": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "inheritModelVersion": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "inputDatasetVersionIds": {
+                        "default": [],
+                        "maxItems": 1000,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "inheritOutputDatasets": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "parameters": {
+                        "default": {},
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "additionalProperties": {
+                          "$ref": "#/components/schemas/JsonValue"
+                        }
+                      },
+                      "tags": {
+                        "default": {},
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 200
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "maxLength": 4000
+                        }
+                      },
+                      "targetId": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "gpuIds": {
+                        "default": [],
+                        "maxItems": 128,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      },
+                      "gpuCount": {
+                        "default": 0,
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 64
+                      },
+                      "walltimeSeconds": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 2592000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "arraySize": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 10000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "datasetPartitionVersionId": {
+                        "default": null,
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "maxAttempts": {
+                        "default": 3,
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      "retryOnFailure": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "retryOnTimeout": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "allowChildJobs": {
+                        "default": false,
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "experimentId",
+                      "kind",
+                      "codeVersionId",
+                      "targetId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "checkpointMode": {
+                    "default": "every",
+                    "type": "string",
+                    "enum": [
+                      "every",
+                      "every_k",
+                      "latest",
+                      "skip_if_running"
+                    ]
+                  },
+                  "checkpointEvery": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "concurrency": {
+                    "default": "queue",
+                    "type": "string",
+                    "enum": [
+                      "queue",
+                      "skip_if_running"
+                    ]
+                  },
+                  "maxStartsPerHour": {
+                    "default": 60,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "webhookSignature": {
+                    "type": "string",
+                    "enum": [
+                      "github",
+                      "mmt"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "trigger",
+                  "template"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_gpu_ids",
+              "site_only_setting",
+              "incompatible_runtime",
+              "image_platform_mismatch",
+              "hook_secret_key_missing",
+              "site_target_required",
+              "dataset_partition_invalid",
+              "reserved_tag",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "image_registry_unavailable",
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/hooks/{id}": {
+      "patch": {
+        "operationId": "patchProjectsByPHooksById",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "フックの有効・無効を切り替える",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "editor",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/hooks/{id}/trigger": {
+      "post": {
+        "operationId": "postProjectsByPHooksByIdTrigger",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "フックを手動で起動（triggerがmanualのフック）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "jobs:write"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "editor",
+          "scope": "jobs:write"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/JsonValue"
+                    }
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookExecution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "hook_disabled",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "hook_not_manual",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/hook-executions": {
+      "get": {
+        "operationId": "getProjectsByPHookExecutions",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "フックの起動の履歴",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "hookId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookExecutionPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/hooks/{id}/webhook": {
+      "post": {
+        "operationId": "postHooksByIdWebhook",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "外部からのwebhookを受ける（署名で確かめる）",
+        "security": [],
+        "x-mmt-access": {
+          "kind": "public"
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "送り手の本文そのもの（JSON以外も可）。署名はこのbyte列に対して計算する",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/json"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "受け付けた（非同期に処理する）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "executionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "accepted",
+                    "executionId"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "invalid_signature"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "hook_disabled",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "hook_secret_key_missing",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/children": {
+      "post": {
+        "operationId": "postProjectsByPJobsByJChildren",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "ドライバーが子Jobを作成（同じidempotencyKeyの再送は200）",
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "jobToken"
+        },
+        "x-mmt-job-token": "write",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "experimentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "inference",
+                      "evaluation",
+                      "training",
+                      "finetuning",
+                      "processing"
+                    ]
+                  },
+                  "codeVersionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "modelVersionId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "inputDatasetVersionIds": {
+                    "default": [],
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "parameters": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/JsonValue"
+                    }
+                  },
+                  "tags": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 4000
+                    }
+                  },
+                  "targetId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "gpuIds": {
+                    "default": [],
+                    "maxItems": 128,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    }
+                  },
+                  "gpuCount": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 64
+                  },
+                  "walltimeSeconds": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 2592000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "arraySize": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "datasetPartitionVersionId": {
+                    "default": null,
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxAttempts": {
+                    "default": 3,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "retryOnFailure": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "retryOnTimeout": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "allowChildJobs": {
+                    "default": false,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "idempotencyKey",
+                  "name",
+                  "kind",
+                  "codeVersionId",
+                  "targetId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildJobCreated"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildJobCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "driver_token_required",
+              "child_jobs_not_allowed",
+              "password_change_required",
+              "invalid_origin",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "child_job_limit",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_gpu_ids",
+              "site_only_setting",
+              "incompatible_runtime",
+              "image_platform_mismatch",
+              "chain_too_deep",
+              "site_target_required",
+              "reserved_tag",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "image_registry_unavailable",
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getProjectsByPJobsByJChildren",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "子Job一覧（再実行を含む）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/jobs/{j}/children/wait": {
+      "get": {
+        "operationId": "getProjectsByPJobsByJChildrenWait",
+        "tags": [
+          "hooks"
+        ],
+        "summary": "子Jobがすべて終わるまで待つ（最長60秒）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "viewer",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "read",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "j",
+            "in": "path",
+            "required": true,
+            "description": "Job ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "timeoutSeconds",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildJobWait"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "project_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
             ],
             "content": {
               "application/json": {
@@ -40055,6 +45100,53 @@
         ],
         "additionalProperties": false
       },
+      "ChildJobCreated": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "arrayGroupId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          }
+        },
+        "required": [
+          "created",
+          "arrayGroupId",
+          "jobs"
+        ],
+        "additionalProperties": false
+      },
+      "ChildJobWait": {
+        "type": "object",
+        "properties": {
+          "done": {
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/JobStatusCounts"
+          }
+        },
+        "required": [
+          "done",
+          "counts"
+        ],
+        "additionalProperties": false
+      },
       "Code": {
         "type": "object",
         "properties": {
@@ -40510,7 +45602,8 @@
             "type": "string",
             "enum": [
               "ssh",
-              "local"
+              "local",
+              "site"
             ]
           },
           "datasetCacheMaxBytes": {
@@ -40523,6 +45616,35 @@
             "enum": [
               "relay",
               "direct"
+            ]
+          },
+          "submissionMode": {
+            "type": "string",
+            "enum": [
+              "automatic",
+              "manual"
+            ]
+          },
+          "cpuArch": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64"
+            ]
+          },
+          "supportsArray": {
+            "type": "boolean"
+          },
+          "queueTimeoutSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },
@@ -40542,7 +45664,11 @@
           "enabled",
           "executor",
           "datasetCacheMaxBytes",
-          "datasetTransfer"
+          "datasetTransfer",
+          "submissionMode",
+          "cpuArch",
+          "supportsArray",
+          "queueTimeoutSeconds"
         ],
         "additionalProperties": false
       },
@@ -41164,6 +46290,23 @@
               "type": "string"
             }
           },
+          "gpuCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "walltimeSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "outputModel": {
             "anyOf": [
               {
@@ -41202,6 +46345,8 @@
           "tags",
           "targetId",
           "gpuIds",
+          "gpuCount",
+          "walltimeSeconds",
           "revision",
           "createdAt",
           "updatedAt"
@@ -41234,6 +46379,559 @@
           "namespace",
           "name",
           "version"
+        ],
+        "additionalProperties": false
+      },
+      "Hook": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "model_registered",
+              "run_finished",
+              "array_finished",
+              "checkpoint_saved",
+              "webhook"
+            ]
+          },
+          "filter": {
+            "$ref": "#/components/schemas/HookFilter"
+          },
+          "template": {
+            "$ref": "#/components/schemas/HookJobTemplate"
+          },
+          "checkpointMode": {
+            "type": "string",
+            "enum": [
+              "every",
+              "every_k",
+              "latest",
+              "skip_if_running"
+            ]
+          },
+          "checkpointEvery": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "concurrency": {
+            "type": "string",
+            "enum": [
+              "queue",
+              "skip_if_running"
+            ]
+          },
+          "maxStartsPerHour": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "webhookSignature": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "mmt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runAsUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "runAsKind": {
+            "type": "string",
+            "enum": [
+              "human",
+              "service"
+            ]
+          },
+          "runAsName": {
+            "type": "string"
+          },
+          "createdByName": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "name",
+          "enabled",
+          "trigger",
+          "filter",
+          "template",
+          "checkpointMode",
+          "checkpointEvery",
+          "concurrency",
+          "maxStartsPerHour",
+          "webhookSignature",
+          "createdBy",
+          "runAsUserId",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "HookCreated": {
+        "type": "object",
+        "properties": {
+          "hook": {
+            "$ref": "#/components/schemas/Hook"
+          },
+          "webhookSecret": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "webhookPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "hook",
+          "webhookSecret",
+          "webhookPath"
+        ],
+        "additionalProperties": false
+      },
+      "HookExecution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hookId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "queued",
+              "skipped",
+              "failed"
+            ]
+          },
+          "subjectKind": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "model_version",
+              "run",
+              "array_group",
+              "checkpoint",
+              "webhook"
+            ]
+          },
+          "subjectId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "loop_detected",
+                  "chain_too_deep",
+                  "rate_limited",
+                  "already_running",
+                  "owner_access_revoked",
+                  "superseded",
+                  "source_run_unsuccessful",
+                  "source_run_timeout",
+                  "hook_disabled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "jobId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arrayGroupId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "waitingRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "checkpointId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requestedBy": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "jobStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "running",
+                  "finished",
+                  "failed",
+                  "canceled",
+                  "claimed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "hookId",
+          "status",
+          "subjectKind",
+          "subjectId",
+          "reason",
+          "error",
+          "jobId",
+          "arrayGroupId",
+          "runId",
+          "waitingRunId",
+          "checkpointId",
+          "requestedBy",
+          "jobStatus",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "HookExecutionPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HookExecution"
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "HookFilter": {
+        "type": "object",
+        "properties": {
+          "modelFamilies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "experimentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "runKinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "inference",
+                "evaluation",
+                "training",
+                "finetuning",
+                "processing"
+              ]
+            }
+          },
+          "runStatuses": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "finished",
+                "failed",
+                "canceled"
+              ]
+            }
+          },
+          "tags": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "HookJobTemplate": {
+        "type": "object",
+        "properties": {
+          "experimentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "inference",
+              "evaluation",
+              "training",
+              "finetuning",
+              "processing"
+            ]
+          },
+          "codeVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "modelVersionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inheritModelVersion": {
+            "type": "boolean"
+          },
+          "inputDatasetVersionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "inheritOutputDatasets": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "tags": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "gpuIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "gpuCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "walltimeSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arraySize": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "datasetPartitionVersionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "retryOnFailure": {
+            "type": "boolean"
+          },
+          "retryOnTimeout": {
+            "type": "boolean"
+          },
+          "allowChildJobs": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "experimentId",
+          "kind",
+          "codeVersionId",
+          "modelVersionId",
+          "inheritModelVersion",
+          "inputDatasetVersionIds",
+          "inheritOutputDatasets",
+          "parameters",
+          "tags",
+          "targetId",
+          "gpuIds",
+          "gpuCount",
+          "walltimeSeconds",
+          "arraySize",
+          "datasetPartitionVersionId",
+          "maxAttempts",
+          "retryOnFailure",
+          "retryOnTimeout",
+          "allowChildJobs"
         ],
         "additionalProperties": false
       },
@@ -41376,6 +47074,160 @@
           },
           "heartbeatStale": {
             "type": "boolean"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "waiting_manual",
+                  "submitting",
+                  "submitted",
+                  "waiting_resources",
+                  "running"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gpuCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "walltimeSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedulerJobId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runnerHost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arrayGroupId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arrayIndex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arraySize": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "timed_out",
+                  "queue_timeout",
+                  "submit_failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parentJobId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chainDepth": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "hookId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowChildJobs": {
+            "type": "boolean"
+          },
+          "retryOnFailure": {
+            "type": "boolean"
+          },
+          "retryOnTimeout": {
+            "type": "boolean"
+          },
+          "datasetPartitionVersionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -41396,7 +47248,118 @@
           "heartbeatAt",
           "exitCode",
           "error",
-          "heartbeatStale"
+          "heartbeatStale",
+          "phase",
+          "gpuCount",
+          "walltimeSeconds",
+          "schedulerJobId",
+          "submittedAt",
+          "runnerHost",
+          "arrayGroupId",
+          "arrayIndex",
+          "arraySize",
+          "endReason",
+          "parentJobId",
+          "chainDepth",
+          "hookId",
+          "allowChildJobs",
+          "retryOnFailure",
+          "retryOnTimeout",
+          "datasetPartitionVersionId"
+        ],
+        "additionalProperties": false
+      },
+      "JobArrayCreated": {
+        "type": "object",
+        "properties": {
+          "arrayGroup": {
+            "$ref": "#/components/schemas/JobArrayGroup"
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            }
+          }
+        },
+        "required": [
+          "arrayGroup",
+          "jobs"
+        ],
+        "additionalProperties": false
+      },
+      "JobArrayGroup": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentJobId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hookId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "targetId",
+          "size",
+          "createdBy",
+          "parentJobId",
+          "hookId",
+          "finishedAt",
+          "createdAt"
         ],
         "additionalProperties": false
       },
@@ -41524,6 +47487,160 @@
           "heartbeatStale": {
             "type": "boolean"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "waiting_manual",
+                  "submitting",
+                  "submitted",
+                  "waiting_resources",
+                  "running"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gpuCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "walltimeSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schedulerJobId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "submittedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runnerHost": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "arrayGroupId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arrayIndex": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "arraySize": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "endReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "timed_out",
+                  "queue_timeout",
+                  "submit_failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parentJobId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chainDepth": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "hookId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowChildJobs": {
+            "type": "boolean"
+          },
+          "retryOnFailure": {
+            "type": "boolean"
+          },
+          "retryOnTimeout": {
+            "type": "boolean"
+          },
+          "datasetPartitionVersionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runName": {
             "type": "string"
           },
@@ -41577,11 +47694,78 @@
           "exitCode",
           "error",
           "heartbeatStale",
+          "phase",
+          "gpuCount",
+          "walltimeSeconds",
+          "schedulerJobId",
+          "submittedAt",
+          "runnerHost",
+          "arrayGroupId",
+          "arrayIndex",
+          "arraySize",
+          "endReason",
+          "parentJobId",
+          "chainDepth",
+          "hookId",
+          "allowChildJobs",
+          "retryOnFailure",
+          "retryOnTimeout",
+          "datasetPartitionVersionId",
           "runName",
           "runKind",
           "taskId",
           "taskName",
           "sweepEarlyStopped"
+        ],
+        "additionalProperties": false
+      },
+      "JobStatusCounts": {
+        "type": "object",
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "claimed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "running": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "finished": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "canceled": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "queued",
+          "claimed",
+          "running",
+          "finished",
+          "failed",
+          "canceled",
+          "total"
         ],
         "additionalProperties": false
       },
@@ -41717,6 +47901,29 @@
           "timestamp",
           "level",
           "message"
+        ],
+        "additionalProperties": false
+      },
+      "ManualSubmissionWaiting": {
+        "type": "object",
+        "properties": {
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetName": {
+            "type": "string"
+          },
+          "waitingJobs": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "targetId",
+          "targetName",
+          "waitingJobs"
         ],
         "additionalProperties": false
       },
@@ -46157,6 +52364,46 @@
         ],
         "additionalProperties": false
       },
+      "RunnerFinishResult": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          },
+          "retryJobId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "job",
+          "retryJobId"
+        ],
+        "additionalProperties": false
+      },
+      "RunnerState": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "$ref": "#/components/schemas/Job"
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "job",
+          "cancelRequested"
+        ],
+        "additionalProperties": false
+      },
       "RunNote": {
         "type": "object",
         "properties": {
@@ -46678,6 +52925,84 @@
           "role",
           "status",
           "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SiteSchedulerCancellation": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "schedulerJobId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId",
+          "targetId",
+          "schedulerJobId"
+        ],
+        "additionalProperties": false
+      },
+      "SiteSubmission": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/ComputeTarget"
+          },
+          "arrayGroupId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requester": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": "string"
+              },
+              "username": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "email",
+              "username"
+            ],
+            "additionalProperties": false
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkerJob"
+            }
+          }
+        },
+        "required": [
+          "target",
+          "arrayGroupId",
+          "requester",
+          "jobs"
         ],
         "additionalProperties": false
       },
@@ -47997,6 +54322,26 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/WorkerResumeCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputCheckpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkerResumeCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "triggerPayload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonObject"
               },
               {
                 "type": "null"

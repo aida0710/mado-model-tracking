@@ -2,6 +2,7 @@ import type { TaskOutputModel } from '@mmt/contracts';
 import { z } from 'zod';
 import {
   executionModeSchema,
+  gpuCountSchema,
   gpuIdsSchema,
   isRelativeFilePath,
   jsonObjectSchema,
@@ -10,6 +11,7 @@ import {
   tagsSchema,
   uniqueIdsSchema,
   uuidSchema,
+  walltimeSecondsSchema,
 } from './validation.js';
 import { isValidVersionTemplate } from './outputModelVersionTemplate.js';
 
@@ -53,6 +55,9 @@ const taskFields = {
   tags: tagsSchema,
   targetId: uuidSchema.nullable(),
   gpuIds: gpuIdsSchema,
+  // Site launches ask for a number of GPUs and a time limit instead of GPU IDs.
+  gpuCount: gpuCountSchema,
+  walltimeSeconds: walltimeSecondsSchema.nullable(),
   outputModel: outputModelSchema.nullable(),
 };
 
@@ -66,6 +71,8 @@ export const taskCreateSchema = z.strictObject({
   tags: taskFields.tags.default({}),
   targetId: taskFields.targetId.default(null),
   gpuIds: taskFields.gpuIds.default([]),
+  gpuCount: taskFields.gpuCount.default(0),
+  walltimeSeconds: taskFields.walltimeSeconds.default(null),
   outputModel: taskFields.outputModel.default(null),
 });
 export const taskPatchSchema = z.strictObject(taskFields).partial().extend({
@@ -76,6 +83,8 @@ export const taskLaunchSchema = z.strictObject({
   executionMode: executionModeSchema.default('run'),
   targetId: uuidSchema.optional(),
   gpuIds: gpuIdsSchema.optional(),
+  gpuCount: gpuCountSchema.optional(),
+  walltimeSeconds: walltimeSecondsSchema.nullable().optional(),
   name: nameSchema.optional(),
   parameters: jsonObjectSchema.optional(),
   modelVersionId: uuidSchema.nullable().optional(),

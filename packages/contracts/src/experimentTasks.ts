@@ -30,6 +30,10 @@ export interface ExperimentTask {
   tags: Record<string, string>;
   targetId: string | null;
   gpuIds: string[];
+  /** GPUs a site Job asks for (sites take a count; ssh/local targets take gpuIds). */
+  gpuCount: number;
+  /** Time limit a site Job asks for; null leaves it to the site's job shell. */
+  walltimeSeconds: number | null;
   /** Registration target for a successful training/finetuning Run; null means none. */
   outputModel?: TaskOutputModel | null;
   revision: number;

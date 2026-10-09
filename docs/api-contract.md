@@ -44,9 +44,9 @@ Originは`MMT_WEB_ORIGIN`/`MMT_PUBLIC_URL`の完全一致を許可し、`MMT_ALL
 - `GET|POST /projects/:p/codes` (name,description?) / `GET|POST /projects/:p/codes/:id/versions` (version,source?,runtime?,entrypoint,testEntrypoint?,requirements?,environment?,supportedModelFamilies,taskTypes)。source/runtime/entrypointは下記とcontracts参照。Qwen2/Qwen3の組合せをサービスで検証。training/finetuningも同じCodeVersion契約を使う。
 - `GET|POST /projects/:p/datasets` (name,namespace?,description?) / `GET|POST /projects/:p/datasets/:id/versions` (version,uri,digest,schema?,metadata?,sourceRunId?,parentDatasetVersionIds?,externalRef?)。sourceRunIdがあればRun.outputへ関係を保存。`content`を付けるとArtifactを本体とする版になる（下の「Artifactを本体とするDatasetVersion」）。
 - `GET /projects/:p/lineage` → LineageGraph。
-- `GET|POST /targets` (ComputeTargetのidを除く。作成はglobal admin)。`runtimeKinds`は重複のないPython/Docker/Singularity/Apptainerの一覧で、省略時は`['python']`。`datasetTransfer`は`relay`（既定）か`direct`、`datasetCacheMaxBytes`は1MiB以上の整数で省略時は100GiB（「入力DatasetVersionの取得」）。取得時に鍵パス等を一般viewerへ出さない。executor=localはdevelopmentの明示許可のみ。
-- `PATCH /targets/:id` → ComputeTarget。全体管理者が設定・有効状態を変更する。queued/claimed/runningのJobが参照中なら接続先・Runtime・GPU・`datasetTransfer`・`datasetCacheMaxBytes`等の変更を409で拒否する。有効切替は可能で、無効targetは新規claimの候補から外す。実行中Jobのleaseを取り消さない。
-- `GET /projects/:p/jobs` / `POST /projects/:p/jobs` (runId,targetId,gpuIds?,maxAttempts?)。Run kindとCodeVersion taskTypes、モデル系列、固定runtimeとtargetの対応runtime、GPU一覧、参照projectを検証。GETの各行はJobListItem（Jobに`runName`,`runKind`,`taskId`,`taskName`,`sweepEarlyStopped`を足したもの）。`sweepEarlyStopped`はRunのtag `mmt.sweepEarlyStopped=true`（Sweepの早期打ち切り）で、人による停止と区別する。
+- `GET|POST /targets` (ComputeTargetのidを除く。作成はglobal admin)。`runtimeKinds`は重複のないPython/Docker/Singularity/Apptainerの一覧で、省略時は`['python']`。`datasetTransfer`は`relay`か`direct`で、省略時はsiteなら`direct`、それ以外は`relay`。`datasetCacheMaxBytes`は1MiB以上の整数で省略時は100GiB（「入力DatasetVersionの取得」）。取得時に鍵パス等を一般viewerへ出さない。executor=localはdevelopmentの明示許可のみ（422 `local_executor_disabled`）。ssh/localはhost・username・workDirectory・pythonExecutableが必要（422 `target_connection_required`）、sshは鍵とknown_hostsのパスも要る（422 `ssh_config_required`）。`executor:'site'`は「外部の計算機（site）」節で、`submissionMode`（`automatic`既定/`manual`）・`cpuArch`（`amd64`既定/`arm64`）・`supportsArray`（既定false）・`queueTimeoutSeconds`（null既定、60秒〜30日）を持つ。siteに接続設定・GPU ID・python runtime・`relay`を指定すると422 `site_target_settings`、site以外に`manual`・`supportsArray`・`queueTimeoutSeconds`を指定すると422 `site_only_setting`。
+- `PATCH /targets/:id` → ComputeTarget。全体管理者が設定・有効状態を変更する。queued/claimed/runningのJobが参照中なら接続先・Runtime・GPU・`datasetTransfer`・`datasetCacheMaxBytes`・`submissionMode`・`supportsArray`・`cpuArch`等の変更を409で拒否する（`queueTimeoutSeconds`は変えられる）。有効切替は可能で、無効targetは新規claimの候補から外す。実行中Jobのleaseを取り消さない。`maxConcurrentJobs`はsiteでは同時に投入中の数（arrayに対応するsiteのarrayは1つ）で、実行中より小さくすると409。
+- `GET /projects/:p/jobs` / `POST /projects/:p/jobs` (runId,targetId,gpuIds?,gpuCount?,walltimeSeconds?,maxAttempts?,retryOnFailure?,retryOnTimeout?,allowChildJobs?)。Run kindとCodeVersion taskTypes、モデル系列、固定runtimeとtargetの対応runtime（422 `incompatible_runtime`）、GPU一覧、参照projectを検証。siteのJobはGPUを数（`gpuCount`、0〜64）で求め、`gpuIds`を指定すると422 `site_gpu_ids`。`gpuCount`・`retryOnFailure`・`retryOnTimeout`をsite以外で指定すると422 `site_only_setting`。`walltimeSeconds`（1秒〜30日）はsiteのjob shellが使い、ssh/localでは記録だけ。`allowChildJobs`は「フックとドライバー」節。`MMT_IMAGE_PLATFORM_CHECK=enforce`ではdockerのimageがtargetの`cpuArch`向けか確かめ（「imageのCPU照合」）、違えば422 `image_platform_mismatch`、registryに届かなければ503 `image_registry_unavailable`。GETの各行はJobListItem（Jobに`runName`,`runKind`,`taskId`,`taskName`,`sweepEarlyStopped`を足したもの）。`sweepEarlyStopped`はRunのtag `mmt.sweepEarlyStopped=true`（Sweepの早期打ち切り）で、人による停止と区別する。
 - `POST /projects/:p/jobs/:j/cancel` / `POST /projects/:p/jobs/:j/retry`。retryは新Run/Jobを作り`{run,job}`。生きているleaseのGPUを解放しない。
 - 個人token: `GET|POST /tokens` (POST:name,kind,projectId,scopes,expiresAt?; `{token:string,item:TokenSummary}`一度だけ返す)。GETは自分が所有する未失効のtoken。`DELETE /tokens/:id`。発行と失効はbrowser sessionだけ（tokenからは403 `session_required`）。tokenはhashと先頭12文字（`tokenPrefix`）だけを保存する。scope候補は`read`,`runs:write`,`registry:write`,`artifacts:write`,`jobs:write`,`worker:execute`,`admin`（contractsの`TOKEN_SCOPES`）。所有者に要るProject roleはscopeごとに`read`=viewer、`*:write`=editor、`worker:execute`・`admin`=admin（`TOKEN_SCOPE_REQUIRED_ROLE`）。worker tokenは設定されたprojectのみclaim可能。`kind:'service'`の個人所有tokenは旧形式で、発行はProject adminに限り、動作は従来どおり（`legacy:true`）。新しいworker・自動実行用のtokenはService Accountで発行する。
 - 期限: 新しいtokenはすべて期限を持つ。上限は`MMT_TOKEN_MAX_LIFETIME_DAYS`（既定365日）で、`expiresAt`を省略すると上限の日時になる。上限を超えると422 `token_lifetime_exceeded`、過去なら422 `invalid_expiry`。移行前の期限なしtokenはそのまま使える。`lastUsedAt`は前回の記録から5分以上たった使用だけで更新する。
@@ -421,6 +421,7 @@ Markdownの文章に図・平行座標・重要度・散布図・Run一覧・med
 - 読み出しはtokenのProject配下（`GET|HEAD /projects/:p/*`、`/mlflow/projects/:p/*`）と、読むだけのsearch（`POST /projects/:p/runs/search`、MLflowの`runs/search`・`experiments/search`・`logged-models/search`・`registered-models/get-latest-versions`）、token自身の情報（`GET /auth/token`。`job=true`を返す）。
 - 書き込みは次の許可表に一致したものだけ。それ以外（`/worker/*`、Run作成、他Runへの書き込み、token発行、Project設定、自動実行rule、Runの説明文、コメント等）は403 `job_token_forbidden`（MLflowは`PERMISSION_DENIED`）。許可表に無いrouteは追加されても既定で拒否される。
   - native: `PATCH /projects/:p/runs/:r`、`POST .../runs/:r/metrics`、`POST .../runs/:r/logs`、`PUT .../runs/:r/artifacts`（`:r`がtokenのRun）。`POST /projects/:p/artifact-uploads`（`body.runId`がtokenのRun）と、そのsessionの`PUT .../parts/:n`・`POST .../complete`・`DELETE /artifact-uploads/:u`（sessionの`run_id`がtokenのRun）。`POST /projects/:p/models`。`POST .../models/:m/versions`と`POST .../datasets/:d/versions`（`body.sourceRunId`がtokenのRun）。
+  - site・ドライバー: runnerの報告（`POST /projects/:p/jobs/:j/runner/start`・`heartbeat`・`logs`・`metrics`・`outputs`・`finish`）と`POST /projects/:p/jobs/:j/children`（`:j`がtokenのJob）。
   - MLflow: `runs/update`・`log-parameter`・`log-metric`・`log-batch`・`set-tag`・`delete-tag`・`log-inputs`・`outputs`・`log-model`（`run_id`/`run_uuid`がtokenのRun）。`registered-models/create`。`model-versions/create`（`run_id`を指定するならtokenのRunで、`source`がtokenのRunのArtifactか、tokenのRunをsourceとするLogged Model）。`POST logged-models`（`source_run_id`がtokenのRun）と、そのLogged Modelの`PATCH`・`PATCH .../tags`・`DELETE .../tags/:key`・`POST .../params`。`PUT mlflow-artifacts/artifacts/runs/<tokenのRun>/…`と`…/models/<tokenのRunのLogged Model>/…`。
 - workerは実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`にJob tokenを渡し、worker tokenは渡さない。Job tokenが無ければ実行コードを起動しない。workerが自分で行うheartbeat・metrics/logs転送・出力upload・completeは従来どおりworker token。
 
@@ -450,12 +451,91 @@ API serverはSSH鍵を持たないので、Compute targetの接続確認はそ�
 
 - TargetCheck `{id,targetId,requestedBy,status:'queued'|'claimed'|'finished'|'failed',workerId,result:TargetCheckResult|null,failureReason:'no_worker'|'claim_timeout'|null,createdAt,claimedAt,finishedAt}`。leaseとworker tokenは返さない。
 - TargetCheckResult `{version:1,items:TargetCheckItem[],gpus:TargetCheckGpu[]|null,runtimeKinds:ExecutionRuntimeKind[],workDirectoryFreeBytes:int|null}`。TargetCheckItem `{name,status:'ok'|'ng'|'unavailable'|'skipped',code,detail}`。`name`は`connection`・`python`・`venv`・`pip`・`git`・`docker`・`apptainer`・`singularity`・`gpu`・`work_directory`・`api`。`ok`だけが`code=null`。`unavailable`は任意の道具（gitやDocker）が無いこと、`ng`はそのままではJobが失敗すること。`detail`は200文字以下の1行（版やパス）。TargetCheckGpuは`nvidia-smi --query-gpu=index,uuid,name,memory.total`の行`{index,uuid,name,memoryTotalMiB}`で、nvidia-smiが無い・失敗したときは`gpus=null`（値を推測で埋めない）。`runtimeKinds`は確認に通ったRuntimeで、候補として示すだけでtargetは変えない。
-- `POST /targets/:id/checks` → TargetCheck（201、`status=queued`）。全体管理者（session、またはProject制限の無い`admin` scope token）だけ。同じtargetにqueued/claimedの確認があれば409 `target_check_in_progress`。無いtargetは404。
+- `POST /targets/:id/checks` → TargetCheck（201、`status=queued`）。全体管理者（session、またはProject制限の無い`admin` scope token）だけ。同じtargetにqueued/claimedの確認があれば409 `target_check_in_progress`。無いtargetは404。siteは接続しないので422 `site_check_unsupported`。
 - `GET /targets/:id/checks` → `{items:TargetCheck[]}`。全体管理者だけ。新しい順に20件。
 - `POST /worker/target-checks/claim` ({workerId,targetIds:string[]}) → `{item:{check,leaseId,target:ComputeTarget}|null}`。worker token（`worker:execute`）。`targetIds`は必須で1件以上（`MMT_WORKER_TARGET_IDS`。省略や空は422）。含まれないtargetの確認は返さない。queuedを`SKIP LOCKED`で1件claimし、同じworker（token＋workerId）がclaim済みの確認があればそれを同じleaseで返す（応答が失われた再送で二重にclaimしない）。local executorが無効ならlocal targetは対象外。
 - `POST /worker/target-checks/:id/complete` ({leaseId,status:'finished'|'failed',result}) → TargetCheck。leaseとworker tokenが一致しなければ409 `invalid_lease`。同じstatusの再送は保存済みの確認を返す。違うstatusや期限切れ後は409 `target_check_finished`。resultは厳密なschemaで検証し（未知のfieldは422）、JSONで16KiB（`MAX_TARGET_CHECK_RESULT_BYTES`）を超えると422 `target_check_result_too_large`。targetの`sshKeyPath`・`knownHostsPath`、API token（`mmt_`/`mmtj_`）、秘密鍵のPEMを含む文字列は422 `target_check_secret_in_result`で保存しない。`failed`はworkerが確認を始められなかったとき（鍵ファイルが無いなど）。
 - 期限: queuedのまま5分（`TARGET_CHECK_QUEUE_TIMEOUT_SECONDS`）は`failed`・`no_worker`、claimから5分（`TARGET_CHECK_CLAIM_TIMEOUT_SECONDS`）報告が無ければ`failed`・`claim_timeout`。依頼・一覧・claimのときに判定する。
 - workerは`MMT_WORKER_TARGET_IDS`があるときだけ、Jobのclaimが空いた間に5秒間隔で確認をclaimし、Jobの監視と並行して確認する（docs/worker.md）。
+
+## 外部の計算機（site）
+
+siteは、trackingが名前・CPU・runtime・投入方式だけを持つ計算機（`ComputeTarget.executor='site'`）。接続先・スケジューラのoption・鍵はsiteの側（launcherの`site.yaml`とjob shell）にあり、trackingは持たない（docs/sites.md）。型はcontractsの`siteExecution.ts`。
+
+- siteのJobは`phase`で段階を表す: `queued`/null（launcherの投入待ち）、`queued`/`waiting_manual`（本人の`mado-tracking submit`待ち）、`claimed`/`submitting`（job shellを実行中）、`claimed`/`submitted`（スケジューラの待ち行列。`schedulerJobId`・`submittedAt`）、`claimed`/`waiting_resources`（runnerが空きGPUを待つ）、`running`/`running`（コンテナが動いている）。終わったJobは最後の段階のままで、`endReason`は`timed_out`・`queue_timeout`・`submit_failed`かnull。ssh/localのJobの`phase`はnull。
+- Runは、runnerが`phase='running'`を報告した時点で`running`になる（claimしただけでは`queued`のまま）。`heartbeatStale`は`waiting_manual`・`submitting`・`submitted`のJobには立たない。
+- workerの`/worker/claim`・`/worker/resume`はsiteのJobを返さず、worker protocolでsiteのJobへ報告もできない（409 `invalid_lease`）。
+- 再実行（`POST /projects/:p/jobs/:j/retry`、自動の再実行）はsiteの項目（gpuCount、walltime、array、フック、親Job、連鎖、各フラグ）を引き継ぐ。runnerが報告した`gpuIds`は引き継がない。
+- Taskは`gpuCount`（既定0）と`walltimeSeconds`（既定null）を持ち、起動（`POST /projects/:p/tasks/:id/launch`）でも指定できる。モデル登録後の自動実行ruleは`gpuCount`を持たないので、siteではGPU 0のJobになる（GPUが要るならフックを使う）。
+
+### 投入（launcher）
+
+- `POST /worker/site-submissions/claim` ({launcherId,targetIds?,limit?}) → `{items:SiteSubmission[]}`。Projectのworker token（`worker:execute`）。`submissionMode='automatic'`で有効なsiteの、queuedかつ`phase=null`のJobを`claimed`/`submitting`にし、lease・worker token・`workerId=launcherId`を付け、Job tokenを発行する（`WorkerJob.jobToken`）。`supportsArray`のsiteではarrayのqueuedの全員を1つのsubmissionにし（`arrayGroupId`、Jobはarray番号順）、それ以外は1Jobずつ。`limit`は1〜50（既定50）で、arrayは1つと数える。siteの`maxConcurrentJobs`を超えて投入しない。SiteSubmissionは`{target,arrayGroupId,requester:{id,email,username},jobs:WorkerJob[]}`で、`requester`はRunの作成者（個人ごとのアカウントを使うsiteでlauncherが選ぶ）。launcherはworkerの一覧（`GET /projects/:p/workers`）にも出る。WorkerJobを作れないJob（消えたcheckpointなど）は`failed`（`submit_failed`）になり、他の投入は続く。
+- `POST /worker/site-submissions/report` ({launcherId,results:[{jobIds,outcome:'submitted'|'failed',schedulerJobId?,error?}]}) → `{items:Job[]}`。`jobIds`はこのlauncherが受け取ったJob（違えば409 `invalid_submission`）。`submitted`は`phase='submitted'`、`schedulerJobId`（直実行のhostではnull）、`submittedAt`。`failed`は`failed`・`submit_failed`（Runも）。同じ内容の再送は今の状態を返す。投入済みと報告したJobを`failed`にする報告は409 `invalid_submission`。受け取った後に取り消された・終わったJobは`schedulerJobId`だけを記録し、runnerが起動していなければ待ち行列から外す対象にする。直実行のhostでrunnerの報告が先に届いた場合も段階は戻さない。
+- `POST /worker/site-submissions/cancellations` ({launcherId,targetIds?}) → `{items:SiteSchedulerCancellation[]}`（`{jobId,targetId,schedulerJobId}`）。このlauncherが投入し、待ち行列から外す必要のあるJob（最大1000件）。launcherはsiteの取消コマンドに`MMT_SCHEDULER_JOB_ID`を渡す。
+- `POST /worker/site-submissions/cancellations/report` ({launcherId,jobIds}) → 204。外し終えたJobを一覧から除く。
+
+### 手動投入（`mado-tracking submit`）
+
+ログインに一時パスワードが要るsiteは`submissionMode='manual'`にし、本人が自分のPCから投入する。3つとも本人のAPI tokenが要り、browser sessionとJob tokenは403 `api_token_required`。
+
+- `GET /manual-submissions` → `{items:ManualSubmissionWaiting[]}`（`{targetId,targetName,waitingJobs}`）。自分が作ったRunの`waiting_manual`のJobの数を、manualのsiteごとに返す。tokenに`read`が要り、Projectに限定されたtokenはそのProjectだけ。
+- `POST /manual-submissions/claim` ({targetId,submitterId,limit?}) → `{items:SiteSubmission[]}`。`jobs:write`。自分のRun（作成者が自分で、今もeditor以上のProject）の`waiting_manual`のJobだけを、launcherのclaimと同じ形で返す。leaseは自分のtokenに付く。siteでないtargetは404 `not_found`、`automatic`のsiteは422 `site_not_manual`。
+- `POST /manual-submissions/report` ({submitterId,results}) → `{items:Job[]}`。`jobs:write`。意味はlauncherのreportと同じ（409 `invalid_submission`）。手動のsiteで待ち行列から外す一覧は無く、取り消したJobのrunnerは起動してもtokenが401になるのですぐ終わる。
+
+### runner（計算ノード）
+
+runnerはsiteの計算ノードでJob token（`mmtj_`）を使って報告する。最初の`start`で選んだ`instanceId`（uuid）を毎回送り、別のinstanceIdは409 `runner_conflict`（再投入された同じJobの2つ目のrunnerなど）。そのJobのJob tokenでない呼び出し、siteでないJobは403 `runner_token_required`。runnerはinstanceIdをコンテナへ渡さない（コンテナも同じJob tokenを持つため）。
+
+- `POST /projects/:p/jobs/:j/runner/start` ({instanceId,host,gpuIds,phase:'waiting_resources'|'running'}) → RunnerState `{job,cancelRequested}`。最初の呼び出しでinstanceId・host・GPUを記録し、`startedAt`を付ける。終わったJobは409 `job_not_startable`。`phase='running'`でJobとRunを`running`にする。段階は戻らない。
+- `POST .../runner/heartbeat` ({instanceId,phase?,gpuIds?}) → RunnerState。5秒ごと。`cancelRequested`がtrueならrunnerはコンテナを止める。段階の変更もここで受ける。終わったJobは409 `conflict`（tokenも401になる）。
+- `POST .../runner/logs` ({instanceId,entries}) → 204、`POST .../runner/metrics` ({instanceId,metrics}) → 204。
+- `POST .../runner/outputs` ({instanceId,declarations}) → `{items:RunOutputDeclaration[]}`。workerの「出力の宣言」と同じ検証（409 `output_declaration_mismatch`、422 `output_model_kind`など）。Artifactは先に既存のupload（`PUT /projects/:p/runs/:r/artifacts`、upload session）でJob tokenを使って保存する。
+- `POST .../runner/finish` ({instanceId,status:'finished'|'failed'|'canceled',exitCode?,error?,endReason?:'timed_out'}) → RunnerFinishResult `{job,retryJobId}`。`finished`で非zeroの`exitCode`は422 `inconsistent_completion`。`endReason:'timed_out'`（スケジューラの時間切れのSIGTERM）は`failed`・`timed_out`。取消を求められたJobは`finished`以外なら`canceled`になり、再実行しない。`retryOnTimeout`のJobが時間切れなら最新のcheckpointから（無ければこの試行の開始点から）、`retryOnFailure`のJobが失敗ならこの試行の開始点から、`maxAttempts`まで自動で再実行し、新しいJobのIDを返す。再実行はRunの終了より前に作るので、arrayとフックは再実行を待つ。終わった後はJob tokenが401になるので、runnerはfinishの再送で401が返ったら終わったものとして扱う。
+
+### array
+
+- `POST /projects/:p/job-arrays` (JobArrayCreate `{experimentId,name,kind,codeVersionId,modelVersionId?,inputDatasetVersionIds?,parameters?,tags?,targetId,gpuCount?,walltimeSeconds?,size,maxAttempts?,retryOnFailure?,retryOnTimeout?,allowChildJobs?,datasetPartitionVersionId?}`) → 201 JobArrayCreated `{arrayGroup,jobs}`。editor、tokenは`runs:write`と`jobs:write`。番号（0〜size-1、最大10000）ごとにRun（名前は`<name> [<番号>]`）とJobを作り、Runに予約tag `mmt.arrayGroupId`・`mmt.arrayIndex`を付ける。siteだけ（422 `site_target_required`）。予約tagは422 `reserved_tag`。`datasetPartitionVersionId`は入力に含まれる`artifacts`の版で（違えば422 `dataset_partition_invalid`）、runnerはファイル一覧をpath順に並べ、`位置 % size == 番号`のファイルだけを用意する。JobはarrayIndexとarraySizeを持つ。
+- `GET /projects/:p/job-arrays/:g` → JobArrayCreated（全員の全試行、番号と試行の順）。viewer。`arrayGroup.finishedAt`は全員の最後の試行が終わり、待つ再実行が無くなった時刻。
+- 作成はRunとJobを1件ずつ検証して作るので、数千件のarrayは作成の応答に数十秒かかる。
+
+### 監視と期限
+
+- `queueTimeoutSeconds`を過ぎても`submitted`のJobは`failed`・`queue_timeout`になり、launcherの取消一覧に入る。`submitting`のまま15分（`SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS`）結果が報告されないJobは`failed`・`submit_failed`。API serverが30秒ごとに判定する（複数のprocessでは1つだけ）。runnerが起動したJobはここでは終わらせない（runnerが報告する）。
+
+### imageのCPU照合
+
+- `MMT_IMAGE_PLATFORM_CHECK=enforce`（既定`off`）では、dockerのimageを使うJob・Task・自動実行rule・フック・子Jobを保存するとき、registry（Docker Registry HTTP API v2、https）からimageのmanifestを読み、`linux/<target.cpuArch>`を含むかを確かめる。含まなければ422 `image_platform_mismatch`、registryに届かない・読めなければ503 `image_registry_unavailable`。Docker Hubなどtokenを求めるregistryには自動でtokenを取り、非公開のimageには`MMT_REGISTRY_USERNAME`・`MMT_REGISTRY_PASSWORD`を使う。imageはdigestで固定なので、結果はprocessの中で使い回す。Apptainer/Singularityしかないsiteでも、runnerがdockerのimageを`apptainer pull --arch`でSIFへ変えるので、同じ照合が当てはまる。
+
+## フックとドライバー
+
+フックは、Projectで何かが起きたときにJobを起動する（docs/hooks.md）。モデル登録後の自動実行ruleを広げたもので、ruleはそのまま使える。型はcontractsの`hooks.ts`。
+
+- `GET /projects/:p/hooks` → `{items:Hook[]}`。viewer。
+- `POST /projects/:p/hooks` (HookCreate `{name,trigger,filter?,template,checkpointMode?,checkpointEvery?,concurrency?,maxStartsPerHour?,webhookSignature?}`) → 201 HookCreated `{hook,webhookSecret,webhookPath}`。editor、tokenは`jobs:write`。フックは作成者として動き（`runAsUserId`）、作成者がeditor以上でなくなると起動は`skipped`（`owner_access_revoked`）。`trigger`は`manual`・`model_registered`・`run_finished`・`array_finished`・`checkpoint_saved`・`webhook`。`template`は1回の起動で作るJob（`{experimentId,kind,codeVersionId,modelVersionId,inheritModelVersion,inputDatasetVersionIds,inheritOutputDatasets,parameters,tags,targetId,gpuIds,gpuCount,walltimeSeconds,arraySize,datasetPartitionVersionId,maxAttempts,retryOnFailure,retryOnTimeout,allowChildJobs}`）で、作成時にCode・target・runtime・GPU・入力を起動と同じように確かめる（`arraySize`はsiteだけで422 `site_target_required`、予約tagは422 `reserved_tag`、分割の版は422 `dataset_partition_invalid`）。`webhookSignature`（`github`か`mmt`）はtrigger `webhook`だけに指定し、`checkpointMode`はtrigger `checkpoint_saved`だけ、`checkpointEvery`は`every_k`だけ、`model_registered`では`template.modelVersionId`を指定しない（どれも422 `invalid_request`）。trigger `webhook`には`MMT_HOOK_SECRET_KEY`（base64の32 byte）が要り、無ければ422 `hook_secret_key_missing`。secretは作成時に一度だけ返し、サーバーは暗号化して持つ。`webhookPath`は`/api/hooks/<id>/webhook`。設定は作成後に変えられない（`enabled`だけ変えられる）。
+- `PATCH /projects/:p/hooks/:id` ({enabled}) → Hook。editor。
+- `POST /projects/:p/hooks/:id/trigger` ({payload?,idempotencyKey?}) → 201 HookExecution。trigger `manual`だけ（違えば422 `hook_not_manual`）。無効なフックは409 `hook_disabled`。同じ`idempotencyKey`の再送は同じ起動を返す。`payload`（256KiBまで。超えると413 `body_too_large`）はJobへ渡る。
+- `GET /projects/:p/hook-executions?hookId=&limit=&cursor=` → HookExecutionPage `{items,nextCursor}`。新しい順、`limit`は1〜200（既定50）。HookExecutionは`{id,projectId,hookId,status:'pending'|'queued'|'skipped'|'failed',subjectKind,subjectId,reason,error,jobId,arrayGroupId,runId,waitingRunId,checkpointId,requestedBy,jobStatus,createdAt,updatedAt}`。
+- `POST /hooks/:id/webhook` → 202 `{accepted:true,executionId}`。sessionもtokenも要らず、署名で確かめる。`github`は`X-Hub-Signature-256: sha256=<hex HMAC-SHA256(secret, 本文)>`で、重複判定は`X-GitHub-Delivery`。`mmt`は`X-MMT-Signature: t=<unix秒>,v1=<hex HMAC-SHA256(secret, "<t>.<本文>")>`で、時刻のずれは5分まで、重複判定は`X-MMT-Delivery`。署名が合わない401 `invalid_signature`、無いフック404 `not_found`、無効なフック409 `hook_disabled`（署名が合ったときだけ返す）、本文が256KiBを超えると413 `body_too_large`、鍵が無い・違うと503 `hook_secret_key_missing`。同じ配信IDの再送は同じ`executionId`。本文がJSONのobjectならそのまま、そうでなければ`{body:<本文>}`がJobへ渡る。
+
+### 起動の判定
+
+- フィルタ（`filter`）は`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`で、全部の条件に合う出来事だけが起動する（合わなければ記録も残さない）。`manual`と`webhook`はフィルタを使わない。
+- 出来事ごとに1回だけ起動する（`model_version:<id>`・`run:<id>`・`array_group:<id>`・`checkpoint:<id>`・配信ID）。
+- 起動しない理由（`status='skipped'`の`reason`）: `hook_disabled`（待っている間に無効にされた）、`owner_access_revoked`、`loop_detected`（同じ連鎖に同じフックがもういる）、`chain_too_deep`（連鎖が10段を超える。`MAX_JOB_CHAIN_DEPTH`）、`rate_limited`（直近1時間の起動が`maxStartsPerHour`に達した）、`already_running`（`concurrency='skip_if_running'`か`checkpointMode='skip_if_running'`で、このフックのJobが終わっていない）、`superseded`（`checkpointMode='latest'`で新しいcheckpointが来た）、`source_run_unsuccessful`（学習Runが成功しなかった）、`source_run_timeout`（7日待っても学習Runが終わらない）。JobやRunを作れなかったときは`status='failed'`で`error`に理由を残し、出来事そのもの（登録・checkpoint・Runの終了）は取り消さない。
+- `pending`: 学習中に登録された版（`model_registered`）は学習Runの終了を待ち、`checkpointMode='latest'`では評価中に来た最新のcheckpointだけが前の評価Runの終了を待つ（`waitingRunId`）。
+- `model_registered`は登録された版を、`inheritModelVersion`は出来事のRunの版を、`inheritOutputDatasets`は出来事のRun（arrayなら全員）の出力DatasetVersionを入力に加える。起動したRunは出来事のRunの下に入り（`parentRunId`）、予約tag `mmt.hookId`・`mmt.hookExecutionId`（`checkpoint_saved`では`mmt.inputCheckpointId`も）を持つ。
+- `checkpoint_saved`は`POST /projects/:p/runs/:r/checkpoints`で保存したcheckpointで起動する（MLflowの`checkpoints/step-N/`は、ファイルが揃った時点が分からないので対象外）。`checkpointMode`は`every`・`every_k`（そのRunのk個ごと）・`latest`・`skip_if_running`。
+- フックのJobのWorkerJobには`triggerPayload`が入る（manualの`payload`、webhookの本文、それ以外は`{event,…}`の出来事の説明）。`checkpoint_saved`のJobには`inputCheckpoint`（`resumeCheckpoint`と同じ形）が入る。
+
+### ドライバー（子Job）
+
+Job内のコードが自分のJob tokenで子Jobを作り、待ち、結果を読む。パイプラインの定義の代わりに、コードで段階をつなぐ。
+
+- `POST /projects/:p/jobs/:j/children` (ChildJobCreate `{idempotencyKey,experimentId?,name,kind,codeVersionId,modelVersionId?,inputDatasetVersionIds?,parameters?,tags?,targetId,gpuIds?,gpuCount?,walltimeSeconds?,arraySize?,datasetPartitionVersionId?,maxAttempts?,retryOnFailure?,retryOnTimeout?,allowChildJobs?}`) → 201（新規）か200（同じ`idempotencyKey`の再送）ChildJobCreated `{created,arrayGroupId,jobs}`。`:j`のJob tokenだけ（403 `driver_token_required`）。親Jobが`allowChildJobs`でなければ403 `child_jobs_not_allowed`。子は1つの親につき全部で10000件、同時に2000件まで（409 `child_job_limit`）。連鎖が10段を超えると422 `chain_too_deep`。子のRunは親のRunの下に入り、作成者は親のRunの作成者。`experimentId`の省略は親のRunのExperiment。`arraySize`を指定するとarrayを作る（siteだけ）。
+- `GET /projects/:p/jobs/:j/children` → `{items:Job[]}`（再実行を含む）。viewer。
+- `GET /projects/:p/jobs/:j/children/wait?timeoutSeconds=1..60` → ChildJobWait `{done,counts:{queued,claimed,running,finished,failed,canceled,total}}`。全部の子が終わるか時間切れで返す（既定30秒）。数えるのは各子の最新の試行。
+- 親Jobを取り消すと、終わっていない子Jobも同じように取り消す（子の子も）。
 
 ## 再開可能なArtifact upload
 

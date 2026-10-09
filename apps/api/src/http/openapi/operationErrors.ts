@@ -33,6 +33,8 @@ export function genericErrorsOf(route: NativeRoute): RouteError[] {
     errors.push(...routeError(403, 'project_forbidden'), ...routeError(404, 'not_found'));
   if (access.kind === 'globalAdmin') errors.push(...routeError(403, 'admin_required'));
   if (access.kind === 'worker') errors.push(...routeError(403, 'worker_token_required'));
+  if (access.kind === 'apiToken')
+    errors.push(...routeError(403, 'api_token_required', 'insufficient_scope'));
   if (access.kind !== 'public' && jobTokenAccess(route) !== 'read')
     errors.push(...routeError(403, 'job_token_forbidden'));
   if (route.method !== 'get')

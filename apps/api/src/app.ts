@@ -63,6 +63,23 @@ import { targetCheckRoutes } from './routes/targetCheckRoutes.js';
 import { JobService } from './services/jobService.js';
 import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
+import { SiteSubmissionService } from './services/siteSubmissionService.js';
+import { RunnerService } from './services/runnerService.js';
+import { JobArrayService } from './services/jobArrayService.js';
+import { SiteJobMonitor } from './services/siteJobMonitor.js';
+import {
+  NO_IMAGE_PLATFORM_CHECK,
+  RegistryImagePlatformChecker,
+} from './services/imagePlatformChecker.js';
+import { HookDispatcher } from './services/hookDispatcher.js';
+import { HookService } from './services/hookService.js';
+import { HookRunHandler } from './services/hookRunHandler.js';
+import { HookSweeper } from './services/hookSweeper.js';
+import { JobArrayCompletionHandler } from './services/jobArrayCompletionHandler.js';
+import { ChildJobService } from './services/childJobService.js';
+import { childJobRoutes, hookRoutes, webhookRoutes } from './routes/hookRoutes.js';
+import type { ModelRegistrationListener } from './services/modelAutomationService.js';
+import type { CheckpointListener } from './services/checkpointService.js';
 import { RunOutputDeclarationService } from './services/runOutputDeclarationService.js';
 import { TokenService } from './services/tokenService.js';
 import { ServiceAccountService } from './services/serviceAccountService.js';
@@ -116,6 +133,12 @@ import {
   workerPresenceRoutes,
   workerRoutes,
 } from './routes/executionRoutes.js';
+import {
+  jobArrayRoutes,
+  manualSubmissionRoutes,
+  runnerRoutes,
+  siteSubmissionRoutes,
+} from './routes/siteExecutionRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { serviceAccountRoutes } from './routes/serviceAccountRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
@@ -216,7 +239,15 @@ export function createApplication(options: ApplicationOptions) {
   const artifactUploads = new ArtifactUploadService(database, stores, {
     maxBytes: config.artifactMaxBytes,
   });
-  const checkpoints = new CheckpointService(database, { keepCount: config.checkpointKeepCount });
+  // Hooks listen to saved checkpoints and registered versions; both arrays are filled once the
+  // hooks exist (they are built from services created below).
+  const checkpointListeners: CheckpointListener[] = [];
+  const registrationListeners: ModelRegistrationListener[] = [];
+  const checkpoints = new CheckpointService(
+    database,
+    { keepCount: config.checkpointKeepCount },
+    checkpointListeners,
+  );
   const runMedia = new RunMediaService(database, new MediaTableService(artifacts));
   const mlflowMultipartUploads = new MlflowMultipartUploadService({
     database,
@@ -247,7 +278,11 @@ export function createApplication(options: ApplicationOptions) {
   const targets = new TargetService(database, config);
   const targetChecks = new TargetCheckService(database, config);
   const jobTokens = new JobTokenService(database);
-  const jobs = new JobService({ database, runs, config, runCompletion, jobTokens });
+  const imagePlatforms =
+    config.imagePlatformCheck === 'enforce'
+      ? new RegistryImagePlatformChecker({ credentials: config.registryCredentials })
+      : NO_IMAGE_PLATFORM_CHECK;
+  const jobs = new JobService({ database, runs, config, runCompletion, jobTokens, imagePlatforms });
   const tasks = new TaskService(database, runs, jobs);
   const gitRepositories = new GitRepositoryReader({ ssh: config.repositorySsh });
   const repositories = new RepositoryFilesService(
@@ -259,7 +294,16 @@ export function createApplication(options: ApplicationOptions) {
     runs,
     jobs,
     webOrigin: config.webOrigin,
+    registrationListeners,
   });
+  const jobArrays = new JobArrayService({ database, runs, jobs });
+  const hookDispatcher = new HookDispatcher({ runs, jobs, jobArrays });
+  registrationListeners.push(hookDispatcher);
+  checkpointListeners.push(hookDispatcher);
+  const arrayCompletion = new JobArrayCompletionHandler(hookDispatcher);
+  const hookSweeper = new HookSweeper(database, hookDispatcher, arrayCompletion);
+  const hooks = new HookService({ database, dispatcher: hookDispatcher, jobs, config, clock: options.clock });
+  const childJobs = new ChildJobService({ database, runs, jobs, jobArrays });
   const automationSweeper = new AutomationPendingSweeper(database, automation);
   const registry = new RegistryService(database, automation);
   // Output registration must run before the source-run handler releases pending automation.
@@ -274,12 +318,20 @@ export function createApplication(options: ApplicationOptions) {
   // Sweep trials follow chaining, promotion and automatic retry, and precede notifications.
   const sweepController = new SweepController(tasks, jobs);
   terminalHandlers.push(new SweepTrialCompletionHandler(sweepController));
-  // Notifications end the wave-wide handler order (outputs, pending, chain, promotion, retry, sweep).
+  // Arrays and hooks follow every handler that may queue a retry, so a member with a retry to
+  // run keeps its array open and a hook sees the final state of the Run.
+  terminalHandlers.push(arrayCompletion);
+  terminalHandlers.push(new HookRunHandler(hookDispatcher));
+  // Notifications end the wave-wide handler order (outputs, pending, chain, promotion, retry,
+  // sweep, arrays, hooks).
   terminalHandlers.push(new NotificationRunHandler({ webOrigin: config.webOrigin }));
   const sweeps = new SweepService(database, jobs, sweepController);
   const sweepScheduler = new SweepScheduler(database, sweepController);
   const outputDeclarations = new RunOutputDeclarationService(registry);
   const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
+  const siteSubmissions = new SiteSubmissionService({ database, jobs, runCompletion });
+  const runner = new RunnerService({ database, jobs, runCompletion, outputDeclarations });
+  const siteJobMonitor = new SiteJobMonitor(database, runCompletion);
   const tokens = new TokenService({ database, tokenMaxLifetimeDays: config.tokenMaxLifetimeDays });
   const evaluation = new EvaluationService(database);
   const plugins = new PluginService({
@@ -441,6 +493,11 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', artifactMediaInfoRoutes(artifactMediaInfo));
   app.route('/api/projects', artifactPreviewRoutes(artifactPreviews));
   app.route('/api/projects', jobRoutes(jobs));
+  app.route('/api/projects', jobArrayRoutes(jobArrays));
+  app.route('/api/projects', runnerRoutes(runner));
+  app.route('/api/projects', hookRoutes(hooks));
+  app.route('/api/projects', childJobRoutes(childJobs));
+  app.route('/api', webhookRoutes(hooks));
   app.route('/api/projects', pluginRoutes(plugins));
   app.route('/api/projects', evaluationRoutes(evaluation));
   app.route('/api/projects', modelEvaluationRoutes(new ModelEvaluationService(database)));
@@ -458,6 +515,8 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', operationsRoutes(operationsAlerts));
   app.route('/api/targets', targetRoutes(targets));
   app.route('/api/worker', workerRoutes(worker));
+  app.route('/api/worker', siteSubmissionRoutes(siteSubmissions));
+  app.route('/api', manualSubmissionRoutes(siteSubmissions));
   app.route('/api', targetCheckRoutes(targetChecks));
   app.route('/api', workerPresenceRoutes(worker));
   app.route('/api/tokens', tokenRoutes(tokens));
@@ -502,6 +561,8 @@ export function createApplication(options: ApplicationOptions) {
     sweepScheduler,
     notificationDispatcher,
     operationsMonitor,
+    siteJobMonitor,
+    hookSweeper,
     services: {
       auth,
       audit,
@@ -526,6 +587,12 @@ export function createApplication(options: ApplicationOptions) {
       targetChecks,
       jobs,
       worker,
+      siteSubmissions,
+      runner,
+      jobArrays,
+      hooks,
+      hookDispatcher,
+      childJobs,
       tokens,
       jobTokens,
       plugins,

@@ -43,6 +43,8 @@ const TAGS: { name: string; description: string }[] = [
     name: 'worker',
     description: 'worker専用のprotocol（Projectに限定された worker:execute token）',
   },
+  { name: 'sites', description: 'site（外部の計算機）のarray・手動投入・runnerの報告' },
+  { name: 'hooks', description: 'フック（任意のタイミングの自動実行）・webhook・ドライバーの子Job' },
   { name: 'plugins', description: 'Mado plugin接続' },
   { name: 'evaluation', description: '評価結果の集約と比較' },
   { name: 'promotion', description: '昇格policyと判定履歴' },
@@ -89,6 +91,7 @@ const PATH_PARAMETERS: Record<string, { description: string; schema: JsonSchema 
   projectId: { description: 'Project ID', schema: { type: 'string', format: 'uuid' } },
   r: { description: 'Run ID', schema: { type: 'string', format: 'uuid' } },
   a: { description: 'Artifact ID', schema: { type: 'string', format: 'uuid' } },
+  g: { description: 'Job array（JobArrayGroup）ID', schema: { type: 'string', format: 'uuid' } },
   u: { description: 'upload session ID', schema: { type: 'string', format: 'uuid' } },
   n: { description: 'part番号（1から）', schema: { type: 'integer', minimum: 1 } },
   j: { description: 'Job ID', schema: { type: 'string', format: 'uuid' } },
@@ -225,6 +228,9 @@ function security(route: NativeRoute): Record<string, string[]>[] {
   if (access.kind === 'public') return [];
   if (access.kind === 'session' || ('sessionOnly' in access && access.sessionOnly))
     return [{ sessionCookie: [] }];
+  // A Job token carries fixed scopes (read, runs:write, artifacts:write, registry:write).
+  if (access.kind === 'jobToken') return [{ bearerToken: [] }];
+  if (access.kind === 'apiToken') return [{ bearerToken: [access.scope] }];
   const scope =
     access.kind === 'worker'
       ? 'worker:execute'

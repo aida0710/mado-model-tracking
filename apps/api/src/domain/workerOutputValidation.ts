@@ -53,19 +53,21 @@ const datasetDeclarationSchema = z
     'A dataset declaration needs exactly one of uri or path',
   );
 
-export const workerOutputsSchema = z
-  .strictObject({
-    leaseId: uuidSchema,
-    declarations: z
-      .array(z.union([modelDeclarationSchema, datasetDeclarationSchema]))
-      .min(1)
-      .max(MAX_MODEL_DECLARATIONS + MAX_DATASET_DECLARATIONS),
-  })
+// Shared by the worker (with its lease) and the site runner (with its instance ID).
+export const outputDeclarationsSchema = z
+  .array(z.union([modelDeclarationSchema, datasetDeclarationSchema]))
+  .min(1)
+  .max(MAX_MODEL_DECLARATIONS + MAX_DATASET_DECLARATIONS)
   .refine(
-    ({ declarations }) =>
+    (declarations) =>
       new Set(declarations.map((declaration) => declaration.index)).size === declarations.length,
     'Declaration indexes must be unique',
   );
+
+export const workerOutputsSchema = z.strictObject({
+  leaseId: uuidSchema,
+  declarations: outputDeclarationsSchema,
+});
 
 export type WorkerOutputsInput = z.infer<typeof workerOutputsSchema>;
 export type ParsedOutputDeclaration = WorkerOutputsInput['declarations'][number];

@@ -64,6 +64,7 @@ import { assertNoReservedRunTags } from '../domain/reservedRunTags.js';
 import { requireProject } from './accessService.js';
 import { auditActor, recordDenial, type AuditEventDraft } from './auditService.js';
 import { enqueueAutomationFailure } from './automationFailureNotification.js';
+import { notifyListener } from './eventListeners.js';
 import type { JobService } from './jobService.js';
 import type { RunService } from './runService.js';
 
@@ -97,6 +98,12 @@ export interface AutomationTrigger {
   requestedBy: string | null;
 }
 
+/** Told about every new ModelVersion after the rules (hooks with trigger model_registered). */
+export interface ModelRegistrationListener {
+  readonly name: string;
+  onModelRegistered(connection: Connection, model: ModelVersion): Promise<void>;
+}
+
 const AUTOMATIC_REGISTRATION: AutomationTrigger = {
   run: null,
   pipelineRootExecutionId: null,
@@ -111,16 +118,20 @@ export class ModelAutomationService {
   private readonly jobs: JobService;
   // Links in automation.failed notifications point at the Web app.
   private readonly webOrigin: string;
+  // Kept by reference: app.ts adds the hooks once they are built from this service's peers.
+  private readonly registrationListeners: readonly ModelRegistrationListener[];
   constructor(options: {
     database: Database;
     runs: RunService;
     jobs: JobService;
     webOrigin: string;
+    registrationListeners?: readonly ModelRegistrationListener[];
   }) {
     this.database = options.database;
     this.runs = options.runs;
     this.jobs = options.jobs;
     this.webOrigin = options.webOrigin;
+    this.registrationListeners = options.registrationListeners ?? [];
   }
 
   async rules(principal: Principal, projectId: string): Promise<ModelAutomationRule[]> {
@@ -341,8 +352,14 @@ export class ModelAutomationService {
       sourceRunId: sourceRun?.id ?? null,
       isPending,
     });
-    if (!isNewEvent || isPending) return;
-    await this.executeEnabledRules(connection, model);
+    if (isNewEvent && !isPending) await this.executeEnabledRules(connection, model);
+    // Listeners keep their own records of repeated and pending registrations.
+    for (const listener of this.registrationListeners)
+      await notifyListener(connection, {
+        listener: listener.name,
+        subjectId: model.id,
+        notify: () => listener.onModelRegistered(connection, model),
+      });
   }
 
   // The source Run finished: run the rules enabled at this moment for every version it registered.

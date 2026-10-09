@@ -12,7 +12,7 @@ Codeの版登録画面でPython、Docker、Singularity、Apptainerを選びま�
 | Docker | `image@sha256:<64桁>`、コンテナ内の実行コマンド、任意の作業ディレクトリ |
 | Singularity/Apptainer | 保存済みSIF Artifact、SHA256、コンテナ内の実行コマンド、任意の作業ディレクトリ |
 
-Dockerのイメージはregistryのdigestで固定します。SIFをアップロードした場合は、ArtifactのSHA256を使います。保存先はProjectの設定に従いS3互換ストレージまたはファイルシステムです。APIへの登録時には外部registryへ接続しません。
+Dockerのイメージはregistryのdigestで固定します。SIFをアップロードした場合は、ArtifactのSHA256を使います。保存先はProjectの設定に従いS3互換ストレージまたはファイルシステムです。CodeVersionの登録時には外部registryへ接続しません（Job・Task・rule・フックの保存時のCPUの照合は、`MMT_IMAGE_PLATFORM_CHECK=enforce`のときだけ行います。[api-contract.md](api-contract.md)の「imageのCPU照合」）。
 
 コンテナ内にコードが含まれる場合は`source: null`を選べます。Git/inline/zip・tarのソースを追加すると、`/mmt/source`へ読み取り専用で渡します。コンテナの依存関係はイメージに含め、`requirements`は空にします。
 
