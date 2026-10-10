@@ -13,6 +13,8 @@ It never watches a Job afterwards; the runner on the compute node reports for it
 submission or a cancel fails to log in (site, account, key), the poll's later submissions through
 that login are failed with its reason without trying, and cancels leave it alone for a while
 (login_failures.py); the next poll submits through it again, and a login that works is forgotten.
+A connection check that logs in works too: after someone registers the key and checks it, the
+waiting cancels go ahead in that same poll.
 """
 
 from __future__ import annotations
@@ -31,14 +33,20 @@ from .launcher_assignment import AssignedSite, ConnectionCheck, LauncherAssignme
 from .launcher_config import LauncherConfig
 from .launcher_keys import LauncherKeys
 from .launcher_logins import SiteLogins
-from .login_failures import LoginFailures
+from .login_failures import LoginFailure, LoginFailures
 from .pending_reports import PendingReports
 from .site_operations import SiteOperations
 from .site_settings import SubmissionAccount, SubmissionSetup
 from .submission import failed_result, submission_job_ids, submit_to_site
 from .submission_api import LauncherApi
 from .submission_ledger import SubmissionLedger
-from .transport import SiteTransport, SshEndpoint, SshSiteTransport
+from .transport import (
+    MAX_CONTROL_PATH_BYTES,
+    SiteTransport,
+    SshEndpoint,
+    SshSiteTransport,
+    connections_can_be_shared,
+)
 
 LOGGER = logging.getLogger(__name__)
 # A connection check runs this and nothing else.
@@ -74,6 +82,14 @@ class Launcher:
         self.masker = self.client.masker
         state = config.state_directory
         state.mkdir(mode=PRIVATE_DIRECTORY_MODE, parents=True, exist_ok=True)
+        if transport_factory is None and not connections_can_be_shared(state):
+            LOGGER.warning(
+                "state_directory %s is too deep for SSH control sockets (their paths must stay within "
+                "%d bytes): every site command logs in on its own. A shorter path keeps one connection "
+                "per account",
+                state,
+                MAX_CONTROL_PATH_BYTES,
+            )
         self.keys = LauncherKeys(state, masker=self.masker)
         self.logins = SiteLogins(state, self.keys)
         self.pending = PendingReports(
@@ -149,7 +165,7 @@ class Launcher:
     # Connection checks -------------------------------------------------------------------------
 
     def answer_connection_check(self, assignment: LauncherAssignment, check: ConnectionCheck) -> None:
-        failure = self.login_failure(assignment.sites.get(check.target_id), check.account)
+        failure = self.try_login(assignment.sites.get(check.target_id), check.account)
         if failure is not None:
             failure = failure[-MAX_CHECK_MESSAGE_CHARACTERS:]
         LOGGER.info(
@@ -164,8 +180,12 @@ class Launcher:
             # Still queued: the next poll checks again. Answered or expired: nothing is left to do.
             LOGGER.warning("Connection check %s was not reported: %s", check.id, self.masker.mask(str(error)))
 
-    def login_failure(self, site: AssignedSite | None, account: SubmissionAccount) -> str | None:
-        """Why logging in on the site as the account failed; None when `true` ran there."""
+    def try_login(self, site: AssignedSite | None, account: SubmissionAccount) -> str | None:
+        """Log in on the site as the account and run `true`: why it failed, None when it ran.
+
+        A login that gets through is forgotten among the recent failures, whatever `true` did, as
+        after a submission or a cancel: the cancels waiting for it go ahead in this poll.
+        """
         if site is None:
             return "This launcher does not submit to the site"
         try:
@@ -180,6 +200,7 @@ class Launcher:
             return self.masker.mask(str(error))
         finally:
             transport.close()
+        self.login_failures.forget(endpoint)
         if result.exit_code:
             return (
                 f"Logged in, but `true` exited with status {result.exit_code}: "
@@ -293,9 +314,10 @@ class Launcher:
             endpoint = self.logins.endpoint(site.target_id, site.settings.connection, account)
         except ConfigurationError as error:
             return self.cancel_impossible(job_id, error)
-        if self.login_failures.within(endpoint, CANCEL_LOGIN_PAUSE_SECONDS):
+        failure = self.login_failures.recent(endpoint, CANCEL_LOGIN_PAUSE_SECONDS)
+        if failure is not None:
             # The login failed a moment ago, for a submission or a cancel; this cancel waits.
-            LOGGER.debug("Cancel of Job %s waits: logging in as %s failed recently", job_id, endpoint.user)
+            self.say_why_cancels_wait(job_id, site, endpoint, failure)
             return False
         try:
             transport = self.transport_for(endpoint)
@@ -304,7 +326,8 @@ class Launcher:
             )
         except TransportError as error:
             reason = self.masker.mask(str(error))
-            self.login_failures.record(endpoint, reason)
+            # The warning below tells the cancels through this login why they wait.
+            self.login_failures.record(endpoint, reason, cancels_told=True)
             LOGGER.warning(
                 "Cancel of Job %s deferred: %s; cancels log in as %s on site %s again in %.0f seconds",
                 job_id,
@@ -326,6 +349,23 @@ class Launcher:
                 transport.diagnostic(result.stderr),
             )
         return True
+
+    def say_why_cancels_wait(
+        self, job_id: str, site: AssignedSite, endpoint: SshEndpoint, failure: LoginFailure
+    ) -> None:
+        """Once per failed login (until it works again): why its cancels wait, and for how long."""
+        if not self.login_failures.tell_cancels_once(endpoint):
+            LOGGER.debug("Cancel of Job %s waits: logging in as %s failed recently", job_id, endpoint.user)
+            return
+        LOGGER.info(
+            "Cancel of Job %s waits: logging in as %s on site %s failed: %s; cancels log in there again "
+            "in %.0f seconds, or once a submission or a connection check logs in",
+            job_id,
+            endpoint.user,
+            site.label,
+            failure.reason,
+            CANCEL_LOGIN_PAUSE_SECONDS - self.login_failures.since(failure),
+        )
 
     def cancel_impossible(self, job_id: str, error: ConfigurationError) -> bool:
         """Report the Job as done: no later poll could remove it either."""

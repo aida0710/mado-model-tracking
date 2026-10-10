@@ -1,11 +1,12 @@
 """Submit one SiteSubmission through a site's job shell and describe the outcome for the API.
 
 Shared by the launcher (over SSH) and `mado-tracking submit` (on the login node or PC). Setting up
-the work directory is retried; the job shell itself runs once, because a lost answer may mean the
-scheduler already holds the job, and a second submission would run it twice. The Job tokens and
-the registry login in the spec directory are masked in every error the result carries. The outcome
-also says when the site could not be reached at all, so that a launcher does not log in again
-through the same login for the rest of its poll.
+the work directory is retried, unless the site refused the login: another attempt would only be
+another failed login, and sites lock accounts after a few. The job shell itself runs once, because
+a lost answer may mean the scheduler already holds the job, and a second submission would run it
+twice. The Job tokens and the registry login in the spec directory are masked in every error the
+result carries. The outcome also says when the site could not be reached at all, so that a
+launcher does not log in again through the same login for the rest of its poll.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from .bundle import runner_installation
 from .job_shell import JobShellOutputError, job_shell_environment, job_shell_error, scheduler_job_id
 from .site_operations import SiteOperations
 from .spec_directory import RunnerSettings, ordered_jobs, secret_values_of, spec_files
+from .transport import LoginRefused
 
 LOGGER = logging.getLogger(__name__)
 SETUP_ATTEMPTS = 3
@@ -64,6 +66,8 @@ def _with_retries(operation: Callable[[], Result], *, sleep: Callable[[float], N
     for attempt in range(SETUP_ATTEMPTS):
         try:
             return operation()
+        except LoginRefused:
+            raise
         except TransportError:
             if attempt == SETUP_ATTEMPTS - 1:
                 raise

@@ -40,7 +40,7 @@ mado-tracking submit --site <計算機のID> --watch        # 止めるまで、
 mado-tracking submit --site <計算機のID> --watch --all  # 共有したProjectのメンバーのJobも投入する
 ```
 
-`--all`のJobも、PCの持ち主のアカウントで動きます。共有するProjectは、そのメンバーのコードを自分のPCで動かしてよい範囲にしてください。
+`--all`のJobも、PCの持ち主のアカウントで動きます。共有するProjectは、そのメンバーのコードを自分のPCで動かしてよい範囲にしてください。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 
 ## 動き
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import stat
 import sys
@@ -31,7 +32,13 @@ from mado_tracking.security import SecretMasker
 from mado_tracking.site.launcher import Launcher
 from mado_tracking.site.launcher_config import load_launcher_config
 from mado_tracking.site.site_settings import SubmissionAccount
-from mado_tracking.site.transport import CommandResult, SshEndpoint, SshSiteTransport, ssh_config_text
+from mado_tracking.site.transport import (
+    CommandResult,
+    LoginRefused,
+    SshEndpoint,
+    SshSiteTransport,
+    ssh_config_text,
+)
 
 RUNTIME = {"kind": "apptainer", "artifactId": "artifact", "sha256": "0" * 64}
 JOB_SHELL = """#!/bin/sh
@@ -181,6 +188,16 @@ def test_launcher_toml_holds_only_how_the_launcher_starts(tmp_path):
     secret.write_text("not json")
     with pytest.raises(ConfigurationError, match="username and password"):
         load_launcher_config(with_secret)
+
+
+def test_a_state_directory_too_deep_for_ssh_control_sockets_is_named_at_start(
+    tmp_path, ssh_state_directory, caplog
+):
+    for state_directory, warned in ((ssh_state_directory, False), (tmp_path / ("d" * 100), True)):
+        caplog.clear()
+        config = load_launcher_config(write_config(tmp_path, state_directory=f'"{state_directory}"'))
+        Launcher(config, client_factory=FakeLauncherApi().client).close()
+        assert ("too deep for SSH control sockets" in caplog.text) is warned
 
 
 def test_a_claimed_submission_runs_as_its_account_and_is_reported_then_canceled_in_the_queue(
@@ -496,23 +513,25 @@ def test_after_a_failed_login_the_polls_later_submissions_through_it_fail_untrie
     queued = str(uuid4())
     cancellation = {"jobId": queued, "targetId": target["id"], "schedulerJobId": "9.pbs", "account": mmt}
     api.cancellations = [cancellation]
-    # The key is not in authorized_keys yet.
-    reason = "SSH connection to the site failed: mmt@login: Permission denied (publickey)"
-    logins.refusal = TransportError(reason)
+    # mmt's key is not in authorized_keys yet; the connection as `other` is lost on the way.
+    refused = "SSH connection to the site failed: mmt@login: Permission denied (publickey)."
+    lost = "SSH connection to the site failed: Connection closed by 192.0.2.1 port 22"
+    logins.refusals = {"mmt": LoginRefused(refused), "other": TransportError(lost)}
     launcher = launcher_for(tmp_path, api, logins)
     launcher.run_once()
     errors = {report["jobIds"][0]: report["error"] for report in api.reports()}
-    untried = f"Not tried: logging in to the site failed for an earlier submission of this poll: {reason}"
+    untried = f"Not tried: logging in to the site failed for an earlier submission of this poll: {refused}"
     assert [errors[job_id] for job_id in job_ids] == [
-        f"The site could not be prepared: {reason}",
+        f"The site could not be prepared: {refused}",
         untried,
         # Another account is another login: it is tried.
-        f"The site could not be prepared: {reason}",
+        f"The site could not be prepared: {lost}",
         untried,
     ]
-    # One submission's attempts (three) per login, not one for every claimed submission.
+    # One failed login per refused login and poll; a lost connection is tried three times. The
+    # poll's later submissions through either login do not log in at all.
     assert [(login.endpoint.user, len(login.commands)) for login in logins.shared()] == [
-        ("mmt", 3),
+        ("mmt", 1),
         ("other", 3),
     ]
     # The cancel through the failed login waits too, in this poll and the ones after.
@@ -521,7 +540,7 @@ def test_after_a_failed_login_the_polls_later_submissions_through_it_fail_untrie
     )
 
     # The next poll tries the login again; it works now, so the cancel no longer waits either.
-    logins.refusal = None
+    logins.refusals = {}
     for login in logins.made:
         login.refusal = None
     queue(next_poll, mmt)
@@ -534,7 +553,122 @@ def test_after_a_failed_login_the_polls_later_submissions_through_it_fail_untrie
     launcher.close()
 
 
-def test_ssh_sites_share_one_connection_and_jump_hosts_get_the_same_settings(tmp_path):
+def refuse_logins(logins: LocalLogins, refusal: Exception | None) -> None:
+    """From now on every login fails with `refusal` (None: they work), the made ones too."""
+    logins.refusal = refusal
+    for login in logins.made:
+        login.refusal = refusal
+
+
+def waiting_notices(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """What the launcher said, at INFO or above, about cancels that wait for a failed login."""
+    return [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.INFO and "waits: logging in as" in record.getMessage()
+    ]
+
+
+def test_a_connection_check_that_logs_in_lets_the_waiting_cancels_go_ahead(tmp_path, keygen, caplog):
+    caplog.set_level(logging.INFO, logger="mado_tracking.site.launcher")
+    api, logins = FakeLauncherApi(), LocalLogins()
+    target_id = str(uuid4())
+    canceled = tmp_path / "canceled.txt"
+    api.assign_site(
+        {"id": target_id, "name": "ABCI"},
+        site_settings_document(cancelCommand=f'echo "$MMT_SCHEDULER_JOB_ID" >> "{canceled}"'),
+    )
+    mmt = account_document(account_name="mmt", key_id=api.add_key(target_id))
+    job_id = str(uuid4())
+    cancellation = {"jobId": job_id, "targetId": target_id, "schedulerJobId": "1.pbs", "account": mmt}
+    now = [1000.0]
+    launcher = launcher_for(tmp_path, api, logins, clock=lambda: now[0])
+    # The key is not in authorized_keys yet: the cancel fails, and its warning says when it retries.
+    refuse_logins(logins, LoginRefused("SSH connection to the site failed: mmt@login: Permission denied"))
+    api.cancellations = [cancellation]
+    launcher.run_once()
+    assert f"Cancel of Job {job_id} deferred" in caplog.text
+
+    # Someone registers the key. Without a check the cancel waits out its pause, quietly.
+    refuse_logins(logins, None)
+    now[0] += 10.0
+    api.cancellations = [cancellation]
+    launcher.run_once()
+    assert not canceled.exists() and waiting_notices(caplog) == []
+
+    # A connection check that logs in as the account lets the cancel go ahead in that same poll.
+    check_id = str(uuid4())
+    api.checks = [{"id": check_id, "targetId": target_id, "account": mmt}]
+    now[0] += 10.0
+    api.cancellations = [cancellation]
+    launcher.run_once()
+    assert api.check_results()[check_id] == {"outcome": "succeeded", "message": None}
+    assert canceled.read_text() == "1.pbs\n"
+    assert api.bodies("POST", "launcher/site-submissions/cancellations/report") == [{"jobIds": [job_id]}]
+    launcher.close()
+
+
+def test_cancels_held_back_by_a_failed_submission_say_why_once_until_the_login_works(
+    tmp_path, keygen, monkeypatch, caplog
+):
+    monkeypatch.setattr("mado_tracking.site.submission.SETUP_RETRY_SECONDS", 0.0)
+    caplog.set_level(logging.INFO, logger="mado_tracking.site.launcher")
+    api, logins = FakeLauncherApi(), LocalLogins()
+    target = site_submission()["target"]
+    canceled = tmp_path / "canceled.txt"
+    settings = site_settings_document(cancelCommand=f'echo "$MMT_SCHEDULER_JOB_ID" >> "{canceled}"')
+    api.assign_site(target, settings)
+    mmt = account_document(
+        mode="shared",
+        account_name="mmt",
+        work_directory=str(tmp_path / "work"),
+        key_id=api.add_key(target["id"]),
+    )
+    refused = "SSH connection to the site failed: mmt@login: Permission denied (publickey)."
+    now = [1000.0]
+    launcher = launcher_for(tmp_path, api, logins, clock=lambda: now[0])
+
+    def poll(cancel_job_id: str, *, refusal: Exception | None) -> list[str]:
+        """One poll with a submission and one cancel through mmt; its notices of waiting cancels."""
+        refuse_logins(logins, refusal)
+        submission = site_submission()
+        submission.update(
+            target=target,
+            settings=settings,
+            jobShell=job_shell_document(JOB_SHELL, target_id=target["id"]),
+            account=mmt,
+        )
+        api.submissions.append(submission)
+        api.cancellations = [
+            {
+                "jobId": cancel_job_id,
+                "targetId": target["id"],
+                "schedulerJobId": f"{cancel_job_id}.pbs",
+                "account": mmt,
+            }
+        ]
+        caplog.clear()
+        launcher.run_once()
+        now[0] += 10.0
+        return waiting_notices(caplog)
+
+    first, second = str(uuid4()), str(uuid4())
+    # The poll's submission fails to log in, so the cancel waits: the log says why, and until when.
+    [notice] = poll(first, refusal=LoginRefused(refused))
+    assert notice.startswith(f"Cancel of Job {first} waits: logging in as mmt on site")
+    assert refused in notice and "again in 600 seconds" in notice
+    # While the login keeps failing, the polls after that wait without saying it again.
+    assert poll(first, refusal=LoginRefused(refused)) == []
+    assert not canceled.exists()
+    # A submission that logs in ends the wait; a later failure is told once more.
+    assert poll(first, refusal=None) == []
+    assert canceled.read_text() == f"{first}.pbs\n"
+    [again] = poll(second, refusal=LoginRefused(refused))
+    assert again.startswith(f"Cancel of Job {second} waits")
+    launcher.close()
+
+
+def test_ssh_sites_share_one_connection_and_jump_hosts_get_the_same_settings(tmp_path, ssh_state_directory):
     key, known_hosts = tmp_path / "key", tmp_path / "known_hosts"
     key.write_text("private")
     key.chmod(0o600)
@@ -547,7 +681,7 @@ def test_ssh_sites_share_one_connection_and_jump_hosts_get_the_same_settings(tmp
         known_hosts=known_hosts,
         jump_hosts=("access.example.org", "bob@bastion:2200"),
     )
-    transport = SshSiteTransport(endpoint, state_directory=tmp_path / "state", masker=SecretMasker())
+    transport = SshSiteTransport(endpoint, state_directory=ssh_state_directory, masker=SecretMasker())
     argv = transport.command_argv(["sh", "-c", 'echo "$1"', "_", "it's"])
     assert argv[:3] == ["ssh", "-F", str(transport.config_file)]
     assert f"ControlPath={transport.control_path}" in argv and "ControlMaster=no" in argv
@@ -572,14 +706,14 @@ def test_ssh_sites_share_one_connection_and_jump_hosts_get_the_same_settings(tmp
 
     # A connection check logs in on its own: no shared connection is used or left behind.
     alone = SshSiteTransport(
-        endpoint, state_directory=tmp_path / "state", masker=SecretMasker(), shared_connection=False
+        endpoint, state_directory=ssh_state_directory, masker=SecretMasker(), shared_connection=False
     )
     argv = alone.command_argv(["true"])
     assert not [value for value in argv if value.startswith(("ControlPath", "ControlMaster"))]
     assert argv[-2:] == ["login.example.org", "true"] and argv[argv.index("-l") + 1] == "alice"
     key.chmod(0o640)
     with pytest.raises(ConfigurationError, match="readable"):
-        SshSiteTransport(endpoint, state_directory=tmp_path / "state", masker=SecretMasker())
+        SshSiteTransport(endpoint, state_directory=ssh_state_directory, masker=SecretMasker())
 
 
 def test_launcher_job_shell_and_installed_runner_complete_a_job(tmp_path, monkeypatch, keygen):

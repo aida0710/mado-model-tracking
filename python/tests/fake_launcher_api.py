@@ -209,14 +209,19 @@ class LocalLogin(LocalSiteTransport):
 
 
 class LocalLogins:
-    """The launcher's transport factory in tests; set `refusal` to make the next logins fail."""
+    """The launcher's transport factory in tests; set `refusal` to make the next logins fail.
+
+    `refusals` names the refusal of the next logins as one account, over `refusal`.
+    """
 
     def __init__(self) -> None:
         self.made: list[LocalLogin] = []
         self.refusal: Exception | CommandResult | None = None
+        self.refusals: dict[str, Exception | CommandResult] = {}
 
     def __call__(self, endpoint: SshEndpoint, *, shared_connection: bool) -> LocalLogin:
-        login = LocalLogin(endpoint, shared_connection=shared_connection, refusal=self.refusal)
+        refusal = self.refusals.get(endpoint.user, self.refusal)
+        login = LocalLogin(endpoint, shared_connection=shared_connection, refusal=refusal)
         self.made.append(login)
         return login
 

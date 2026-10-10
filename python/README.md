@@ -357,7 +357,7 @@ mado-tracking submit --site <siteのID> --registry-secret-file ~/.config/mado-tr
 ```
 
 - 各Jobは、受け取ったときのsiteの設定・job shellの版・投入する本人の作業ディレクトリと変数で投入します。`--work-dir`と`--var NAME=VALUE`はその回だけ、その上に重ねます。
-- `--all`は、自分が所有する計算機で、自分以外のJobも含めて待っているJobを全部投入します（APIの`all`）。所有していない計算機では、受け取る前に止まります。
+- `--all`は、自分が所有する計算機で、自分以外のJobも含めて待っているJobを投入します（APIの`all`）。所有していない計算機では、受け取る前に止まります。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 - `--watch`は、`--interval`（秒、既定10、1以上）ごとに同じことを繰り返します。APIの一時的な失敗（接続できない、5xx、408、429）は表示して続け、tokenの失効などの拒否と設定の誤りで止まります。最初のSIGINT（Ctrl-C）かSIGTERMで、その回の投入と報告を終えてから止まります。2回目のCtrl-Cはすぐに止めます。job shellは別のsessionで動くので、Ctrl-Cで投入の途中に切れません。
 - `--registry-secret-file PATH`は、runnerがimageをSIFへ変換するときのregistryの認証です。中身はlauncherの`registry_secret_file`と同じJSON（`{"username", "password"}`）で、mode 600にします（グループ・他人が読めると、Jobを受け取る前に止まります）。回ごとに読み直し、runnerには仕様の置き場の`secrets.json`（600）で渡ります。passwordは表示とJobのエラーに出しません。
 - `--limit`は1回に受け取る数（1〜50）です。`--job-shell`・`--config`・`submit.toml`はありません（job shellはWebで版として管理します）。

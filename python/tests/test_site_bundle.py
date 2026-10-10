@@ -7,11 +7,18 @@ import os
 import stat
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
 from mado_tracking.security import SecretMasker
-from mado_tracking.site.bundle import RUNNER_BUNDLE_NAME, RUNNER_WRAPPER_NAME, runner_installation
+from mado_tracking.site.bundle import (
+    ENTRY_DATE_TIME,
+    RUNNER_BUNDLE_NAME,
+    RUNNER_WRAPPER_NAME,
+    build_runner_bundle,
+    runner_installation,
+)
 from mado_tracking.site.site_operations import SiteOperations
 from mado_tracking.site.transport import CommandResult, LocalSiteTransport
 
@@ -59,6 +66,17 @@ def test_the_bundle_holds_the_package_and_httpx_and_runs_from_the_zip(tmp_path):
         env={**os.environ, "MMT_RUNNER_PYTHON": sys.executable},
     )
     assert "SPEC_DIR" in through_wrapper.stdout
+
+
+def test_the_bundle_is_the_same_whenever_a_process_builds_it(monkeypatch):
+    # Every launcher process and every `mado-tracking submit` builds the bundle anew; when the
+    # bytes changed with the clock, each of them installed another copy of the runner on the site.
+    first = build_runner_bundle()
+    an_hour_later = time.time() + 3600
+    monkeypatch.setattr(time, "time", lambda: an_hour_later)
+    assert build_runner_bundle() == first
+    with zipfile.ZipFile(io.BytesIO(first)) as archive:
+        assert {entry.date_time for entry in archive.infolist()} == {ENTRY_DATE_TIME}
 
 
 def test_the_runner_and_job_shell_are_installed_once_per_version(tmp_path):

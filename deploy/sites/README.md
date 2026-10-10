@@ -39,6 +39,7 @@ launcherが渡す環境変数と、読み取る最後の行の決まりは[job_s
 | `MMT_VAR_<名前>` | 全体設定の変数に、依頼者の「自分の設定」の変数を重ねたもの。例: `MMT_VAR_GROUP` |
 
 - launcherはjob shellを、内容のhashごとに`<作業ディレクトリ>/.mmt-job-shells/<hash>/job.sh`へ置き、仕様の置き場をcurrent directoryにして実行します。値は`env NAME=value`で1つずつ渡り、シェルを通りません。
+- launcherのjob shellは非対話のSSHのsessionで動き、ログインのprofile（`/etc/profile`や`~/.bash_profile`）は読まれません。そのためPATHが、対話でログインしたときと違うことがあります。スケジューラのコマンドをprofileでPATHに足すsite（PBSの`/opt/pbs/bin`など）では、job shellの先頭でPATHを足します。例のjob shellは、`qsub`などが見つからなければ投入せずに失敗にします。
 - 標準出力の最後の行に、スケジューラのジョブIDだけを出します。直実行のホストでは何も出しません。例のjob shellは、標準出力にIDの1行だけを出し、ほかの表示はすべて標準エラーへ出します。標準エラーの終わりの部分は、失敗の理由としてJobに残ります。
 - 終了コードが0でなければ、投入の失敗（`submit_failed`）として報告されます。依頼の値が検証に通らないときも、投入せずに失敗します。
 - arrayは`MMT_ARRAY_SIZE`が2以上のときだけ使います。計算ノード側で、スケジューラの番号を0始まりの`MMT_ARRAY_INDEX`に直してから`exec "$MMT_RUNNER" "$MMT_SPEC_DIR"`します（1つのJobなら0）。
@@ -103,6 +104,7 @@ launcherは起動に要るものだけを1つのTOMLから読みます（`mado-t
 
 - 公開鍵の注記は`mmt-launcher:<launcherの名前>:<鍵のID>`です。authorized_keysの中で、どのlauncherのどの鍵かを見分けられます。
 - 「接続確認」を押すと、launcherが次の巡回でその鍵とアカウントでsiteへログインし、`true`だけを実行して結果を返します。5分答えがなければ失敗になります（launcherが止まっている、など）。
+- 公開鍵がまだ登録されていないなどでsiteが鍵を拒んだとき（`Permission denied`）や、ホスト鍵がknown_hostsに無いとき（`Host key verification failed`）、launcherは巡回ごとに、そのアカウントへ1回だけログインを試します。その巡回の同じアカウントへの残りの投入は試さずに失敗にし、待ち行列からの取消は600秒待ってから試し直します（その前に、そのアカウントへの投入か接続確認のログインが通れば、取消もすぐ再開します。公開鍵を登録したら「接続確認」を押すと早く戻ります）。失敗したログインが重なるとアカウントやアドレスを止めるsiteがあるためです。応答がない・接続が切れたときは、投入の準備を3回まで試します。
 - 鍵を作り直すと、古い鍵はすぐ失効し、launcherが手元のファイルも消します。新しい公開鍵を登録し直すまで、そのアカウントへの投入は失敗します。
 - 状態の置き場を失うと、launcherは同じ鍵のIDで鍵を作り直し、新しい公開鍵を送ります（監査ログ`site.key.publish`）。登録し直すまで投入は失敗します。
 - known_hostsはWebの全体設定のものだけを使います（`<state_directory>/known-hosts/<計算機のID>`へ書き出します）。`ssh-keyscan`の出力は、サイトが公開しているホスト鍵の指紋と照らしてから貼ってください。
@@ -120,7 +122,7 @@ mado-tracking submit --site <計算機のID> --watch --all  # 所有者: 共有�
 
 - job shell・作業ディレクトリ・runnerのPython・変数は、Webの全体設定と自分の設定から読みます。設定ファイルは要りません。`--work-dir`と`--var NAME=VALUE`は、その回だけ上に重ねます。
 - `--watch`は`--interval`（既定10秒）ごとに繰り返し、SIGINTかSIGTERMで止まります。`--watch`を使わなければ何も常駐しません。
-- `--all`は計算機の所有者だけが使えます。所有者のPCの上で、所有者のアカウントで全員のJobを動かすので、共有する相手を選んでください。
+- `--all`は計算機の所有者だけが使えます。所有者のPCの上で、所有者のアカウントで全員のJobを動かすので、共有する相手を選んでください。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 
 ## サイトで試す
 
@@ -137,6 +139,8 @@ env MMT_SPEC_DIR=<作業ディレクトリ>/try-spec MMT_RUNNER=<作業ディレ
 ```
 
 最後の行がジョブIDだけで、ジョブが終わった後に`<作業ディレクトリ>/try-spec/scheduler.*.log`へ`index=0 ...`と`index=1 ...`が出れば、約束どおりです。取消は`MMT_SCHEDULER_JOB_ID=<ID> sh -c '<取消コマンド>'`で確かめます。
+
+上の手順はログインした対話のshellで動かすので、profileが足したPATHも見えます。launcherから投入する計算機では、launcherと同じ非対話のsessionでもスケジューラのコマンドが見えるかを、`ssh <アカウント>@<ログインノード> 'command -v qsub'`（Slurmは`sbatch`、TCSは`pjsub`）で確かめてください。
 
 ## launcherをDocker composeで動かす
 
