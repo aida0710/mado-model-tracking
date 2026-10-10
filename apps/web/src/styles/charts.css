@@ -21,7 +21,7 @@
 }
 .chart-weight input[type='range'] {
   width: 120px;
-  accent-color: var(--teal);
+  accent-color: var(--accent);
 }
 .chart-weight output {
   min-width: 3ch;
@@ -71,7 +71,7 @@
   max-width: 240px;
   padding: 2px 6px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text);
   cursor: pointer;
@@ -97,7 +97,7 @@
   flex: none;
   width: 12px;
   height: 3px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 .chart-legend-swatch.group {
   height: 8px;
@@ -145,7 +145,7 @@
   pointer-events: none;
 }
 .chart-zoom-selection {
-  fill: var(--teal);
+  fill: var(--accent);
   opacity: 0.12;
   pointer-events: none;
 }

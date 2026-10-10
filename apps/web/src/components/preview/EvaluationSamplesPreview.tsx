@@ -21,7 +21,7 @@ export const EVALUATION_SAMPLES_MAX_BYTES = 16 * 1024 * 1024;
 function ParsedTable({ artifact, content, format }: { artifact: Artifact; content: string; format: EvaluationSampleFormat }) {
   const table = useMemo(() => parseEvaluationSamples(content, format), [content, format]);
   if (isEvaluationSampleTable(table.columns)) return <EvaluationSamplesTable artifact={artifact} table={table} />;
-  if (artifact.size <= TEXT_PREVIEW_MAX_BYTES) return <TextContent content={content} />;
+  if (artifact.size <= TEXT_PREVIEW_MAX_BYTES) return <TextContent artifact={artifact} content={content} />;
   return <p className="muted">{text.previewUnsupported}</p>;
 }
 

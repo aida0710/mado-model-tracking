@@ -1,9 +1,9 @@
-/* Experiments sidebar, run toolbar and selection, data tables, and status badges. */
-/* Fills the workspace below the bars (layout.css), so the sidebar reaches the window's bottom. */
+/* Experiments sidebar, run toolbar and selection, and the run table. Generic tables, status badges
+   and the responsive table come from @mado/design-system/components.css. */
 .experiments-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  flex: 1 0 auto;
+  min-height: calc(100vh - var(--chrome-height));
 }
 .experiment-sidebar {
   background: var(--surface);
@@ -43,7 +43,7 @@
 }
 .experiment-item.active {
   background: var(--selected);
-  border-left-color: var(--teal);
+  border-left-color: var(--accent);
   font-weight: 600;
 }
 .experiment-item span {
@@ -57,8 +57,8 @@
   font-weight: 400;
   margin-top: 4px;
 }
-/* One row where it fits; what does not fit wraps instead of widening the page (just above --bp-lg,
-   below which the search field takes a row of its own). */
+/* The controls wrap to a second line whenever they do not fit beside the search, which also
+   happens on wide screens once the navigation sidebar and the Experiments list take their width. */
 .run-toolbar {
   background: var(--surface);
   display: flex;
@@ -70,7 +70,7 @@
 .search-field {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 1 1 360px;
   gap: 12px;
   padding: 0 12px;
   min-width: 180px;
@@ -93,11 +93,13 @@
 }
 .toolbar-select {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   border-left: 1px solid var(--background);
   padding: 0 10px;
   gap: 6px;
   font-size: 11px;
+  white-space: nowrap;
 }
 .toolbar-select select {
   background: transparent;
@@ -108,6 +110,7 @@
 }
 .column-menu {
   position: relative;
+  flex: 0 0 auto;
   border-left: 1px solid var(--background);
 }
 .column-menu > summary {
@@ -119,19 +122,6 @@
   padding: 10px 14px;
   font-size: 12px;
   white-space: nowrap;
-}
-.popover {
-  position: absolute;
-  z-index: 8;
-  top: 100%;
-  right: 0;
-  min-width: 220px;
-  max-height: 380px;
-  overflow-y: auto;
-  padding: 12px;
-  box-shadow: 0 4px 18px #0003;
-  border: 1px solid var(--border);
-  background: var(--background);
 }
 .popover > label {
   display: flex;
@@ -146,8 +136,8 @@
   align-items: center;
   justify-content: space-between;
   min-height: 45px;
-  background: var(--teal-strong);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--on-accent);
   padding-left: 16px;
 }
 .selection-bar > div {
@@ -156,55 +146,11 @@
 .selection-bar button {
   background: transparent;
   border: 0;
-  color: #fff;
+  color: var(--on-accent);
   padding: 15px;
 }
 .selection-bar button:hover {
-  background: #ffffff15;
-}
-.table-scroll {
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: thin;
-}
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 12px;
-}
-th {
-  font-weight: 600;
-  text-align: left;
-  background: var(--table-header);
-  padding: 10px 14px;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
-th small {
-  display: block;
-  font-family: var(--font);
-  font-weight: 400;
-  color: var(--muted);
-  font-size: 10px;
-  margin-bottom: 7px;
-}
-td {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 14px;
-  vertical-align: middle;
-}
-td small {
-  display: block;
-  font-size: 10px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-tr:hover td {
-  background: var(--surface-hover);
-}
-tr.selected td {
-  background: var(--selected);
+  background: var(--on-accent-hover);
 }
 .runs-page td {
   padding-top: 11px;
@@ -252,87 +198,7 @@ tr.selected td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.table-footer {
-  min-height: 39px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 12px 5px 16px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 12px;
-}
-.table-footer > span:last-child {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: 12px;
-  font-size: 10px;
-  letter-spacing: 0.15px;
-  padding: 5px 9px;
-  white-space: nowrap;
-}
-.status-finished {
-  background: #abefbf;
-  color: #075b23;
-}
-.status-running,
-.status-claimed {
-  background: #cfdefe;
-  color: #1547ac;
-}
-.status-failed {
-  background: #ffd4d7;
-  color: #bd0f20;
-}
-.status-queued,
-.status-canceled {
-  background: #e3e5e8;
-  color: #555e66;
-}
-[data-theme='dark'] .status-finished {
-  background: #20593a;
-  color: #a0eabe;
-}
-[data-theme='dark'] .status-running,
-[data-theme='dark'] .status-claimed {
-  background: #263c69;
-  color: #a5c8ff;
-}
-[data-theme='dark'] .status-failed {
-  background: #612632;
-  color: #ffa9b0;
-}
-[data-theme='dark'] .status-queued,
-[data-theme='dark'] .status-canceled {
-  background: #3c4149;
-  color: #d7dbe1;
-}
-/* Waits for a person: a site Job to submit by hand, or a site submitted by hand. */
-.status-attention {
-  background: #fde7b0;
-  color: #6b4500;
-}
-[data-theme='dark'] .status-attention {
-  background: #5a4413;
-  color: #ffd98a;
-}
-/* Badges beside a label in one cell, such as a target's executor with its CPU and submission. */
-.badge-group {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
 @media (width < 1200px) {
-  .run-toolbar {
-    flex-wrap: wrap;
-  }
   .search-field {
     flex-basis: 100%;
     min-height: 40px;
@@ -366,49 +232,7 @@ tr.selected td {
     margin-left: auto;
   }
 }
-/* ResponsiveTable: the row's open button and the secondary columns shown beneath an opened row. */
-/* Keeps the visually hidden header labels inside the scroll box instead of widening the page. */
-.responsive-table {
-  position: relative;
-}
-/* Text cells keep a few characters per line; a squeezed table scrolls inside its box instead. */
-.responsive-table td:not(.responsive-table-toggle) {
-  min-width: 6em;
-}
-/* URLs and digests have no spaces, so they break anywhere rather than widen their column. */
-.responsive-table .long-value {
-  overflow-wrap: anywhere;
-}
+/* Action buttons of a row opened by ResponsiveTable wrap under the secondary columns. */
 .responsive-table-details dd :is(.access-actions, .user-actions, .storage-row-actions) {
   flex-wrap: wrap;
-}
-.responsive-table .responsive-table-toggle {
-  width: calc(var(--tap-target) + 8px);
-  padding-left: 4px;
-  padding-right: 4px;
-  text-align: right;
-}
-.responsive-table tr.clickable-row {
-  cursor: pointer;
-}
-.responsive-table-details > td,
-tr.responsive-table-details:hover > td {
-  background: var(--background);
-}
-.responsive-table-details dl {
-  display: grid;
-  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
-  gap: 8px 16px;
-  margin: 0;
-}
-.responsive-table-details dl > div {
-  display: contents;
-}
-.responsive-table-details dt {
-  color: var(--muted);
-}
-.responsive-table-details dd {
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }

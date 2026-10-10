@@ -1,53 +1,39 @@
 import { Link } from 'react-router-dom';
 import { LogOut, Moon, Sun } from 'lucide-react';
-import type { ProjectRole } from '@mmt/contracts';
 import { authApi } from '../api/auth';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useMutation } from '../hooks/useMutation';
+import type { Navigation } from '../hooks/useNavigation';
 import { ErrorNotice } from '../components/Feedback';
-import { isGlobalAdmin } from '../lib/permissions';
-import { narrowerThan } from '../lib/breakpoints';
-import { useMediaQuery } from '../lib/useMediaQuery';
 import { UserMenu } from '../components/UserMenu';
 import { OperationsAlertBadge } from '../components/OperationsAlertBadge';
 import { text } from '../i18n/catalog';
-import { navigationLinks } from './navigationLinks';
 import { NavigationDrawer } from './NavigationDrawer';
-import { NavigationLinkList } from './NavigationLinkList';
 
 export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
 export { ADMIN_PATH } from './navigationLinks';
 
-// Below --bp-lg the fourteen Project screens no longer fit beside the brand and actions, so the
-// navigation moves into the drawer. Above it they wrap onto a second row where they do not fit
-// (styles/layout.css).
-const DRAWER_NAVIGATION_QUERY = narrowerThan('lg');
-
-/** The header: screen navigation for the open Project, theme, the signed-in user and logout. */
-export function TopBar({
-  projectId,
-  projectRole,
-}: {
-  projectId?: string;
-  projectRole?: ProjectRole;
-}) {
+/**
+ * The header: the app name, theme, the signed-in user and logout. The screen navigation sits in
+ * the sidebar or the rail; below --bp-md this header opens it in the drawer.
+ */
+export function TopBar({ projectId, navigation }: { projectId?: string; navigation: Navigation }) {
   const auth = useAuth();
   const theme = useTheme();
   const mutation = useMutation();
-  const usesDrawer = useMediaQuery(DRAWER_NAVIGATION_QUERY);
-  const links = navigationLinks({ projectId, projectRole, isGlobalAdmin: isGlobalAdmin(auth.user) });
   return (
     <>
       <a className="skip-link" href="#content">
         {text.skipContent}
       </a>
       <header className="topbar">
-        {usesDrawer && links.length > 0 && <NavigationDrawer links={links} />}
+        {navigation.mode === 'drawer' && navigation.groups.length > 0 && (
+          <NavigationDrawer groups={navigation.groups} />
+        )}
         <Link to="/" className="brand">
           {text.appName}
         </Link>
-        {!usesDrawer && <NavigationLinkList links={links} />}
         <div className="topbar-actions">
           {projectId && <OperationsAlertBadge projectId={projectId} />}
           <button

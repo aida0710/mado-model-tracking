@@ -8,7 +8,14 @@ describe('NavigationDrawer', () => {
   it('最初は閉じていて、メニューボタンが aria-expanded=false でドロワーを指す', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
-        <NavigationDrawer links={[{ to: '/projects/p1/experiments', label: 'Experiments' }]} />
+        <NavigationDrawer
+          groups={[
+            {
+              label: '記録',
+              links: [{ screen: 'experiments', to: '/projects/p1/experiments', label: 'Experiments' }],
+            },
+          ]}
+        />
       </MemoryRouter>,
     );
     const button = markup.match(/<button[^>]*navigation-toggle[^>]*>/)?.[0] ?? '';
@@ -18,5 +25,6 @@ describe('NavigationDrawer', () => {
     expect(markup).toContain(`<dialog id="${drawerId}"`);
     expect(markup).not.toMatch(/<dialog[^>]* open/);
     expect(markup).toContain('href="/projects/p1/experiments"');
+    expect(markup).toContain('>記録</span>');
   });
 });

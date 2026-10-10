@@ -1,4 +1,5 @@
-/* Registry list/detail, details lists, automation panels, charts, logs, jobs, and the lineage graph. */
+/* Registry list/detail, automation panels, charts, logs, jobs, and the lineage graph. Section headings,
+   details lists and the JSON view come from @mado/design-system/components.css. */
 .registry-layout {
   display: grid;
   grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
@@ -10,20 +11,6 @@
   border-left: 1px solid var(--border);
   padding-left: 28px;
 }
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.section-heading h2 {
-  margin: 0;
-}
-.section-heading > div {
-  display: flex;
-  gap: 8px;
-}
 .version-detail {
   padding-top: 20px;
 }
@@ -34,7 +21,7 @@
   padding-top: 20px;
 }
 .automation-enabled {
-  color: var(--teal);
+  color: var(--link);
 }
 .automation-links {
   display: flex;
@@ -58,33 +45,9 @@
   color: var(--muted);
   font-size: 12px;
 }
-.details-list {
-  margin: 0;
-  font-size: 12px;
-}
-.details-list > div {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 14px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-.details-list dt {
-  color: var(--muted);
-}
-.details-list dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .version-link {
   display: block;
   margin-bottom: 5px;
-}
-.json-view {
-  padding: 16px;
-  background: var(--surface);
-  overflow: auto;
-  line-height: 1.6;
 }
 .details-grid {
   display: grid;
@@ -107,8 +70,8 @@
   min-width: 160px;
 }
 .log-view {
-  background: #13171b;
-  color: #d8e1e5;
+  background: var(--code-background);
+  color: var(--code-text);
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.6;
@@ -125,13 +88,13 @@
   padding: 3px 0;
 }
 .log-entry time {
-  color: #788c95;
+  color: var(--code-muted);
 }
 .log-entry.log-error {
-  color: #ff9ca7;
+  color: var(--code-error);
 }
 .log-entry.log-warning {
-  color: #efcf8e;
+  color: var(--code-warning);
 }
 .section-actions {
   display: flex;
@@ -166,7 +129,7 @@
 .manual-submission {
   flex-direction: column;
   align-items: stretch;
-  border-left-color: #c58a00;
+  border-left-color: var(--warning);
 }
 .manual-submission p,
 .manual-submission ul {
@@ -226,17 +189,17 @@
   stroke-width: 1.5px;
 }
 .graph-node:hover rect {
-  stroke: var(--teal);
+  stroke: var(--accent);
 }
 .node-run rect {
-  stroke: var(--teal);
+  stroke: var(--accent);
 }
 .node-modelVersion rect,
 .node-loggedModel rect {
-  stroke: #7991cf;
+  stroke: var(--lineage-model);
 }
 .node-datasetVersion rect {
-  stroke: #b79854;
+  stroke: var(--lineage-dataset);
 }
 .node-kind {
   fill: var(--muted);

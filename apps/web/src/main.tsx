@@ -4,6 +4,19 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NavigationGuardProvider } from './components/NavigationGuardProvider';
+import { initialTheme } from './hooks/useTheme';
+// Fonts and theme tokens shared with Mado. Noto Sans JP covers the Japanese text IBM Plex lacks.
+import '@fontsource/noto-sans-jp/japanese-400.css';
+import '@fontsource/noto-sans-jp/japanese-500.css';
+import '@fontsource/noto-sans-jp/japanese-700.css';
+import '@mado/design-system/fonts.css';
+import '@mado/design-system/tokens.css';
+// Element defaults, components, the app frame and the code view shared with Mado, before this
+// app's area files.
+import '@mado/design-system/base.css';
+import '@mado/design-system/components.css';
+import '@mado/design-system/shell.css';
+import '@mado/design-system/code.css';
 // Area stylesheets. Order matters for equal-specificity rules: keep breakpoints (the width
 // breakpoints every other stylesheet uses) and base first, and add new rules to the file of the
 // area they style instead of creating a catch-all stylesheet.
@@ -37,9 +50,11 @@ import './styles/savedViews.css';
 import './styles/comparison.css';
 import './styles/runList.css';
 import './styles/datasets.css';
-import './styles/touchTargets.css';
 import './styles/responsiveManagement.css';
 import './styles/siteComputers.css';
+
+// The login screen and everything else start in the stored theme, or the operating system's.
+document.documentElement.dataset.theme = initialTheme();
 
 // Keep the existing route tree while enabling blocked SPA navigation.
 const router = createBrowserRouter([{

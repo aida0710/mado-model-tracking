@@ -5,13 +5,7 @@ import { ErrorNotice } from './Feedback';
 import { text } from '../i18n/catalog';
 import { localLoginErrorMessage } from '../lib/authErrorMessages';
 
-export function LocalLoginForm({
-  isPrimary,
-  onLogin,
-}: {
-  isPrimary: boolean;
-  onLogin: () => void;
-}) {
+export function LocalLoginForm({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const mutation = useMutation();
@@ -52,7 +46,7 @@ export function LocalLoginForm({
         />
       </label>
       <ErrorNotice message={mutation.error} />
-      <button className={isPrimary ? 'button primary' : 'button'} disabled={mutation.pending}>
+      <button className="button primary" disabled={mutation.pending}>
         {text.localLogin}
       </button>
     </form>

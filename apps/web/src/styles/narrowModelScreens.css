@@ -77,9 +77,6 @@
   .job-run-cell {
     min-width: 0;
   }
-  .section-heading {
-    flex-wrap: wrap;
-  }
   .lineage-graph.narrow .graph-scroll {
     max-height: 60vh;
   }
@@ -105,8 +102,7 @@
     flex: 1;
     min-width: 0;
   }
-  .task-actions,
-  .section-heading > div {
+  .task-actions {
     flex-wrap: wrap;
   }
 }

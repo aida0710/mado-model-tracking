@@ -12,8 +12,8 @@
   background: var(--surface);
 }
 .upload-dropzone.dragging {
-  border-color: var(--teal);
-  background: var(--teal-tint);
+  border-color: var(--accent);
+  background: var(--accent-tint);
 }
 .upload-dropzone p {
   margin: 0;
@@ -27,7 +27,7 @@
   cursor: pointer;
 }
 .upload-pickers label.button:focus-within {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .upload-selection {
@@ -97,7 +97,7 @@
 .upload-queue-row progress {
   width: 100%;
   height: 6px;
-  accent-color: var(--teal);
+  accent-color: var(--accent);
 }
 .upload-queue-row.failed progress {
   accent-color: var(--error);

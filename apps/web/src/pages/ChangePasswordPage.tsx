@@ -25,8 +25,8 @@ export function ChangePasswordPage({
   // The required screen replaces the app, so it also offers the only way out besides changing.
   return (
     <div className="login-page">
-      <div className="login-brand">{text.appName}</div>
       <main className="login-card">
+        <div className="login-mark">{text.appName}</div>
         <h1>{text.changePasswordTitle}</h1>
         {form}
         <ErrorNotice message={logout.error} />

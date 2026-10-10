@@ -26,7 +26,7 @@ export function AudioWaveform({ peaks, height }: { peaks: WaveformPeaks; height:
     const style = getComputedStyle(canvas);
     context.fillStyle = style.getPropertyValue('--border');
     context.fillRect(0, Math.floor(pixelHeight / 2), canvas.width, 1);
-    context.fillStyle = style.getPropertyValue('--teal');
+    context.fillStyle = style.getPropertyValue('--accent');
     const middle = pixelHeight / 2;
     for (let column = 0; column < peaks.max.length; column += 1) {
       const top = middle - peaks.max[column]! * middle;
