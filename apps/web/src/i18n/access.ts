@@ -3,7 +3,7 @@ export const accessText = {
   username: 'ユーザー名',
   password: 'パスワード',
   localLogin: 'ローカルアカウントでログイン',
-  localLoginSeparator: 'またはローカルアカウント',
+  localLoginSeparator: 'または',
   localLoginInvalid: 'ユーザー名またはパスワードが正しくありません',
   loginRateLimited: '試行回数の上限に達しました。しばらく待ってから再試行してください',
   ssoUnavailable: 'このサーバーではログイン方法が設定されていません',

@@ -1,6 +1,12 @@
 /* Element defaults, typography, buttons, and shared feedback (notices, loading). Fonts and theme
    colors come from @mado/design-tokens (imported first in main.tsx). */
 :root {
+  /* The header, and everything above a screen: the header alone beside the navigation sidebar, the
+     header and the project bar where the drawer holds the navigation (below --bp-lg). */
+  --topbar-height: 49px;
+  --projectbar-height: 43px;
+  --chrome-height: var(--topbar-height);
+  --navigation-width: 192px;
   --sidebar-width: 240px;
   --page-padding: 32px;
   font-family: var(--font);
@@ -252,6 +258,7 @@ pre {
 }
 @media (width < 1200px) {
   :root {
+    --chrome-height: calc(var(--topbar-height) + var(--projectbar-height));
     --sidebar-width: 215px;
     --page-padding: 24px;
   }

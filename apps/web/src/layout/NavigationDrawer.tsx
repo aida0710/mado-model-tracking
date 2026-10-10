@@ -1,15 +1,15 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { Menu, X } from 'lucide-react';
 import { text } from '../i18n/catalog';
-import type { NavigationLink } from './navigationLinks';
+import type { NavigationGroup } from './navigationLinks';
 import { NavigationLinkList } from './NavigationLinkList';
 
 /**
- * The main navigation on narrow screens: a menu button that opens the links in a drawer from the
- * left. The drawer is a modal <dialog>, so Esc closes it and focus returns to the button; a tap
- * outside it or on a link closes it too.
+ * The main navigation on narrow screens: a menu button that opens the grouped links in a drawer
+ * from the left. The drawer is a modal <dialog>, so Esc closes it and focus returns to the button;
+ * a tap outside it or on a link closes it too.
  */
-export function NavigationDrawer({ links }: { links: NavigationLink[] }) {
+export function NavigationDrawer({ groups }: { groups: NavigationGroup[] }) {
   const drawerId = useId();
   const drawerRef = useRef<HTMLDialogElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -61,7 +61,7 @@ export function NavigationDrawer({ links }: { links: NavigationLink[] }) {
               <X size={20} />
             </button>
           </div>
-          <NavigationLinkList links={links} />
+          <NavigationLinkList groups={groups} />
         </div>
       </dialog>
     </>

@@ -3,13 +3,22 @@ import type { Project } from '@mmt/contracts';
 import { text } from '../i18n/catalog';
 
 /**
- * The bar under the header: which Project is open and the user's role in it. It stays one line on
- * every width; on narrow screens the select shrinks and truncates the Project name.
+ * Which Project is open and the user's role in it. On wide screens it heads the navigation sidebar
+ * ("sidebar"); on narrow ones it is the one-line bar under the header ("bar"), where the select
+ * shrinks and truncates the Project name.
  */
-export function ProjectBar({ projects, project }: { projects: Project[]; project?: Project }) {
+export function ProjectBar({
+  projects,
+  project,
+  placement,
+}: {
+  projects: Project[];
+  project?: Project;
+  placement: 'bar' | 'sidebar';
+}) {
   const navigate = useNavigate();
   return (
-    <div className="projectbar">
+    <div className={placement === 'sidebar' ? 'sidebar-project' : 'projectbar'}>
       <label>
         <span>{text.project}</span>
         <select

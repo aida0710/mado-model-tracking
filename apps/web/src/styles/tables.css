@@ -2,7 +2,7 @@
 .experiments-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  min-height: calc(100vh - 92px);
+  min-height: calc(100vh - var(--chrome-height));
 }
 .experiment-sidebar {
   background: var(--surface);
@@ -56,9 +56,12 @@
   font-weight: 400;
   margin-top: 4px;
 }
+/* The controls wrap to a second line whenever they do not fit beside the search, which also
+   happens on wide screens once the navigation sidebar and the Experiments list take their width. */
 .run-toolbar {
   background: var(--surface);
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   margin-bottom: 16px;
   min-height: 40px;
@@ -66,7 +69,7 @@
 .search-field {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 1 1 360px;
   gap: 12px;
   padding: 0 12px;
   min-width: 180px;
@@ -89,11 +92,13 @@
 }
 .toolbar-select {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   border-left: 1px solid var(--background);
   padding: 0 10px;
   gap: 6px;
   font-size: 11px;
+  white-space: nowrap;
 }
 .toolbar-select select {
   background: transparent;
@@ -104,6 +109,7 @@
 }
 .column-menu {
   position: relative;
+  flex: 0 0 auto;
   border-left: 1px solid var(--background);
 }
 .column-menu > summary {
@@ -304,9 +310,6 @@ tr.selected td {
   gap: 4px;
 }
 @media (width < 1200px) {
-  .run-toolbar {
-    flex-wrap: wrap;
-  }
   .search-field {
     flex-basis: 100%;
     min-height: 40px;

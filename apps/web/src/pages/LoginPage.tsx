@@ -50,13 +50,15 @@ function DevelopmentLoginForm({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-// hybrid shows SSO as the main path and the local account form below it as the fallback.
+// The same card as Mado's login: the app name, what it is, then the ways to sign in. hybrid shows
+// SSO first and the local account form below the separator.
 export function LoginPage({ config, onLogin }: { config: AuthConfig; onLogin: () => void }) {
   const methods = loginMethods(config);
   return (
     <div className="login-page">
-      <div className="login-brand">{text.appName}</div>
       <main className="login-card">
+        <div className="login-mark">{text.appName}</div>
+        <p className="login-eyebrow">{text.loginEyebrow}</p>
         <h1>{text.loginTitle}</h1>
         {methods.development && <DevelopmentLoginForm onLogin={onLogin} />}
         {methods.sso && (
@@ -70,8 +72,8 @@ export function LoginPage({ config, onLogin }: { config: AuthConfig; onLogin: ()
             {methods.sso.label || text.login}
           </a>
         )}
-        {methods.sso && methods.local && <p className="muted">{text.localLoginSeparator}</p>}
-        {methods.local && <LocalLoginForm isPrimary={!methods.sso} onLogin={onLogin} />}
+        {methods.sso && methods.local && <p className="login-or">{text.localLoginSeparator}</p>}
+        {methods.local && <LocalLoginForm onLogin={onLogin} />}
         {!methods.development && !methods.sso && !methods.local && (
           <ErrorNotice message={text.ssoUnavailable} />
         )}
