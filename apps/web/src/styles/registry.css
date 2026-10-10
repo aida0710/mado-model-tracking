@@ -34,7 +34,7 @@
   padding-top: 20px;
 }
 .automation-enabled {
-  color: var(--teal);
+  color: var(--link);
 }
 .automation-links {
   display: flex;
@@ -107,8 +107,8 @@
   min-width: 160px;
 }
 .log-view {
-  background: #13171b;
-  color: #d8e1e5;
+  background: var(--code-background);
+  color: var(--code-text);
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.6;
@@ -125,13 +125,13 @@
   padding: 3px 0;
 }
 .log-entry time {
-  color: #788c95;
+  color: var(--code-muted);
 }
 .log-entry.log-error {
-  color: #ff9ca7;
+  color: var(--code-error);
 }
 .log-entry.log-warning {
-  color: #efcf8e;
+  color: var(--code-warning);
 }
 .section-actions {
   display: flex;
@@ -166,7 +166,7 @@
 .manual-submission {
   flex-direction: column;
   align-items: stretch;
-  border-left-color: #c58a00;
+  border-left-color: var(--warning);
 }
 .manual-submission p,
 .manual-submission ul {
@@ -222,17 +222,17 @@
   stroke-width: 1.5px;
 }
 .graph-node:hover rect {
-  stroke: var(--teal);
+  stroke: var(--accent);
 }
 .node-run rect {
-  stroke: var(--teal);
+  stroke: var(--accent);
 }
 .node-modelVersion rect,
 .node-loggedModel rect {
-  stroke: #7991cf;
+  stroke: var(--lineage-model);
 }
 .node-datasetVersion rect {
-  stroke: #b79854;
+  stroke: var(--lineage-dataset);
 }
 .node-kind {
   fill: var(--muted);

@@ -15,7 +15,7 @@ npx --no-install vitest run apps/web/src/api apps/web/src/lib
 - `src/lib/`: 入力、互換性、フィルタ、表示、メトリクス、Lineageの純粋ロジック。
 - `src/types/`: フォーム・選択肢・実行カタログの型。
 - `src/i18n/`: UI文言とRuntime・自動実行結果の表示名。
-- `public/fonts/`: 利用者提供HTMLから取り込んだIBM Plex。ライセンス同梱。
+- 書体と色の変数: `packages/design-tokens`（`@mado/design-tokens`）。IBM Plexは利用者提供HTMLから取り込んだもので、ライセンス同梱。日本語は`@fontsource/noto-sans-jp`。
 
 ブラウザ検証は既存のPlaywrightを使える。root manifest/lockfileへ依存を追加する必要はない。
 

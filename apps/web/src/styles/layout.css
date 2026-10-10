@@ -30,7 +30,7 @@
   scrollbar-width: thin;
 }
 .topbar > nav a {
-  color: #ddd;
+  color: var(--header-text-muted);
   display: flex;
   align-items: center;
   padding: 0 16px;
@@ -39,12 +39,12 @@
   min-height: 49px;
 }
 .topbar > nav a.active {
-  background: #282828;
-  border-bottom-color: #00b9b1;
-  color: #fff;
+  background: var(--header-active);
+  border-bottom-color: var(--header-indicator);
+  color: var(--header-text-strong);
 }
 .topbar > nav a:hover {
-  background: #242424;
+  background: var(--header-hover);
   text-decoration: none;
 }
 .topbar-actions {
@@ -55,21 +55,21 @@
   padding-left: 10px;
 }
 .topbar .icon-button:hover {
-  background: #333;
+  background: var(--header-control-hover);
 }
 .avatar {
   width: 27px;
   height: 27px;
   border-radius: 50%;
-  background: #008782;
+  background: var(--avatar);
   display: grid;
   place-items: center;
   font-size: 11px;
   font-weight: 650;
-  color: #fff;
+  color: var(--on-accent);
 }
 .topbar a.avatar:hover {
-  background: #00a19b;
+  background: var(--avatar-hover);
   text-decoration: none;
 }
 .topbar .navigation-toggle {
@@ -91,13 +91,13 @@
   border: 0;
   background: var(--header);
   color: var(--header-text);
-  box-shadow: 4px 0 30px #0006;
+  box-shadow: var(--shadow-drawer);
 }
 .navigation-drawer[open] {
   animation: navigation-drawer-slide-in 160ms ease-out;
 }
 .navigation-drawer::backdrop {
-  background: #0008;
+  background: var(--backdrop);
 }
 @keyframes navigation-drawer-slide-in {
   from {
@@ -116,14 +116,14 @@
   min-height: 49px;
   padding: 0 6px 0 18px;
   font-size: 14px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--header-border);
 }
 .navigation-drawer-header .icon-button {
   width: var(--tap-target);
   height: var(--tap-target);
 }
 .navigation-drawer-header .icon-button:hover {
-  background: #333;
+  background: var(--header-control-hover);
 }
 .navigation-drawer nav {
   display: flex;
@@ -136,16 +136,16 @@
   align-items: center;
   min-height: 44px;
   padding: 0 18px;
-  color: #ddd;
+  color: var(--header-text-muted);
   border-left: 3px solid transparent;
 }
 .navigation-drawer nav a.active {
-  background: #282828;
-  border-left-color: #00b9b1;
-  color: #fff;
+  background: var(--header-active);
+  border-left-color: var(--header-indicator);
+  color: var(--header-text-strong);
 }
 .navigation-drawer nav a:hover {
-  background: #242424;
+  background: var(--header-hover);
   text-decoration: none;
 }
 .projectbar {
@@ -202,7 +202,7 @@
   overflow-wrap: anywhere;
 }
 .eyebrow {
-  color: var(--teal);
+  color: var(--link);
   font-size: 12px;
   margin-bottom: 12px;
 }
@@ -242,7 +242,7 @@
 }
 .tab.active {
   color: var(--text);
-  border-bottom-color: var(--teal);
+  border-bottom-color: var(--accent);
   font-weight: 600;
 }
 .tab:hover {

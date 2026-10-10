@@ -6,7 +6,7 @@
   position: relative;
 }
 .topbar .operations-alert-button.has-alerts {
-  color: #ffb4bc;
+  color: var(--header-alert);
 }
 .operations-alert-count {
   position: absolute;
@@ -15,9 +15,9 @@
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: 8px;
-  background: var(--error);
-  color: #fff;
+  border-radius: var(--radius-pill);
+  background: var(--error-fill);
+  color: var(--on-error-fill);
   font-size: 10px;
   font-weight: 650;
   line-height: 16px;
@@ -36,7 +36,7 @@
   background: var(--background);
   color: var(--text);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: var(--shadow-popover);
 }
 .operations-alert-heading {
   padding: 12px 14px;

@@ -61,7 +61,7 @@
   gap: 0 10px;
   padding: 8px 10px 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 .sweep-space-row.invalid {
   border-color: var(--error);
@@ -89,7 +89,7 @@
 /* Detail */
 .sweep-summary {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   padding: 14px 16px;
   margin-bottom: 20px;
 }
@@ -141,16 +141,12 @@
 
 /* early_stopped is a decision of the sweep, so it is told apart from a user cancel. */
 .status-early-stopped {
-  background: #fde7c4;
-  color: #8a5300;
-}
-[data-theme='dark'] .status-early-stopped {
-  background: #5a4220;
-  color: #f6cf8e;
+  background: var(--status-stopped-background);
+  color: var(--status-stopped-text);
 }
 /* The best trial is named in its objective cell, which stays visible on narrow screens too. */
 .sweep-best-marker {
-  color: var(--teal-strong);
+  color: var(--link);
 }
 @media (width < 900px) {
   /* Padding instead of a flex box keeps the summary's open/closed marker. */

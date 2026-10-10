@@ -7,7 +7,7 @@
   width: min(560px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   overflow-y: auto;
-  box-shadow: 0 12px 50px #0005;
+  box-shadow: var(--shadow-dialog);
 }
 .dialog.wide {
   width: min(740px, calc(100vw - 32px));
@@ -16,7 +16,7 @@
   width: min(1280px, calc(100vw - 32px));
 }
 .dialog::backdrop {
-  background: #0008;
+  background: var(--backdrop);
 }
 .dialog > header {
   display: flex;
@@ -136,8 +136,8 @@
   border-bottom: 2px solid transparent;
 }
 .wizard-steps li.active {
-  color: var(--teal);
-  border-bottom-color: var(--teal);
+  color: var(--link);
+  border-bottom-color: var(--accent);
 }
 @media (width < 640px) {
   .wizard-steps {

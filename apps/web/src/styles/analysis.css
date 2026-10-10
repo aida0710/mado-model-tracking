@@ -114,9 +114,9 @@
   touch-action: none;
 }
 .parallel-brush {
-  fill: var(--teal);
+  fill: var(--accent);
   fill-opacity: 0.25;
-  stroke: var(--teal);
+  stroke: var(--accent);
   pointer-events: none;
 }
 .parallel-axis-header {
@@ -164,14 +164,14 @@
   display: inline-block;
   width: 96px;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .parallel-color-missing {
   display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #9a9a96;
+  background: var(--chart-missing);
 }
 .analysis-selected-runs {
   margin-top: 8px;
@@ -232,14 +232,14 @@
   position: relative;
   flex: 1;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
 }
 .importance-bar {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 4px;
-  background: #2a78d6;
+  border-radius: var(--radius-sm);
+  background: var(--chart-positive);
 }
 .correlation-bar {
   position: absolute;
@@ -247,12 +247,12 @@
   bottom: 0;
 }
 .correlation-bar.positive {
-  border-radius: 0 4px 4px 0;
-  background: #2a78d6;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--chart-positive);
 }
 .correlation-bar.negative {
-  border-radius: 4px 0 0 4px;
-  background: #d03b3b;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: var(--chart-negative);
 }
 .importance-value {
   min-width: 56px;

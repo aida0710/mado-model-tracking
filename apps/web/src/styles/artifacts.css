@@ -57,7 +57,7 @@
   flex-direction: column;
   background: var(--background);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: var(--shadow-popover);
 }
 .artifact-actions-popover button {
   border: 0;

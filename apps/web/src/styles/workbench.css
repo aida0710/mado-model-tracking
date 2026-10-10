@@ -63,7 +63,7 @@
 }
 .code-file-tree button[aria-current='true'] {
   background: var(--surface);
-  color: var(--teal-strong);
+  color: var(--link);
 }
 .code-directory {
   color: var(--muted);

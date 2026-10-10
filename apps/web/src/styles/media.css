@@ -17,7 +17,7 @@
 .media-step-slider input[type='range'] {
   flex: 1;
   min-width: 160px;
-  accent-color: var(--teal);
+  accent-color: var(--accent);
 }
 .media-step-value {
   min-width: 150px;
@@ -103,11 +103,11 @@
   background: transparent;
 }
 .media-compare-grid td.selected .media-compare-cell {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .media-compare-cell:focus-visible {
-  outline: 2px solid var(--teal-strong);
+  outline: 2px solid var(--accent-strong);
 }
 .media-compare-audio {
   display: inline-flex;
@@ -191,7 +191,7 @@
   width: 100%;
 }
 .media-compare-run-step.selected .media-compare-cell {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 .media-compare-run-steps > .media-compare-detail {

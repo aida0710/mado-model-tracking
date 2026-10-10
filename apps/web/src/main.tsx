@@ -4,6 +4,12 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { NavigationGuardProvider } from './components/NavigationGuardProvider';
+// Fonts and theme tokens shared with Mado. Noto Sans JP covers the Japanese text IBM Plex lacks.
+import '@fontsource/noto-sans-jp/japanese-400.css';
+import '@fontsource/noto-sans-jp/japanese-500.css';
+import '@fontsource/noto-sans-jp/japanese-700.css';
+import '@mado/design-tokens/fonts.css';
+import '@mado/design-tokens/tokens.css';
 // Area stylesheets. Order matters for equal-specificity rules: keep breakpoints (the width
 // breakpoints every other stylesheet uses) and base first, and add new rules to the file of the
 // area they style instead of creating a catch-all stylesheet.

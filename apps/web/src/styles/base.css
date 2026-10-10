@@ -1,73 +1,12 @@
-/* Fonts, theme tokens, element defaults, typography, buttons, and shared feedback (notices, loading). */
-@font-face {
-  font-family: 'IBM Plex Sans';
-  font-style: normal;
-  font-weight: 100 700;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-sans-latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-mono-latin.woff2') format('woff2');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
-    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
+/* Element defaults, typography, buttons, and shared feedback (notices, loading). Fonts and theme
+   colors come from @mado/design-tokens (imported first in main.tsx). */
 :root {
-  color-scheme: light;
-  --background: #fff;
-  --surface: #f4f4f4;
-  --surface-hover: #eaeaea;
-  --table-header: #e4e4e4;
-  --selected: #dedede;
-  --text: #202020;
-  --muted: #6f7478;
-  --border: #dedede;
-  --input-border: #8a8a8a;
-  --teal: #008682;
-  --teal-strong: #007b77;
-  --teal-tint: #e2f3f1;
-  --error: #bd2838;
-  --error-tint: #fff0f1;
-  --success: #157839;
-  --success-tint: #eaf8ed;
-  --header: #151515;
-  --header-text: #efefef;
-  --font:
-    'IBM Plex Sans', 'Noto Sans', 'Noto Sans CJK JP', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
-  --mono: 'IBM Plex Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --sidebar-width: 240px;
   --page-padding: 32px;
   font-family: var(--font);
   color: var(--text);
   background: var(--background);
-  font-size: 13px;
-}
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --background: #191b1e;
-  --surface: #23262a;
-  --surface-hover: #2d3136;
-  --table-header: #30353b;
-  --selected: #343c3f;
-  --text: #e5e8eb;
-  --muted: #9da5ad;
-  --border: #373c42;
-  --input-border: #687078;
-  --teal: #4ac5bf;
-  --teal-strong: #149891;
-  --teal-tint: #193d3a;
-  --error: #ff8e98;
-  --error-tint: #3e252b;
-  --success: #8fdda8;
-  --success-tint: #213c2c;
+  font-size: var(--font-size-base);
 }
 * {
   box-sizing: border-box;
@@ -94,7 +33,7 @@ button:disabled {
   cursor: default;
 }
 a {
-  color: var(--teal);
+  color: var(--link);
   text-decoration: none;
 }
 a:hover {
@@ -109,7 +48,7 @@ summary {
   -webkit-tap-highlight-color: transparent;
 }
 :focus-visible {
-  outline: 2px solid var(--teal);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 input,
@@ -118,12 +57,12 @@ textarea {
   background: var(--background);
   color: var(--text);
   border: 1px solid var(--input-border);
-  border-radius: 0;
+  border-radius: var(--radius-none);
   padding: 9px 10px;
   min-width: 0;
 }
 input[type='checkbox'] {
-  accent-color: var(--teal-strong);
+  accent-color: var(--accent-strong);
   padding: 0;
   width: 14px;
   height: 14px;
@@ -197,7 +136,7 @@ pre {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border-radius: 0;
+  border-radius: var(--radius-none);
   white-space: nowrap;
   text-decoration: none;
 }
@@ -206,9 +145,9 @@ pre {
   text-decoration: none;
 }
 .button.primary {
-  background: var(--teal-strong);
-  color: #fff;
-  border-color: var(--teal-strong);
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  border-color: var(--accent-strong);
 }
 .button.primary:hover:not(:disabled) {
   filter: brightness(0.93);
@@ -238,7 +177,7 @@ pre {
   border: 0;
   padding: 0;
   background: transparent;
-  color: var(--teal);
+  color: var(--link);
   text-align: left;
 }
 .link-button:hover {
@@ -260,7 +199,7 @@ pre {
   padding: 12px;
   margin: 12px 0;
   background: var(--surface);
-  border-left: 3px solid var(--teal);
+  border-left: 3px solid var(--accent);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -303,8 +242,8 @@ pre {
   position: absolute;
   top: -100px;
   left: 10px;
-  background: var(--teal-strong);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--on-accent);
   padding: 10px;
   z-index: 50;
 }

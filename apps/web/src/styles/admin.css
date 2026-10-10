@@ -114,7 +114,7 @@
 }
 .storage-tag {
   display: inline-block;
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   padding: 2px 8px;
   background: var(--surface);
   color: var(--muted);
@@ -122,8 +122,8 @@
   white-space: nowrap;
 }
 .storage-tag.storage-default {
-  background: var(--teal-tint);
-  color: var(--teal-strong);
+  background: var(--accent-tint);
+  color: var(--link);
 }
 .storage-location code {
   font-family: var(--mono);
@@ -295,7 +295,7 @@ button.avatar {
 }
 button.avatar:hover,
 button.avatar[aria-expanded='true'] {
-  background: #00a19b;
+  background: var(--avatar-hover);
 }
 .user-menu-popover {
   position: absolute;
@@ -308,7 +308,7 @@ button.avatar[aria-expanded='true'] {
   background: var(--background);
   color: var(--text);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: var(--shadow-popover);
 }
 .user-menu-identity {
   display: flex;

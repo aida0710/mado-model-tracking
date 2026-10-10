@@ -30,7 +30,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--background);
   padding: 8px 10px;
   box-sizing: border-box;
@@ -75,8 +75,8 @@
   padding: 10px;
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-drag);
   width: max-content;
 }
 .chart-move-buttons,
@@ -86,8 +86,8 @@
   gap: 4px;
 }
 .chart-size-buttons .button.active {
-  background: var(--teal-tint);
-  border-color: var(--teal);
+  background: var(--accent-tint);
+  border-color: var(--accent);
 }
 .chart-panel > .notice,
 .chart-panel > .state-message {
@@ -101,7 +101,7 @@
 }
 .chart-metric-picker {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 10px 12px;
   display: grid;
   gap: 8px;
@@ -167,7 +167,7 @@
 .resume-track {
   position: relative;
   height: 14px;
-  border-radius: 7px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   margin-bottom: 8px;
 }
@@ -175,7 +175,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-pill);
 }
 
 /* One panel per row on narrow screens; the stored placement is kept for wider ones. */

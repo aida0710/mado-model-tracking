@@ -42,7 +42,7 @@
 }
 .experiment-item.active {
   background: var(--selected);
-  border-left-color: var(--teal);
+  border-left-color: var(--accent);
   font-weight: 600;
 }
 .experiment-item span {
@@ -125,7 +125,7 @@
   max-height: 380px;
   overflow-y: auto;
   padding: 12px;
-  box-shadow: 0 4px 18px #0003;
+  box-shadow: var(--shadow-menu);
   border: 1px solid var(--border);
   background: var(--background);
 }
@@ -142,8 +142,8 @@
   align-items: center;
   justify-content: space-between;
   min-height: 45px;
-  background: var(--teal-strong);
-  color: #fff;
+  background: var(--accent-strong);
+  color: var(--on-accent);
   padding-left: 16px;
 }
 .selection-bar > div {
@@ -152,11 +152,11 @@
 .selection-bar button {
   background: transparent;
   border: 0;
-  color: #fff;
+  color: var(--on-accent);
   padding: 15px;
 }
 .selection-bar button:hover {
-  background: #ffffff15;
+  background: var(--on-accent-hover);
 }
 .table-scroll {
   overflow-x: auto;
@@ -267,56 +267,34 @@ tr.selected td {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  border-radius: 12px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
   letter-spacing: 0.15px;
   padding: 5px 9px;
   white-space: nowrap;
 }
 .status-finished {
-  background: #abefbf;
-  color: #075b23;
+  background: var(--status-success-background);
+  color: var(--status-success-text);
 }
 .status-running,
 .status-claimed {
-  background: #cfdefe;
-  color: #1547ac;
+  background: var(--status-info-background);
+  color: var(--status-info-text);
 }
 .status-failed {
-  background: #ffd4d7;
-  color: #bd0f20;
+  background: var(--status-danger-background);
+  color: var(--status-danger-text);
 }
 .status-queued,
 .status-canceled {
-  background: #e3e5e8;
-  color: #555e66;
-}
-[data-theme='dark'] .status-finished {
-  background: #20593a;
-  color: #a0eabe;
-}
-[data-theme='dark'] .status-running,
-[data-theme='dark'] .status-claimed {
-  background: #263c69;
-  color: #a5c8ff;
-}
-[data-theme='dark'] .status-failed {
-  background: #612632;
-  color: #ffa9b0;
-}
-[data-theme='dark'] .status-queued,
-[data-theme='dark'] .status-canceled {
-  background: #3c4149;
-  color: #d7dbe1;
+  background: var(--status-neutral-background);
+  color: var(--status-neutral-text);
 }
 /* Waits for a person: a site Job to submit by hand, or a site submitted by hand. */
 .status-attention {
-  background: #fde7b0;
-  color: #6b4500;
-}
-[data-theme='dark'] .status-attention {
-  background: #5a4413;
-  color: #ffd98a;
+  background: var(--status-attention-background);
+  color: var(--status-attention-text);
 }
 /* Badges beside a label in one cell, such as a target's executor with its CPU and submission. */
 .badge-group {

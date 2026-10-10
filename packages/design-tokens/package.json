@@ -1,0 +1,19 @@
+{
+  "name": "@mado/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MadoとMado Model Trackingが共有する色・書体・角丸の変数とIBM Plexの書体ファイル",
+  "files": [
+    "tokens.css",
+    "fonts.css",
+    "fonts",
+    "README.md"
+  ],
+  "exports": {
+    "./tokens.css": "./tokens.css",
+    "./fonts.css": "./fonts.css"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}
