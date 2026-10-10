@@ -92,9 +92,9 @@ ssh-keygen -lf ~/.ssh/mmt_known_hosts
 
 ![Compute targetの登録ダイアログ](/images/compute-target-dialog.png)
 
-targetの登録と変更は全体管理者が行います。
+SSH・Localのtargetの登録と変更は、全体管理者が行います。研究者が自分で足せるのは、外部の計算機（site）だけです（[外部の計算機（site）](/compute/sites)）。
 
-1. Computeを開き、［Compute targetを登録］を押します。
+1. Computeを開き、［計算機を追加］を押します。
 2. 次の項目を入力します。
 
 | 項目 | 入力例 | 内容 |
@@ -138,7 +138,7 @@ Taskや自動実行ルールでGPU IDを選ぶと、そのJobの間はアプリ�
 
 ### targetの変更と無効化
 
-一覧の［Compute targetを編集］で設定を変えます。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
+一覧の［計算機を編集］で設定を変えます。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
 
 有効のチェックを外すと、新しいJobの割り当て先から外れます。実行中のJobは、workerが引き続き管理します。
 
@@ -192,4 +192,5 @@ Computeの［Workers］に、このProjectに接続しているworkerの接続�
 | 操作 | 必要な権限 |
 | --- | --- |
 | targetの一覧とWorkersを見る | viewer以上 |
-| targetの登録・変更・有効と無効の切り替え、接続確認 | 全体管理者 |
+| SSH・Localのtargetの登録・変更・有効と無効の切り替え、接続確認 | 全体管理者 |
+| 外部の計算機（site）の登録・変更 | 所有者か全体管理者（[外部の計算機（site）](/compute/sites)） |

@@ -14,7 +14,7 @@ description: 全体管理者とProjectのViewer・Editor・Admin、直接付与�
 - ユーザーの作成・無効化・パスワード再設定（［全体管理］→［ユーザー］）
 - Artifactの保存先の追加と既定の保存先（［全体管理］→［ストレージ］。[保存先](/data/storage)）
 - 全体の監査ログ（［全体管理］→［監査ログ］）
-- Compute targetの作成と変更
+- Compute target（SSH・Local）と全体の計算機の作成と変更、launcherの登録。研究者も、自分の外部の計算機を足せます（[外部の計算機（site）](/compute/sites)）
 - 通知先の作成・変更・テスト送信（[通知と運用アラート](/admin/notifications)）
 - Pluginの登録と変更（[PluginとMado連携](/admin/plugins)）
 
