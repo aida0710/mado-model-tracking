@@ -4,6 +4,7 @@ export const adminText = {
   adminTabStorage: 'ストレージ',
   adminTabUsers: 'ユーザー',
   adminTabAudit: '監査ログ',
+  adminTabLaunchers: 'launcher',
   adminAuditDescription:
     'すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など）を新しい順に表示します。',
   adminUsers: 'ユーザー',

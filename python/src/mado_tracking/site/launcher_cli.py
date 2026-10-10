@@ -1,4 +1,4 @@
-"""`mado-tracking-launcher --config launcher.toml`: submit claimed site Jobs until stopped."""
+"""`mado-tracking-launcher --config launcher.toml`: submit the site Jobs assigned on the Web until stopped."""
 
 from __future__ import annotations
 
@@ -21,12 +21,19 @@ CONFIG_VARIABLE = "MMT_LAUNCHER_CONFIG"
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mado-tracking-launcher",
-        description="Claim Jobs for sites, submit them with each site's job shell and report the result.",
+        description=(
+            "Read the sites assigned to this launcher on the Web, keep their SSH keys, claim their Jobs, "
+            "submit them with each site's job shell and report the result."
+        ),
     )
     parser.add_argument(
-        "--config", type=Path, help=f"launcher TOML (default: ${CONFIG_VARIABLE}); tokens stay in token files"
+        "--config",
+        type=Path,
+        help=f"launcher TOML (default: ${CONFIG_VARIABLE}): api_url, token_file, state_directory, ...",
     )
-    parser.add_argument("--once", action="store_true", help="claim, submit and report once, then exit")
+    parser.add_argument(
+        "--once", action="store_true", help="poll once (keys, checks, submissions), then exit"
+    )
     return parser
 
 

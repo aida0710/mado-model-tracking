@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps ./apps
 COPY packages ./packages
+# The Web offers these job shells as templates and reads them at build time.
+COPY deploy/sites/examples ./deploy/sites/examples
 RUN npm ci && npm run build --workspace @mmt/web
 FROM nginx:1.28-alpine
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf

@@ -6,6 +6,7 @@ import {
   type HookCreated,
   type HookExecution,
   type HookExecutionPage,
+  type HookOwnerTransfer,
   type JsonObject,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
@@ -29,7 +30,11 @@ import {
   listHookExecutions,
   listHooks,
   lockHook,
+  updateHookOwner,
 } from '../repositories/hookRepository.js';
+import { writeAuditEvent } from '../repositories/auditRepository.js';
+import { findServiceAccount } from '../repositories/serviceAccountRepository.js';
+import type { RequestMetadata } from '../http/requestMetadata.js';
 import {
   assertProjectReference,
   assertProjectReferences,
@@ -39,12 +44,15 @@ import {
 import { validateCodeArtifacts } from '../repositories/runtimeArtifactRepository.js';
 import { decryptSecret, encryptSecret } from '../security/secretEncryption.js';
 import { requireProject } from './accessService.js';
+import { auditActor, recordDenial, type AuditEventDraft } from './auditService.js';
 import type { HookDispatcher } from './hookDispatcher.js';
 import { assertPartitionVersion } from './jobArrayService.js';
 import type { JobService } from './jobService.js';
 
 // 32 random bytes, the length GitHub recommends for webhook secrets.
 const WEBHOOK_SECRET_BYTES = 32;
+// Starting a hook needs an editor (hasHookOwnerAccess), so its owner must be one too.
+const HOOK_OWNER_ROLES = ['editor', 'admin'];
 
 function webhookSecretContext(hookId: string): string {
   return `hook-webhook:${hookId}`;
@@ -71,8 +79,9 @@ function webhookPayload(body: Buffer): JsonObject {
 }
 
 /**
- * Hooks of a Project (docs/hooks.md): settings fixed at creation except enabled, the manual
- * trigger, signed webhooks and the execution history. The starts themselves are HookDispatcher's.
+ * Hooks of a Project (docs/hooks.md): settings fixed at creation except enabled and the owner,
+ * the manual trigger, signed webhooks and the execution history. The starts themselves are
+ * HookDispatcher's.
  */
 export class HookService {
   private readonly database: Database;
@@ -117,7 +126,7 @@ export class HookService {
         role: 'editor',
         scope: 'jobs:write',
       });
-      await this.validateTemplate(connection, { projectId, input });
+      await this.validateTemplate(connection, { projectId, input, userId: principal.user.id });
       const id = randomUUID();
       const webhookSecret =
         input.trigger === 'webhook' ? randomBytes(WEBHOOK_SECRET_BYTES).toString('base64url') : null;
@@ -169,6 +178,57 @@ export class HookService {
       if (!updated.rowCount) notFound('Hook');
       return (await findHook(connection, { projectId, id: toggle.hookId }))!;
     });
+  }
+
+  /**
+   * Moves the user a hook runs as to a Service Account of the same Project, so the hook keeps
+   * starting when its creator leaves. Like an automation rule's owner, only a Project admin may
+   * move it; the account must be active and an editor or admin. created_by keeps the creator.
+   * Setting the same owner again changes nothing and is not audited again.
+   */
+  async transferOwner(
+    principal: Principal,
+    projectId: string,
+    transfer: { hookId: string; input: HookOwnerTransfer; metadata: RequestMetadata },
+  ): Promise<Hook> {
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...transfer.metadata,
+      action: 'hook.owner.transfer',
+      resourceType: 'hook',
+      resourceId: transfer.hookId,
+      projectId,
+      details: { serviceAccountId: transfer.input.serviceAccountId },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        // Global administrators still obey token scope, project restrictions and membership.
+        await requireProject(connection, principal, {
+          projectId,
+          role: principal.user.isAdmin ? 'viewer' : 'admin',
+          scope: 'admin',
+        });
+        const hook = await lockHook(connection, { projectId, id: transfer.hookId, mode: 'update' });
+        if (!hook) notFound('Hook');
+        const serviceAccountId = transfer.input.serviceAccountId;
+        const account = await findServiceAccount(connection, { projectId, serviceAccountId });
+        if (!account || account.status !== 'active' || !HOOK_OWNER_ROLES.includes(account.role ?? ''))
+          throw new DomainError(
+            422,
+            '移管先は同じプロジェクトの有効なService Account（role editorかadmin）にしてください',
+            'invalid_hook_owner',
+          );
+        if (hook.runAsUserId !== serviceAccountId) {
+          await updateHookOwner(connection, { hookId: hook.id, runAsUserId: serviceAccountId });
+          await writeAuditEvent(connection, {
+            ...draft,
+            outcome: 'success',
+            details: { ...draft.details, previousRunAsUserId: hook.runAsUserId },
+          });
+        }
+        return (await findHook(connection, { projectId, id: hook.id }))!;
+      }),
+    );
   }
 
   async trigger(
@@ -272,7 +332,8 @@ export class HookService {
   // Checks what each start would check, so a hook that can never start fails at creation.
   private async validateTemplate(
     connection: Connection,
-    creation: { projectId: string; input: HookCreateInput },
+    // userId: the hook's creator, whom it runs as.
+    creation: { projectId: string; input: HookCreateInput; userId: string },
   ): Promise<void> {
     const { projectId, input } = creation;
     const { template } = input;
@@ -301,6 +362,7 @@ export class HookService {
       retryOnFailure: template.retryOnFailure,
       retryOnTimeout: template.retryOnTimeout,
       runtime: code.runtime,
+      usage: { projectId, userId: creation.userId },
     });
     if (template.arraySize !== null && target.executor !== 'site')
       throw new DomainError(422, 'arrayはsiteでだけ実行できます', 'site_target_required');

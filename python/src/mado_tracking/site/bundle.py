@@ -29,6 +29,11 @@ VENDORED_DISTRIBUTION = "httpx"
 VERSION_CHARACTERS = 16
 REQUIREMENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
 EXCLUDED_SUFFIXES = {".pyc", ".pyo", ".so", ".pyd"}
+# Every entry carries this time and mode, so the bundle's bytes, and the version a site installs
+# it under, follow from the files' content alone: not from when a process built it, nor from when
+# the package was installed. The time is the earliest a zip can hold.
+ENTRY_DATE_TIME = (1980, 1, 1, 0, 0, 0)
+ENTRY_MODE = 0o644
 
 
 @dataclass(frozen=True)
@@ -93,16 +98,24 @@ def vendored_files(root: str = VENDORED_DISTRIBUTION) -> list[tuple[str, Path]]:
     return files
 
 
+def _add_entry(archive: zipfile.ZipFile, name: str, content: bytes) -> None:
+    entry = zipfile.ZipInfo(name, date_time=ENTRY_DATE_TIME)
+    entry.compress_type = zipfile.ZIP_DEFLATED
+    entry.external_attr = ENTRY_MODE << 16
+    archive.writestr(entry, content)
+
+
 def build_runner_bundle() -> bytes:
     package_directory = Path(__file__).resolve().parent.parent
     buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("__main__.py", BUNDLE_MAIN)
+    with zipfile.ZipFile(buffer, "w") as archive:
+        _add_entry(archive, "__main__.py", BUNDLE_MAIN.encode())
         for path in sorted(package_directory.rglob("*")):
             if path.is_file() and "__pycache__" not in path.parts and path.suffix not in EXCLUDED_SUFFIXES:
-                archive.write(path, f"mado_tracking/{path.relative_to(package_directory).as_posix()}")
+                name = f"mado_tracking/{path.relative_to(package_directory).as_posix()}"
+                _add_entry(archive, name, path.read_bytes())
         for name, path in sorted(vendored_files()):
-            archive.write(path, name)
+            _add_entry(archive, name, path.read_bytes())
     return buffer.getvalue()
 
 

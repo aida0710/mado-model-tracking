@@ -150,13 +150,13 @@ with Client() as client:
 
 ### Service Accountと所有者の移管
 
-人の異動で自動実行が止まらないように、ruleとpolicyをService Accountの権限で動かす。どれもProject adminの操作。
+人の異動で自動実行が止まらないように、rule・policy・フックをService Accountの権限で動かす。どれもProject adminの操作。移管先のService Accountのroleは、ruleとpolicyがadmin、フックがeditorかadmin（`worker:execute`のtokenもadminにだけ発行できる）。
 
 ```python
 from datetime import UTC, datetime, timedelta
 
 with Client() as client:
-    account = client.create_service_account("project-id", name="pipeline", role="editor")
+    account = client.create_service_account("project-id", name="pipeline", role="admin")
     issued = client.create_service_account_token(
         "project-id", account["id"], name="worker", scopes=["read", "worker:execute"],
         expires_at=datetime.now(UTC) + timedelta(days=90),
@@ -164,6 +164,7 @@ with Client() as client:
     # issued["token"] はこの応答でしか返らない。安全な場所へ保存する。
     client.transfer_automation_rule_owner("project-id", "rule-id", service_account_id=account["id"])
     client.transfer_promotion_policy_owner("project-id", "policy-id", service_account_id=account["id"])
+    client.transfer_hook_owner("project-id", "hook-id", service_account_id=account["id"])
     for token in client.list_project_tokens("project-id"):
         print(token["ownerType"], token["ownerName"], token["tokenPrefix"], token["expiresAt"])
 ```
@@ -309,35 +310,59 @@ sourceはパストラバーサル、`.git`への編集・追加・削除、symli
 
 ### 外部の計算機（site）: runner・launcher・手動投入
 
-siteは、trackingが名前・CPU・runtime・投入方式だけを持つ計算機（`ComputeTarget.executor='site'`）です。launcher（OTPのサイトでは本人の`mado-tracking submit`）がsiteのjob shellを動かし、計算ノードのrunnerがJob tokenでAPIへ直接報告します。設計は`docs/design/external-execution.md`、job shellとsiteの設定例は`deploy/sites/`にあります。
+siteは、スーパーコンピュータやGPUサーバー、研究者のPCのように、siteのjob shellで投入する計算機（`ComputeTarget.executor='site'`）です。接続先・job shell（版つき）・作業ディレクトリ・runner・取消コマンドなどの全体設定と、各人のアカウント名・作業ディレクトリ・変数（個人設定）は、trackingのWebで管理します。自動投入のsiteではlauncherが、手動投入のsite（ログインに一時パスワードが要るsiteや研究者のPC）では本人の`mado-tracking submit`がjob shellを動かし、計算ノードのrunnerがJob tokenでAPIへ直接報告します。説明は`docs/sites.md`、job shellの例は`deploy/sites/`にあります。
 
 **runner（`mado-tracking site-run <spec dir>`）**
 
-- launcherと`submit`は、作業ディレクトリ（`work_dir`）に`.mmt-runner/<版>/mmt-runner.pyz`（このpackageとhttpxを含むzipapp）と`mmt-runner`（起動用のshell script）を版ごとに一度だけ置きます。job shellは`"$MMT_RUNNER" "$MMT_SPEC_DIR"`を起動します。計算ノードにはPython 3.11以上だけが要ります（`runner_python`、または環境変数`MMT_RUNNER_PYTHON`）。
-- 仕様の置き場（`.mmt-submissions/<最初のJob ID>/`、700）には`submission.json`（tokenなし）、`api.json`（`apiUrl`）、`runner.json`（作業ディレクトリ、GPUの割り当て方など）、`jobs/<i>.json`（WorkerJobとJob token、600）、任意の`secrets.json`（`registry`）があります。runnerは`MMT_ARRAY_INDEX`（無ければ0）番目のJobを動かします。
+- launcherと`submit`は、作業ディレクトリに`.mmt-runner/<版>/mmt-runner.pyz`（このpackageとhttpxを含むzipapp）と`mmt-runner`（起動用のshell script）を版ごとに一度だけ置きます。job shellは`"$MMT_RUNNER" "$MMT_SPEC_DIR"`を起動します。計算ノードにはPython 3.11以上だけが要ります（siteの設定のrunnerのPython、または環境変数`MMT_RUNNER_PYTHON`）。
+- 仕様の置き場（`.mmt-submissions/<最初のJob ID>/`、700）には`submission.json`（tokenなし。job shellは`id`・`version`・`sha256`だけで、内容は入れません）、`api.json`（`apiUrl`）、`runner.json`（作業ディレクトリ、GPUの割り当て方など）、`jobs/<i>.json`（WorkerJobとJob token、600）、任意の`secrets.json`（`registry`）があります。runnerは`MMT_ARRAY_INDEX`（無ければ0）番目のJobを動かします。
 - 流れは`runner/start`（phase `waiting_resources`）→ 入力の用意 → GPUの割り当て → heartbeatでphase `running` → コンテナ → 出力の検証とupload（`container/<path>`、64MiB以上はupload session）→ metrics・宣言 → `runner/finish`です。heartbeatは5秒ごとで、`cancelRequested`ならコンテナを止めて`canceled`で終えます。heartbeatが拒否された（401・410など）ときは、コンテナを止めてfinishを送らずに終わります。SIGTERMでは、コンテナを止めて`endReason: timed_out`で終えます。
-- 入力はworkerの直接転送（`datasetTransfer='direct'`）と同じ処理で用意します。`datasetPartitionVersionId`の版は、path順で`位置 % arraySize == arrayIndex`のファイルだけを取ります。SIFのArtifactと、Dockerのimageを変換したSIF（`apptainer pull --arch <cpuArch>`、registryの認証は`secrets.json`から`APPTAINER_DOCKER_USERNAME`・`APPTAINER_DOCKER_PASSWORD`で渡します）は、`<work_dir>/.mmt-cache/sif/`にdigestとCPUの組ごとに1つ置き、lockで1回だけ取得します。
+- 入力はworkerの直接転送（`datasetTransfer='direct'`）と同じ処理で用意します。`datasetPartitionVersionId`の版は、path順で`位置 % arraySize == arrayIndex`のファイルだけを取ります。SIFのArtifactと、Dockerのimageを変換したSIF（`apptainer pull --arch <cpuArch>`、registryの認証は`secrets.json`から`APPTAINER_DOCKER_USERNAME`・`APPTAINER_DOCKER_PASSWORD`で渡します）は、`<作業ディレクトリ>/.mmt-cache/sif/`にdigestとCPUの組ごとに1つ置き、lockで1回だけ取得します。
 - フックの入力: `inputCheckpoint`は`/mmt/inputs/checkpoint`（read-only、`MMT_INPUT_CHECKPOINT_DIR`・`MMT_INPUT_CHECKPOINT_FILE`）、`triggerPayload`は`/mmt/context/trigger-payload.json`（`MMT_TRIGGER_PAYLOAD_FILE`）に置きます。再開のcheckpointもあるJobでは、入力のcheckpointは`/mmt/inputs/input-checkpoint`になります。SSHのworkerも同じ変数とファイルを渡します。
-- GPU: スケジューラのあるsiteでは、スケジューラが渡した`CUDA_VISIBLE_DEVICES`を使います。直実行のホスト（`gpu_assignment = "lease"`）では、`nvidia-smi`で空いたGPUを選びます。他のrunnerがleaseしているGPUと、Madoのlabelが付いた動いているDockerコンテナが持つGPUは使いません。足りない間はphase `waiting_resources`のまま待ちます。
+- GPU: スケジューラのあるsiteでは、スケジューラが渡した`CUDA_VISIBLE_DEVICES`を使います。直実行のホスト（siteの設定でGPUの渡し方が`lease`）では、`nvidia-smi`で空いたGPU（選んでよいGPUを設定したときはその中）を選びます。他のrunnerがleaseしているGPUと、Madoのlabelが付いた動いているDockerコンテナが持つGPUは使いません。足りない間はphase `waiting_resources`のまま待ちます。
 - 終了コードは、成功で0、失敗・取消・時間切れで1、設定の誤りで2、APIがJobを受け付けなかった（終了済み・別のrunner・tokenの失効）ときに3です。
 
 **launcher（`mado-tracking-launcher --config launcher.toml`）**
 
-- 設定はTOMLで、`[[projects]]`（`api_url`と、project worker tokenを入れたmode 600の`token_file`）と`[[sites]]`（`target_id`、`job_shell`、`work_dir`、`account_mode`、`cancel_command`、`[sites.connection]`、本人のアカウント`[sites.accounts."<email>"]`など）を並べます。例は`deploy/sites/examples/launcher.toml`と各`site.toml`です。tokenはファイルからだけ読み、コマンドの引数に出しません。
-- 1回の巡回で、siteごとに`claim`し、作業ディレクトリへrunnerとjob shellを入れ、仕様の置き場を書き、job shellを1回だけ動かして、標準出力の最後の行をスケジューラのジョブIDとして`report`します。job shellが0以外で終わったら、tokenを伏せた短いエラーで`failed`を報告します。届かなかった報告は`state_directory`に残し、次の巡回で送り直します。
-- 待ち行列で取り消されたJobは`cancellations`で受け取り、投入したアカウントで`cancel_command`（`MMT_SCHEDULER_JOB_ID`を渡します）を動かしてから報告します。
-- SSHは`BatchMode=yes`・`StrictHostKeyChecking=yes`で、`state_directory/ssh/`に置く専用のssh_configを使います。経由するホスト（`jump_hosts`、`ssh -J`）にも同じ鍵とknown_hostsが効きます。接続は（site, アカウント）ごとにControlMasterで1本を共有し、60秒使わなければ閉じます。
+launcherは全体管理者がWebで登録し、そのとき一度だけ表示されるtoken（`mmt_…`）をファイルに置きます。どのsiteを担当するかは、Webでsiteの設定にlauncherを選んで決めます。`launcher.toml`（`--config`か`MMT_LAUNCHER_CONFIG`）には起動に要るものだけを書きます。相対pathはこのファイルのディレクトリから読みます。
+
+```toml
+api_url = "https://tracking.example.org"     # launcherから見たAPI
+token_file = "/run/secrets/mado-tracking-launcher/launcher.token"   # mode 600。グループ・他人が読めると起動しない
+state_directory = "/var/lib/mado-tracking-launcher"   # 秘密鍵・known_hosts・未送信の報告。再起動をまたいで残す
+poll_seconds = 10                             # 省略で10
+# registry_secret_file = "/run/secrets/mado-tracking-launcher/forge-pull.json"   # 任意。全siteのrunnerがSIFへの変換に使う
+```
+
+- `state_directory`は必須です。launcherの秘密鍵を置くので、launcherごとに別のディレクトリを使い、消さないでください（消すと鍵を作り直し、siteへの公開鍵の登録もやり直しです）。`registry_secret_file`はmode 600のJSON（`{"username", "password"}`）で、投入のたびに読み直します。
+- `[[projects]]`・`[[sites]]`（`[sites.connection]`・`local = true`・`[sites.accounts]`）・`launcher_id`は読みません。書いてあると、Webへ移ったことを示すエラーで起動しません。知らないkeyも起動しません。tokenはファイルからだけ読み、コマンドの引数やログに出しません。
+- 1回の巡回は、未送信の報告の再送 → `GET /api/launcher/config`（担当の自動投入のsite・鍵・接続確認）→ 鍵の同期 → 接続確認 → siteごとの投入 → 待ち行列での取消、の順です。APIはtokenでlauncherを知るので、どの要求もlauncherのIDを送りません。
+- 鍵: `state_directory/keys/`（700）に、APIが挙げた鍵ごとに秘密鍵`<keyId>`（600）と公開鍵`<keyId>.pub`を`ssh-keygen -q -t ed25519 -N '' -C 'mmt-launcher:<launcher名>:<keyId>'`で作り、公開鍵だけを`PUT /api/launcher/keys/<keyId>`で送ります。秘密鍵はlauncherのホストから出ません。`requested`のままの鍵や、APIの持つ公開鍵が手元と違う鍵は送り直し、半分しか無い鍵は作り直し、APIが挙げなくなった鍵（失効・作り直し）のファイルは消します。Webに出る公開鍵を、siteのアカウントの`~/.ssh/authorized_keys`に登録します。
+- 接続確認: Webで頼まれた確認ごとに、そのアカウントと鍵で、共有の接続を使わずに1回ログインして`true`だけを実行し、成否を`POST /api/launcher/connection-checks/<id>`で送ります。失敗のときは、sshの標準エラーの末尾（tokenは伏せる、2000文字まで）を添えます。
+- 投入: siteごとに`POST /api/launcher/site-submissions/claim`（`targetIds`とsiteの`maxActiveSubmissions`）で受け取り、各submissionに付いた設定で投入します。SSHのユーザーは`account.accountName`、鍵は`account.keyId`の鍵です。host keyは、siteの設定のknown_hosts（`state_directory/known-hosts/<siteのID>`、600に書きます）に載ったものだけを受け入れます。known_hostsが空のsiteや接続先の無いsiteは、理由を添えて`failed`を報告します。作業ディレクトリと変数は`account`（個人の設定が全体の設定の上に乗ったもの）、job shellは`jobShell`（Jobが記録した版）、runnerのPython・runnerから見たAPIのURL・GPUの渡し方・取消の猶予・出力の上限は`settings`から取ります。作業ディレクトリへrunnerとjob shellを入れ、仕様の置き場を書き、job shellを1回だけ動かして、標準出力の最後の行をスケジューラのジョブIDとして報告します。job shellが0以外で終わったら、tokenとJob tokenを伏せた短いエラーで`failed`を報告します。届かなかった報告は`state_directory/pending-reports/`に残し、次の巡回で送り直します。
+- 取消: 待ち行列で取り消されたJobは`cancellations`で受け取り、APIが示すアカウント（`account`）でsiteの取消コマンド（`MMT_SCHEDULER_JOB_ID`を渡します）を動かしてから報告します。投入したときと違うアカウントが示されたときはログに残します（スケジューラが取消を断ることがあります）。アカウントが分からないJobは待ち行列に残ります（runnerは起動するとtokenが401になり、すぐ終わります）。
+- ログインの失敗: 投入か取消でSSHのログインに失敗した接続先（site・アカウント・鍵）には、その巡回の残りの投入では入らず、最初の失敗と同じ理由（`Not tried: …`）で`failed`を報告します。次の巡回ではまた試します（Jobは`submit_failed`になるので、同じJobは繰り返しません）。取消は、その接続先へ600秒のあいだ入らず、後の巡回に回します。ログインできたら記録を消します。公開鍵がsiteに登録される前（launcherや鍵を変えた直後など）に、失敗したログインが1巡回に何百回も続いて、siteにアカウントやIPを止められないためです。記録はプロセスの中だけで、再起動で消えます。
+- SSHは`BatchMode=yes`・`StrictHostKeyChecking=yes`で、`state_directory/ssh/`に置く専用のssh_configを使います。経由するホスト（`ssh -J`）にも同じ鍵とknown_hostsが効きます。投入と取消の接続は（site、アカウント、鍵）ごとにControlMasterで1本を共有し、60秒使わなければ閉じます。`ssh-keygen`と`ssh`は引数を分けて起動し、shellを通しません。
 
 **手動投入（`mado-tracking submit --site <siteのID>`）**
 
-本人のAPI token（`MMT_API_URL`・`MMT_API_TOKEN`）で、siteのログインノードから実行します。自分の手動投入待ちのJobを受け取り、仕様の置き場を書き、手元のjob shellで投入して報告したら終わります。何も常駐しません。
+本人のAPI token（`MMT_API_URL`・`MMT_API_TOKEN`）で、job shellが投入できる場所（siteのログインノード、またはsiteである研究者のPC）から実行します。siteの設定・job shell・自分の作業ディレクトリと変数はWebから読みます（`GET /api/manual-submissions/sites/<siteのID>`）。待っているJobを受け取り、仕様の置き場を書き、job shellで投入して報告します。
 
 ```bash
-mado-tracking submit --site <siteのID> --dry-run      # 待っている件数だけ表示
-mado-tracking submit --site <siteのID> --job-shell ~/mmt/job.sh --work-dir /work/gxx/me/mmt --var GROUP=gxx50000
+mado-tracking submit --site <siteのID> --dry-run          # 待っている件数と使う設定を表示する（受け取らない）
+mado-tracking submit --site <siteのID>                    # 1回投入して終わる。何も常駐しない
+mado-tracking submit --site <siteのID> --work-dir /work/gxx/me/mmt --var GROUP=gxx50000   # この回だけの上書き
+mado-tracking submit --site <siteのID> --watch --all      # PC: 止めるまで10秒ごとに、全員のJobを投入する
+mado-tracking submit --site <siteのID> --registry-secret-file ~/.config/mado-tracking/pull.json   # SIFへの変換にregistryの認証を使う
 ```
 
-siteごとの既定値は`~/.config/mado-tracking/submit.toml`（`MMT_SUBMIT_CONFIG`）の`[sites."<siteのID>"]`に、launcherの`[[sites]]`と同じ名前（`job_shell`、`work_dir`、`runner_python`、`runner_api_url`、`variables`など）で書けます。
+- 各Jobは、受け取ったときのsiteの設定・job shellの版・投入する本人の作業ディレクトリと変数で投入します。`--work-dir`と`--var NAME=VALUE`はその回だけ、その上に重ねます。
+- `--all`は、自分が所有する計算機で、自分以外のJobも含めて待っているJobを投入します（APIの`all`）。所有していない計算機では、受け取る前に止まります。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
+- `--watch`は、`--interval`（秒、既定10、1以上）ごとに同じことを繰り返します。APIの一時的な失敗（接続できない、5xx、408、429）は表示して続け、tokenの失効などの拒否と設定の誤りで止まります。最初のSIGINT（Ctrl-C）かSIGTERMで、その回の投入と報告を終えてから止まります。2回目のCtrl-Cはすぐに止めます。job shellは別のsessionで動くので、Ctrl-Cで投入の途中に切れません。
+- `--registry-secret-file PATH`は、runnerがimageをSIFへ変換するときのregistryの認証です。中身はlauncherの`registry_secret_file`と同じJSON（`{"username", "password"}`）で、mode 600にします（グループ・他人が読めると、Jobを受け取る前に止まります）。回ごとに読み直し、runnerには仕様の置き場の`secrets.json`（600）で渡ります。passwordは表示とJobのエラーに出しません。
+- `--limit`は1回に受け取る数（1〜50）です。`--job-shell`・`--config`・`submit.toml`はありません（job shellはWebで版として管理します）。
+- job shellの無いsiteや、作業ディレクトリが決まっていない（Webの設定に無く、`--work-dir`も無い）ときは、Jobを受け取らずに止まります。
+- 届かなかった報告は`~/.local/state/mado-tracking/submit/<siteのID>/pending/`（`XDG_STATE_HOME`）に残り、次の実行（`--watch`では次の回）で送り直します。tokenは表示に出しません。
 
 **ドライバー・フック・array（SDK）**
 

@@ -1,8 +1,9 @@
 /* Experiments sidebar, run toolbar and selection, data tables, and status badges. */
+/* Fills the workspace below the bars (layout.css), so the sidebar reaches the window's bottom. */
 .experiments-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  min-height: calc(100vh - 92px);
+  flex: 1 0 auto;
 }
 .experiment-sidebar {
   background: var(--surface);
@@ -56,9 +57,12 @@
   font-weight: 400;
   margin-top: 4px;
 }
+/* One row where it fits; what does not fit wraps instead of widening the page (just above --bp-lg,
+   below which the search field takes a row of its own). */
 .run-toolbar {
   background: var(--surface);
   display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
   margin-bottom: 16px;
   min-height: 40px;

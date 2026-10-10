@@ -92,6 +92,7 @@ export const hookCreateSchema = z.strictObject({
   webhookSignature: z.enum(HOOK_WEBHOOK_SIGNATURES).optional(),
 });
 export const hookToggleSchema = z.strictObject({ enabled: z.boolean() });
+export const hookOwnerSchema = z.strictObject({ serviceAccountId: uuidSchema });
 export const hookTriggerRequestSchema = z.strictObject({
   payload: jsonObjectSchema.optional(),
   idempotencyKey: idempotencyKeySchema.optional(),

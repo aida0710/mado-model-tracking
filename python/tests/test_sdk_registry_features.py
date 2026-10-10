@@ -355,7 +355,7 @@ def test_manual_application_of_a_chained_rule_sends_the_upstream_run():
     assert requests[0][3] == {"triggerRunId": "inference-run"}
 
 
-def test_owner_transfers_put_the_service_account_on_the_rule_and_the_policy():
+def test_owner_transfers_put_the_service_account_on_the_rule_the_policy_and_the_hook():
     def respond(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"id": request.url.path.split("/")[-2], "runAsUserId": "sa-1"})
 
@@ -363,11 +363,14 @@ def test_owner_transfers_put_the_service_account_on_the_rule_and_the_policy():
     with client:
         rule = client.transfer_automation_rule_owner(PROJECT, "rule-1", service_account_id="sa-1")
         policy = client.transfer_promotion_policy_owner(PROJECT, "policy-1", service_account_id="sa-1")
+        hook = client.transfer_hook_owner(PROJECT, "hook-1", service_account_id="sa-1")
     assert rule == {"id": "rule-1", "runAsUserId": "sa-1"}
     assert policy == {"id": "policy-1", "runAsUserId": "sa-1"}
+    assert hook == {"id": "hook-1", "runAsUserId": "sa-1"}
     assert requests == [
         ("PUT", f"{PROJECT_PATH}/automation-rules/rule-1/owner", {}, {"serviceAccountId": "sa-1"}),
         ("PUT", f"{PROJECT_PATH}/promotion-policies/policy-1/owner", {}, {"serviceAccountId": "sa-1"}),
+        ("PUT", f"{PROJECT_PATH}/hooks/hook-1/owner", {}, {"serviceAccountId": "sa-1"}),
     ]
 
 

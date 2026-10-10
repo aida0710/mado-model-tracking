@@ -15,7 +15,8 @@ export async function listAdminUsers(
   return rows<AdminUser>(
     connection,
     `SELECT ${adminUserColumns} FROM users u
-    WHERE ($1::text IS NULL OR u.email ILIKE $1 OR u.username ILIKE $1 OR u.display_name ILIKE $1)
+    WHERE u.kind<>'launcher'
+    AND ($1::text IS NULL OR u.email ILIKE $1 OR u.username ILIKE $1 OR u.display_name ILIKE $1)
     AND ($2::text IS NULL OR u.status=$2) AND ($3::text IS NULL OR u.kind=$3)
     ORDER BY lower(u.display_name),u.id LIMIT $4`,
     [
@@ -31,9 +32,12 @@ export async function findAdminUser(
   connection: Connection,
   userId: string,
 ): Promise<AdminUser | undefined> {
-  return first<AdminUser>(connection, `SELECT ${adminUserColumns} FROM users u WHERE u.id=$1`, [
-    userId,
-  ]);
+  // A launcher's user is managed with its launcher (launcherService), not as a user.
+  return first<AdminUser>(
+    connection,
+    `SELECT ${adminUserColumns} FROM users u WHERE u.id=$1 AND u.kind<>'launcher'`,
+    [userId],
+  );
 }
 
 // Locks the row so a concurrent change to the same user waits for this transaction.

@@ -11,6 +11,11 @@ import type {
 import { computeTargetSchema, jobSchema } from './execution.js';
 import { idSchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
+import {
+  siteJobShellSchema,
+  siteSettingsSchema,
+  siteSubmissionAccountSchema,
+} from './siteComputers.js';
 import type { Expect, MutuallyAssignable } from './typeAssertions.js';
 import { workerJobSchema } from './workerJobs.js';
 
@@ -39,15 +44,28 @@ export const siteSubmissionSchema = namedContractSchema(
     arrayGroupId: idSchema.nullable(),
     requester: z.strictObject({ id: idSchema, email: z.string(), username: z.string().nullable() }),
     jobs: z.array(workerJobSchema),
+    settings: siteSettingsSchema,
+    jobShell: siteJobShellSchema,
+    account: siteSubmissionAccountSchema,
   }),
 );
 export const manualSubmissionWaitingSchema = namedContractSchema(
   'ManualSubmissionWaiting',
-  z.strictObject({ targetId: idSchema, targetName: z.string(), waitingJobs: z.number().int() }),
+  z.strictObject({
+    targetId: idSchema,
+    targetName: z.string(),
+    waitingJobs: z.number().int(),
+    allWaitingJobs: z.number().int().nullable(),
+  }),
 );
 export const siteSchedulerCancellationSchema = namedContractSchema(
   'SiteSchedulerCancellation',
-  z.strictObject({ jobId: idSchema, targetId: idSchema, schedulerJobId: z.string() }),
+  z.strictObject({
+    jobId: idSchema,
+    targetId: idSchema,
+    schedulerJobId: z.string(),
+    account: siteSubmissionAccountSchema,
+  }),
 );
 export const runnerStateSchema = namedContractSchema(
   'RunnerState',

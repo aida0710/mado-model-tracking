@@ -1,128 +1,161 @@
-"""How one site submits, shared by the launcher's [[sites]] and `mado-tracking submit`'s tables.
+"""A site's settings as the API hands them out, and the SubmissionPlan of one claimed submission.
 
-job_shell             local file; installed on the site per content (<work dir>/.mmt-job-shells)
-work_dir              absolute directory on the site that compute nodes also see
-runner_python         Python 3.11+ on the compute nodes (default python3)
-runner_api_url        the API as compute nodes reach it (default: the API the caller uses)
-gpu_assignment        scheduler (default) or lease (hosts without a scheduler)
-gpu_ids               lease only: the GPUs a runner may choose from
-cancel_grace_seconds  how long a stopped container may take to exit
-max_output_files      outputs one Job may save
-registry_secret_file  JSON {"username", "password"} for pulling images into SIFs (mode 600)
-variables             MMT_VAR_<name> values for the job shell
+Every SiteSubmission carries the site's settings at claim time (`settings`), the job shell
+version its Jobs recorded (`jobShell`) and whose account it runs as (`account`: the SSH user, the
+work directory and the variables, the person's own on top of the site's), so one submission never
+mixes the settings of two moments. `mado-tracking submit` reads the same shapes from
+GET /manual-submissions/sites/:id before it claims.
 """
 
 from __future__ import annotations
 
-import json
-import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
-from ..errors import ConfigurationError
-from ..toml_tables import TableReader
-from ..worker.config import DEFAULT_CANCEL_GRACE_SECONDS
-from ..worker.container_outputs import DEFAULT_MAX_OUTPUT_FILES
+from .api_documents import DocumentReader
 from .spec_directory import RunnerSettings
 from .submission import SubmissionPlan
 
-DEFAULT_RUNNER_PYTHON = "python3"
-SITE_SUBMISSION_KEYS = {
-    "job_shell",
-    "work_dir",
-    "runner_python",
-    "runner_api_url",
-    "gpu_assignment",
-    "gpu_ids",
-    "cancel_grace_seconds",
-    "max_output_files",
-    "registry_secret_file",
-    "variables",
-}
-# A job shell is a script, not data; a larger file is a mistake.
-MAX_JOB_SHELL_BYTES = 1024 * 1024
+
+@dataclass(frozen=True)
+class SiteConnection:
+    """Where a launcher logs in (automatic sites only)."""
+
+    host: str
+    port: int
+    # [user@]host[:port] of each host to pass through, in order.
+    jump_hosts: tuple[str, ...]
+    # known_hosts lines of the host and every jump host; no other host key is accepted.
+    known_hosts: str
+
+    @classmethod
+    def parse(cls, reader: DocumentReader) -> SiteConnection:
+        return cls(
+            host=reader.text("host"),
+            port=reader.integer("port"),
+            jump_hosts=reader.text_list("jumpHosts"),
+            known_hosts=reader.text("knownHosts"),
+        )
 
 
 @dataclass(frozen=True)
-class SiteSubmissionSettings:
-    job_shell: Path
-    work_dir: str
-    runner_python: str = DEFAULT_RUNNER_PYTHON
-    runner_api_url: str | None = None
-    gpu_assignment: str = "scheduler"
-    gpu_ids: tuple[str, ...] = ()
-    cancel_grace_seconds: float = DEFAULT_CANCEL_GRACE_SECONDS
-    max_output_files: int = DEFAULT_MAX_OUTPUT_FILES
-    registry_secret_file: Path | None = None
-    variables: Mapping[str, str] = field(default_factory=dict)
+class SiteSettings:
+    """The parts of a site's global settings that a launcher or `mado-tracking submit` uses."""
 
-    def __post_init__(self) -> None:
-        # RunnerSettings validates the values the runner reads.
-        self.runner_settings()
+    connection: SiteConnection | None
+    runner_python: str
+    # The API as compute nodes reach it; None for the URL the launcher or submit uses.
+    runner_api_url: str | None
+    # Shell text that removes one queued scheduler job (MMT_SCHEDULER_JOB_ID); None without a queue.
+    cancel_command: str | None
+    gpu_assignment: str
+    lease_gpu_ids: tuple[str, ...]
+    cancel_grace_seconds: float
+    max_output_files: int
+    max_active_submissions: int
 
     @classmethod
-    def from_reader(cls, reader: TableReader) -> SiteSubmissionSettings:
+    def parse(cls, reader: DocumentReader) -> SiteSettings:
+        connection = reader.optional_child("connection")
         return cls(
-            job_shell=reader.path("job_shell"),
-            work_dir=reader.string("work_dir"),
-            runner_python=reader.string("runner_python", default=DEFAULT_RUNNER_PYTHON),
-            runner_api_url=reader.optional_string("runner_api_url"),
-            gpu_assignment=reader.string("gpu_assignment", default="scheduler"),
-            gpu_ids=reader.string_list("gpu_ids", default=()),
-            cancel_grace_seconds=reader.number("cancel_grace_seconds", default=DEFAULT_CANCEL_GRACE_SECONDS),
-            max_output_files=reader.integer("max_output_files", default=DEFAULT_MAX_OUTPUT_FILES, minimum=1),
-            registry_secret_file=reader.optional_path("registry_secret_file"),
-            variables=reader.string_table("variables"),
+            connection=SiteConnection.parse(connection) if connection is not None else None,
+            runner_python=reader.text("runnerPython"),
+            runner_api_url=reader.optional_text("runnerApiUrl"),
+            cancel_command=reader.optional_text("cancelCommand"),
+            gpu_assignment=reader.text("gpuAssignment"),
+            lease_gpu_ids=reader.text_list("leaseGpuIds"),
+            cancel_grace_seconds=reader.number("cancelGraceSeconds"),
+            max_output_files=reader.integer("maxOutputFiles"),
+            max_active_submissions=reader.integer("maxActiveSubmissions"),
         )
 
-    def runner_settings(self) -> RunnerSettings:
-        return RunnerSettings(
-            work_directory=self.work_dir,
-            gpu_assignment=self.gpu_assignment,
-            gpu_ids=self.gpu_ids,
-            cancel_grace_seconds=self.cancel_grace_seconds,
-            max_output_files=self.max_output_files,
+
+@dataclass(frozen=True)
+class SubmissionAccount:
+    """Whose account one job shell call runs as, with the work directory and variables for it."""
+
+    # The SSH user a launcher logs in as; '' for manual submissions, which run as whoever submits.
+    account_name: str
+    work_directory: str
+    # The site's variables with the person's own on top.
+    variables: Mapping[str, str]
+    # The launcher key to log in with; None for manual submissions.
+    key_id: str | None
+
+    @classmethod
+    def parse(cls, reader: DocumentReader) -> SubmissionAccount:
+        return cls(
+            account_name=reader.text("accountName"),
+            work_directory=reader.text("workDirectory"),
+            variables=reader.text_map("variables"),
+            key_id=reader.optional_uuid("keyId"),
         )
 
-    def plan(self, *, api_url: str, variables: Mapping[str, str] | None = None) -> SubmissionPlan:
-        """Read the job shell and the registry secret now, so an edit applies to the next submission."""
-        try:
-            job_shell = self.job_shell.read_bytes()
-        except OSError as error:
-            raise ConfigurationError(
-                f"The job shell {self.job_shell} could not be read: {error.strerror}"
-            ) from None
-        if not job_shell or len(job_shell) > MAX_JOB_SHELL_BYTES:
-            raise ConfigurationError(f"The job shell {self.job_shell} is empty or larger than 1 MiB")
+
+@dataclass(frozen=True)
+class JobShell:
+    """One version of a site's job shell; versions never change once saved on the Web."""
+
+    version: int
+    content: bytes = field(repr=False)
+
+    @classmethod
+    def parse(cls, reader: DocumentReader) -> JobShell:
+        return cls(version=reader.integer("version"), content=reader.text("content").encode())
+
+
+@dataclass(frozen=True)
+class SubmissionSetup:
+    """How one claimed SiteSubmission is submitted: the site's settings, job shell and account."""
+
+    settings: SiteSettings
+    job_shell: JobShell
+    account: SubmissionAccount
+
+    @classmethod
+    def of(cls, submission: Mapping[str, Any]) -> SubmissionSetup:
+        reader = DocumentReader(submission, label="submission")
+        return cls(
+            settings=SiteSettings.parse(reader.child("settings")),
+            job_shell=JobShell.parse(reader.child("jobShell")),
+            account=SubmissionAccount.parse(reader.child("account")),
+        )
+
+    def plan(self, *, api_url: str, secrets: Mapping[str, Any] | None = None) -> SubmissionPlan:
+        """`api_url` is the API as the caller reaches it; runnerApiUrl replaces it for the runner."""
         return SubmissionPlan(
-            job_shell=job_shell,
-            runner_python=self.runner_python,
-            api_url=self.runner_api_url or api_url,
-            runner_settings=self.runner_settings(),
-            variables={**self.variables, **(variables or {})},
-            secrets=self.secrets(),
+            job_shell=self.job_shell.content,
+            runner_python=self.settings.runner_python,
+            api_url=self.settings.runner_api_url or api_url,
+            runner_settings=RunnerSettings(
+                work_directory=self.account.work_directory,
+                gpu_assignment=self.settings.gpu_assignment,
+                gpu_ids=self.settings.lease_gpu_ids,
+                cancel_grace_seconds=self.settings.cancel_grace_seconds,
+                max_output_files=self.settings.max_output_files,
+            ),
+            variables=self.account.variables,
+            secrets=secrets,
         )
 
-    def secrets(self) -> dict[str, Any] | None:
-        if self.registry_secret_file is None:
-            return None
-        path = self.registry_secret_file
-        try:
-            if os.stat(path).st_mode & 0o077:
-                raise ConfigurationError(
-                    f"{path} holds a registry password and must not be readable by others"
-                )
-            registry = json.loads(path.read_text(encoding="utf-8"))
-        except OSError as error:
-            raise ConfigurationError(f"{path} could not be read: {error.strerror}") from None
-        except ValueError:
-            raise ConfigurationError(f"{path} must be JSON with username and password") from None
-        if (
-            not isinstance(registry, dict)
-            or not isinstance(registry.get("username"), str)
-            or not isinstance(registry.get("password"), str)
-        ):
-            raise ConfigurationError(f"{path} must be JSON with username and password")
-        return {"registry": {"username": registry["username"], "password": registry["password"]}}
+
+@dataclass(frozen=True)
+class ManualSiteConfiguration:
+    """GET /manual-submissions/sites/:id: what `mado-tracking submit` checks before it claims."""
+
+    target_name: str
+    # None until the site's owner saves one; a claim would then only fail the waiting Jobs.
+    job_shell: JobShell | None
+    # The caller's own work directory and variables on this site.
+    account: SubmissionAccount
+
+    @classmethod
+    def parse(cls, document: Any) -> ManualSiteConfiguration:
+        reader = DocumentReader(document, label="site configuration")
+        job_shell = reader.optional_child("jobShell")
+        return cls(
+            target_name=reader.child("target").text("name"),
+            job_shell=JobShell.parse(job_shell) if job_shell is not None else None,
+            account=SubmissionAccount.parse(reader.child("account")),
+        )

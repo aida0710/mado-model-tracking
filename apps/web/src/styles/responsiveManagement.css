@@ -4,20 +4,20 @@
  * --bp-lg covers tablets in landscape; a coarse pointer covers touch screens wider than that.
  */
 @media (width < 1200px), (pointer: coarse) {
-  :is(.management-page, .admin-users, .admin-storage, .admin-audit)
+  :is(.management-page, .admin-users, .admin-storage, .admin-launchers, .admin-audit)
     :is(.button, select, input:not([type='checkbox'], [type='radio'])) {
     min-height: var(--tap-target);
   }
-  :is(.management-page, .admin-users, .admin-storage, .admin-audit) .icon-button {
+  :is(.management-page, .admin-users, .admin-storage, .admin-launchers, .admin-audit) .icon-button {
     width: var(--tap-target);
     height: var(--tap-target);
   }
-  :is(.management-page, .admin-users, .admin-storage, .admin-audit) .section-heading {
+  :is(.management-page, .admin-users, .admin-storage, .admin-launchers, .admin-audit) .section-heading {
     flex-wrap: wrap;
     gap: 8px;
   }
   /* A row of tap-sized buttons needs room between them. */
-  :is(.management-page, .admin-users, .admin-storage, .admin-audit)
+  :is(.management-page, .admin-users, .admin-storage, .admin-launchers, .admin-audit)
     :is(.access-actions, .user-actions, .storage-row-actions) {
     gap: 8px;
   }

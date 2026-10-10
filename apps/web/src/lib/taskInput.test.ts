@@ -12,7 +12,7 @@ const target: ComputeTarget = { id: 'target', name: 'Compute', host: 'example.in
   username: 'test', sshKeyPath: '', knownHostsPath: '', workDirectory: '/work', pythonExecutable: 'python',
   runtimeKinds: ['docker'], gpuIds: ['0'], maxConcurrentJobs: 1, enabled: true, executor: 'ssh',
   datasetCacheMaxBytes: 107374182400, datasetTransfer: 'relay', submissionMode: 'automatic',
-  cpuArch: 'amd64', supportsArray: false, queueTimeoutSeconds: null };
+  cpuArch: 'amd64', supportsArray: false, queueTimeoutSeconds: null, ownerUserId: null };
 const catalog = { experiments: [{ id: 'experiment' }], codes: [], models: [], datasets: [], runs: [],
   codeVersions: [code], modelVersions: [], datasetVersions: [] } as unknown as ExecutionCatalog;
 const task: ExperimentTask = { id: 'task', projectId: 'project', experimentId: 'experiment',

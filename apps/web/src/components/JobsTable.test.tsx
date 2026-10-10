@@ -81,10 +81,16 @@ describe('Jobsの一覧', () => {
 
   it('手動投入を待つsiteごとに、本人が実行するコマンドを表示する', () => {
     const html = renderToStaticMarkup(
-      <ManualSubmissionNotice groups={[{ targetId: 'site', targetName: 'Miyabi', waitingJobs: 2 }]} />,
+      <ManualSubmissionNotice
+        groups={[
+          { targetId: 'site', targetName: 'Miyabi', waitingJobs: 2, ownership: { kind: 'global' } },
+        ]}
+      />,
     );
     expect(html).toContain('Miyabi: 2件');
     expect(html).toContain('mado-tracking submit --site site');
+    // The hint mentions an owner's --all; a site one does not own gets no such command.
+    expect(html).not.toContain('--all</code>');
     expect(renderToStaticMarkup(<ManualSubmissionNotice groups={[]} />)).toBe('');
   });
 });

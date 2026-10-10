@@ -52,6 +52,15 @@ export function parseStringArray(value: string): string[] {
     throw new Error(text.stringArrayError);
   return parsed as string[];
 }
+/** A select's value as one of its choices; anything else is refused with `message`. */
+export function parseChoice<T extends string>(
+  value: string,
+  choices: readonly T[],
+  message: string = text.required,
+): T {
+  if (!choices.includes(value as T)) throw new Error(message);
+  return value as T;
+}
 export function parsePositiveInteger(value: string): number {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number <= 0) throw new Error(text.positiveNumberError);

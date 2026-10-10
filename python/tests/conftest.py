@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import shutil
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from uuid import uuid4
 
@@ -88,3 +91,11 @@ def worker_settings(tmp_path: Path) -> WorkerSettings:
         cancel_grace_seconds=0.15,
         install_dependencies=False,
     )
+
+
+@pytest.fixture
+def ssh_state_directory() -> Iterator[Path]:
+    """A launcher state directory short enough for SSH control sockets, which tmp_path is often not."""
+    directory = Path(tempfile.mkdtemp(prefix="mmt-", dir="/tmp"))
+    yield directory
+    shutil.rmtree(directory, ignore_errors=True)

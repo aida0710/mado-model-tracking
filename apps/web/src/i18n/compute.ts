@@ -62,7 +62,7 @@ export const computeText = {
   targetCheckCurrent: '現在',
   saveTargetCandidates: '選んだ候補を保存',
   targetCheckCandidatesSaved: 'targetの設定を保存しました',
-  // Sites: tracking only describes them; the launcher's site.yaml and job shell hold the rest.
+  // Sites: their connection, accounts and job shell are set here; the launcher makes their keys.
   siteExecutor: 'Site（launcherかmado-tracking submitで投入）',
   submissionMode: '投入方式',
   submissionModeAutomatic: '自動（launcherが投入）',
@@ -74,14 +74,11 @@ export const computeText = {
   queueTimeoutPlaceholder: '72:00:00',
   siteRuntimeKinds: '対応Runtime（siteはコンテナだけ）',
   siteTargetNotice:
-    'siteの接続先、鍵、スケジューラの指定はtrackingに保存しません。launcherのsite.yamlとjob shellに書きます。',
-  targetLocationSite: 'サイト側の設定',
+    'siteの接続先・アカウント・job shellは、ここで設定してtrackingに保存します。SSHの鍵はlauncherが作り、Webには公開鍵だけが出ます（秘密鍵はlauncherのホストから出ません）。',
   targetGpuPerJob: 'Jobごとに数を指定',
   submissionAutomaticBadge: '自動投入',
   submissionManualBadge: '手動投入',
   supportsArrayBadge: 'array対応',
-  targetCheckSite:
-    'siteにはtrackingのworkerが接続しないため、ここでは接続を確認できません。launcher（手動投入のsiteでは依頼した本人のmado-tracking submit）がsiteのjob shellを動かし、計算ノードのrunnerがJobの状態を報告します。投入に失敗したJobは「投入失敗」で終わります。',
   siteRuntimeKindsError:
     'siteの対応RuntimeはDocker・Singularity・Apptainerから1つ以上選択してください。',
 };

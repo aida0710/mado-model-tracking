@@ -2,6 +2,7 @@ import type {
   ArtifactBackend,
   CodeSource,
   ComputeTarget,
+  ComputeTargetSiteFields,
   DatasetVersionContent,
   ExecutionRuntime,
   ExecutionMode,
@@ -81,7 +82,16 @@ export interface CreateToken {
   scopes: string[];
   expiresAt?: string;
 }
-export type CreateTarget = Omit<ComputeTarget, 'id'>;
+/**
+ * POST /targets: the target's own fields and, for a site, its global settings, owner, sharing and
+ * first job shell (ComputeTargetSiteFields). The API sets the owner from `personal`.
+ */
+export type CreateTarget = Omit<ComputeTarget, 'id' | 'ownerUserId'> & ComputeTargetSiteFields;
+/**
+ * PATCH /targets/:id: some of the target's fields and its site settings. The owner never changes,
+ * sharing has its own PUT, and a job shell edit saves a new version (siteComputersApi).
+ */
+export type UpdateTarget = Partial<Omit<CreateTarget, 'personal' | 'projectIds' | 'jobShell'>>;
 export type CreateTask = Omit<ExperimentTask, 'id' | 'projectId' | 'revision' | 'createdAt' | 'updatedAt'>;
 export type UpdateTask = Partial<Omit<CreateTask, 'experimentId'>> & { expectedRevision: number };
 export interface LaunchTask {

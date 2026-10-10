@@ -12,10 +12,23 @@
 | `job.sh`の`DEFAULT_WALLTIME_SECONDS` | `3600` | 制限時間を指定しないJobの制限時間。partitionの`MaxTime`以下にします |
 | `job.sh`の`TIMEOUT_NOTICE_SECONDS` | `120` | 制限時間の何秒前にrunnerへSIGTERMを送らせるか（`--signal=B:TERM@120`） |
 | batch script（`job.sh`の`BATCH`の中） | コメント | `module load apptainer`など、計算ノードがproxy経由でしか外へ出られないときの`https_proxy` |
-| `site.toml`の`variables`の`ACCOUNT` | `lab-a` | 任意。共用アカウントのSlurmのaccount（`MMT_VAR_ACCOUNT`）。あれば`--account`に渡します |
-| `site.toml` | — | `target_id`、`[sites.connection]`（共用アカウントの`user`と`identity_file`）、`work_dir`、`runner_python`、`runner_api_url`、`max_active_submissions` |
 
 GPUは`--gres=gpu:N`で要求します。GPUの種類を指定するサイトでは`--gres=gpu:<種類>:N`、`--gpus`を使うサイトではその形に変えます。
+
+## Webに入れる値
+
+雛形「Slurm」を選ぶと、job shell、取消コマンド（`scancel "$MMT_SCHEDULER_JOB_ID"`）、array、GPUの渡し方（スケジューラ）、runtime（`apptainer`）が入ります。そのほかは次の例のように入れます。利用者がすることはありません（共用アカウントの計算機には「自分の設定」がありません）。
+
+| 全体設定 | 例の値 | 内容 |
+|---|---|---|
+| 投入方式 | 自動 | launcherがSSHで入って投入します |
+| 接続先 | host `slurm-login.example.internal`、port 22 | known_hostsにはログインノードの行を入れます |
+| ログインするアカウント | 共用のアカウント、`mmt-launcher` | 計算機の詳細に出る公開鍵を、このアカウントの`~/.ssh/authorized_keys`に登録します |
+| 作業ディレクトリ | `/shared/mmt` | ログインノードと計算ノードから同じパスで見える場所 |
+| runnerのPython | `/shared/mmt/python/bin/python3` | 計算ノードのPython 3.11以上 |
+| runnerから見たAPIのURL | `https://tracking.example.internal` | LANの中のクラスタなら、trackingのhostnameそのものを使えます |
+| 変数 | `ACCOUNT=lab-a` | 任意。共用アカウントのSlurmのaccount（`MMT_VAR_ACCOUNT`）。あれば`--account`に渡します |
+| 1回に受け取る数 | `50` | launcherが1回の巡回で受け取るsubmissionの上限（arrayは1つと数えます） |
 
 ## 動き
 

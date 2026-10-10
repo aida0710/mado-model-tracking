@@ -1,7 +1,8 @@
 """The spec directory: what a launcher or `mado-tracking submit` hands one job shell call.
 
     <spec dir>/          0700
-      submission.json    the SiteSubmission without Job tokens
+      submission.json    the SiteSubmission without Job tokens; of the job shell, its id,
+                         version and sha256 (the job shell itself is installed on its own)
       api.json           {"apiUrl"}: the API as the compute nodes reach it
       runner.json        the site's runner settings (RunnerSettings)
       jobs/<i>.json      the WorkerJob of the i-th Job in array order, with its Job token (0600)
@@ -33,10 +34,14 @@ SECRETS_FILENAME = "secrets.json"
 # scheduler: the scheduler gave this node its GPUs (CUDA_VISIBLE_DEVICES). lease: a host without
 # a scheduler, where the runner picks free GPUs itself (Docker GPU servers).
 GPU_ASSIGNMENTS = ("scheduler", "lease")
-# A stop must finish well inside the scheduler's kill delay after its SIGTERM.
-MAX_CANCEL_GRACE_SECONDS = 300.0
+# MAX_SITE_CANCEL_GRACE_SECONDS of the contracts, the most a site's settings on the Web allow. A
+# site should stay within its scheduler's kill delay after SIGTERM, or the scheduler kills first.
+MAX_CANCEL_GRACE_SECONDS = 3600.0
 # Spec documents are small; a larger file is not one this package wrote.
 MAX_SPEC_FILE_BYTES = 64 * 1024**2
+# What submission.json keeps of the job shell version: which one it was, not its content (up to
+# 1 MiB, installed once per content under <work dir>/.mmt-job-shells/).
+SUBMISSION_JOB_SHELL_FIELDS = ("id", "version", "sha256")
 
 
 @dataclass(frozen=True)
@@ -102,6 +107,14 @@ def ordered_jobs(submission: Mapping[str, Any]) -> list[dict[str, Any]]:
     )
 
 
+def secret_values_of(secrets: Mapping[str, Any]) -> list[str]:
+    """The values of a secrets.json document that no output may show: the registry password."""
+    registry = secrets.get("registry")
+    if isinstance(registry, dict) and isinstance(registry.get("password"), str):
+        return [registry["password"]]
+    return []
+
+
 def _document(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True).encode()
 
@@ -115,9 +128,14 @@ def spec_files(
 ) -> dict[str, tuple[bytes, int]]:
     """Every file of the spec directory as relative path -> (content, mode)."""
     jobs = ordered_jobs(submission)
-    without_tokens = {**submission, "jobs": [{**job, "jobToken": None} for job in jobs]}
+    recorded = {**submission, "jobs": [{**job, "jobToken": None} for job in jobs]}
+    job_shell = submission.get("jobShell")
+    if isinstance(job_shell, Mapping):
+        recorded["jobShell"] = {
+            key: job_shell[key] for key in SUBMISSION_JOB_SHELL_FIELDS if key in job_shell
+        }
     files = {
-        SUBMISSION_FILENAME: (_document(without_tokens), PRIVATE_FILE_MODE),
+        SUBMISSION_FILENAME: (_document(recorded), PRIVATE_FILE_MODE),
         API_FILENAME: (_document({"apiUrl": api_url}), PRIVATE_FILE_MODE),
         RUNNER_SETTINGS_FILENAME: (_document(settings.to_document()), PRIVATE_FILE_MODE),
     }

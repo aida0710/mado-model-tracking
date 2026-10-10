@@ -21,6 +21,7 @@ export const jobsText = {
   schedulerJobIdShort: 'ジョブID',
   jobSubmittedAt: '投入',
   runnerHost: 'runnerのホスト',
+  jobSiteJobShell: 'job shellの版',
   parentJob: '親Job',
   jobHook: 'フック',
   jobArray: 'array',
@@ -36,9 +37,9 @@ export const jobsText = {
   jobAutoRetry: '自動の再実行（最大試行回数まで）',
   manualSubmissionTitle: '手動投入を待っているJob',
   manualSubmissionHint:
-    '依頼した本人がsiteのログインノードで次のコマンドを実行すると、待っているJobが投入されます（本人のAPI tokenを使います）。',
+    '依頼した本人がsite（ログインノードか、計算機にしたPC）で次のコマンドを実行すると、待っているJobが投入されます（本人のAPI tokenを使います）。PCを共有している所有者が--allで待ち受けていれば、所有者が投入します。',
   manualSubmissionOwnHint:
-    'あなたが依頼したJobです。siteのログインノードで次のコマンドを実行して投入してください（あなたのAPI tokenを使います）。',
+    'あなたが依頼したJobです。site（ログインノードか、計算機にしたPC）で次のコマンドを実行して投入してください（あなたのAPI tokenを使います）。',
   jobArrays: 'Job array',
   jobArraySize: '個数',
   jobArrayStates: '状態（番号ごとの最新の試行）',

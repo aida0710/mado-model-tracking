@@ -7,6 +7,7 @@ import { createApplication } from '../app.js';
 import { DomainError } from '../domain/errors.js';
 import { first } from '../db/database.js';
 import { upsertIdentity } from '../repositories/identityRepository.js';
+import { NO_REQUEST_METADATA } from '../services/auditService.js';
 import {
   codeVersionSchema,
   datasetVersionSchema,
@@ -314,7 +315,7 @@ export async function seedDemo(
           cpuArch: 'amd64',
           supportsArray: false,
           queueTimeoutSeconds: null,
-        });
+        }, NO_REQUEST_METADATA);
     }
     await database.query('INSERT INTO demo_seed_history(name,project_id) VALUES($1,$2)', [
       DEMO_PROJECT_NAME,

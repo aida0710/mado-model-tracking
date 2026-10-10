@@ -23,6 +23,8 @@ export const hooksText = {
   hookTrigger: 'きっかけ',
   hookOwner: '所有者',
   hookOwnerHint: 'フックはこの所有者の権限でJobを起動し、作るRunの作成者になります。',
+  hookTransferNoAccounts:
+    'ほかに移管できるService Accountがありません。移管先はプロジェクト設定でrole editorかadminの有効なService Accountとして作成します。',
   hookFilter: 'きっかけの絞り込み',
   hookFilterHint:
     '空の項目では絞り込みません。条件に合わないイベントでは起動せず、実行履歴も残しません。',
@@ -146,6 +148,8 @@ export const hookExecutionSubjectLabels: Record<HookExecutionSubject, string> = 
 // Text that embeds values.
 export const hooksTextTemplates = {
   hookSkipped: (reason: string) => `起動せず（${reason}）`,
+  hookTransferConfirm: (hookName: string, accountName: string) =>
+    `「${hookName}」の所有者を ${accountName} に移します。以後のフックの起動はこのService Accountの権限で行います。`,
   hookEnableConfirm: (name: string) =>
     `「${name}」を有効にします。以後のイベントで、所有者の権限でJobを起動します。`,
   hookDisableConfirm: (name: string) =>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { ComputeTarget, Hook, JobListItem } from '@mmt/contracts';
 import { DetailsList } from './JsonDetails';
 import { JobStatusBadges } from './JobStatusBadges';
+import { SiteJobShellVersion } from './SiteJobShellVersion';
 import { formatClockDuration } from '../lib/clockDuration';
 import { formatDate } from '../lib/format';
 import {
@@ -25,6 +26,12 @@ function siteEntries(job: JobListItem): Entry[] {
     [text.schedulerJobId, job.schedulerJobId && <span className="mono">{job.schedulerJobId}</span>],
     [text.jobSubmittedAt, job.submittedAt && formatDate(job.submittedAt)],
     [text.runnerHost, job.runnerHost && <span className="mono">{job.runnerHost}</span>],
+    [
+      text.jobSiteJobShell,
+      job.siteJobShellId && (
+        <SiteJobShellVersion targetId={job.targetId} jobShellId={job.siteJobShellId} />
+      ),
+    ],
     [text.jobAutoRetry, formatAutoRetries(job)],
   ];
 }

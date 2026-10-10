@@ -3,10 +3,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import type { ExperimentTask, Sweep, SweepStatus } from '@mmt/contracts';
 import { accessApi } from '../api/access';
-import { executionApi } from '../api/execution';
 import { tasksApi } from '../api/tasks';
 import { trackingApi } from '../api/tracking';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { useQuery } from '../hooks/useQuery';
 import { useSweepList } from '../hooks/useSweeps';
 import { formatDate, formatNumber } from '../lib/format';
@@ -127,7 +127,7 @@ function CreateSweepDialogLoader({
   onCreated: (sweep: Sweep) => void;
 }) {
   const experiments = useQuery(`${projectId}:sweep-experiments`, (signal) => trackingApi.experiments(projectId, signal));
-  const targets = useQuery('sweep-targets', executionApi.targets);
+  const targets = useProjectTargets(projectId);
   return (
     <Resource query={experiments}>
       {(experimentItems) => (

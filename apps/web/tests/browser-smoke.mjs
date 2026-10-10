@@ -21,6 +21,17 @@ page.on('pageerror', (error) => pageErrors.push(error.message));
 const base = process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182';
 const projectBase = `${base}/projects/${api.state.project.id}`;
 const artifactsDirectory = process.env.MMT_SCREENSHOT_DIR;
+// Uploads one file in an open upload dialog and returns its queue row once it has completed.
+async function uploadOneFile(uploadDialog, file) {
+  await uploadDialog.getByLabel('ファイルを選ぶ', { exact: true }).setInputFiles(file);
+  await uploadDialog.getByRole('button', { name: 'アップロードを開始', exact: true }).click();
+  const row = uploadDialog.getByTestId('upload-queue-row').filter({ hasText: file.name });
+  await row.and(page.locator('[data-status="completed"]')).waitFor();
+  return row;
+}
+// A dialog that takes several files stays open after its uploads until it is closed.
+const closeUploadDialog = (uploadDialog) =>
+  uploadDialog.locator('footer').getByRole('button', { name: '閉じる', exact: true }).click();
 try {
   console.log('Browser check: authentication');
   await page.goto(base);
@@ -60,15 +71,31 @@ try {
     await page.screenshot({ path: `${artifactsDirectory}/runs-light.png`, fullPage: true });
   }
 
-  await page
-    .getByLabel('検索', { exact: true })
-    .fill('metrics.val/loss < 0.16 and params.batch_size = 32');
+  // The API evaluates the filter, in MLflow syntax: a key with '/' goes in backticks and a param
+  // value is a quoted string. The mock lists every Run, so while the filter is applied this step
+  // answers the search the page sends with the Runs the API returns for that filter.
+  const filter = "metrics.`val/loss` < 0.16 and params.batch_size = '32'";
+  const filteredRuns = api.state.runs.filter(
+    (run) => run.latestMetrics['val/loss'] < 0.16 && String(run.parameters.batch_size) === '32',
+  );
+  const answerFilteredSearch = (route) =>
+    route.request().postDataJSON()?.filter === filter
+      ? route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ items: filteredRuns, nextCursor: null }),
+        })
+      : route.fallback();
+  await page.route('**/api/projects/*/runs/search', answerFilteredSearch);
+  await page.getByLabel('検索', { exact: true }).fill(filter);
   await page.getByRole('button', { name: '絞り込み', exact: true }).click();
   await page
     .getByRole('link', { name: 'training-test-02', exact: true })
     .waitFor({ state: 'hidden' });
+  await page.getByRole('link', { name: 'training-test-01', exact: true }).waitFor();
   await page.getByLabel('検索', { exact: true }).fill('');
   await page.getByRole('button', { name: '絞り込み', exact: true }).click();
+  await page.getByRole('link', { name: 'training-test-02', exact: true }).waitFor();
+  await page.unroute('**/api/projects/*/runs/search', answerFilteredSearch);
   await page.getByLabel('Runを選択: training-test-01').check();
   await page.getByLabel('Runを選択: training-test-02').check();
   await page.getByRole('button', { name: '比較', exact: true }).click();
@@ -78,17 +105,21 @@ try {
   const firstRun = api.state.runs[0];
   await page.goto(`${projectBase}/runs/${firstRun.id}`);
   await page.getByRole('heading', { name: firstRun.name, exact: true }).waitFor();
+  // The tab draws one panel per category of the Run's system metrics (browser-charts.mjs checks
+  // them); this Run has none among its latest metrics.
   await page.getByRole('tab', { name: 'System metrics' }).click();
-  await page.getByLabel('メトリクス名').selectOption('system/gpu.utilization');
+  await page.getByText('システムメトリクスはまだありません。', { exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Artifacts', exact: true }).click();
   await page.getByText('Browser test artifact', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Artifactをアップロード' }).click();
-  await page.getByLabel('ファイル', { exact: true }).setInputFiles({
+  const runUploadDialog = page.getByRole('dialog');
+  await uploadOneFile(runUploadDialog, {
     name: 'test-upload.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('test upload'),
   });
-  await page.getByRole('dialog').getByRole('button', { name: 'アップロード', exact: true }).click();
+  await closeUploadDialog(runUploadDialog);
+  await runUploadDialog.waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'test-upload.txt', exact: true }).waitFor();
   await page.getByRole('tab', { name: 'Logs', exact: true }).click();
   await page.getByText('Browser test log', { exact: true }).waitFor();
@@ -115,31 +146,31 @@ try {
   }
   console.log('Browser check: model version');
   await page.goto(`${projectBase}/codes`);
+  // An Artifact without a Run: the finished file shows its artifact:// URI to copy.
   await page.getByRole('button', { name: 'Artifactをアップロード', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByLabel('ファイル', { exact: true })
-    .setInputFiles({
-      name: 'source.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('browser source test'),
-    });
-  await page.getByRole('dialog').getByRole('button', { name: 'アップロード', exact: true }).click();
-  await page.getByRole('dialog').getByText('Artifact ID', { exact: true }).waitFor();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: '閉じる', exact: true })
-    .last()
-    .click();
+  const standaloneUploadDialog = page.getByRole('dialog');
+  const sourceRow = await uploadOneFile(standaloneUploadDialog, {
+    name: 'source.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('browser source test'),
+  });
+  const sourceArtifact = api.state.artifacts.find((artifact) => artifact.path === 'source.txt');
+  await sourceRow.getByText('artifact://' + sourceArtifact.id, { exact: true }).waitFor();
+  await closeUploadDialog(standaloneUploadDialog);
   await page.goto(`${projectBase}/models`);
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await page.getByRole('dialog').getByLabel('版').fill('v2');
+  // '版' is also part of '親の版' and '既定のコード版'; the exact accessible name picks the field.
+  await page.getByRole('dialog').getByRole('textbox', { name: '版', exact: true }).fill('v2');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByRole('button', { name: 'v2', exact: true }).waitFor();
+  // Each version in the list links to its own page.
+  await page.getByRole('link', { name: 'v2', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Aliasを設定' }).click();
   await page.getByRole('dialog').getByLabel('Alias').fill('candidate');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByText('candidate', { exact: true }).waitFor();
+  // The alias shows in the Alias column of the Model list and in the selected Model's aliases.
+  const aliasCells = page.getByRole('cell', { name: 'candidate', exact: true });
+  await aliasCells.nth(0).waitFor();
+  await aliasCells.nth(1).waitFor();
 
   console.log('Browser check: plugins');
   await page.goto(`${projectBase}/plugins`);
@@ -175,7 +206,8 @@ try {
   releaseMetrics();
   api.state.metricsGate = null;
   await storageMetrics.getByRole('heading', { name: 'UI検証ストレージ', exact: true }).waitFor();
-  await storageMetrics.getByText('3 GiB', { exact: true }).waitFor();
+  // formatBytes shows one decimal (lib/format.ts): 3221225472 bytes is '3.0 GiB'.
+  await storageMetrics.getByText('3.0 GiB', { exact: true }).waitFor();
   assert.equal(await storageMetrics.getByText('1.2M', { exact: true }).count(), 1);
   assert.deepEqual(
     await storageMetrics
@@ -205,7 +237,7 @@ try {
   );
   api.state.failPluginMetrics = false;
   await storageMetrics.getByRole('button', { name: '再試行', exact: true }).click();
-  await storageMetrics.getByText('3 GiB', { exact: true }).waitFor();
+  await storageMetrics.getByText('3.0 GiB', { exact: true }).waitFor();
   const measuredPrometheus = api.state.prometheus;
   api.state.prometheus = '';
   await storageMetrics.getByRole('button', { name: 'メトリクスを更新' }).click();
@@ -213,7 +245,7 @@ try {
   assert.equal(await storageMetrics.locator('table').count(), 0);
   api.state.prometheus = measuredPrometheus;
   await storageMetrics.getByRole('button', { name: 'メトリクスを更新' }).click();
-  await storageMetrics.getByText('3 GiB', { exact: true }).waitFor();
+  await storageMetrics.getByText('3.0 GiB', { exact: true }).waitFor();
 
   console.log('Browser check: project admin plugin permissions');
   api.state.user.isAdmin = false;
@@ -240,7 +272,7 @@ try {
   await page.getByRole('button', { name: '接続を確認' }).click();
   await page.getByText('接続を確認しました', { exact: true }).waitFor();
   await storageMetrics.getByRole('button', { name: 'メトリクスを更新' }).click();
-  await storageMetrics.getByText('3 GiB', { exact: true }).waitFor();
+  await storageMetrics.getByText('3.0 GiB', { exact: true }).waitFor();
   await page.getByLabel('データセットを検索').fill('test');
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: 'インポート', exact: true }).click();
@@ -281,16 +313,27 @@ try {
   await page.getByRole('button', { name: 'API tokenを発行', exact: true }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('browser-test-token');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByText(/トークンは一度だけ表示/).waitFor();
+  await page.getByText(/API tokenは一度だけ表示/).waitFor();
   await page
     .getByRole('dialog')
     .getByRole('button', { name: '閉じる', exact: true })
     .last()
     .click();
-  await page.getByRole('button', { name: '失効', exact: true }).click();
+  // The token is limited to this Project, so a Project admin sees it twice: among their own tokens
+  // and in the Project's token list.
+  const tokenSection = (heading) =>
+    page
+      .locator('.settings-section')
+      .filter({ has: page.getByRole('heading', { name: heading, exact: true }) });
+  const personalTokens = tokenSection('自分のAPI token');
+  const projectTokens = tokenSection('Projectのtoken一覧');
+  const issuedToken = (section) => section.getByText('browser-test-token', { exact: true });
+  await issuedToken(projectTokens).waitFor();
+  await personalTokens.getByRole('button', { name: '失効', exact: true }).click();
   await page.getByRole('dialog').getByText(/browser-test-token.*失効/).waitFor();
   await page.getByRole('dialog').getByRole('button', { name: '失効', exact: true }).click();
-  await page.getByText('browser-test-token', { exact: true }).waitFor({ state: 'hidden' });
+  await issuedToken(personalTokens).waitFor({ state: 'hidden' });
+  await issuedToken(projectTokens).waitFor({ state: 'hidden' });
 
   console.log('Browser check: password change');
   await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
@@ -330,7 +373,9 @@ try {
   assert.equal(api.state.jobs[0].gpuIds.length, 0, 'CPU selection must remain empty');
   await page.getByRole('button', { name: '停止を要求', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
-  await page.getByText('停止要求済み', { exact: true }).waitFor();
+  // The launch opens the Job's detail, so both its row and its detail mark the request.
+  await page.getByRole('cell').getByText('停止要求済み', { exact: true }).waitFor();
+  await page.locator('.job-detail').getByText('停止要求済み', { exact: true }).waitFor();
 
   console.log('Browser check: errors/theme/mobile');
   api.state.failRunList = true;

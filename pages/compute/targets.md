@@ -5,7 +5,7 @@ description: Jobを実行するGPUマシンをCompute targetとして登録す�
 
 # Compute target
 
-![Compute画面のtarget一覧とWorkers](/images/compute-targets.png)
+![Compute画面の計算機の一覧（所有者・共有先）とWorkers](/images/compute-targets.png)
 
 Compute targetは、Jobを実行するマシンの登録です。SSHの接続先、使えるGPU、対応するRuntime（Python、Docker、Singularity、Apptainer）、作業ディレクトリを登録します。targetへの接続とJobの実行はworkerが行い、API serverはtargetへ接続しません。
 
@@ -90,17 +90,17 @@ ssh-keygen -lf ~/.ssh/mmt_known_hosts
 
 ## targetを登録する
 
-![Compute targetの登録ダイアログ](/images/compute-target-dialog.png)
+![［計算機を追加］のダイアログ（SSHのtarget）](/images/compute-target-dialog.png)
 
-targetの登録と変更は全体管理者が行います。
+SSH・Localのtargetの登録と変更は、全体管理者が行います。研究者が自分で足せるのは、外部の計算機（site）だけです（[外部の計算機（site）](/compute/sites)）。
 
-1. Computeを開き、［Compute targetを登録］を押します。
+1. Computeを開き、［計算機を追加］を押します。
 2. 次の項目を入力します。
 
 | 項目 | 入力例 | 内容 |
 | --- | --- | --- |
 | 名前 | `gpu-host-1` | 画面とTaskの選択肢に表示する名前 |
-| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます |
+| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます。Site（外部の計算機。[外部の計算機（site）](/compute/sites)）も選べます |
 | Host、Port | `gpu-host-1.example.internal`、`22` | targetのSSHの接続先 |
 | SSHユーザー | `mmt` | SSHで接続するユーザー |
 | SSH鍵のパス | `/home/worker/.ssh/mmt_worker_ed25519` | workerのマシン上の秘密鍵のパス |
@@ -138,7 +138,7 @@ Taskや自動実行ルールでGPU IDを選ぶと、そのJobの間はアプリ�
 
 ### targetの変更と無効化
 
-一覧の［Compute targetを編集］で設定を変えます。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
+一覧の［計算機を編集］で設定を変えます。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
 
 有効のチェックを外すと、新しいJobの割り当て先から外れます。実行中のJobは、workerが引き続き管理します。
 
@@ -192,4 +192,5 @@ Computeの［Workers］に、このProjectに接続しているworkerの接続�
 | 操作 | 必要な権限 |
 | --- | --- |
 | targetの一覧とWorkersを見る | viewer以上 |
-| targetの登録・変更・有効と無効の切り替え、接続確認 | 全体管理者 |
+| SSH・Localのtargetの登録・変更・有効と無効の切り替え、接続確認 | 全体管理者 |
+| 外部の計算機（site）の登録・変更 | 所有者か全体管理者（[外部の計算機（site）](/compute/sites)） |

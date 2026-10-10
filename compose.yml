@@ -92,17 +92,16 @@ services:
         LAUNCHER_UID: ${MMT_LAUNCHER_UID:-10002}
         LAUNCHER_GID: ${MMT_LAUNCHER_GID:-10002}
     environment:
-      # Names each Project's API (api_url, for example http://api:4182) and token file, and the
-      # sites with the URL their runners use (runner_api_url).
+      # Names the API (api_url, for example http://api:4182), the token file and the state
+      # directory. The sites, job shells and accounts come from the API on each poll.
       MMT_LAUNCHER_CONFIG: /etc/mado-tracking-launcher/launcher.toml
     volumes:
-      # The site repository: launcher.toml and each site's job shell (deploy/sites/examples/).
+      # launcher.toml (deploy/sites/examples/launcher.toml).
       - ${MMT_LAUNCHER_CONFIG_DIR:-./var/launcher-config}:/etc/mado-tracking-launcher:ro
-      # Project worker tokens and registry logins that launcher.toml names (mode 600 files).
+      # The launcher's token and the registry login that launcher.toml names (mode 600 files).
       - ${MMT_LAUNCHER_SECRETS_DIR:-./var/launcher-secrets}:/run/secrets/mado-tracking-launcher:ro
-      # Keys and known_hosts that launcher.toml names under /home/launcher/.ssh.
-      - ${MMT_LAUNCHER_SSH_DIR:-./var/launcher-ssh}:/home/launcher/.ssh:ro
-      # state_directory of launcher.toml: submissions in flight and reports not yet delivered.
+      # state_directory of launcher.toml: the private SSH keys the launcher makes, the sites'
+      # known_hosts, submissions in flight and reports not yet delivered.
       - launcher-state:/var/lib/mado-tracking-launcher
     # SIGTERM stops the launcher after the current poll; a report cut off by the stop is kept in
     # the state volume and sent on the next start.

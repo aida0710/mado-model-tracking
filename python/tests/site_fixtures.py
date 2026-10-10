@@ -1,4 +1,4 @@
-"""Site Jobs, spec directories and a fake Apptainer CLI for the site runner tests.
+"""Site Jobs, site submissions, spec directories and a fake Apptainer CLI for the site tests.
 
 The fake CLI runs the registered entrypoint for real with the bind mounts translated to host
 paths, so the runner's staging, execution and output collection all run unmodified.
@@ -6,6 +6,7 @@ paths, so the runner's staging, execution and output collection all run unmodifi
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -171,6 +172,7 @@ def site_job(
             "cpuArch": cpu_arch,
             "supportsArray": array_index is not None,
             "queueTimeoutSeconds": None,
+            "ownerUserId": None,
         },
         "codeVersion": {
             "id": code_id,
@@ -190,12 +192,85 @@ def site_job(
     }
 
 
-def submission_for(jobs: list[dict[str, Any]]) -> dict[str, Any]:
+def site_settings_document(**overrides: Any) -> dict[str, Any]:
+    """SiteSettings as the API hands them out; overrides take the contract's field names."""
+    settings = {
+        "launcherId": str(uuid4()),
+        "connection": {
+            "host": "login.example.org",
+            "port": 22,
+            "jumpHosts": [],
+            "knownHosts": "login.example.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIexample\n",
+        },
+        "accountMode": "shared",
+        "sharedAccount": "mmt",
+        "workDirectory": "/work/mmt",
+        "runnerPython": "python3",
+        "runnerApiUrl": None,
+        "cancelCommand": None,
+        "gpuAssignment": "scheduler",
+        "leaseGpuIds": [],
+        "variables": {},
+        "cancelGraceSeconds": 10,
+        "maxOutputFiles": 10000,
+        "maxActiveSubmissions": 10,
+        "jobShell": None,
+    }
+    return {**settings, **overrides}
+
+
+def job_shell_document(content: str, *, target_id: str, version: int = 1) -> dict[str, Any]:
+    """A SiteJobShell with its content, as a submission or a site configuration carries it."""
+    data = content.encode()
+    return {
+        "id": str(uuid4()),
+        "targetId": target_id,
+        "version": version,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "sizeBytes": len(data),
+        "createdBy": str(uuid4()),
+        "createdByName": "Site owner",
+        "createdAt": "2026-10-10T00:00:00Z",
+        "content": content,
+    }
+
+
+def account_document(
+    *,
+    account_name: str = "",
+    work_directory: str = "/work/mmt",
+    variables: dict[str, str] | None = None,
+    key_id: str | None = None,
+    mode: str = "personal",
+) -> dict[str, Any]:
+    """A SiteSubmissionAccount; the defaults are a manual submission's (no SSH user, no key)."""
+    return {
+        "mode": mode,
+        "accountName": account_name,
+        "workDirectory": work_directory,
+        "variables": variables or {},
+        "keyId": key_id,
+    }
+
+
+def submission_for(
+    jobs: list[dict[str, Any]],
+    *,
+    settings: dict[str, Any] | None = None,
+    job_shell: str = "#!/bin/sh\necho 1.pbs\n",
+    job_shell_version: int = 1,
+    account: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """A SiteSubmission: the Jobs with the site's settings, job shell and account of the claim."""
+    target_id = jobs[0]["target"]["id"]
     return {
         "target": jobs[0]["target"],
         "arrayGroupId": jobs[0]["job"]["arrayGroupId"],
         "requester": {"id": str(uuid4()), "email": "alice@example.org", "username": "alice"},
         "jobs": jobs,
+        "settings": settings or site_settings_document(),
+        "jobShell": job_shell_document(job_shell, target_id=target_id, version=job_shell_version),
+        "account": account or account_document(),
     }
 
 

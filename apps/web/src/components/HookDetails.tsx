@@ -2,9 +2,15 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Hook } from '@mmt/contracts';
 import type { HookCatalog } from '../types/hooks';
+import { hooksApi } from '../api/hooks';
 import { DetailsList, JsonDetails } from './JsonDetails';
 import { HookStart } from './HookStart';
-import { automationOwnerLabel } from '../lib/automationOwner';
+import { ServiceAccountOwnerTransfer } from './ServiceAccountOwnerTransfer';
+import {
+  HOOK_OWNER_ROLES,
+  automationOwnerLabel,
+  serviceAccountOwnerOptions,
+} from '../lib/automationOwner';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { creatorName } from '../lib/creatorName';
 import { formatDate } from '../lib/format';
@@ -109,21 +115,28 @@ function templateEntries(hook: Hook, catalog: HookCatalog | undefined, base: str
   ];
 }
 
-/** A hook's fixed settings, its manual start (trigger 'manual') and the way to its executions. */
+/**
+ * A hook's fixed settings, its manual start (trigger 'manual'), the move of its owner to a Service
+ * Account and the way to its executions.
+ */
 export function HookDetails({
   hook,
   catalog,
   projectId,
   canStart,
+  canTransferOwner,
   onShowExecutions,
   onStarted,
+  onOwnerTransferred,
 }: {
   hook: Hook;
   catalog: HookCatalog | undefined;
   projectId: string;
   canStart: boolean;
+  canTransferOwner: boolean;
   onShowExecutions: () => void;
   onStarted: () => void;
+  onOwnerTransferred: () => void;
 }) {
   const base = `/projects/${projectId}`;
   return (
@@ -147,6 +160,26 @@ export function HookDetails({
       />
       {hook.trigger === 'manual' && canStart && (
         <HookStart key={hook.id} hook={hook} projectId={projectId} onStarted={onStarted} />
+      )}
+      {canTransferOwner && (
+        <ServiceAccountOwnerTransfer
+          key={`${hook.id}:owner`}
+          projectId={projectId}
+          candidates={(accounts) =>
+            serviceAccountOwnerOptions(accounts, {
+              runAsUserId: hook.runAsUserId,
+              roles: HOOK_OWNER_ROLES,
+            })
+          }
+          confirmMessage={(accountName) =>
+            hooksTextTemplates.hookTransferConfirm(hook.name, accountName)
+          }
+          noAccountsMessage={text.hookTransferNoAccounts}
+          transfer={(serviceAccountId) =>
+            hooksApi.transferOwner(projectId, hook.id, { serviceAccountId })
+          }
+          onTransferred={onOwnerTransferred}
+        />
       )}
       <details className="automation-settings">
         <summary>

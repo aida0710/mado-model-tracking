@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { Play, Plus, RefreshCw } from 'lucide-react';
 import type { ExperimentTask, ExecutionMode } from '@mmt/contracts';
 import { tasksApi } from '../api/tasks';
-import { executionApi } from '../api/execution';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
 import { useQuery } from '../hooks/useQuery';
 import { useTaskRunHistory } from '../hooks/useTaskRunHistory';
@@ -28,7 +28,7 @@ export function TasksPage() {
   const experimentId = params.get('experiment') ?? '';
   const [dialog, setDialog] = useState<TaskDialog | null>(null);
   const catalog = useExecutionCatalog(project.id);
-  const targets = useQuery('task-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   const tasks = useQuery(`${project.id}:tasks:${experimentId}`, (signal) => tasksApi.list(project.id, experimentId || undefined, signal));
   const selected = tasks.value?.find((task) => task.id === params.get('id')) ?? tasks.value?.[0];
   const history = useTaskRunHistory({ projectId: project.id, taskId: selected?.id });

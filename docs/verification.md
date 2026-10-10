@@ -321,6 +321,60 @@ MMT_VERIFY_OUTPUT=artifacts/verification/<日付>/storage-web \
 node apps/web/tests/browser-admin-storage.mjs
 ```
 
+## Webで足す計算機（site）をブラウザで確認する
+
+`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）でCompute画面と全体管理の「launcher」を開きます。確認する項目は次のとおりです。
+
+- launcherの登録（tokenを一度だけ表示）、tokenの作り直し、失効
+- 全体管理者が雛形（Slurm）から計算機を足すときの送信内容
+- 共用アカウントの公開鍵、接続確認、鍵の作り直し
+- job shellの版（同じ内容なら新しい版を作らない、新しい版、過去の版の表示）
+- 研究者が自分のPC（手動投入）を足してProjectへ共有すること、所有者だけに出る`--watch --all`の案内、共有の解除
+- 本人アカウントの計算機での、自分のアカウント名と公開鍵
+- Jobのjob shellの版、`?projectId=`の一覧、390px幅で横にスクロールしないこと
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47129 npx vite --port 47120 --strictPort --host 127.0.0.1) &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_WEB_URL=http://127.0.0.1:47120 \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/site-computers-web \
+node apps/web/tests/browser-site-computers.mjs
+```
+
+2026-10-10に通過しました（mockのAPIです。実際のlauncherが鍵を作る流れはAPIとPythonのテストで確かめます）。
+
+## Webで足す計算機（site）を実APIでブラウザ確認する
+
+`apps/web/tests/browser-site-computers-api.mjs`は、`mmt_test`の一時schemaを使う開発モード（`AUTH_MODE=development`）のAPI（47140）を自分で起動し、実際の記録を作ってCompute画面・Jobs画面・全体管理の「launcher」を確かめます。終わるとschemaを消します。WebはViteを47141で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47140 npx vite --port 47141 --strictPort --host 127.0.0.1) &
+MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55483/mmt_test \
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/site-computers-api-web \
+npx tsx apps/web/tests/browser-site-computers-api.mjs
+```
+
+開発モードのログインで、全体管理者（`admin@localhost`）と、2つのProjectのEditorである研究者2人（Alice・Bob）を作ります。画面の無い準備（Project、メンバー、Dockerのコード版）はAPIで作ります。コード版のimageはdigest固定の例で、pullしません。launcherと`mado-tracking submit`の側（公開鍵の送信、接続確認の報告、claimとreport）は、それぞれのtokenでAPIを直接呼びます。確認する項目は次のとおりです。
+
+| 場面 | 確かめること |
+|---|---|
+| launcher | 登録するとtokenを一度だけ表示し、閉じると画面にも一覧のAPIにも出ない。launcher.tomlにtokenを書かない。tokenを作り直すと古いtokenは401、新しいtokenで`GET /launcher/config`が通る。失効させると新しいtokenも401 |
+| 全体の計算機 | 全体管理者がPBSの雛形から、本人アカウントの自動投入の計算機を足す（job shellは雛形のまま版1、取消コマンド・array・runtimeは雛形の値）。Dockerの雛形から共用アカウントの計算機も足し、共用の鍵は「作成待ち」で、接続確認は押せない |
+| 自分の設定 | Editorがアカウント名と`GROUP`を保存すると、自分の鍵が「作成待ち」で出て、接続確認は押せない。launcherが公開鍵を送ると、公開鍵とauthorized_keysの案内に変わる。接続確認でlauncherに渡るアカウント・作業ディレクトリ・変数が画面で入れた値で、失敗の報告が結果に出る。管理者の「利用者の設定」に、アカウント・変数・鍵の状態が出る |
+| 共用アカウント | 研究者には「自分の設定はありません」の案内だけが出る（入力、鍵、利用者の設定、job shellの編集が無い）。APIも個人設定を422で拒む |
+| 自分のPC | 研究者が手動投入のPCを足し、2つのProjectのうち1つへ共有する（選択肢は自分がEditor以上のProjectで、全体管理者だけのProjectは出ない）。所有者には`--watch --all`まで3つのコマンドと、`--all`で受け取るのはtokenのProjectのJobだという案内が出る |
+| job shell | 編集して保存すると版2になり、版の履歴に2つの版が出て、版1も表示できる |
+| 共有 | 同じProjectの別のメンバーには、Jobの実行先の選択肢にそのPCが出る。共有していないProjectには出ない（`?projectId=`の一覧も同じで、そのProjectでJobを作るとAPIが422 `target_not_available`） |
+| 手動投入 | そのPCで作ったJobは手動投入待ちになる。所有者には`--watch --all`のコマンドと`--all`の範囲の案内が出る。所有者でない依頼者には、自分のJobと同じ`mado-tracking submit --site <ID>`と、「この計算機は○○さんの計算機です。所有者が--watch --allで待ち受けている計算機（所有者のPCなど）では、所有者の側で投入されます」の補足が出る（計算機の詳細にも同じ補足）。所有者のtokenで`--all`のclaimをすると版2のjob shellで投入され、Jobの詳細に「job shellの版」v2が出る |
+| 共有の編集 | 全体管理者がそのPCを編集すると、共有先の選択肢は所有者のProjectで、全体管理者のProjectではない。所有者が共有先にBを足すと、BのメンバーもJobの実行先に選べる。所有者がBのViewerになると、Bは印付きで選択肢に残り、外して保存できる（Jobが終わっていない間も、実行の設定を変えない編集は通る） |
+| 390px幅 | 自分のPCの詳細、自分の設定と鍵、計算機の追加のダイアログ、Jobの詳細、launcherの一覧で、横にスクロールしない |
+
+開発サーバーは、ファイルが変わると開いている画面をHMRで作り直します。そのため、走らせている間はWebのファイルを書き換えないでください。ファイルが変わる環境（作業コピーへの同期など）では、`npx vite build --outDir <dir>`したものを、同じ`MMT_WEB_API_PROXY_TARGET`で`npx vite preview --outDir <dir> --port 47141 --strictPort --host 127.0.0.1`して配ります。
+
+実際のlauncher（ssh-keygen・SSH）、スケジューラ、`mado-tracking submit`のプロセスは使いません（それらがAPIへ送るものを同じ形で送ります）。2026-10-10に通過しました（Playwright 1.56.1、Chromium 141。Webは`vite preview`で配ったbuild）。
+
 ## 探索結果の分析（平行座標・パラメータ重要度・散布図）をブラウザで確認する
 
 `apps/web/tests/browser-analysis.mjs`は、`/tests/fixtures/analysis-harness.html`（RunAnalysisPanelを単独でmountするページ）をmockのAPIで開きます。確認する項目は次のとおりです。

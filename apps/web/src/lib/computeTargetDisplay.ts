@@ -1,4 +1,4 @@
-import type { ComputeTarget, TargetCheckItemName } from '@mmt/contracts';
+import type { ComputeTarget, ComputeTargetDetails, TargetCheckItemName } from '@mmt/contracts';
 import { text } from '../i18n/catalog';
 import {
   computeTargetExecutorLabels,
@@ -6,17 +6,25 @@ import {
   targetCheckItemLabels,
 } from '../i18n/compute';
 
+const NO_LOCATION = '—';
+
 /**
  * Where a target runs Jobs, for the Compute table. A local target runs on the worker's own host,
- * so its stored host and port (127.0.0.1:22 from the form defaults) are not shown as SSH. A site's
- * connection lives in its launcher's settings, so tracking has no address to show.
+ * so its stored host and port (127.0.0.1:22 from the form defaults) are not shown as SSH. A site is
+ * reached at its settings' connection, which only its owner and global administrators see; a
+ * manual site has none, since each requester submits on it themselves.
  */
 export function formatTargetLocation(
-  target: Pick<ComputeTarget, 'executor' | 'host' | 'port' | 'username'>,
+  target: Pick<ComputeTargetDetails, 'executor' | 'host' | 'port' | 'username' | 'site'>,
 ): string {
   if (target.executor === 'local') return text.targetLocationLocal;
-  if (target.executor === 'site') return text.targetLocationSite;
-  return target.host ? `${target.username}@${target.host}:${target.port}` : '—';
+  if (target.executor === 'site') {
+    const connection = target.site?.connection;
+    if (!connection) return NO_LOCATION;
+    const account = target.site?.accountMode === 'shared' ? `${target.site.sharedAccount}@` : '';
+    return `${account}${connection.host}:${connection.port}`;
+  }
+  return target.host ? `${target.username}@${target.host}:${target.port}` : NO_LOCATION;
 }
 
 /** A target in a select: the name and where it runs. */
@@ -34,9 +42,11 @@ export function formatTargetGpus(target: Pick<ComputeTarget, 'executor' | 'gpuId
   return target.gpuIds.join(', ') || text.cpuOnly;
 }
 
-/** How the worker reaches the target, as written above the connection check results. */
+/**
+ * How the worker reaches an ssh or local target, as written above the connection check results.
+ * Sites are checked by their launcher instead (SiteConnectionChecks).
+ */
 export function targetCheckHintFor(executor: ComputeTarget['executor']): string {
-  if (executor === 'site') return text.targetCheckSite;
   return executor === 'local' ? text.targetCheckHintLocal : text.targetCheckHint;
 }
 
