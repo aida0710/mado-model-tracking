@@ -162,7 +162,7 @@ try {
 
   console.log('Browser containers: target runtimes and launch compatibility');
   await page.goto(projectBase + '/compute');
-  await page.getByRole('button', { name: 'Compute targetを登録', exact: true }).click();
+  await page.getByRole('button', { name: '計算機を追加', exact: true }).click();
   await fill('名前', 'Container target');
   await select('Executor', 'local');
   await fill('Host', 'localhost');

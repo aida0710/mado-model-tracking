@@ -1,19 +1,20 @@
-# Settings of mado-tracking-launcher (--config, or MMT_LAUNCHER_CONFIG). Every value is an
-# example. In the site repository this file sits at the top, and each site adds one [[sites]]
-# entry below it: the site.toml files beside it are such entries (../README.md). Relative paths
-# start from the directory of this file. Tokens live in files outside the repository.
+# Settings of mado-tracking-launcher (--config, or MMT_LAUNCHER_CONFIG): only what it needs to
+# start. Its sites, job shells, accounts and keys are set on the Web and read from the API on each
+# poll, so changing them needs no restart. Every value is an example. Relative paths start from
+# the directory of this file.
 
-# Stable across restarts: the API ties claimed submissions to it.
-launcher_id = "launcher-1"
-# Submissions in flight, reports not yet delivered and SSH connection files. Keep it across
-# restarts (the compose service mounts a volume here).
-state_directory = "/var/lib/mado-tracking-launcher"
-poll_seconds = 10
-
-# One entry per Project whose site Jobs this launcher submits. api_url is the API as the launcher
-# reaches it; token_file holds a project worker token (a Service Account token with read and
-# worker:execute), mode 600 and owned by the launcher's user.
-[[projects]]
-name = "speech"
+# The API as the launcher reaches it. Inside the compose project: http://api:4182.
 api_url = "http://api:4182"
-token_file = "/run/secrets/mado-tracking-launcher/speech.token"
+# The token the Web showed once when a global administrator registered this launcher, alone in a
+# file with mode 600 owned by the launcher's user. It reaches only /api/launcher/*.
+token_file = "/run/secrets/mado-tracking-launcher/launcher.token"
+# The private SSH keys the launcher makes, the known_hosts of its sites, submissions in flight and
+# reports not yet delivered. Keep it across restarts (the compose service mounts a volume here)
+# and give every launcher its own: losing it means new keys to authorize again.
+state_directory = "/var/lib/mado-tracking-launcher"
+# Seconds between polls.
+poll_seconds = 10
+# Optional: a read-only registry token for pulling images into SIFs, used by the runners of every
+# site, as JSON {"username": ..., "password": ...} in a mode-600 file. It reaches apptainer pull
+# only through the runner's environment.
+# registry_secret_file = "/run/secrets/mado-tracking-launcher/registry.json"

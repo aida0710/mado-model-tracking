@@ -188,6 +188,12 @@ export function createBrowserApi() {
     cpuArch: 'amd64',
     supportsArray: false,
     queueTimeoutSeconds: null,
+    // Migration 053: a global target, which GET /targets lists without site settings.
+    ownerUserId: null,
+    ownerName: null,
+    projectIds: [],
+    site: null,
+    siteAccountMode: null,
   };
   const plugin = {
     id: id(),
@@ -232,6 +238,7 @@ export function createBrowserApi() {
     datasetVersions: [datasetVersion],
     runs,
     targets: [target],
+    launchers: [],
     jobs: [],
     automationRules: [],
     automationExecutions: [],
@@ -312,10 +319,21 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     }
     if (path === '/targets') {
       if (method === 'GET') return list(state.targets);
-      const target = { id: id(), ...body };
+      // The create-only fields (owner, sharing, first job shell) are not part of the target.
+      const { personal, projectIds, jobShell: _jobShell, site, ...fields } = body;
+      const target = {
+        id: id(),
+        ...fields,
+        ownerUserId: personal ? user.id : null,
+        ownerName: personal ? user.displayName : null,
+        projectIds: personal ? (projectIds ?? []) : [],
+        site: site ? { ...site, jobShell: null } : null,
+        siteAccountMode: site ? (site.accountMode ?? 'personal') : null,
+      };
       state.targets.push(target);
-      return reply(target);
+      return reply(target, 201);
     }
+    if (path === '/launchers' && method === 'GET') return list(state.launchers);
     if (path === '/tokens') {
       if (method === 'GET') return list(state.tokens);
       const token = {
@@ -588,6 +606,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
           retryOnFailure: false,
           retryOnTimeout: false,
           datasetPartitionVersionId: null,
+          siteJobShellId: null,
           ...body,
           status: 'queued',
           cancelRequested: false,

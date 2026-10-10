@@ -179,6 +179,7 @@ export class ModelAutomationService {
         targetId: input.targetId,
         gpuIds: input.gpuIds,
         runtime: code.runtime,
+        usage: { projectId, userId: principal.user.id },
       });
       const created = (await first<{ id: string }>(
         connection,

@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, RefreshCw } from 'lucide-react';
 import type { Hook } from '@mmt/contracts';
-import { executionApi } from '../api/execution';
 import { hooksApi } from '../api/hooks';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
 import { useHookExecutions, useHookList } from '../hooks/useHooks';
-import { useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Tabs } from '../components/Tabs';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -36,7 +35,7 @@ export function HooksPage() {
   const selectedHookId = params.get('hook') ?? '';
   const hooks = useHookList(project.id);
   const registry = useExecutionCatalog(project.id);
-  const targets = useQuery('hook-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   const executions = useHookExecutions(project.id, {
     hookId: selectedHookId,
     enabled: view === 'executions',

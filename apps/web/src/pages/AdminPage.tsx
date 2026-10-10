@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { Tabs } from '../components/Tabs';
 import { AuditEventsPanel } from '../components/admin/AuditEventsPanel';
+import { LaunchersPanel } from '../components/admin/LaunchersPanel';
 import { StorageBackendsPanel } from '../components/admin/StorageBackendsPanel';
 import { UsersPanel } from '../components/admin/UsersPanel';
 import { useAuth } from '../hooks/useAuth';
@@ -15,6 +16,7 @@ const ADMIN_TAB_PANEL_ID = 'admin-tab-panel';
 const adminTabs: Array<{ key: string; label: string; component: ComponentType }> = [
   { key: 'users', label: text.adminTabUsers, component: UsersPanel },
   { key: 'storage', label: text.adminTabStorage, component: StorageBackendsPanel },
+  { key: 'launchers', label: text.adminTabLaunchers, component: LaunchersPanel },
   { key: 'audit', label: text.adminTabAudit, component: AuditEventsPanel },
 ];
 

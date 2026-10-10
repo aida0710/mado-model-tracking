@@ -69,7 +69,7 @@ export const workbenchText = {
   inferenceSample: 'CPU inference',
   trainingSample: 'CPU training',
   sampleConflict: 'サンプルと同じパスがあります。名前を変更するか削除してから追加してください。',
-  editTarget: 'Compute targetを編集',
+  editTarget: '計算機を編集',
   editPlugin: 'Pluginを編集',
   enableTarget: 'Compute targetを有効にする',
   disableTarget: 'Compute targetを無効にする',

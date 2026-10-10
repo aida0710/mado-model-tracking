@@ -45,7 +45,7 @@ from .log_forwarder import LogForwarder
 from .runner_api import RunnerApi, upload_state_directory
 from .runner_inputs import InputStaging, StagedInputs
 from .runner_outputs import OutputSaver
-from .spec_directory import RunnerSettings, SpecDirectory
+from .spec_directory import RunnerSettings, SpecDirectory, secret_values_of
 
 LOGGER = logging.getLogger(__name__)
 # Calls that must reach the API (start, finish, saving results) ride out an outage of minutes.
@@ -136,13 +136,6 @@ def array_index_from_environment(environment: Mapping[str, str]) -> int:
     return int(raw)
 
 
-def registry_secrets(secrets: Mapping[str, Any]) -> list[str]:
-    registry = secrets.get("registry")
-    if isinstance(registry, dict) and isinstance(registry.get("password"), str):
-        return [registry["password"]]
-    return []
-
-
 class SiteRunner:
     """Read the spec directory and run its Job; a Job that fails validation is failed at the API."""
 
@@ -180,7 +173,7 @@ class SiteRunner:
             job = WorkerJob.parse(payload, executors=SITE_EXECUTORS)
         except ConfigurationError as error:
             return await self.report_invalid_job(payload, api_settings, error)
-        masker = SecretMasker([*registry_secrets(secrets), *secret_values(job.code_version["environment"])])
+        masker = SecretMasker([*secret_values_of(secrets), *secret_values(job.code_version["environment"])])
         workspace = Path(settings.work_directory) / job.id
         api = RunnerApi(
             url=api_settings.url,

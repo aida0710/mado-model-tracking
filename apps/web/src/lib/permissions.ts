@@ -1,4 +1,4 @@
-import type { ProjectRole, User } from '@mmt/contracts';
+import type { ComputeTarget, ProjectRole, User } from '@mmt/contracts';
 
 // Mirrors the API's checks (accessService.requireProject / requireGlobalAdmin) so screens hide
 // actions the API would reject. The API stays the authority; these only decide what to show.
@@ -80,4 +80,37 @@ export function canManageHooks(role: ProjectRole): boolean {
  */
 export function canTransferHookOwners(role: ProjectRole, globalAdmin: boolean): boolean {
   return globalAdmin || canManageProject(role);
+}
+
+/**
+ * Adding a computer: anyone signed in may add a site of their own (POST /targets with
+ * `personal: true` from a session); global administrators also add global targets of any executor.
+ */
+export function canAddTarget(user: Pick<User, 'status'>): boolean {
+  return user.status !== 'disabled';
+}
+
+/** Global computers serve every Project, so only global administrators add them (ssh and local too). */
+export function canAddGlobalTarget(user: Pick<User, 'isAdmin'>): boolean {
+  return isGlobalAdmin(user);
+}
+
+/** The researcher who added a site owns it; a global computer has no owner. */
+export function isTargetOwner(
+  user: Pick<User, 'id'>,
+  target: Pick<ComputeTarget, 'ownerUserId'>,
+): boolean {
+  return target.ownerUserId !== null && target.ownerUserId === user.id;
+}
+
+/**
+ * Editing a computer, sharing it, saving its job shell, its shared account key and everyone's
+ * settings on it: a global administrator or its owner (targetService). Everyone who may use it
+ * reads its job shell and keeps their own settings and key.
+ */
+export function canManageTarget(
+  user: Pick<User, 'id' | 'isAdmin'>,
+  target: Pick<ComputeTarget, 'ownerUserId'>,
+): boolean {
+  return isGlobalAdmin(user) || isTargetOwner(user, target);
 }

@@ -126,7 +126,7 @@ export class HookService {
         role: 'editor',
         scope: 'jobs:write',
       });
-      await this.validateTemplate(connection, { projectId, input });
+      await this.validateTemplate(connection, { projectId, input, userId: principal.user.id });
       const id = randomUUID();
       const webhookSecret =
         input.trigger === 'webhook' ? randomBytes(WEBHOOK_SECRET_BYTES).toString('base64url') : null;
@@ -332,7 +332,8 @@ export class HookService {
   // Checks what each start would check, so a hook that can never start fails at creation.
   private async validateTemplate(
     connection: Connection,
-    creation: { projectId: string; input: HookCreateInput },
+    // userId: the hook's creator, whom it runs as.
+    creation: { projectId: string; input: HookCreateInput; userId: string },
   ): Promise<void> {
     const { projectId, input } = creation;
     const { template } = input;
@@ -361,6 +362,7 @@ export class HookService {
       retryOnFailure: template.retryOnFailure,
       retryOnTimeout: template.retryOnTimeout,
       runtime: code.runtime,
+      usage: { projectId, userId: creation.userId },
     });
     if (template.arraySize !== null && target.executor !== 'site')
       throw new DomainError(422, 'arrayはsiteでだけ実行できます', 'site_target_required');

@@ -2,7 +2,7 @@
 
 The SSH settings live in a private ssh_config the launcher writes, so jump hosts (`-J`) get the
 same known_hosts, key and BatchMode as the login host; a ControlMaster keeps one connection per
-(site, account) open between commands.
+(site, account, key) open between commands. A connection check logs in on its own instead.
 """
 
 from __future__ import annotations
@@ -53,8 +53,15 @@ class SiteTransport:
         self, argv: Sequence[str], *, stdin: bytes = b"", timeout: float = DEFAULT_COMMAND_TIMEOUT_SECONDS
     ) -> CommandResult:
         try:
+            # Its own session: a Ctrl-C meant for `mado-tracking submit --watch` must not cut a
+            # job shell off in the middle of a submission.
             completed = subprocess.run(
-                self.command_argv(argv), input=stdin, capture_output=True, timeout=timeout, check=False
+                self.command_argv(argv),
+                input=stdin,
+                capture_output=True,
+                timeout=timeout,
+                check=False,
+                start_new_session=True,
             )
         except OSError:
             raise TransportError("Could not start the site transport") from None
@@ -75,7 +82,7 @@ class SiteTransport:
 
 
 class LocalSiteTransport(SiteTransport):
-    """Commands run on this machine: `mado-tracking submit` on a login node, or a launcher on the site."""
+    """Commands run on this machine: `mado-tracking submit` on a login node or on the PC it serves."""
 
 
 @dataclass(frozen=True)
@@ -140,10 +147,20 @@ def ssh_config_text(endpoint: SshEndpoint) -> str:
 
 
 class SshSiteTransport(SiteTransport):
-    def __init__(self, endpoint: SshEndpoint, *, state_directory: Path, masker: SecretMasker):
+    """`shared_connection=False` logs in anew for each command, as a connection check must."""
+
+    def __init__(
+        self,
+        endpoint: SshEndpoint,
+        *,
+        state_directory: Path,
+        masker: SecretMasker,
+        shared_connection: bool = True,
+    ):
         super().__init__(masker=masker)
         endpoint.check_files()
         self.endpoint = endpoint
+        self.shared_connection = shared_connection
         directory = state_directory / "ssh"
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.config_file = directory / f"{endpoint.key}.config"
@@ -153,20 +170,24 @@ class SshSiteTransport(SiteTransport):
             output.write(ssh_config_text(endpoint))
 
     def _base_argv(self) -> list[str]:
-        argv = ["ssh", "-F", str(self.config_file), "-o", f"ControlPath={self.control_path}"]
+        argv = ["ssh", "-F", str(self.config_file)]
+        # Without a ControlPath ssh shares nothing: -F keeps ~/.ssh/config from naming one.
+        if self.shared_connection:
+            argv += ["-o", f"ControlPath={self.control_path}"]
         argv += ["-p", str(self.endpoint.port), "-l", self.endpoint.user]
         if self.endpoint.jump_hosts:
             argv += ["-J", ",".join(self.endpoint.jump_hosts)]
         return argv
 
     def command_argv(self, argv: Sequence[str]) -> list[str]:
+        sharing = ["-o", "ControlMaster=no"] if self.shared_connection else []
         # The remote login shell parses the command line; every argument is quoted on its own.
-        return [*self._base_argv(), "-o", "ControlMaster=no", "--", self.endpoint.host, shlex.join(argv)]
+        return [*self._base_argv(), *sharing, "--", self.endpoint.host, shlex.join(argv)]
 
     def run(
         self, argv: Sequence[str], *, stdin: bytes = b"", timeout: float = DEFAULT_COMMAND_TIMEOUT_SECONDS
     ) -> CommandResult:
-        if not self.control_path.exists():
+        if self.shared_connection and not self.control_path.exists():
             self.start_master()
         return super().run(argv, stdin=stdin, timeout=timeout)
 
@@ -204,7 +225,7 @@ class SshSiteTransport(SiteTransport):
             raise TransportError(f"SSH connection to the site failed: {self.diagnostic(result.stderr)}")
 
     def close(self) -> None:
-        if not self.control_path.exists():
+        if not self.shared_connection or not self.control_path.exists():
             return
         try:
             subprocess.run(

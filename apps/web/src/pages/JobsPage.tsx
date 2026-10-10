@@ -6,6 +6,7 @@ import { hooksApi } from '../api/hooks';
 import { trackingApi } from '../api/tracking';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
@@ -42,7 +43,7 @@ export function JobsPage() {
     (signal) => executionApi.jobs(project.id, signal),
     EXECUTION_POLL_MS,
   );
-  const targets = useQuery('job-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   // Hook names for the origin column; without them the column shows the hook's id.
   const hooks = useQuery(`${project.id}:job-hooks`, (signal) => hooksApi.list(project.id, signal));
   const resumedRunIds = useResumedRunIds(project.id, jobs.value);

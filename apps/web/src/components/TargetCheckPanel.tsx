@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PlugZap } from 'lucide-react';
 import type {
   ComputeTarget,
@@ -38,41 +38,10 @@ const outcomeBadgeClass: Record<TargetCheckItem['status'], string> = {
 };
 
 /**
- * The connection check of a target. A worker checks ssh and local targets; a site is reached only
- * by its launcher (or the requester's `mado-tracking submit`), so its panel explains that instead.
+ * The connection check of an ssh or local target, which a worker runs. A site is reached only by
+ * its launcher, which checks the site's login in the site's details (SiteComputerDetails).
  */
 export function TargetCheckPanel({
-  target,
-  onTargetSaved,
-}: {
-  target: ComputeTarget;
-  onTargetSaved: () => void;
-}) {
-  if (target.executor === 'site') return <SiteTargetCheck target={target} />;
-  return <WorkerTargetCheck target={target} onTargetSaved={onTargetSaved} />;
-}
-
-function SiteTargetCheck({ target }: { target: ComputeTarget }) {
-  const hintId = useId();
-  return (
-    <section className="settings-section" data-testid="target-check-panel">
-      <div className="section-heading">
-        <h2>
-          {text.targetCheck}: {target.name}
-        </h2>
-        <button className="button primary" disabled aria-describedby={hintId}>
-          <PlugZap size={15} />
-          {text.checkTarget}
-        </button>
-      </div>
-      <p className="notice" id={hintId}>
-        {targetCheckHintFor(target.executor)}
-      </p>
-    </section>
-  );
-}
-
-function WorkerTargetCheck({
   target,
   onTargetSaved,
 }: {

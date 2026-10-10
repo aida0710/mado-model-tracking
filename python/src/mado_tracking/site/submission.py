@@ -1,8 +1,11 @@
 """Submit one SiteSubmission through a site's job shell and describe the outcome for the API.
 
-Shared by the launcher (over SSH) and `mado-tracking submit` (on the login node). Setting up the
-work directory is retried; the job shell itself runs once, because a lost answer may mean the
-scheduler already holds the job, and a second submission would run it twice.
+Shared by the launcher (over SSH) and `mado-tracking submit` (on the login node or PC). Setting up
+the work directory is retried; the job shell itself runs once, because a lost answer may mean the
+scheduler already holds the job, and a second submission would run it twice. The Job tokens and
+the registry login in the spec directory are masked in every error the result carries. The outcome
+also says when the site could not be reached at all, so that a launcher does not log in again
+through the same login for the rest of its poll.
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from ..security import SecretMasker
 from .bundle import runner_installation
 from .job_shell import JobShellOutputError, job_shell_environment, job_shell_error, scheduler_job_id
 from .site_operations import SiteOperations
-from .spec_directory import RunnerSettings, ordered_jobs, spec_files
+from .spec_directory import RunnerSettings, ordered_jobs, secret_values_of, spec_files
 
 LOGGER = logging.getLogger(__name__)
 SETUP_ATTEMPTS = 3
@@ -37,6 +40,16 @@ class SubmissionPlan:
     runner_settings: RunnerSettings
     variables: Mapping[str, str] = field(default_factory=dict)
     secrets: Mapping[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class SubmissionOutcome:
+    """The SiteSubmissionResult to report, and whether the site could be reached to prepare it."""
+
+    result: dict[str, Any]
+    # Why the site could not be reached while preparing (a TransportError, masked): another
+    # submission through the same login would fail alike. None once the site was reached.
+    connection_failure: str | None = None
 
 
 def submission_job_ids(submission: Mapping[str, Any]) -> list[str]:
@@ -65,11 +78,14 @@ def submit_to_site(
     plan: SubmissionPlan,
     masker: SecretMasker,
     sleep: Callable[[float], None] = time.sleep,
-) -> dict[str, Any]:
-    """Prepare the work directory, run the job shell once, and return a SiteSubmissionResult."""
+) -> SubmissionOutcome:
+    """Prepare the work directory, run the job shell once, and say what to report."""
     job_ids = submission_job_ids(submission)
     jobs = ordered_jobs(submission)
     target_id = str(submission["target"]["id"])
+    # The spec directory holds the Job tokens and the registry login, and a job shell may print them.
+    job_tokens = [job["jobToken"] for job in jobs if isinstance(job.get("jobToken"), str)]
+    masker = SecretMasker([*masker.secrets, *job_tokens, *secret_values_of(plan.secrets or {})])
 
     def prepare() -> tuple[str, str, str]:
         runner = operations.ensure_runner(runner_installation(plan.runner_python))
@@ -85,20 +101,33 @@ def submit_to_site(
             jobs, spec_directory=spec_directory, runner=runner, target_id=target_id, variables=plan.variables
         )
     except (TransportError, ConfigurationError, OSError) as error:
-        return failed_result(job_ids, f"The site could not be prepared: {masker.mask(str(error))}")
-    try:
-        result = operations.run_job_shell(job_shell, spec_directory=spec_directory, environment=environment)
-    except TransportError as error:
-        LOGGER.error("Job shell for %s lost its connection: %s", ", ".join(job_ids), masker.mask(str(error)))
-        return failed_result(
-            job_ids,
-            "The connection was lost while the job shell ran; the scheduler may still hold the job "
-            f"({masker.mask(str(error))})",
+        reason = masker.mask(str(error))
+        return SubmissionOutcome(
+            failed_result(job_ids, f"The site could not be prepared: {reason}"),
+            connection_failure=reason if isinstance(error, TransportError) else None,
         )
-    if result.exit_code:
-        return failed_result(job_ids, job_shell_error(result.exit_code, result.stderr, masker))
     try:
-        scheduler_id = scheduler_job_id(result.stdout)
+        completed = operations.run_job_shell(
+            job_shell, spec_directory=spec_directory, environment=environment
+        )
+    except TransportError as error:
+        # The site was reached and prepared, so this says nothing about the next login.
+        LOGGER.error("Job shell for %s lost its connection: %s", ", ".join(job_ids), masker.mask(str(error)))
+        return SubmissionOutcome(
+            failed_result(
+                job_ids,
+                "The connection was lost while the job shell ran; the scheduler may still hold the job "
+                f"({masker.mask(str(error))})",
+            )
+        )
+    if completed.exit_code:
+        return SubmissionOutcome(
+            failed_result(job_ids, job_shell_error(completed.exit_code, completed.stderr, masker))
+        )
+    try:
+        scheduler_id = scheduler_job_id(completed.stdout)
     except JobShellOutputError as error:
-        return failed_result(job_ids, str(error))
-    return {"jobIds": job_ids, "outcome": "submitted", "schedulerJobId": scheduler_id, "error": None}
+        return SubmissionOutcome(failed_result(job_ids, str(error)))
+    return SubmissionOutcome(
+        {"jobIds": job_ids, "outcome": "submitted", "schedulerJobId": scheduler_id, "error": None}
+    )

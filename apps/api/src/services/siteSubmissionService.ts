@@ -2,25 +2,32 @@ import type {
   ComputeTarget,
   Job,
   JobPhase,
+  ManualSiteConfiguration,
   ManualSubmissionWaiting,
   SiteSchedulerCancellation,
   SiteSubmission,
+  SiteSubmissionAccount,
   SiteSubmissionMode,
   SiteSubmissionRequester,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
-import { DomainError, notFound } from '../domain/errors.js';
+import { DomainError } from '../domain/errors.js';
 import type { SiteSubmissionResultInput } from '../domain/siteExecutionValidation.js';
 import { jobColumns } from '../repositories/jobRepository.js';
-import { touchWorker } from '../repositories/workerPresenceRepository.js';
-import { requireScope, requireWorker } from './accessService.js';
+import { findCurrentJobShell } from '../repositories/siteJobShellRepository.js';
+import { findSiteSettings } from '../repositories/siteSettingsRepository.js';
+import { requireScope } from './accessService.js';
 import type { JobService } from './jobService.js';
+import { requireLauncher } from './launcherService.js';
 import type { RunCompletionService } from './runCompletionService.js';
+import { findSiteTarget, requireTargetUser } from './siteAccess.js';
 import { failUnstartedSiteJob, submissionCountSql } from './siteJobEnding.js';
+import { resolveSubmissionAccount } from './siteReadiness.js';
 
-// Who holds claimed submissions: a launcher with its Project's worker token, or the requester
-// with their own API token. A report must come from the same holder.
+// Who holds claimed submissions: a launcher, or the requester with their own API token. A report
+// must come from the same holder: the same ID, with any token of the same owner (a launcher whose
+// token was replaced still reports what it submitted).
 interface SubmissionHolder {
   tokenId: string;
   holderId: string;
@@ -29,13 +36,27 @@ interface SubmissionHolder {
 interface ClaimScope {
   holder: SubmissionHolder;
   mode: SiteSubmissionMode;
-  // A launcher's worker token names one Project; a person's token may span every Project.
+  // A person's token may be limited to one Project; a launcher's spans every Project.
   projectId: string | null;
   targetIds: string[] | null;
-  // Manual submissions take only the requester's own Runs in Projects where they edit.
+  // A launcher claims only the sites assigned to it.
+  launcherId: string | null;
+  // Manual submissions take the requester's own Runs in Projects where they edit, unless the
+  // owner of the computer takes all of them.
   requesterId: string | null;
+  // Whoever runs the job shell of a manual submission; their settings apply.
+  submittingUserId: string | null;
   limit: number;
 }
+
+// The tokens of the holder's owner, in SQL; $token is the request's token.
+const HOLDER_TOKENS_SQL = (token: string) =>
+  `(SELECT o.id FROM api_tokens o WHERE o.user_id=(SELECT t.user_id FROM api_tokens t WHERE t.id=${token}))`;
+
+// The Job `j` is on an automatic site that the launcher $launcher submits for now, in SQL.
+const ASSIGNED_SITE_SQL = (launcher: string) =>
+  `EXISTS(SELECT 1 FROM compute_targets t JOIN site_settings s ON s.target_id=t.id
+    WHERE t.id=j.target_id AND t.submission_mode='automatic' AND s.launcher_id=${launcher})`;
 
 const SUBMISSION_SAVEPOINT = 'site_submission';
 // Cancellations one launcher request returns; the launcher asks again for the rest.
@@ -72,25 +93,21 @@ export class SiteSubmissionService {
 
   async claim(
     principal: Principal,
-    request: { launcherId: string; targetIds?: string[]; limit: number },
+    request: { targetIds?: string[]; limit: number },
   ): Promise<SiteSubmission[]> {
     return transaction(this.database, async (connection) => {
-      const worker = await requireWorker(connection, principal);
-      const holder = { tokenId: worker.tokenId, holderId: request.launcherId };
+      const launcher = await requireLauncher(connection, principal);
+      const holder = { tokenId: launcher.tokenId, holderId: launcher.launcherId };
       await this.lockHolder(connection, holder);
-      // A launcher shows in the worker list like a worker, so a stopped launcher is noticed.
-      await touchWorker(connection, {
-        projectId: worker.projectId,
-        tokenId: worker.tokenId,
-        workerId: request.launcherId,
-        targetIds: request.targetIds ?? null,
-      });
+      await connection.query('UPDATE launchers SET last_seen_at=now() WHERE id=$1', [launcher.launcherId]);
       return this.claimSubmissions(connection, {
         holder,
         mode: 'automatic',
-        projectId: worker.projectId,
+        projectId: null,
         targetIds: request.targetIds ?? null,
+        launcherId: launcher.launcherId,
         requesterId: null,
+        submittingUserId: null,
         limit: request.limit,
       });
     });
@@ -98,90 +115,119 @@ export class SiteSubmissionService {
 
   async report(
     principal: Principal,
-    request: { launcherId: string; results: SiteSubmissionResultInput[] },
+    request: { results: SiteSubmissionResultInput[] },
   ): Promise<Job[]> {
     return transaction(this.database, async (connection) => {
-      const worker = await requireWorker(connection, principal);
+      const launcher = await requireLauncher(connection, principal);
       return this.applyResults(connection, {
-        holder: { tokenId: worker.tokenId, holderId: request.launcherId },
+        holder: { tokenId: launcher.tokenId, holderId: launcher.launcherId },
         results: request.results,
       });
     });
   }
 
-  /** Jobs this launcher submitted that ended while still in the scheduler queue. */
+  /**
+   * Jobs that ended while still in the scheduler queue of a site this launcher submits for now,
+   * whichever launcher queued them: after a site moves to another launcher, the new one logs in
+   * with its own key and removes them.
+   */
   async cancellations(
     principal: Principal,
-    request: { launcherId: string; targetIds?: string[] },
+    request: { targetIds?: string[] },
   ): Promise<SiteSchedulerCancellation[]> {
     return transaction(this.database, async (connection) => {
-      const worker = await requireWorker(connection, principal);
-      return rows<SiteSchedulerCancellation>(
+      const launcher = await requireLauncher(connection, principal);
+      const pending = await rows<{ jobId: string; targetId: string; schedulerJobId: string; requesterId: string }>(
         connection,
-        `SELECT id AS job_id,target_id,scheduler_job_id FROM jobs
-        WHERE project_id=$1 AND worker_token_id=$2 AND worker_id=$3 AND scheduler_cancel_state='pending'
-        AND ($4::uuid[] IS NULL OR target_id=ANY($4::uuid[]))
-        ORDER BY ended_at,id LIMIT $5`,
-        [
-          worker.projectId,
-          worker.tokenId,
-          request.launcherId,
-          request.targetIds ?? null,
-          CANCELLATION_LIST_LIMIT,
-        ],
+        `SELECT j.id AS job_id,j.target_id,j.scheduler_job_id,r.created_by AS requester_id
+        FROM jobs j JOIN runs r ON r.id=j.run_id AND r.project_id=j.project_id
+        WHERE ${ASSIGNED_SITE_SQL('$1')}
+        AND j.scheduler_cancel_state='pending' AND ($2::uuid[] IS NULL OR j.target_id=ANY($2::uuid[]))
+        ORDER BY j.ended_at,j.id LIMIT $3`,
+        [launcher.launcherId, request.targetIds ?? null, CANCELLATION_LIST_LIMIT],
       );
+      const cancellations: SiteSchedulerCancellation[] = [];
+      for (const { requesterId, ...job } of pending)
+        cancellations.push({
+          ...job,
+          account: await this.cancellationAccount(connection, { targetId: job.targetId, requesterId }),
+        });
+      return cancellations;
     });
   }
 
   async reportCancellations(
     principal: Principal,
-    request: { launcherId: string; jobIds: string[] },
+    request: { jobIds: string[] },
   ): Promise<void> {
     await transaction(this.database, async (connection) => {
-      const worker = await requireWorker(connection, principal);
+      const launcher = await requireLauncher(connection, principal);
       await connection.query(
-        `UPDATE jobs SET scheduler_cancel_state='done'
-        WHERE id=ANY($1::uuid[]) AND project_id=$2 AND worker_token_id=$3 AND worker_id=$4
-        AND scheduler_cancel_state='pending'`,
-        [request.jobIds, worker.projectId, worker.tokenId, request.launcherId],
+        `UPDATE jobs j SET scheduler_cancel_state='done'
+        WHERE j.id=ANY($1::uuid[]) AND ${ASSIGNED_SITE_SQL('$2')} AND j.scheduler_cancel_state='pending'`,
+        [request.jobIds, launcher.launcherId],
       );
     });
   }
 
-  /** The requester's Jobs waiting for `mado-tracking submit`, counted per manual site. */
+  /**
+   * Manual sites with Jobs waiting for `mado-tracking submit`: one's own Jobs, and every waiting
+   * Job of the computers one owns (what `--all` takes).
+   */
   async listManual(principal: Principal): Promise<ManualSubmissionWaiting[]> {
     requireSubmitterToken(principal, 'read');
     return rows<ManualSubmissionWaiting>(
       this.database,
-      `SELECT t.id AS target_id,t.name AS target_name,count(*)::int AS waiting_jobs
+      `SELECT t.id AS target_id,t.name AS target_name,
+        (count(*) FILTER (WHERE r.created_by=$1 AND EXISTS(SELECT 1 FROM effective_project_roles e
+          WHERE e.project_id=j.project_id AND e.user_id=$1 AND e.role IN ('editor','admin'))))::int AS waiting_jobs,
+        CASE WHEN t.owner_user_id=$1 THEN count(*)::int END AS all_waiting_jobs
       FROM jobs j JOIN compute_targets t ON t.id=j.target_id
       JOIN runs r ON r.id=j.run_id AND r.project_id=j.project_id
-      WHERE j.status='queued' AND j.phase='waiting_manual' AND r.created_by=$1
+      WHERE j.status='queued' AND j.phase='waiting_manual' AND (r.created_by=$1 OR t.owner_user_id=$1)
       AND ($2::uuid IS NULL OR j.project_id=$2)
-      AND EXISTS(SELECT 1 FROM effective_project_roles e
-        WHERE e.project_id=j.project_id AND e.user_id=$1 AND e.role IN ('editor','admin'))
-      GROUP BY t.id,t.name ORDER BY t.name`,
+      GROUP BY t.id,t.name,t.owner_user_id
+      HAVING t.owner_user_id=$1 OR count(*) FILTER (WHERE r.created_by=$1 AND EXISTS(
+        SELECT 1 FROM effective_project_roles e
+        WHERE e.project_id=j.project_id AND e.user_id=$1 AND e.role IN ('editor','admin'))) > 0
+      ORDER BY t.name`,
       [principal.user.id, principal.token?.projectId ?? null],
     );
   }
 
+  /** What `mado-tracking submit` needs before it claims: settings, job shell, one's account. */
+  async manualConfiguration(principal: Principal, targetId: string): Promise<ManualSiteConfiguration> {
+    requireSubmitterToken(principal, 'read');
+    return transaction(this.database, async (connection) => {
+      const target = await this.manualTarget(connection, targetId);
+      await requireTargetUser(connection, principal, target);
+      const settings = (await findSiteSettings(connection, targetId))!;
+      return {
+        target,
+        settings,
+        jobShell: (await findCurrentJobShell(connection, targetId)) ?? null,
+        account: await resolveSubmissionAccount(connection, {
+          target,
+          settings,
+          requesterId: principal.user.id,
+          submittingUserId: principal.user.id,
+        }),
+      };
+    });
+  }
+
   async claimManual(
     principal: Principal,
-    request: { targetId: string; submitterId: string; limit: number },
+    request: { targetId: string; submitterId: string; limit: number; all: boolean },
   ): Promise<SiteSubmission[]> {
     const { tokenId } = requireSubmitterToken(principal, 'jobs:write');
     return transaction(this.database, async (connection) => {
-      const target = await first<ComputeTarget>(
-        connection,
-        "SELECT * FROM compute_targets WHERE id=$1 AND executor='site'",
-        [request.targetId],
-      );
-      if (!target) notFound('ComputeTarget');
-      if (target.submissionMode !== 'manual')
+      const target = await this.manualTarget(connection, request.targetId);
+      if (request.all && target.ownerUserId !== principal.user.id)
         throw new DomainError(
-          422,
-          'このsiteはlauncherが投入します（手動投入のsiteではありません）',
-          'site_not_manual',
+          403,
+          '全員のJobを投入できるのは、この計算機の所有者だけです',
+          'site_owner_required',
         );
       const holder = { tokenId, holderId: request.submitterId };
       await this.lockHolder(connection, holder);
@@ -190,7 +236,9 @@ export class SiteSubmissionService {
         mode: 'manual',
         projectId: principal.token?.projectId ?? null,
         targetIds: [request.targetId],
-        requesterId: principal.user.id,
+        launcherId: null,
+        requesterId: request.all ? null : principal.user.id,
+        submittingUserId: principal.user.id,
         limit: request.limit,
       });
     });
@@ -207,6 +255,44 @@ export class SiteSubmissionService {
         results: request.results,
       }),
     );
+  }
+
+  private async manualTarget(connection: Connection, targetId: string): Promise<ComputeTarget> {
+    const target = await findSiteTarget(connection, targetId);
+    if (target.submissionMode !== 'manual')
+      throw new DomainError(
+        422,
+        'このsiteはlauncherが投入します（手動投入のsiteではありません）',
+        'site_not_manual',
+      );
+    return target;
+  }
+
+  // The account that queued a Job, which its cancel command runs as; best effort, since the
+  // person's settings may have changed since (the launcher then leaves the Job in the queue).
+  private async cancellationAccount(
+    connection: Connection,
+    job: { targetId: string; requesterId: string },
+  ): Promise<SiteSubmissionAccount> {
+    const target = await findSiteTarget(connection, job.targetId);
+    const settings = (await findSiteSettings(connection, job.targetId))!;
+    try {
+      return await resolveSubmissionAccount(connection, {
+        target,
+        settings,
+        requesterId: job.requesterId,
+        submittingUserId: null,
+      });
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+      return {
+        mode: settings.accountMode,
+        accountName: '',
+        workDirectory: settings.workDirectory,
+        variables: settings.variables,
+        keyId: null,
+      };
+    }
   }
 
   // Serializes a holder's duplicate HTTP requests, while other holders can use SKIP LOCKED.
@@ -236,6 +322,8 @@ export class SiteSubmissionService {
         AND ($5::uuid IS NULL OR (r.created_by=$5 AND EXISTS(SELECT 1 FROM effective_project_roles e
           WHERE e.project_id=j.project_id AND e.user_id=$5 AND e.role IN ('editor','admin'))))
         AND NOT(j.id=ANY($6::uuid[])) AND NOT(j.target_id=ANY($7::uuid[]))
+        AND ($8::uuid IS NULL OR EXISTS(SELECT 1 FROM site_settings s
+          WHERE s.target_id=j.target_id AND s.launcher_id=$8))
         ORDER BY j.created_at,j.array_index NULLS FIRST,j.id LIMIT 1 FOR UPDATE OF j SKIP LOCKED`,
         [
           waitingPhase,
@@ -245,6 +333,7 @@ export class SiteSubmissionService {
           scope.requesterId,
           seen,
           unavailableTargets,
+          scope.launcherId,
         ],
       );
       if (!candidate) break;
@@ -263,7 +352,12 @@ export class SiteSubmissionService {
             )
           : [candidate];
       seen.push(...members.map((job) => job.id));
-      const submission = await this.submit(connection, { target, members, holder: scope.holder });
+      const submission = await this.submit(connection, {
+        target,
+        members,
+        holder: scope.holder,
+        submittingUserId: scope.submittingUserId,
+      });
       if (submission) submissions.push(submission);
     }
     return submissions;
@@ -293,32 +387,55 @@ export class SiteSubmissionService {
     return occupancy.count < target.maxConcurrentJobs ? target : undefined;
   }
 
-  // A Job that cannot be described to the site (for example a deleted checkpoint) fails instead
-  // of blocking the queue on every claim.
+  // A Job that cannot be described to the site (for example a deleted checkpoint, or a requester
+  // without an account on it) fails instead of blocking the queue on every claim.
   private async submit(
     connection: Connection,
-    submission: { target: ComputeTarget; members: Job[]; holder: SubmissionHolder },
+    submission: {
+      target: ComputeTarget;
+      members: Job[];
+      holder: SubmissionHolder;
+      submittingUserId: string | null;
+    },
   ): Promise<SiteSubmission | null> {
     const { target, members, holder } = submission;
     await connection.query(`SAVEPOINT ${SUBMISSION_SAVEPOINT}`);
     try {
+      const settings = await findSiteSettings(connection, target.id);
+      const jobShell = settings ? await findCurrentJobShell(connection, target.id) : undefined;
+      if (!settings || !jobShell)
+        throw new DomainError(422, 'この計算機にはjob shellがありません', 'site_submission_unready');
+      const requester = (await first<SiteSubmissionRequester>(
+        connection,
+        'SELECT u.id,u.email,u.username FROM runs r JOIN users u ON u.id=r.created_by WHERE r.id=$1',
+        [members[0]!.runId],
+      ))!;
+      const account = await resolveSubmissionAccount(connection, {
+        target,
+        settings,
+        requesterId: requester.id,
+        submittingUserId: submission.submittingUserId,
+      });
       const claimed = await rows<Job>(
         connection,
         `UPDATE jobs SET status='claimed',phase='submitting',worker_id=$2,lease_id=gen_random_uuid(),
-          worker_token_id=$3,heartbeat_at=now()
+          worker_token_id=$3,heartbeat_at=now(),site_job_shell_id=$4
         WHERE id=ANY($1::uuid[]) RETURNING ${jobColumns()}`,
-        [members.map((job) => job.id), holder.holderId, holder.tokenId],
+        [members.map((job) => job.id), holder.holderId, holder.tokenId, jobShell.id],
       );
       claimed.sort((left, right) => (left.arrayIndex ?? 0) - (right.arrayIndex ?? 0));
       const workerJobs = [];
       for (const job of claimed) workerJobs.push(await this.jobs.getWorkerJob(connection, job));
-      const requester = (await first<SiteSubmissionRequester>(
-        connection,
-        'SELECT u.id,u.email,u.username FROM runs r JOIN users u ON u.id=r.created_by WHERE r.id=$1',
-        [claimed[0]!.runId],
-      ))!;
       await connection.query(`RELEASE SAVEPOINT ${SUBMISSION_SAVEPOINT}`);
-      return { target, arrayGroupId: claimed[0]!.arrayGroupId, requester, jobs: workerJobs };
+      return {
+        target,
+        arrayGroupId: claimed[0]!.arrayGroupId,
+        requester,
+        jobs: workerJobs,
+        settings,
+        jobShell,
+        account,
+      };
     } catch (error) {
       await connection.query(`ROLLBACK TO SAVEPOINT ${SUBMISSION_SAVEPOINT}`);
       if (!(error instanceof DomainError)) throw error;
@@ -341,7 +458,8 @@ export class SiteSubmissionService {
     for (const result of report.results) {
       const jobs = await rows<Job>(
         connection,
-        `SELECT ${jobColumns()} FROM jobs WHERE id=ANY($1::uuid[]) AND worker_token_id=$2 AND worker_id=$3
+        `SELECT ${jobColumns()} FROM jobs WHERE id=ANY($1::uuid[])
+        AND worker_token_id IN ${HOLDER_TOKENS_SQL('$2')} AND worker_id=$3
         ORDER BY array_index NULLS FIRST,id FOR UPDATE`,
         [result.jobIds, holder.tokenId, holder.holderId],
       );

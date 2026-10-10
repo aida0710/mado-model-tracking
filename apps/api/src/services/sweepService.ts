@@ -81,7 +81,7 @@ export class SweepService {
         validateSweepDefinition(input);
         const task = await findTask(connection, { projectId, id: input.taskId });
         await lockActiveExperiment(connection, { projectId, id: task.experimentId });
-        await this.validateTarget(connection, { projectId, input, task });
+        await this.validateTarget(connection, { projectId, input, task, userId: principal.user.id });
         const sweep = await insertSweep(connection, {
           projectId,
           input,
@@ -326,6 +326,8 @@ export class SweepService {
       projectId: string;
       input: SweepCreateInput;
       task: { targetId: string | null; gpuIds: string[]; codeVersionId: string };
+      // The Sweep's creator, whose Runs its trials are.
+      userId: string;
     },
   ): Promise<void> {
     const { input, task } = launch;
@@ -340,6 +342,7 @@ export class SweepService {
       targetId,
       gpuIds: input.gpuIds ?? task.gpuIds,
       runtime: code.runtime,
+      usage: { projectId: launch.projectId, userId: launch.userId },
     });
   }
 

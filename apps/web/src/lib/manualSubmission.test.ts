@@ -33,4 +33,14 @@ describe('手動投入を待つJob', () => {
   it('本人がsiteのログインノードで実行するコマンドはsiteのIDを指定する', () => {
     expect(manualSubmitCommand(siteTarget.id)).toBe('mado-tracking submit --site site');
   });
+
+  it('PCで待ち受けるときは--watchを、所有者が全員のJobを投入するときは--allを付ける', () => {
+    expect(manualSubmitCommand('pc', { watch: true })).toBe('mado-tracking submit --site pc --watch');
+    expect(manualSubmitCommand('pc', { all: true, watch: true })).toBe(
+      'mado-tracking submit --site pc --watch --all',
+    );
+    expect(manualSubmitCommand('pc', { all: false, watch: false })).toBe(
+      'mado-tracking submit --site pc',
+    );
+  });
 });

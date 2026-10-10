@@ -69,7 +69,11 @@
     },
     {
       "name": "sites",
-      "description": "site（外部の計算機）のarray・手動投入・runnerの報告"
+      "description": "site（外部の計算機）の設定・job shell・個人設定・鍵・array・手動投入・runnerの報告"
+    },
+    {
+      "name": "launcher",
+      "description": "launcher専用のprotocol（Webで登録したlauncherのtoken）"
     },
     {
       "name": "hooks",
@@ -22297,6 +22301,10 @@
               "site_only_setting",
               "incompatible_runtime",
               "image_platform_mismatch",
+              "target_not_available",
+              "site_job_shell_missing",
+              "site_launcher_missing",
+              "site_account_required",
               "invalid_request",
               "invalid_reference"
             ],
@@ -22676,7 +22684,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機（ComputeTarget）一覧",
+        "summary": "計算機（ComputeTarget）一覧。projectIdでそのProjectで使えるものだけ",
         "security": [
           {
             "sessionCookie": []
@@ -22692,7 +22700,17 @@
           "scope": "read"
         },
         "x-mmt-job-token": "forbidden",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -22704,7 +22722,7 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/ComputeTarget"
+                        "$ref": "#/components/schemas/ComputeTargetDetails"
                       }
                     }
                   },
@@ -22735,9 +22753,36 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "project_forbidden",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
             ],
             "content": {
               "application/json": {
@@ -22768,7 +22813,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機を登録",
+        "summary": "計算機を登録（全体管理者、または自分の計算機を足す研究者）",
         "security": [
           {
             "sessionCookie": []
@@ -22780,7 +22825,8 @@
           }
         ],
         "x-mmt-access": {
-          "kind": "globalAdmin"
+          "kind": "signedIn",
+          "scope": "admin"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [],
@@ -22912,6 +22958,171 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "site": {
+                    "type": "object",
+                    "properties": {
+                      "launcherId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "connection": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 253,
+                                "pattern": "^[A-Za-z0-9.:_-]+$"
+                              },
+                              "port": {
+                                "default": 22,
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 65535
+                              },
+                              "jumpHosts": {
+                                "default": [],
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 300,
+                                  "pattern": "^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::\\d{1,5})?$"
+                                }
+                              },
+                              "knownHosts": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "knownHosts"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accountMode": {
+                        "type": "string",
+                        "enum": [
+                          "shared",
+                          "personal"
+                        ]
+                      },
+                      "sharedAccount": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "pattern": "^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*)?$"
+                      },
+                      "workDirectory": {
+                        "type": "string",
+                        "maxLength": 4000,
+                        "pattern": "^(?:\\/[A-Za-z0-9._/+@-]*)?$"
+                      },
+                      "runnerPython": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000,
+                        "pattern": "^[A-Za-z0-9._/+@-]+$"
+                      },
+                      "runnerApiUrl": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 2000,
+                            "format": "uri"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cancelCommand": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000,
+                            "pattern": "^[^\\r\\n\\0]*$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "gpuAssignment": {
+                        "type": "string",
+                        "enum": [
+                          "scheduler",
+                          "lease"
+                        ]
+                      },
+                      "leaseGpuIds": {
+                        "maxItems": 128,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      },
+                      "variables": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "maxLength": 1000,
+                          "pattern": "^[^\\r\\n\\0]*$"
+                        }
+                      },
+                      "cancelGraceSeconds": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3600
+                      },
+                      "maxOutputFiles": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "maxActiveSubmissions": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "personal": {
+                    "type": "boolean"
+                  },
+                  "projectIds": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "jobShell": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -22939,7 +23150,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ComputeTarget"
+                  "$ref": "#/components/schemas/ComputeTargetDetails"
                 }
               }
             }
@@ -22976,10 +23187,11 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_admin_required",
+              "session_required",
               "password_change_required",
               "invalid_origin",
               "insufficient_scope",
-              "admin_required",
               "job_token_forbidden"
             ],
             "content": {
@@ -23024,6 +23236,10 @@
               "target_connection_required",
               "ssh_config_required",
               "local_executor_disabled",
+              "site_settings_invalid",
+              "site_launcher_invalid",
+              "target_not_owned",
+              "target_project_forbidden",
               "invalid_request",
               "invalid_reference"
             ],
@@ -23058,7 +23274,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機を変更",
+        "summary": "計算機を変更（全体管理者か所有者）",
         "security": [
           {
             "sessionCookie": []
@@ -23070,7 +23286,8 @@
           }
         ],
         "x-mmt-access": {
-          "kind": "globalAdmin"
+          "kind": "signedIn",
+          "scope": "admin"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [
@@ -23205,6 +23422,157 @@
                         "type": "null"
                       }
                     ]
+                  },
+                  "site": {
+                    "type": "object",
+                    "properties": {
+                      "launcherId": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "connection": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "host": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 253,
+                                "pattern": "^[A-Za-z0-9.:_-]+$"
+                              },
+                              "port": {
+                                "default": 22,
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 65535
+                              },
+                              "jumpHosts": {
+                                "default": [],
+                                "maxItems": 8,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 300,
+                                  "pattern": "^(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::\\d{1,5})?$"
+                                }
+                              },
+                              "knownHosts": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "host",
+                              "knownHosts"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "accountMode": {
+                        "type": "string",
+                        "enum": [
+                          "shared",
+                          "personal"
+                        ]
+                      },
+                      "sharedAccount": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "pattern": "^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*)?$"
+                      },
+                      "workDirectory": {
+                        "type": "string",
+                        "maxLength": 4000,
+                        "pattern": "^(?:\\/[A-Za-z0-9._/+@-]*)?$"
+                      },
+                      "runnerPython": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000,
+                        "pattern": "^[A-Za-z0-9._/+@-]+$"
+                      },
+                      "runnerApiUrl": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 2000,
+                            "format": "uri"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "cancelCommand": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000,
+                            "pattern": "^[^\\r\\n\\0]*$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "gpuAssignment": {
+                        "type": "string",
+                        "enum": [
+                          "scheduler",
+                          "lease"
+                        ]
+                      },
+                      "leaseGpuIds": {
+                        "maxItems": 128,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 100
+                        }
+                      },
+                      "variables": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "maxLength": 64,
+                          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                        },
+                        "additionalProperties": {
+                          "type": "string",
+                          "maxLength": 1000,
+                          "pattern": "^[^\\r\\n\\0]*$"
+                        }
+                      },
+                      "cancelGraceSeconds": {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3600
+                      },
+                      "maxOutputFiles": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000
+                      },
+                      "maxActiveSubmissions": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 50
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
                 "additionalProperties": false
@@ -23218,7 +23586,2138 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ComputeTarget"
+                  "$ref": "#/components/schemas/ComputeTargetDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "conflict",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_target_settings",
+              "site_only_setting",
+              "target_connection_required",
+              "ssh_config_required",
+              "local_executor_disabled",
+              "site_settings_invalid",
+              "site_launcher_invalid",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/projects": {
+      "put": {
+        "operationId": "putTargetsByIdProjects",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の計算機を共有するProject",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectIds": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "required": [
+                  "projectIds"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputeTargetDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "target_not_owned",
+              "target_project_forbidden",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/job-shells": {
+      "get": {
+        "operationId": "getTargetsByIdJobShells",
+        "tags": [
+          "sites"
+        ],
+        "summary": "siteのjob shellの版（新しい順）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteJobShellSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postTargetsByIdJobShells",
+        "tags": [
+          "sites"
+        ],
+        "summary": "job shellの次の版を保存（同じ内容なら今の版を返す）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "content"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteJobShell"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteJobShell"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/job-shells/{shellId}": {
+      "get": {
+        "operationId": "getTargetsByIdJobShellsByShellId",
+        "tags": [
+          "sites"
+        ],
+        "summary": "job shellの版（内容つき）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "shellId",
+            "in": "path",
+            "required": true,
+            "description": "job shellの版のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteJobShell"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/personal-settings": {
+      "get": {
+        "operationId": "getTargetsByIdPersonalSettings",
+        "tags": [
+          "sites"
+        ],
+        "summary": "全員の個人設定（全体管理者か所有者）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SitePersonalSettings"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/personal-settings/me": {
+      "get": {
+        "operationId": "getTargetsByIdPersonalSettingsMe",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の個人設定（無ければitemがnull）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "item": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/components/schemas/SitePersonalSettings"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "item"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "putTargetsByIdPersonalSettingsMe",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の個人設定を保存（本人アカウントのsiteでは鍵の作成をlauncherへ依頼）",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "session"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "accountName": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^(?:[A-Za-z0-9_][A-Za-z0-9_.-]*)?$"
+                  },
+                  "workDirectory": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 4000,
+                        "pattern": "^(?:\\/[A-Za-z0-9._/+@-]*)?$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "variables": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+                    },
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 1000,
+                      "pattern": "^[^\\r\\n\\0]*$"
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SitePersonalSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "session_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_settings_invalid",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTargetsByIdPersonalSettingsMe",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の個人設定と鍵を消す",
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "session"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "session_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/keys": {
+      "get": {
+        "operationId": "getTargetsByIdKeys",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherが作った鍵（所有者・全体管理者は全部、他は自分の鍵）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteKey"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/keys/rotate": {
+      "post": {
+        "operationId": "postTargetsByIdKeysRotate",
+        "tags": [
+          "sites"
+        ],
+        "summary": "鍵を作り直す（古い鍵は失効）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "personal": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "personal"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_key_unavailable",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/connection-checks": {
+      "post": {
+        "operationId": "postTargetsByIdConnectionChecks",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherにその鍵とアカウントでログインできるか確かめさせる",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "personal": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "personal"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteConnectionCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "site_check_in_progress",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_key_unavailable",
+              "site_check_unavailable",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "getTargetsByIdConnectionChecks",
+        "tags": [
+          "sites"
+        ],
+        "summary": "接続確認の結果（新しい10件）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "personal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteConnectionCheck"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_key_unavailable",
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launchers": {
+      "get": {
+        "operationId": "getLaunchers",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherの一覧（tokenの先頭と失効したものは全体管理者だけ）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Launcher"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "postLaunchers",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherを登録してtokenを発行（tokenは一度だけ返す）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LauncherCreated"
                 }
               }
             }
@@ -23272,6 +25771,7 @@
           "409": {
             "description": "現在の状態と衝突する",
             "x-mmt-error-codes": [
+              "launcher_name_taken",
               "already_exists"
             ],
             "content": {
@@ -23298,11 +25798,267 @@
           "422": {
             "description": "入力が不正",
             "x-mmt-error-codes": [
-              "site_target_settings",
-              "site_only_setting",
-              "target_connection_required",
-              "ssh_config_required",
-              "local_executor_disabled",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launchers/{id}/token": {
+      "post": {
+        "operationId": "postLaunchersByIdToken",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherのtokenを作り直す（古いtokenは失効）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "作成した",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LauncherCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launchers/{id}": {
+      "delete": {
+        "operationId": "deleteLaunchersById",
+        "tags": [
+          "sites"
+        ],
+        "summary": "launcherを失効させる",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
               "invalid_request",
               "invalid_reference"
             ],
@@ -25767,25 +28523,100 @@
         }
       }
     },
-    "/api/worker/site-submissions/claim": {
-      "post": {
-        "operationId": "postWorkerSiteSubmissionsClaim",
+    "/api/launcher/config": {
+      "get": {
+        "operationId": "getLauncherConfig",
         "tags": [
-          "worker"
+          "launcher"
         ],
-        "summary": "siteへの投入を受け取る（launcher）",
+        "summary": "担当のsite・作る鍵・待っている接続確認",
         "security": [
           {
-            "sessionCookie": []
-          },
-          {
             "bearerToken": [
-              "worker:execute"
+              "launcher:execute"
             ]
           }
         ],
         "x-mmt-access": {
-          "kind": "worker"
+          "kind": "launcher"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LauncherConfiguration"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "launcher_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launcher/site-submissions/claim": {
+      "post": {
+        "operationId": "postLauncherSiteSubmissionsClaim",
+        "tags": [
+          "launcher"
+        ],
+        "summary": "担当のsiteへの投入を受け取る",
+        "security": [
+          {
+            "bearerToken": [
+              "launcher:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "launcher"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [],
@@ -25796,11 +28627,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "launcherId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
                   "targetIds": {
                     "maxItems": 1000,
                     "type": "array",
@@ -25816,9 +28642,6 @@
                     "maximum": 50
                   }
                 },
-                "required": [
-                  "launcherId"
-                ],
                 "additionalProperties": false
               }
             }
@@ -25881,7 +28704,7 @@
             "x-mmt-error-codes": [
               "password_change_required",
               "invalid_origin",
-              "worker_token_required",
+              "launcher_token_required",
               "job_token_forbidden"
             ],
             "content": {
@@ -25949,25 +28772,22 @@
         }
       }
     },
-    "/api/worker/site-submissions/report": {
+    "/api/launcher/site-submissions/report": {
       "post": {
-        "operationId": "postWorkerSiteSubmissionsReport",
+        "operationId": "postLauncherSiteSubmissionsReport",
         "tags": [
-          "worker"
+          "launcher"
         ],
-        "summary": "job shellの結果を報告（launcher）",
+        "summary": "job shellの結果を報告",
         "security": [
           {
-            "sessionCookie": []
-          },
-          {
             "bearerToken": [
-              "worker:execute"
+              "launcher:execute"
             ]
           }
         ],
         "x-mmt-access": {
-          "kind": "worker"
+          "kind": "launcher"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [],
@@ -25978,11 +28798,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "launcherId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
                   "results": {
                     "minItems": 1,
                     "maxItems": 50,
@@ -26039,7 +28854,6 @@
                   }
                 },
                 "required": [
-                  "launcherId",
                   "results"
                 ],
                 "additionalProperties": false
@@ -26104,7 +28918,7 @@
             "x-mmt-error-codes": [
               "password_change_required",
               "invalid_origin",
-              "worker_token_required",
+              "launcher_token_required",
               "job_token_forbidden"
             ],
             "content": {
@@ -26173,25 +28987,22 @@
         }
       }
     },
-    "/api/worker/site-submissions/cancellations": {
+    "/api/launcher/site-submissions/cancellations": {
       "post": {
-        "operationId": "postWorkerSiteSubmissionsCancellations",
+        "operationId": "postLauncherSiteSubmissionsCancellations",
         "tags": [
-          "worker"
+          "launcher"
         ],
-        "summary": "スケジューラの待ち行列から外すJob（launcher）",
+        "summary": "スケジューラの待ち行列から外すJob",
         "security": [
           {
-            "sessionCookie": []
-          },
-          {
             "bearerToken": [
-              "worker:execute"
+              "launcher:execute"
             ]
           }
         ],
         "x-mmt-access": {
-          "kind": "worker"
+          "kind": "launcher"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [],
@@ -26202,11 +29013,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "launcherId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
                   "targetIds": {
                     "maxItems": 1000,
                     "type": "array",
@@ -26216,9 +29022,6 @@
                     }
                   }
                 },
-                "required": [
-                  "launcherId"
-                ],
                 "additionalProperties": false
               }
             }
@@ -26281,7 +29084,7 @@
             "x-mmt-error-codes": [
               "password_change_required",
               "invalid_origin",
-              "worker_token_required",
+              "launcher_token_required",
               "job_token_forbidden"
             ],
             "content": {
@@ -26349,25 +29152,22 @@
         }
       }
     },
-    "/api/worker/site-submissions/cancellations/report": {
+    "/api/launcher/site-submissions/cancellations/report": {
       "post": {
-        "operationId": "postWorkerSiteSubmissionsCancellationsReport",
+        "operationId": "postLauncherSiteSubmissionsCancellationsReport",
         "tags": [
-          "worker"
+          "launcher"
         ],
-        "summary": "待ち行列から外したことを報告（launcher）",
+        "summary": "待ち行列から外したことを報告",
         "security": [
           {
-            "sessionCookie": []
-          },
-          {
             "bearerToken": [
-              "worker:execute"
+              "launcher:execute"
             ]
           }
         ],
         "x-mmt-access": {
-          "kind": "worker"
+          "kind": "launcher"
         },
         "x-mmt-job-token": "forbidden",
         "parameters": [],
@@ -26378,11 +29178,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "launcherId": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200
-                  },
                   "jobIds": {
                     "minItems": 1,
                     "maxItems": 1000,
@@ -26394,7 +29189,6 @@
                   }
                 },
                 "required": [
-                  "launcherId",
                   "jobIds"
                 ],
                 "additionalProperties": false
@@ -26440,8 +29234,357 @@
             "x-mmt-error-codes": [
               "password_change_required",
               "invalid_origin",
-              "worker_token_required",
+              "launcher_token_required",
               "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launcher/keys/{keyId}": {
+      "put": {
+        "operationId": "putLauncherKeysByKeyId",
+        "tags": [
+          "launcher"
+        ],
+        "summary": "作った鍵の公開鍵を送る（秘密鍵はlauncherから出ない）",
+        "security": [
+          {
+            "bearerToken": [
+              "launcher:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "launcher"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "description": "鍵（SiteKey）のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "publicKey": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 8192
+                  }
+                },
+                "required": [
+                  "publicKey"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SiteKey"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "launcher_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "site_key_revoked",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "大きすぎる",
+            "x-mmt-error-codes": [
+              "body_too_large"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_public_key",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/launcher/connection-checks/{checkId}": {
+      "post": {
+        "operationId": "postLauncherConnectionChecksByCheckId",
+        "tags": [
+          "launcher"
+        ],
+        "summary": "接続確認の結果を報告",
+        "security": [
+          {
+            "bearerToken": [
+              "launcher:execute"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "launcher"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "checkId",
+            "in": "path",
+            "required": true,
+            "description": "接続確認のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "succeeded",
+                      "failed"
+                    ]
+                  },
+                  "message": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "outcome"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "400": {
+            "description": "要求を読めない",
+            "x-mmt-error-codes": [
+              "invalid_json"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "launcher_token_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
             ],
             "content": {
               "application/json": {
@@ -26793,6 +29936,10 @@
               "site_only_setting",
               "incompatible_runtime",
               "image_platform_mismatch",
+              "target_not_available",
+              "site_job_shell_missing",
+              "site_launcher_missing",
+              "site_account_required",
               "site_target_required",
               "dataset_partition_invalid",
               "reserved_tag",
@@ -27047,13 +30194,131 @@
         }
       }
     },
+    "/api/manual-submissions/sites/{targetId}": {
+      "get": {
+        "operationId": "getManualSubmissionsSitesByTargetId",
+        "tags": [
+          "sites"
+        ],
+        "summary": "mado-tracking submitが使う設定・job shell・自分のaccount",
+        "security": [
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "apiToken",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "targetId",
+            "in": "path",
+            "required": true,
+            "description": "ComputeTarget ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualSiteConfiguration"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "api_token_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "site_not_manual",
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/manual-submissions/claim": {
       "post": {
         "operationId": "postManualSubmissionsClaim",
         "tags": [
           "sites"
         ],
-        "summary": "手動投入する自分のJobを受け取る（mado-tracking submit）",
+        "summary": "手動投入するJobを受け取る（mado-tracking submit。allは所有者が全員の分）",
         "security": [
           {
             "bearerToken": [
@@ -27088,6 +30353,10 @@
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 50
+                  },
+                  "all": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27154,6 +30423,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "site_owner_required",
               "password_change_required",
               "invalid_origin",
               "api_token_required",
@@ -29306,6 +32576,10 @@
               "site_only_setting",
               "incompatible_runtime",
               "image_platform_mismatch",
+              "target_not_available",
+              "site_job_shell_missing",
+              "site_launcher_missing",
+              "site_account_required",
               "hook_secret_key_missing",
               "site_target_required",
               "dataset_partition_invalid",
@@ -30527,6 +33801,10 @@
               "site_only_setting",
               "incompatible_runtime",
               "image_platform_mismatch",
+              "target_not_available",
+              "site_job_shell_missing",
+              "site_launcher_missing",
+              "site_account_required",
               "chain_too_deep",
               "site_target_required",
               "reserved_tag",
@@ -44096,7 +47374,8 @@
             "type": "string",
             "enum": [
               "human",
-              "service"
+              "service",
+              "launcher"
             ]
           },
           "lastLoginAt": {
@@ -45839,6 +49118,17 @@
                 "type": "null"
               }
             ]
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -45861,7 +49151,194 @@
           "submissionMode",
           "cpuArch",
           "supportsArray",
-          "queueTimeoutSeconds"
+          "queueTimeoutSeconds",
+          "ownerUserId"
+        ],
+        "additionalProperties": false
+      },
+      "ComputeTargetDetails": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "username": {
+            "type": "string"
+          },
+          "sshKeyPath": {
+            "type": "string"
+          },
+          "knownHostsPath": {
+            "type": "string"
+          },
+          "workDirectory": {
+            "type": "string"
+          },
+          "pythonExecutable": {
+            "type": "string"
+          },
+          "runtimeKinds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "python",
+                "docker",
+                "singularity",
+                "apptainer"
+              ]
+            }
+          },
+          "gpuIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxConcurrentJobs": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "executor": {
+            "type": "string",
+            "enum": [
+              "ssh",
+              "local",
+              "site"
+            ]
+          },
+          "datasetCacheMaxBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "datasetTransfer": {
+            "type": "string",
+            "enum": [
+              "relay",
+              "direct"
+            ]
+          },
+          "submissionMode": {
+            "type": "string",
+            "enum": [
+              "automatic",
+              "manual"
+            ]
+          },
+          "cpuArch": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64"
+            ]
+          },
+          "supportsArray": {
+            "type": "boolean"
+          },
+          "queueTimeoutSeconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "site": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SiteSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "siteAccountMode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shared",
+                  "personal"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "host",
+          "port",
+          "username",
+          "sshKeyPath",
+          "knownHostsPath",
+          "workDirectory",
+          "pythonExecutable",
+          "runtimeKinds",
+          "gpuIds",
+          "maxConcurrentJobs",
+          "enabled",
+          "executor",
+          "datasetCacheMaxBytes",
+          "datasetTransfer",
+          "submissionMode",
+          "cpuArch",
+          "supportsArray",
+          "queueTimeoutSeconds",
+          "ownerUserId",
+          "ownerName",
+          "projectIds",
+          "site",
+          "siteAccountMode"
         ],
         "additionalProperties": false
       },
@@ -47421,6 +50898,17 @@
                 "type": "null"
               }
             ]
+          },
+          "siteJobShellId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -47458,7 +50946,8 @@
           "allowChildJobs",
           "retryOnFailure",
           "retryOnTimeout",
-          "datasetPartitionVersionId"
+          "datasetPartitionVersionId",
+          "siteJobShellId"
         ],
         "additionalProperties": false
       },
@@ -47834,6 +51323,17 @@
               }
             ]
           },
+          "siteJobShellId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runName": {
             "type": "string"
           },
@@ -47904,6 +51404,7 @@
           "retryOnFailure",
           "retryOnTimeout",
           "datasetPartitionVersionId",
+          "siteJobShellId",
           "runName",
           "runKind",
           "taskId",
@@ -48002,6 +51503,212 @@
           }
         ]
       },
+      "Launcher": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSeenAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revokedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tokenPrefix": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "createdBy",
+          "createdAt",
+          "lastSeenAt",
+          "revokedAt",
+          "tokenPrefix"
+        ],
+        "additionalProperties": false
+      },
+      "LauncherConfiguration": {
+        "type": "object",
+        "properties": {
+          "launcher": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "sites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "$ref": "#/components/schemas/ComputeTarget"
+                },
+                "settings": {
+                  "$ref": "#/components/schemas/SiteSettings"
+                },
+                "jobShell": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SiteJobShell"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "target",
+                "settings",
+                "jobShell"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "targetId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "userId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "requested",
+                    "ready"
+                  ]
+                },
+                "publicKey": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "targetId",
+                "userId",
+                "status",
+                "publicKey"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "targetId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "account": {
+                  "$ref": "#/components/schemas/SiteSubmissionAccount"
+                }
+              },
+              "required": [
+                "id",
+                "targetId",
+                "account"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "launcher",
+          "sites",
+          "keys",
+          "checks"
+        ],
+        "additionalProperties": false
+      },
+      "LauncherCreated": {
+        "type": "object",
+        "properties": {
+          "launcher": {
+            "$ref": "#/components/schemas/Launcher"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "launcher",
+          "token"
+        ],
+        "additionalProperties": false
+      },
       "LineageGraph": {
         "type": "object",
         "properties": {
@@ -48097,6 +51804,37 @@
         ],
         "additionalProperties": false
       },
+      "ManualSiteConfiguration": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/ComputeTarget"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/SiteSettings"
+          },
+          "jobShell": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SiteJobShell"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "account": {
+            "$ref": "#/components/schemas/SiteSubmissionAccount"
+          }
+        },
+        "required": [
+          "target",
+          "settings",
+          "jobShell",
+          "account"
+        ],
+        "additionalProperties": false
+      },
       "ManualSubmissionWaiting": {
         "type": "object",
         "properties": {
@@ -48111,12 +51849,25 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "allWaitingJobs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "targetId",
           "targetName",
-          "waitingJobs"
+          "waitingJobs",
+          "allWaitingJobs"
         ],
         "additionalProperties": false
       },
@@ -53121,6 +56872,316 @@
         ],
         "additionalProperties": false
       },
+      "SiteConnectionCheck": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requestedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "succeeded",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "targetId",
+          "userId",
+          "requestedBy",
+          "status",
+          "message",
+          "createdAt",
+          "finishedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SiteJobShell": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "targetId",
+          "version",
+          "sha256",
+          "sizeBytes",
+          "createdBy",
+          "createdByName",
+          "createdAt",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "SiteJobShellSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "createdByName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "targetId",
+          "version",
+          "sha256",
+          "sizeBytes",
+          "createdBy",
+          "createdByName",
+          "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "SiteKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "launcherId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "ready"
+            ]
+          },
+          "publicKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requestedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readyAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "targetId",
+          "userId",
+          "launcherId",
+          "status",
+          "publicKey",
+          "fingerprint",
+          "requestedAt",
+          "readyAt"
+        ],
+        "additionalProperties": false
+      },
+      "SitePersonalSettings": {
+        "type": "object",
+        "properties": {
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "userName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "workDirectory": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "variables": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SiteKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "targetId",
+          "userId",
+          "userName",
+          "accountName",
+          "workDirectory",
+          "variables",
+          "key",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
       "SiteSchedulerCancellation": {
         "type": "object",
         "properties": {
@@ -53134,12 +57195,159 @@
           },
           "schedulerJobId": {
             "type": "string"
+          },
+          "account": {
+            "$ref": "#/components/schemas/SiteSubmissionAccount"
           }
         },
         "required": [
           "jobId",
           "targetId",
-          "schedulerJobId"
+          "schedulerJobId",
+          "account"
+        ],
+        "additionalProperties": false
+      },
+      "SiteSettings": {
+        "type": "object",
+        "properties": {
+          "launcherId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "connection": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": "string"
+                  },
+                  "port": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "jumpHosts": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "knownHosts": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "host",
+                  "port",
+                  "jumpHosts",
+                  "knownHosts"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accountMode": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "personal"
+            ]
+          },
+          "sharedAccount": {
+            "type": "string"
+          },
+          "workDirectory": {
+            "type": "string"
+          },
+          "runnerPython": {
+            "type": "string"
+          },
+          "runnerApiUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancelCommand": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpuAssignment": {
+            "type": "string",
+            "enum": [
+              "scheduler",
+              "lease"
+            ]
+          },
+          "leaseGpuIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "cancelGraceSeconds": {
+            "type": "number"
+          },
+          "maxOutputFiles": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maxActiveSubmissions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "jobShell": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SiteJobShellSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "launcherId",
+          "connection",
+          "accountMode",
+          "sharedAccount",
+          "workDirectory",
+          "runnerPython",
+          "runnerApiUrl",
+          "cancelCommand",
+          "gpuAssignment",
+          "leaseGpuIds",
+          "variables",
+          "cancelGraceSeconds",
+          "maxOutputFiles",
+          "maxActiveSubmissions",
+          "jobShell"
         ],
         "additionalProperties": false
       },
@@ -53189,13 +57397,71 @@
             "items": {
               "$ref": "#/components/schemas/WorkerJob"
             }
+          },
+          "settings": {
+            "$ref": "#/components/schemas/SiteSettings"
+          },
+          "jobShell": {
+            "$ref": "#/components/schemas/SiteJobShell"
+          },
+          "account": {
+            "$ref": "#/components/schemas/SiteSubmissionAccount"
           }
         },
         "required": [
           "target",
           "arrayGroupId",
           "requester",
-          "jobs"
+          "jobs",
+          "settings",
+          "jobShell",
+          "account"
+        ],
+        "additionalProperties": false
+      },
+      "SiteSubmissionAccount": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "personal"
+            ]
+          },
+          "accountName": {
+            "type": "string"
+          },
+          "workDirectory": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "keyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "mode",
+          "accountName",
+          "workDirectory",
+          "variables",
+          "keyId"
         ],
         "additionalProperties": false
       },
@@ -54437,7 +58703,8 @@
             "type": "string",
             "enum": [
               "human",
-              "service"
+              "service",
+              "launcher"
             ]
           }
         },

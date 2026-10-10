@@ -132,7 +132,7 @@ export interface Hook {
   webhookSignature: HookWebhookSignature | null;
   createdBy: string;
   runAsUserId: string;
-  runAsKind?: UserKind;
+  runAsKind?: Exclude<UserKind, 'launcher'>;
   runAsName?: string;
   createdByName?: string;
   createdAt: string;

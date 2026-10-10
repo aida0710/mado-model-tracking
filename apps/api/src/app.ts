@@ -64,6 +64,11 @@ import { JobService } from './services/jobService.js';
 import { JobTokenService } from './services/jobTokenService.js';
 import { WorkerService } from './services/workerService.js';
 import { SiteSubmissionService } from './services/siteSubmissionService.js';
+import { LauncherService } from './services/launcherService.js';
+import { SiteJobShellService } from './services/siteJobShellService.js';
+import { SitePersonalSettingsService } from './services/sitePersonalSettingsService.js';
+import { SiteKeyService } from './services/siteKeyService.js';
+import { SiteConnectionCheckService } from './services/siteConnectionCheckService.js';
 import { RunnerService } from './services/runnerService.js';
 import { JobArrayService } from './services/jobArrayService.js';
 import { SiteJobMonitor } from './services/siteJobMonitor.js';
@@ -137,8 +142,9 @@ import {
   jobArrayRoutes,
   manualSubmissionRoutes,
   runnerRoutes,
-  siteSubmissionRoutes,
 } from './routes/siteExecutionRoutes.js';
+import { siteComputerRoutes } from './routes/siteComputerRoutes.js';
+import { launcherAdminRoutes, launcherRuntimeRoutes } from './routes/launcherRoutes.js';
 import { tokenRoutes } from './routes/tokenRoutes.js';
 import { serviceAccountRoutes } from './routes/serviceAccountRoutes.js';
 import { pluginRoutes } from './routes/pluginRoutes.js';
@@ -330,6 +336,7 @@ export function createApplication(options: ApplicationOptions) {
   const outputDeclarations = new RunOutputDeclarationService(registry);
   const worker = new WorkerService({ database, jobs, config, runCompletion, outputDeclarations });
   const siteSubmissions = new SiteSubmissionService({ database, jobs, runCompletion });
+  const launchers = new LauncherService(database);
   const runner = new RunnerService({ database, jobs, runCompletion, outputDeclarations });
   const siteJobMonitor = new SiteJobMonitor(database, runCompletion);
   const tokens = new TokenService({ database, tokenMaxLifetimeDays: config.tokenMaxLifetimeDays });
@@ -514,8 +521,18 @@ export function createApplication(options: ApplicationOptions) {
   app.route('/api/projects', savedViewRoutes(savedViews));
   app.route('/api/projects', operationsRoutes(operationsAlerts));
   app.route('/api/targets', targetRoutes(targets));
+  app.route(
+    '/api/targets',
+    siteComputerRoutes({
+      jobShells: new SiteJobShellService(database),
+      personalSettings: new SitePersonalSettingsService(database),
+      keys: new SiteKeyService(database),
+      connectionChecks: new SiteConnectionCheckService(database),
+    }),
+  );
+  app.route('/api/launchers', launcherAdminRoutes(launchers));
+  app.route('/api/launcher', launcherRuntimeRoutes({ launchers, submissions: siteSubmissions }));
   app.route('/api/worker', workerRoutes(worker));
-  app.route('/api/worker', siteSubmissionRoutes(siteSubmissions));
   app.route('/api', manualSubmissionRoutes(siteSubmissions));
   app.route('/api', targetCheckRoutes(targetChecks));
   app.route('/api', workerPresenceRoutes(worker));

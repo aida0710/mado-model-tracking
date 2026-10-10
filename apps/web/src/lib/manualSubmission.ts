@@ -11,11 +11,26 @@ export const isWaitingManualSubmission = (job: Pick<Job, 'status' | 'phase'>): b
   job.status === 'queued' && job.phase === 'waiting_manual';
 
 /**
- * The command the requester runs on the site's login node; it claims their waiting Jobs of the
- * site and submits them through the site's job shell (one call per array).
+ * How `mado-tracking submit` runs: `watch` keeps waiting for new Jobs until it is stopped (a PC
+ * that is the computer itself), and `all` takes everyone's waiting Jobs, which only the
+ * computer's owner may do.
  */
-export const manualSubmitCommand = (targetId: string): string =>
-  `mado-tracking submit --site ${targetId}`;
+export interface ManualSubmitOptions {
+  watch?: boolean;
+  all?: boolean;
+}
+
+/**
+ * The command the requester runs on the site (its login node, or the PC itself); it claims their
+ * waiting Jobs of the site and submits them through the site's job shell (one call per array).
+ */
+export function manualSubmitCommand(targetId: string, options: ManualSubmitOptions = {}): string {
+  return [
+    `mado-tracking submit --site ${targetId}`,
+    ...(options.watch ? ['--watch'] : []),
+    ...(options.all ? ['--all'] : []),
+  ].join(' ');
+}
 
 /** Waiting Jobs per manual site, in the order the sites first appear in the list. */
 export function manualSubmissionGroups(

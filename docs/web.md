@@ -18,6 +18,7 @@
 | workbench | コード編集、ファイルツリー、Task、実行スナップショット |
 | admin | 設定のセクション、plugin検索、容量メトリクス |
 | uploads | Artifactのアップロードダイアログ、ドロップ領域、進み具合、途中のアップロード |
+| siteComputers | Compute画面の計算機の詳細（job shellの版、鍵と接続確認、自分の設定、利用者の設定、手動投入の案内）とjob shellの編集欄。最後に読み込む |
 
 - 新しいCSSは、そのclassが属する領域のファイルへ足します。`styles.css`のような何でも入るファイルを作り直しません。
 - 画面幅による上書き（`@media`）は、対象の領域ファイルの末尾にまとめます。切り替え点は下の「画面幅への対応」の3つだけを使います。
@@ -34,7 +35,7 @@
 
 ## 権限判定
 
-画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canManageHooks`、`canTransferHookOwners`、`canCreateProject`、`canChangeOwnPassword`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
+画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canManageHooks`、`canTransferHookOwners`、`canCreateProject`、`canChangeOwnPassword`、計算機の`canAddTarget`・`canAddGlobalTarget`・`isTargetOwner`・`canManageTarget`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
 
 ## 画面の枠
 

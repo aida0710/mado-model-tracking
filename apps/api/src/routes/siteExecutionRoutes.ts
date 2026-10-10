@@ -9,10 +9,6 @@ import {
   runnerMetricsSchema,
   runnerOutputsSchema,
   runnerStartSchema,
-  siteCancellationQuerySchema,
-  siteCancellationReportSchema,
-  siteSubmissionClaimSchema,
-  siteSubmissionReportSchema,
 } from '../domain/siteExecutionValidation.js';
 import { jsonBody, principal, uuidParam, type ApiContext, type ApiEnvironment } from '../http/request.js';
 import type { JobArrayService } from '../services/jobArrayService.js';
@@ -44,48 +40,16 @@ export function jobArrayRoutes(arrays: JobArrayService): Hono<ApiEnvironment> {
   return routes;
 }
 
-// Mounted at /api/worker: launchers authenticate with their Project's worker token.
-export function siteSubmissionRoutes(submissions: SiteSubmissionService): Hono<ApiEnvironment> {
-  const routes = new Hono<ApiEnvironment>();
-  routes.post('/site-submissions/claim', async (context) =>
-    context.json({
-      items: await submissions.claim(
-        principal(context),
-        await jsonBody(context, siteSubmissionClaimSchema),
-      ),
-    }),
-  );
-  routes.post('/site-submissions/report', async (context) =>
-    context.json({
-      items: await submissions.report(
-        principal(context),
-        await jsonBody(context, siteSubmissionReportSchema),
-      ),
-    }),
-  );
-  routes.post('/site-submissions/cancellations', async (context) =>
-    context.json({
-      items: await submissions.cancellations(
-        principal(context),
-        await jsonBody(context, siteCancellationQuerySchema),
-      ),
-    }),
-  );
-  routes.post('/site-submissions/cancellations/report', async (context) => {
-    await submissions.reportCancellations(
-      principal(context),
-      await jsonBody(context, siteCancellationReportSchema),
-    );
-    return context.body(null, 204);
-  });
-  return routes;
-}
-
 // Mounted at /api: `mado-tracking submit` with the requester's own API token.
 export function manualSubmissionRoutes(submissions: SiteSubmissionService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/manual-submissions', async (context) =>
     context.json({ items: await submissions.listManual(principal(context)) }),
+  );
+  routes.get('/manual-submissions/sites/:targetId', async (context) =>
+    context.json(
+      await submissions.manualConfiguration(principal(context), uuidParam(context, 'targetId')),
+    ),
   );
   routes.post('/manual-submissions/claim', async (context) =>
     context.json({

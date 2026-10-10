@@ -321,6 +321,28 @@ MMT_VERIFY_OUTPUT=artifacts/verification/<日付>/storage-web \
 node apps/web/tests/browser-admin-storage.mjs
 ```
 
+## Webで足す計算機（site）をブラウザで確認する
+
+`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）でCompute画面と全体管理の「launcher」を開きます。確認する項目は次のとおりです。
+
+- launcherの登録（tokenを一度だけ表示）、tokenの作り直し、失効
+- 全体管理者が雛形（Slurm）から計算機を足すときの送信内容
+- 共用アカウントの公開鍵、接続確認、鍵の作り直し
+- job shellの版（同じ内容なら新しい版を作らない、新しい版、過去の版の表示）
+- 研究者が自分のPC（手動投入）を足してProjectへ共有すること、所有者だけに出る`--watch --all`の案内、共有の解除
+- 本人アカウントの計算機での、自分のアカウント名と公開鍵
+- Jobのjob shellの版、`?projectId=`の一覧、390px幅で横にスクロールしないこと
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47129 npx vite --port 47120 --strictPort --host 127.0.0.1) &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_WEB_URL=http://127.0.0.1:47120 \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/site-computers-web \
+node apps/web/tests/browser-site-computers.mjs
+```
+
+2026-10-10に通過しました（mockのAPIです。実際のlauncherが鍵を作る流れはAPIとPythonのテストで確かめます）。
+
 ## 探索結果の分析（平行座標・パラメータ重要度・散布図）をブラウザで確認する
 
 `apps/web/tests/browser-analysis.mjs`は、`/tests/fixtures/analysis-harness.html`（RunAnalysisPanelを単独でmountするページ）をmockのAPIで開きます。確認する項目は次のとおりです。

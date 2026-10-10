@@ -26,7 +26,7 @@ export interface ModelAutomationRule {
   // Project admin moves the rule to a Service Account (PUT .../automation-rules/:id/owner).
   runAsUserId: string;
   // Who runAsUserId is, for display; API responses include them, internal reads may not.
-  runAsKind?: UserKind;
+  runAsKind?: Exclude<UserKind, 'launcher'>;
   runAsName?: string;
   // Display name of createdBy, included in API responses like runAsName.
   createdByName?: string;

@@ -1,10 +1,9 @@
 import { Plus, RefreshCw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { useModelAutomation } from '../hooks/useModelAutomation';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
-import { useQuery } from '../hooks/useQuery';
-import { executionApi } from '../api/execution';
 import { canManageAutomationRules } from '../lib/automationPermissions';
 import { AutomationRuleDialog } from '../dialogs/AutomationRuleDialog';
 import { AutomationRulesTable } from './AutomationRulesTable';
@@ -26,7 +25,7 @@ export function ModelAutomationPanel({
   const canManage = canManageAutomationRules(project.role, user.isAdmin);
   const automation = useModelAutomation(project.id, view === 'history');
   const registry = useExecutionCatalog(project.id);
-  const targets = useQuery('automation-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   const rules = automation.rules.value ?? [];
   const catalog =
     registry.value && targets.value

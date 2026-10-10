@@ -37,6 +37,7 @@ export * from './runs.js';
 export * from './savedViews.js';
 export * from './schemaRegistry.js';
 export * from './serviceAccounts.js';
+export * from './siteComputers.js';
 export * from './siteExecution.js';
 export * from './storageBackends.js';
 export * from './sweeps.js';

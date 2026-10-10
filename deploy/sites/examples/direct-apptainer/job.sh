@@ -1,19 +1,19 @@
 #!/bin/sh
-# Job shell for a GPU host reached over SSH that runs containers with Apptainer (or
-# SingularityCE) and has no scheduler (README.md). The runner leases free GPUs itself
-# (gpu_assignment = "lease") and reports to tracking; this script only starts it detached from
-# the SSH session and returns.
+# Job shell for a GPU host without a scheduler that runs containers with Apptainer (or
+# SingularityCE) (deploy/sites/examples/direct-apptainer/README.md). The runner leases free GPUs
+# itself (the site's GPU assignment "lease") and reports to tracking; this script only starts it
+# detached from the SSH session and returns.
 #
-# The launcher runs this file on the host with the request in MMT_* environment variables
-# (../../README.md). Request values never become script text: the runner script written below is
-# a constant that reads them from its environment.
+# The launcher, or `mado-tracking submit` on the host itself, runs this file with the request in
+# MMT_* environment variables (deploy/sites/README.md). Request values never become script text:
+# the runner script written below is a constant that reads them from its environment.
 # Standard output stays empty: a direct host has no scheduler job ID. Messages go to stderr.
 set -eu
 umask 077
 
 # ---- Site settings ------------------------------------------------------------------------
 # Scratch space of apptainer pull, which writes a whole SIF there before the runner caches it
-# under work_dir. The runner passes TMPDIR on to Apptainer; /tmp is often too small.
+# under the work directory. The runner passes TMPDIR on to Apptainer; /tmp is often too small.
 TMPDIR=/data/mmt/tmp
 # After the time limit's SIGTERM, the runner is killed if it is still running this long later.
 STOP_GRACE_SECONDS=60

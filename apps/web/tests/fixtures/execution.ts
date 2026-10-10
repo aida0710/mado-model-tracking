@@ -1,4 +1,4 @@
-import type { Artifact, CodeVersion, ComputeTarget, Job } from '@mmt/contracts';
+import type { Artifact, CodeVersion, ComputeTarget, ComputeTargetDetails, Job } from '@mmt/contracts';
 import type { ExecutionCatalog } from '../../src/types/executionCatalog';
 
 const createdAt = '2026-10-08T00:00:00Z';
@@ -37,6 +37,15 @@ export const computeTarget: ComputeTarget = {
   cpuArch: 'amd64',
   supportsArray: false,
   queueTimeoutSeconds: null,
+  ownerUserId: null,
+};
+// The ssh target as GET /targets lists it: global, so it has no owner and serves every Project.
+export const computeTargetDetails: ComputeTargetDetails = {
+  ...computeTarget,
+  ownerName: null,
+  projectIds: [],
+  site: null,
+  siteAccountMode: null,
 };
 // A site as the API stores it: connection settings empty, containers only.
 export const siteTarget: ComputeTarget = {
@@ -95,6 +104,7 @@ export const queuedJob: Job = {
   retryOnFailure: false,
   retryOnTimeout: false,
   datasetPartitionVersionId: null,
+  siteJobShellId: null,
 };
 export const sifArtifact: Artifact = {
   id: 'artifact',

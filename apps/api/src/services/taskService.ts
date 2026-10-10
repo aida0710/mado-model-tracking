@@ -91,7 +91,7 @@ export class TaskService {
         scope: 'registry:write',
       });
       await lockActiveExperiment(connection, { projectId, id: input.experimentId });
-      await this.validateDefaults(connection, { projectId, input });
+      await this.validateDefaults(connection, { projectId, input, userId: principal.user.id });
       return insertTask(connection, { projectId, input });
     });
   }
@@ -117,7 +117,11 @@ export class TaskService {
         outputModel:
           changes.outputModel === undefined ? (task.outputModel ?? null) : changes.outputModel,
       };
-      await this.validateDefaults(connection, { projectId, input: updated });
+      await this.validateDefaults(connection, {
+        projectId,
+        input: updated,
+        userId: principal.user.id,
+      });
       return updateTask(connection, updated);
     });
   }
@@ -260,9 +264,10 @@ export class TaskService {
       );
   }
 
+  // userId: who saves the Task; launching it later checks the person who launches.
   private async validateDefaults(
     connection: Connection,
-    registration: { projectId: string; input: TaskDefaults },
+    registration: { projectId: string; input: TaskDefaults; userId: string },
   ): Promise<void> {
     const { projectId, input } = registration;
     const code = await findCodeVersion(connection, { projectId, id: input.codeVersionId });
@@ -290,6 +295,7 @@ export class TaskService {
         gpuIds: input.gpuIds,
         gpuCount: input.gpuCount,
         runtime: code.runtime,
+        usage: { projectId, userId: registration.userId },
       });
   }
 

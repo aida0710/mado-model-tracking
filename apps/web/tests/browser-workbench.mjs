@@ -269,7 +269,7 @@ try {
 
   console.log('Workbench: Compute edit/toggle with failure, plugin preset/edit/toggle/manifest');
   await page.goto(projectBase + '/compute');
-  await page.getByRole('button', { name: 'Compute targetを編集', exact: true }).click();
+  await page.getByRole('button', { name: '計算機を編集', exact: true }).click();
   assert.equal(await dialog().getByLabel('GPU ID（1行に1件）').inputValue(), '0\n1');
   await fill('名前', 'Edited Compute');
   controls.failTarget = true;

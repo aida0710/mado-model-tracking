@@ -35,6 +35,7 @@ import { findJob, jobColumns } from '../repositories/jobRepository.js';
 import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
 import { requireProject } from './accessService.js';
 import { JobTokenService } from './jobTokenService.js';
+import { assertTargetReadyForJobs } from './siteReadiness.js';
 import { NO_IMAGE_PLATFORM_CHECK, type ImagePlatformChecker } from './imagePlatformChecker.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunService } from './runService.js';
@@ -177,6 +178,7 @@ export class JobService {
       retryOnFailure: input.retryOnFailure,
       retryOnTimeout: input.retryOnTimeout,
       runtime: code.runtime,
+      usage: { projectId: run.projectId, userId: run.createdBy },
     });
     // ssh and local Jobs name their GPUs; a site Job asks only for a number.
     const gpuCount = target.executor === 'site' ? (input.gpuCount ?? 0) : input.gpuIds.length;
@@ -211,6 +213,10 @@ export class JobService {
     ))!;
   }
 
+  /**
+   * `usage` is whose Jobs will run there: the Run's creator (a rule's, hook's or Sweep's owner),
+   * who must be allowed to use the computer in the Project.
+   */
   async validateTarget(
     connection: Connection,
     execution: {
@@ -220,6 +226,7 @@ export class JobService {
       gpuCount?: number;
       retryOnFailure?: boolean;
       retryOnTimeout?: boolean;
+      usage: { projectId: string; userId: string };
     },
   ): Promise<ComputeTarget> {
     const target = await first<ComputeTarget>(
@@ -240,6 +247,7 @@ export class JobService {
     });
     // An image for another CPU would fail only on the compute node, after the queue wait.
     await this.imagePlatforms.assertRunsOn(execution.runtime, target);
+    await assertTargetReadyForJobs(connection, { target, ...execution.usage });
     return target;
   }
 

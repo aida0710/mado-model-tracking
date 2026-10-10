@@ -1,0 +1,80 @@
+/* Computers added on the Web: a site's details below the Compute list and its job shell editor. */
+.site-computer-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.site-computer-section:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.site-computer-section h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+.site-computer-section h4 {
+  margin: 16px 0 8px;
+  font-size: 13px;
+}
+.site-computer-section > .section-heading h3 {
+  margin: 0;
+}
+/* Buttons under a block (save, rotate, check) keep the distance of a field. */
+.site-computer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.site-login-key,
+.site-connection-checks,
+.site-personal-key {
+  margin-top: 12px;
+}
+/* The `mado-tracking submit` commands of a manual site, each under what it does. */
+.site-command-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.site-command-list li + li {
+  margin-top: 12px;
+}
+.site-command-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* A job shell is a script: whole lines, monospaced, scrolled inside its own box. */
+.job-shell-content {
+  max-height: 480px;
+  margin: 0 0 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre;
+}
+.job-shell-editor {
+  min-height: 320px;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+.job-shell-version > .badge-group {
+  margin: 0 0 8px;
+}
+.job-shell-history {
+  margin-top: 16px;
+}
+/* NAME=VALUE lines of a person's variables, one per line in the cell. */
+.site-variables-cell {
+  white-space: pre-line;
+}
+@media (width < 640px) {
+  .job-shell-content,
+  .job-shell-editor {
+    font-size: 11px;
+  }
+  .job-shell-content {
+    max-height: 360px;
+  }
+}

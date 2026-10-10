@@ -1,11 +1,11 @@
-# Site launcher as a container: claims site Jobs for its Projects and runs each site's job shell
-# over SSH (deploy/sites/README.md). It keeps no connection to the Jobs; the runner on the
-# compute node reports back by itself.
+# Site launcher as a container: claims the site Jobs of the computers assigned to it on the Web
+# and runs each site's job shell over SSH (deploy/sites/README.md). It keeps no connection to the
+# Jobs; the runner on the compute node reports back by itself. OpenSSH makes its keys too.
 FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-# Match the host owner of the mounted keys and token files: they must be mode 600, and ssh
-# refuses a key owned by another uid.
+# Match the host owner of the mounted token files: they must be mode 600 and readable by the
+# launcher's user.
 ARG LAUNCHER_UID=10002
 ARG LAUNCHER_GID=10002
 RUN groupadd --gid "${LAUNCHER_GID}" launcher \
@@ -15,9 +15,9 @@ COPY python /opt/mado-tracking/python
 RUN python -m venv /opt/mado-tracking-launcher/venv \
   && /opt/mado-tracking-launcher/venv/bin/pip install --no-cache-dir /opt/mado-tracking/python \
   && rm -rf /opt/mado-tracking/python
-# launcher.toml names each Project's API and token file, and the sites; it, the job shells, the
-# token files and the ssh keys are mounted read-only at run time, never baked into the image.
-# Its state_directory is /var/lib/mado-tracking-launcher, the one directory the launcher writes.
+# launcher.toml names the API, the token file and the state directory; it and the token file are
+# mounted read-only at run time, never baked into the image. Its state_directory is
+# /var/lib/mado-tracking-launcher, the one directory the launcher writes (keys included).
 ENV PATH=/opt/mado-tracking-launcher/venv/bin:$PATH \
   MMT_LAUNCHER_CONFIG=/etc/mado-tracking-launcher/launcher.toml
 USER launcher

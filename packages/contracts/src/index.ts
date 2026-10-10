@@ -222,6 +222,70 @@ export {
   SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS,
 } from './siteExecution.js';
 export type {
+  ComputeTargetDetails,
+  ComputeTargetSharing,
+  ComputeTargetSiteFields,
+  Launcher,
+  LauncherConfiguration,
+  LauncherConnectionCheck,
+  LauncherConnectionCheckResult,
+  LauncherCreate,
+  LauncherCreated,
+  LauncherKey,
+  LauncherKeyPublish,
+  LauncherSite,
+  ManualSiteConfiguration,
+  SiteAccountMode,
+  SiteConnection,
+  SiteConnectionCheck,
+  SiteConnectionCheckRequest,
+  SiteConnectionCheckStatus,
+  SiteGpuAssignment,
+  SiteJobShell,
+  SiteJobShellCreate,
+  SiteJobShellSummary,
+  SiteKey,
+  SiteKeyRotate,
+  SiteKeyStatus,
+  SitePersonalSettings,
+  SitePersonalSettingsInput,
+  SitePersonalSettingsLookup,
+  SiteSettings,
+  SiteSettingsInput,
+  SiteSubmissionAccount,
+} from './siteComputers.js';
+export {
+  DEFAULT_SITE_CANCEL_GRACE_SECONDS,
+  DEFAULT_SITE_MAX_ACTIVE_SUBMISSIONS,
+  DEFAULT_SITE_MAX_OUTPUT_FILES,
+  DEFAULT_SITE_RUNNER_PYTHON,
+  DEFAULT_SITE_SSH_PORT,
+  MAX_JOB_SHELL_BYTES,
+  MAX_KNOWN_HOSTS_BYTES,
+  MAX_SITE_ACCOUNT_NAME_LENGTH,
+  MAX_SITE_CANCEL_COMMAND_LENGTH,
+  MAX_SITE_CANCEL_GRACE_SECONDS,
+  MAX_SITE_HOST_LENGTH,
+  MAX_SITE_JUMP_HOST_LENGTH,
+  MAX_SITE_JUMP_HOSTS,
+  MAX_SITE_MAX_OUTPUT_FILES,
+  MAX_SITE_PATH_LENGTH,
+  MAX_SITE_VARIABLE_NAME_LENGTH,
+  MAX_SITE_VARIABLE_VALUE_LENGTH,
+  MAX_SITE_VARIABLES,
+  SITE_ACCOUNT_MODES,
+  SITE_ACCOUNT_NAME_PATTERN,
+  SITE_CONNECTION_CHECK_STATUSES,
+  SITE_CONNECTION_CHECK_TIMEOUT_SECONDS,
+  SITE_GPU_ASSIGNMENTS,
+  SITE_HOST_PATTERN,
+  SITE_JUMP_HOST_PATTERN,
+  SITE_KEY_STATUSES,
+  SITE_PATH_PATTERN,
+  SITE_RUNNER_PYTHON_PATTERN,
+  SITE_VARIABLE_NAME_PATTERN,
+} from './siteComputers.js';
+export type {
   ChildJobCreate,
   ChildJobCreated,
   ChildJobWait,
@@ -282,6 +346,7 @@ export interface User {
   status: 'active' | 'disabled';
   authSources: AuthSource[];
   // 'service' is a Service Account: it has no login method and acts only through its tokens.
+  // 'launcher' is a launcher's user, which owns only the launcher's token.
   kind: UserKind;
 }
 export interface Project {
@@ -507,6 +572,8 @@ export interface ComputeTarget {
   supportsArray: boolean;
   /** Sites: a Job still in the scheduler queue after this many seconds fails as queue_timeout. */
   queueTimeoutSeconds: number | null;
+  /** null: managed by global administrators; otherwise the researcher who added the site. */
+  ownerUserId: string | null;
 }
 export interface Job {
   id: string;
@@ -550,6 +617,8 @@ export interface Job {
   retryOnFailure: boolean;
   retryOnTimeout: boolean;
   datasetPartitionVersionId: string | null;
+  /** Site Jobs: the job shell version they were submitted with, once claimed. */
+  siteJobShellId: string | null;
 }
 /**
  * A row of GET /projects/:p/jobs: the Job with the names of its Run and Task, so the list reads
