@@ -27,7 +27,7 @@ import '@mado/design-tokens/shell.css';
 ダークテーマは`<html data-theme="dark">`のときに有効になります。
 
 - Mado Model Tracking: npm workspaceのパッケージとして`apps/web`が依存し、`main.tsx`で上の順に読み込みます。
-- Mado: `npm pack`で作ったtarballを`front/vendor/`に置き、`file:`で依存します（置き場所が決まるまでの暫定）。Tailwind v4のユーティリティclassで部品の余白などを上書きできるように、`base.css`は`@layer base`、`components.css`と`shell.css`は`@layer components`に入れて読み込みます（`@import "@mado/design-tokens/components.css" layer(components);`）。
+- Mado: `npm pack`で作ったtarballを`front/vendor/`に置き、`file:`で依存します（置き場所が決まるまでの暫定）。`base.css`・`components.css`・`shell.css`は、3つとも`@layer components`に入れて読み込みます（`@import "@mado/design-tokens/base.css" layer(components);`）。Tailwind v4のpreflight（`@layer base`）より強く、ユーティリティclassより弱くなり、共通のCSSどうしの優先順位はlayerを使わないMado Model Trackingと同じになります（要素の指定より`.numeric`などのclassが勝つ）。
 
 ### 画面の枠のclassと属性
 

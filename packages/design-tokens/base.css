@@ -61,6 +61,15 @@ textarea {
   padding: 9px 10px;
   min-width: 0;
 }
+/* The colours above replace the browser's own look for fields that cannot be changed, so those
+   fields show the surface colour and muted text instead. Kept at class strength so that a
+   component's own field style still wins. */
+:where(input:not([type='checkbox'], [type='radio']), select, textarea):disabled {
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
 input[type='checkbox'],
 input[type='radio'] {
   accent-color: var(--accent-strong);
