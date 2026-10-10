@@ -4,6 +4,7 @@ import {
   canChangeOwnPassword,
   canControlSweep,
   canManageHooks,
+  canTransferHookOwners,
   canCreateProject,
   canEditProject,
   canManageAutomationRules,
@@ -80,5 +81,14 @@ describe('フックの権限判定', () => {
     ['admin', true],
   ] as const)('%sのフックの作成・有効と無効の切り替え・手動の起動は%sになる', (role, expected) => {
     expect(canManageHooks(role)).toBe(expected);
+  });
+
+  it.each([
+    ['viewer', false, false],
+    ['editor', false, false],
+    ['admin', false, true],
+    ['viewer', true, true],
+  ] as const)('%s（全体管理者=%s）のフックの所有者の移管は%sになる', (role, globalAdmin, expected) => {
+    expect(canTransferHookOwners(role, globalAdmin)).toBe(expected);
   });
 });

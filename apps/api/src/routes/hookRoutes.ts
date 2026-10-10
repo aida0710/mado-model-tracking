@@ -4,9 +4,11 @@ import {
   childJobWaitQuerySchema,
   hookCreateSchema,
   hookExecutionQuerySchema,
+  hookOwnerSchema,
   hookToggleSchema,
   hookTriggerRequestSchema,
 } from '../domain/hookValidation.js';
+import { requestMetadata } from '../http/requestMetadata.js';
 import {
   jsonBody,
   parse,
@@ -38,6 +40,15 @@ export function hookRoutes(hooks: HookService): Hono<ApiEnvironment> {
       await hooks.toggle(principal(context), uuidParam(context, 'p'), {
         hookId: uuidParam(context, 'id'),
         ...(await jsonBody(context, hookToggleSchema)),
+      }),
+    ),
+  );
+  routes.put('/:p/hooks/:id/owner', async (context) =>
+    context.json(
+      await hooks.transferOwner(principal(context), uuidParam(context, 'p'), {
+        hookId: uuidParam(context, 'id'),
+        input: await jsonBody(context, hookOwnerSchema),
+        metadata: requestMetadata(context),
       }),
     ),
   );

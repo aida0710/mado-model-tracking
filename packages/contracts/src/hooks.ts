@@ -162,6 +162,14 @@ export interface HookToggle {
   enabled: boolean;
 }
 
+/**
+ * PUT /projects/:p/hooks/:id/owner (Project admins): the hook runs as this Service Account from
+ * now on, so it keeps starting after its creator leaves. It must be an active editor or admin.
+ */
+export interface HookOwnerTransfer {
+  serviceAccountId: string;
+}
+
 /** POST /projects/:p/hooks/:id/trigger (trigger 'manual'); a resend with the key finds the start. */
 export interface HookTriggerRequest {
   payload?: JsonObject;

@@ -161,7 +161,8 @@ group同期はブラウザのloginかsessionの再確認でしか起きません
 
 - SDKだけを使う研究者のtokenは、ブラウザで7日間ログインしないと止まります。**ブラウザで一度ログインすれば、同じtokenがそのまま使えるようになります。**
 - 長期に動くworker・自動実行・CIは、人のtokenではなくService Account（上の「workerホストへworkerを導入する」の1.）のtokenを使います。Service Accountはこの期限の対象外です。
-- 自動実行のrule・自動昇格のpolicyの所有者（実行するUser）も、Projectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService AccountでRoleがadmin）。APIではruleが`PUT /api/projects/:p/automation-rules/:id/owner`、policyが`PUT /api/projects/:p/promotion-policies/:id/owner`で、bodyはどちらも`{serviceAccountId}`。移管先が条件に合わなければ422（ruleは`invalid_automation_owner`、policyは`promotion_owner_invalid`）です。人が所有したままだと、その人が7日ログインしないと自動実行が401で止まります。
+- 自動実行のrule・自動昇格のpolicy・フックの所有者（実行するUser）には、この期限を掛けません。どれもサーバーの中で所有者の権限を確かめて動き、Jobに渡すJob tokenも期限を見ません。所有者がProjectの権限を失う（Projectから外れる・無効化される）と止まるので、長く使うものはProjectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService Accountで、ruleとpolicyはRoleがadmin、フックはeditorかadmin）。APIではruleが`PUT /api/projects/:p/automation-rules/:id/owner`、policyが`PUT /api/projects/:p/promotion-policies/:id/owner`、フックが`PUT /api/projects/:p/hooks/:id/owner`で、bodyはどれも`{serviceAccountId}`。移管先が条件に合わなければ422（ruleは`invalid_automation_owner`、policyは`promotion_owner_invalid`、フックは`invalid_hook_owner`）です。
+- 期限が無い代わりに、Authentikでgroupから外した人が所有するrule・policy・フックは、次にgroupが同期される（その人のログインか、使用中のsessionの再確認）までgroup由来の権限で動き続けます。すぐ止めるときは、全体管理者がユーザーを無効化する（上の「ユーザーを止める・戻す」）か、所有者をService Accountへ移します。
 - emailで自動連携したLocal UserもSSO identityを持つので対象です。ローカルアカウントでログインしてもgroupは同期されないため、SSOで一度ログインします。
 - `AUTH_MODE=local`へ切り替えた後も、SSO identityを持つUserのtokenは期限で止まります。
 

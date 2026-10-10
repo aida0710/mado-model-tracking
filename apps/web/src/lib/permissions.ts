@@ -73,3 +73,11 @@ export function canControlSweep(role: ProjectRole, userId: string, sweep: { crea
 export function canManageHooks(role: ProjectRole): boolean {
   return canEditProject(role);
 }
+
+/**
+ * Moving a hook to a Service Account changes whose authority it runs with, so it follows the
+ * automation rule rule: a Project admin or a global administrator (hookService.transferOwner).
+ */
+export function canTransferHookOwners(role: ProjectRole, globalAdmin: boolean): boolean {
+  return globalAdmin || canManageProject(role);
+}

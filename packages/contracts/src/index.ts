@@ -237,6 +237,7 @@ export type {
   HookFilter,
   HookJobTemplate,
   HookJobTemplateInput,
+  HookOwnerTransfer,
   HookSkipReason,
   HookToggle,
   HookTrigger,

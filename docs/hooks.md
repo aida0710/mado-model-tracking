@@ -6,7 +6,7 @@ APIの詳細は[api-contract.md](api-contract.md)の「フックとドライバ�
 
 ## フックを作る
 
-フックはProjectのeditorが作り、作った人として動きます。作った人がProjectのeditorでなくなると、起動は`skipped`（`owner_access_revoked`）になります。設定は作成後に変えられません（有効・無効だけを切り替えられます）。変えたいときは新しいフックを作り、古いものを無効にします。
+フックはProjectのeditorが作り、所有者（作成時は作った人）として動きます。所有者がProjectのeditorでなくなると、起動は`skipped`（`owner_access_revoked`）になります。設定は作成後に変えられません（有効・無効と所有者だけを変えられます）。変えたいときは新しいフックを作り、古いものを無効にします。
 
 ```bash
 curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
@@ -41,6 +41,12 @@ curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
 
 `filter`の`modelFamilies`・`experimentIds`・`runKinds`・`runStatuses`・`tags`は、全部に合う出来事だけで起動します。合わない出来事は記録も残しません。`manual`と`webhook`には条件を付けられず、`model_registered`と`checkpoint_saved`には`runStatuses`を付けられません（その時点で学習Runは終わっていないため）。`template.arraySize`を指定するとarrayを起動します（siteだけ）。
 
+### 所有者をService Accountへ移す
+
+作った人がProjectを離れると、その人のフックは止まります。長く使うフックは、Project adminがService Accountへ移します（フックの詳細の「Service Accountへ移す」か`PUT /projects/:p/hooks/:id/owner`、SDKの`transfer_hook_owner`）。移管先は同じProjectの有効なService Accountで、roleがeditorかadminのものです。以後の起動はそのService Accountの権限で動き、作るRunの作成者もそのService Accountになります。作った人の記録（`createdBy`）は残ります。
+
+SSOのgroup同期の期限（[operations.md](operations.md)の「SSOユーザーのAPI tokenの同期期限」）は、フックの所有者に掛けません。所有者がしばらくログインしなくてもフックは動き続け、フックのJobのJob tokenも使えます。止まるのは、所有者がProjectのeditorでなくなったときです。Authentikでgroupから外しても、次にgroupが同期される（その人のログインか、使用中のsessionの再確認）まではgroup由来のProject権限が残るので、すぐ止めたいときは全体管理者がユーザーを無効化するか、フックを無効にします。
+
 ## 起動の記録
 
 起動ごとに記録（HookExecution）が残ります。`GET /projects/:p/hook-executions?hookId=<id>`で新しい順に読めます。
@@ -60,7 +66,7 @@ curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
 - `already_running`: `concurrency: "skip_if_running"`（または`checkpointMode: "skip_if_running"`）で、このフックのJobがまだ終わっていません。
 - `superseded`: `checkpointMode: "latest"`で、より新しいcheckpointが来ました。
 - `source_run_unsuccessful`・`source_run_timeout`: 学習中に登録された版で、学習Runが成功しなかった、または7日待っても終わりませんでした。
-- `owner_access_revoked`・`hook_disabled`: 作った人の権限が無くなった、待っている間にフックが無効にされた。
+- `owner_access_revoked`・`hook_disabled`: 所有者の権限が無くなった、待っている間にフックが無効にされた。
 
 同じ出来事では1回だけ起動します。webhookの再送、終わったRunの再開と再終了でも、Jobは増えません。
 

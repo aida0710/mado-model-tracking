@@ -60,6 +60,20 @@ describe('フックのAPI呼び出し', () => {
     expect(sentBody(fetch)).toEqual({ enabled: false });
   });
 
+  it('所有者の移管は移管先のService AccountだけをPUTし、移管先の拒否をサーバーの理由つきで返す', async () => {
+    const fetch = stubJsonResponse({ id: 'hook', runAsUserId: 'bot', runAsKind: 'service' });
+    await expect(
+      hooksApi.transferOwner('project', 'hook/1', { serviceAccountId: 'bot' }),
+    ).resolves.toMatchObject({ runAsUserId: 'bot' });
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/projects/project/hooks/hook%2F1/owner');
+    expect(fetch.mock.calls[0]?.[1].method).toBe('PUT');
+    expect(sentBody(fetch)).toEqual({ serviceAccountId: 'bot' });
+    stubJsonResponse({ error: '移管先は有効なService Accountにしてください', code: 'invalid_hook_owner' }, 422);
+    await expect(
+      hooksApi.transferOwner('project', 'hook', { serviceAccountId: 'viewer-bot' }),
+    ).rejects.toMatchObject({ code: 'invalid_hook_owner' });
+  });
+
   it('手動の起動は本文と重複防止キーを送り、manual以外の拒否をサーバーの理由つきで返す', async () => {
     const fetch = stubJsonResponse({ id: 'execution', status: 'queued' }, 201);
     await hooksApi.trigger('project', 'hook', { payload: { shard: 1 }, idempotencyKey: 'key' });

@@ -1,29 +1,34 @@
-import type { ModelAutomationRule, ServiceAccount } from '@mmt/contracts';
+import type { ProjectRole, ServiceAccount } from '@mmt/contracts';
 import type { SelectOption } from '../types/form';
 import { automationText } from '../i18n/automation';
 
-/**
- * Service Accounts a rule can be moved to: active Project admins (what running a rule requires),
- * except the current owner. The API applies the same check.
- */
-export function automationOwnerOptions(
+// What the owner needs to start Jobs (the API checks the same): running a rule needs a Project
+// admin, starting a hook an editor.
+export const RULE_OWNER_ROLES = ['admin'] as const;
+export const HOOK_OWNER_ROLES = ['editor', 'admin'] as const;
+
+/** Service Accounts a rule or hook can be moved to: active ones with a role it needs. */
+export function serviceAccountOwnerOptions(
   accounts: readonly ServiceAccount[],
-  rule: Pick<ModelAutomationRule, 'runAsUserId'>,
+  subject: { runAsUserId: string; roles: readonly ProjectRole[] },
 ): SelectOption[] {
   return accounts
     .filter(
       (account) =>
-        account.status === 'active' && account.role === 'admin' && account.id !== rule.runAsUserId,
+        account.status === 'active' &&
+        account.role !== null &&
+        subject.roles.includes(account.role) &&
+        account.id !== subject.runAsUserId,
     )
     .map((account) => ({ value: account.id, label: account.name }));
 }
 
 /** The owner as a person or a Service Account; the id stands in when the name is unknown. */
 export function automationOwnerLabel(
-  rule: Pick<ModelAutomationRule, 'runAsUserId' | 'runAsKind' | 'runAsName'>,
+  owner: { runAsUserId: string; runAsKind?: 'human' | 'service'; runAsName?: string },
 ): string {
-  const name = rule.runAsName || rule.runAsUserId;
-  return rule.runAsKind === 'service'
+  const name = owner.runAsName || owner.runAsUserId;
+  return owner.runAsKind === 'service'
     ? automationText.ownerServiceAccount(name)
     : automationText.ownerHuman(name);
 }

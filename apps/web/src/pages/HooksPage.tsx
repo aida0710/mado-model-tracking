@@ -4,6 +4,7 @@ import { Plus, RefreshCw } from 'lucide-react';
 import type { Hook } from '@mmt/contracts';
 import { executionApi } from '../api/execution';
 import { hooksApi } from '../api/hooks';
+import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
 import { useHookExecutions, useHookList } from '../hooks/useHooks';
@@ -17,7 +18,7 @@ import { HooksTable } from '../components/HooksTable';
 import { HookDetails } from '../components/HookDetails';
 import { HookExecutionsTable } from '../components/HookExecutionsTable';
 import { HookDialog } from '../dialogs/HookDialog';
-import { canManageHooks } from '../lib/permissions';
+import { canManageHooks, canTransferHookOwners, isGlobalAdmin } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 import { hooksTextTemplates } from '../i18n/hooks';
 
@@ -29,6 +30,7 @@ type HooksView = 'hooks' | 'executions';
  */
 export function HooksPage() {
   const { project } = useProject();
+  const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const view: HooksView = params.get('view') === 'executions' ? 'executions' : 'hooks';
   const selectedHookId = params.get('hook') ?? '';
@@ -42,6 +44,7 @@ export function HooksPage() {
   const [isCreating, setCreating] = useState(false);
   const [toggling, setToggling] = useState<Hook | null>(null);
   const canManage = canManageHooks(project.role);
+  const canTransferOwner = canTransferHookOwners(project.role, isGlobalAdmin(user));
   const hookItems = hooks.value ?? [];
   const selectedHook = hookItems.find((hook) => hook.id === selectedHookId);
   const catalog =
@@ -113,8 +116,10 @@ export function HooksPage() {
                 catalog={catalog}
                 projectId={project.id}
                 canStart={canManage}
+                canTransferOwner={canTransferOwner}
                 onShowExecutions={() => showView('executions', selectedHook.id)}
                 onStarted={executions.reload}
+                onOwnerTransferred={hooks.reload}
               />
             )}
           </>

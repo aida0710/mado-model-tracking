@@ -4,6 +4,7 @@ import type {
   Artifact,
   ChildJobCreated,
   ChildJobWait,
+  Hook,
   HookCreated,
   HookExecution,
   HookExecutionPage,
@@ -14,6 +15,7 @@ import type {
   RunCheckpoint,
   RunnerFinishResult,
   RunnerState,
+  ServiceAccount,
   WorkerJob,
 } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
@@ -194,6 +196,90 @@ describe.skipIf(!testDatabaseUrl)('フック・webhook・ドライバー（独�
     });
     expect(disabled.status).toBe(409);
     expect(await disabled.json()).toMatchObject({ code: 'hook_disabled' });
+  });
+
+  it('Project adminはフックをService Accountへ移せ、以後の起動はService Accountとして動く', async () => {
+    const { hook } = await createHook({ trigger: 'manual' });
+    const serviceAccount = async (role: 'viewer' | 'editor') =>
+      entity<ServiceAccount>(
+        await request(harness.app, `${fixture.basePath}/service-accounts`, {
+          method: 'POST',
+          cookie: fixture.administrator.cookie,
+          body: { name: `Hook ${role}`, role, description: 'Runs hooks' },
+        }),
+      );
+    const owner = await serviceAccount('editor');
+    const reader = await serviceAccount('viewer');
+    const transfer = (serviceAccountId: string, cookie = fixture.administrator.cookie) =>
+      request(harness.app, `${fixture.basePath}/hooks/${hook.id}/owner`, {
+        method: 'PUT',
+        cookie,
+        body: { serviceAccountId },
+      });
+    expect((await transfer(owner.id, fixture.editor.cookie)).status).toBe(403);
+    for (const refused of [reader.id, fixture.editor.userId]) {
+      const response = await transfer(refused);
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({ code: 'invalid_hook_owner' });
+    }
+    const moved = await entity<Hook>(await transfer(owner.id), 200);
+    expect(moved).toMatchObject({
+      runAsUserId: owner.id,
+      runAsKind: 'service',
+      createdBy: fixture.editor.userId,
+    });
+    // The same owner again changes nothing and is not audited again.
+    await entity<Hook>(await transfer(owner.id), 200);
+    const audits = await harness.database.query<{ outcome: string }>(
+      "SELECT outcome FROM audit_events WHERE action='hook.owner.transfer' ORDER BY occurred_at,id",
+    );
+    expect(audits.rows.map((row) => row.outcome)).toEqual(['denied', 'success']);
+    const execution = await entity<HookExecution>(
+      await request(harness.app, `${fixture.basePath}/hooks/${hook.id}/trigger`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+        body: {},
+      }),
+    );
+    const { rows } = await harness.database.query<{ created_by: string }>(
+      'SELECT created_by FROM runs WHERE id=$1',
+      [execution.runId],
+    );
+    expect(rows[0]!.created_by).toBe(owner.id);
+    // Only enabled and the owner can change; the rest of the hook stays as it was created.
+    await expect(
+      harness.database.query("UPDATE hooks SET name='Renamed' WHERE id=$1", [hook.id]),
+    ).rejects.toThrow('immutable');
+  });
+
+  it('SSOのgroup同期が古い所有者のフックも起動し、そのJob tokenも使える', async () => {
+    const { hook } = await createHook({ trigger: 'manual' });
+    // The owner last signed in by SSO a month ago: their own API token is stopped by the sync
+    // expiry, but a hook keeps running for as long as its owner is an editor.
+    await harness.database.query(
+      `INSERT INTO user_oidc_identities(issuer,subject,user_id,email_at_login,email_verified,groups_synced_at)
+      VALUES ('https://sso.example.org','hook-owner',$1,'owner@example.org',true,now()-interval '30 days')`,
+      [fixture.editor.userId],
+    );
+    const stale = await request(harness.app, `${fixture.basePath}/hooks`, {
+      token: fixture.personalToken,
+    });
+    expect(stale.status).toBe(401);
+    expect(await stale.json()).toMatchObject({ code: 'identity_sync_required' });
+    const execution = await entity<HookExecution>(
+      await request(harness.app, `${fixture.basePath}/hooks/${hook.id}/trigger`, {
+        method: 'POST',
+        cookie: fixture.administrator.cookie,
+        body: {},
+      }),
+    );
+    expect(execution).toMatchObject({ status: 'queued', jobStatus: 'queued' });
+    const workerJob = await claimLocal('worker-stale-owner');
+    expect(workerJob.job.id).toBe(execution.jobId);
+    const run = await request(harness.app, `${fixture.basePath}/runs/${execution.runId}`, {
+      token: workerJob.jobToken!,
+    });
+    expect(run.status).toBe(200);
   });
 
   it('Runの終了で起動し、自分が起動したJobの終了では循環として止まる', async () => {

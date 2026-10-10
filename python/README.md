@@ -150,13 +150,13 @@ with Client() as client:
 
 ### Service Accountと所有者の移管
 
-人の異動で自動実行が止まらないように、ruleとpolicyをService Accountの権限で動かす。どれもProject adminの操作。
+人の異動で自動実行が止まらないように、rule・policy・フックをService Accountの権限で動かす。どれもProject adminの操作。移管先のService Accountのroleは、ruleとpolicyがadmin、フックがeditorかadmin（`worker:execute`のtokenもadminにだけ発行できる）。
 
 ```python
 from datetime import UTC, datetime, timedelta
 
 with Client() as client:
-    account = client.create_service_account("project-id", name="pipeline", role="editor")
+    account = client.create_service_account("project-id", name="pipeline", role="admin")
     issued = client.create_service_account_token(
         "project-id", account["id"], name="worker", scopes=["read", "worker:execute"],
         expires_at=datetime.now(UTC) + timedelta(days=90),
@@ -164,6 +164,7 @@ with Client() as client:
     # issued["token"] はこの応答でしか返らない。安全な場所へ保存する。
     client.transfer_automation_rule_owner("project-id", "rule-id", service_account_id=account["id"])
     client.transfer_promotion_policy_owner("project-id", "policy-id", service_account_id=account["id"])
+    client.transfer_hook_owner("project-id", "hook-id", service_account_id=account["id"])
     for token in client.list_project_tokens("project-id"):
         print(token["ownerType"], token["ownerName"], token["tokenPrefix"], token["expiresAt"])
 ```

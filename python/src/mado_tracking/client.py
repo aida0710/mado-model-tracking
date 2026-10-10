@@ -68,6 +68,7 @@ class Client(ExperimentTasksClient):
     wait_for_child_jobs = driver.wait_for_child_jobs
     map_shards = driver.map_shards
     trigger_hook = hooks.trigger_hook
+    transfer_hook_owner = hooks.transfer_hook_owner
     create_job_array = job_arrays.create_job_array
     get_job_array = job_arrays.get_job_array
 

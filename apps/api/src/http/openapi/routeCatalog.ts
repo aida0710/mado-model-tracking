@@ -131,6 +131,7 @@ import {
   childJobWaitQuerySchema,
   hookCreateSchema,
   hookExecutionQuerySchema,
+  hookOwnerSchema,
   hookToggleSchema,
   hookTriggerRequestSchema,
 } from '../../domain/hookValidation.js';
@@ -2026,6 +2027,16 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: JOBS_WRITE,
     body: hookToggleSchema,
     responses: { 200: contract.hookSchema },
+  },
+  {
+    method: 'put',
+    path: '/api/projects/:p/hooks/:id/owner',
+    tag: 'hooks',
+    summary: 'フックの所有者をService Accountへ移す',
+    access: PROJECT_ADMIN,
+    body: hookOwnerSchema,
+    responses: { 200: contract.hookSchema },
+    errors: routeError(422, 'invalid_hook_owner'),
   },
   {
     method: 'post',

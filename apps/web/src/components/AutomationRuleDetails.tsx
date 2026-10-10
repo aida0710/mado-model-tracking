@@ -2,11 +2,16 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { ModelAutomationRule } from '@mmt/contracts';
 import type { AutomationCatalog } from '../types/modelAutomation';
+import { automationApi } from '../api/automation';
 import { DetailsList, JsonDetails } from './JsonDetails';
 import { CodeRuntimeDetails } from './CodeRuntimeDetails';
 import { AutomationManualApply } from './AutomationManualApply';
-import { AutomationOwnerTransfer } from './AutomationOwnerTransfer';
-import { automationOwnerLabel } from '../lib/automationOwner';
+import { ServiceAccountOwnerTransfer } from './ServiceAccountOwnerTransfer';
+import {
+  RULE_OWNER_ROLES,
+  automationOwnerLabel,
+  serviceAccountOwnerOptions,
+} from '../lib/automationOwner';
 import { buildCatalogOptions } from '../lib/catalogOptions';
 import { formatDate } from '../lib/format';
 import { creatorName } from '../lib/creatorName';
@@ -104,10 +109,22 @@ export function AutomationRuleDetails({
         />
       )}
       {canManage && (
-        <AutomationOwnerTransfer
+        <ServiceAccountOwnerTransfer
           key={`${rule.id}:owner`}
-          rule={rule}
           projectId={projectId}
+          candidates={(accounts) =>
+            serviceAccountOwnerOptions(accounts, {
+              runAsUserId: rule.runAsUserId,
+              roles: RULE_OWNER_ROLES,
+            })
+          }
+          confirmMessage={(accountName) =>
+            automationText.transferConfirmMessage(rule.name, accountName)
+          }
+          noAccountsMessage={automationText.transferNoAccounts}
+          transfer={(serviceAccountId) =>
+            automationApi.transferOwner(projectId, rule.id, { serviceAccountId })
+          }
           onTransferred={onApplied}
         />
       )}
