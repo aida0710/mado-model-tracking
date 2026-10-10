@@ -1,0 +1,613 @@
+/*
+ * Components shared by Mado and Mado Model Tracking: buttons, notices, the page frame and header,
+ * section headings, details lists, tabs, form fields, dialogs, data tables, status badges, popovers
+ * and the responsive table.
+ * Needs tokens.css and base.css. Width changes use the shared breakpoints 640px, 900px and 1200px.
+ */
+:root {
+  --page-padding: 32px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────── */
+.button {
+  min-height: 36px;
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  background: var(--background);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: var(--radius-none);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  text-decoration: none;
+}
+.button.primary {
+  background: var(--accent-strong);
+  color: var(--on-accent);
+  border-color: var(--accent-strong);
+}
+.button.primary:hover:not(:disabled) {
+  filter: brightness(0.93);
+}
+.button.small {
+  min-height: 29px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.button.danger {
+  color: var(--error);
+}
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+.link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--link);
+  text-align: left;
+}
+.link-button:hover {
+  text-decoration: underline;
+}
+
+/* ── Feedback ────────────────────────────────────────────────────────── */
+.state-message {
+  min-height: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  padding: 20px;
+}
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  margin: 12px 0;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.notice > span {
+  flex: 1;
+}
+.notice.error {
+  color: var(--error);
+  background: var(--error-tint);
+  border-left-color: var(--error);
+}
+.notice.success {
+  color: var(--success);
+  background: var(--success-tint);
+  border-left-color: var(--success);
+}
+
+/* ── Page frame and header ───────────────────────────────────────────── */
+.page {
+  padding: 26px var(--page-padding) 40px;
+  min-width: 0;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  min-width: 0;
+}
+.page-header > div:first-child {
+  min-width: 0;
+}
+.page-header h1 {
+  overflow-wrap: anywhere;
+}
+.eyebrow {
+  color: var(--link);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+.breadcrumb-separator {
+  color: var(--muted);
+  margin: 0 10px;
+}
+.page-description {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.page-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ── Section headings and details ────────────────────────────────────── */
+/* A section's heading with its actions on the same line. */
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.section-heading h2 {
+  margin: 0;
+}
+.section-heading > div {
+  display: flex;
+  gap: 8px;
+}
+/* Label and value pairs, one per row. */
+.details-list {
+  margin: 0;
+  font-size: 12px;
+}
+.details-list > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.details-list dt {
+  color: var(--muted);
+}
+.details-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Formatted JSON or other preformatted text in a tinted box. */
+.json-view {
+  padding: 16px;
+  background: var(--surface);
+  overflow: auto;
+  line-height: 1.6;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+  gap: 1px;
+  overflow-x: auto;
+}
+.tab {
+  color: var(--muted);
+  display: inline-block;
+  padding: 12px 16px 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+.tab.active,
+.tab[aria-selected='true'],
+.tab[aria-current='page'] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.tab:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* ── Form fields ─────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 16px;
+  font-size: 12px;
+}
+.field > span,
+.field > label {
+  color: var(--muted);
+}
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+}
+.field select[multiple] {
+  min-height: 94px;
+  padding: 4px;
+}
+.field select[multiple] option {
+  padding: 6px 8px;
+}
+.required {
+  color: var(--error);
+}
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+/* A field that has nothing to choose explains why in place of the control. */
+.field-note {
+  margin: 0;
+}
+/* A collapsible block inside a form keeps the same distance to the next field as a field does. */
+.form-details {
+  margin-bottom: 16px;
+}
+/* A heading that splits a long form into parts. */
+.form-section-heading {
+  margin: 8px 0 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.form-section-heading:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.wizard-steps {
+  padding: 0;
+  display: flex;
+  gap: 20px;
+  margin: 0 0 22px;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+}
+.wizard-steps li {
+  padding-bottom: 12px;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.wizard-steps li.active {
+  color: var(--link);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Dialogs ─────────────────────────────────────────────────────────── */
+.dialog {
+  border: 1px solid var(--border);
+  padding: 0;
+  color: var(--text);
+  background: var(--background);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 48px);
+  overflow-y: auto;
+  box-shadow: var(--shadow-dialog);
+}
+.dialog.wide {
+  width: min(740px, calc(100vw - 32px));
+}
+.dialog::backdrop {
+  background: var(--backdrop);
+}
+.dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--background);
+  z-index: 1;
+}
+.dialog > header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.dialog > form,
+.dialog > .dialog-body,
+.dialog > .details-list,
+.dialog > .field,
+.dialog > .notice,
+.dialog > .state-message {
+  margin: 22px;
+}
+.dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.dialog > footer {
+  margin: 22px;
+}
+
+/* ── Data tables ─────────────────────────────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+th {
+  font-weight: 600;
+  text-align: left;
+  background: var(--table-header);
+  padding: 10px 14px;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+th small {
+  display: block;
+  font-family: var(--font);
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 10px;
+  margin-bottom: 7px;
+}
+td {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  vertical-align: middle;
+}
+td small {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+tr:hover td {
+  background: var(--surface-hover);
+}
+tr.selected td {
+  background: var(--selected);
+}
+.table-footer {
+  min-height: 39px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 12px 5px 16px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.table-footer > span:last-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Status badges ───────────────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: var(--radius-pill);
+  font-size: 10px;
+  letter-spacing: 0.15px;
+  padding: 5px 9px;
+  white-space: nowrap;
+}
+.status-finished {
+  background: var(--status-success-background);
+  color: var(--status-success-text);
+}
+.status-running,
+.status-claimed {
+  background: var(--status-info-background);
+  color: var(--status-info-text);
+}
+.status-failed {
+  background: var(--status-danger-background);
+  color: var(--status-danger-text);
+}
+.status-queued,
+.status-canceled {
+  background: var(--status-neutral-background);
+  color: var(--status-neutral-text);
+}
+/* Waits for a person. */
+.status-attention {
+  background: var(--status-attention-background);
+  color: var(--status-attention-text);
+}
+/* Badges beside a label in one cell. */
+.badge-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Popover menus ───────────────────────────────────────────────────── */
+.popover {
+  position: absolute;
+  z-index: 8;
+  top: 100%;
+  right: 0;
+  min-width: 220px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 12px;
+  box-shadow: var(--shadow-menu);
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+
+/* ── Responsive table: primary columns stay in the row, secondary ones open beneath it ── */
+/* Keeps the visually hidden header labels inside the scroll box instead of widening the page. */
+.responsive-table {
+  position: relative;
+}
+/* Text cells keep a few characters per line; a squeezed table scrolls inside its box instead. */
+.responsive-table td:not(.responsive-table-toggle) {
+  min-width: 6em;
+}
+/* URLs and digests have no spaces, so they break anywhere rather than widen their column. */
+.responsive-table .long-value {
+  overflow-wrap: anywhere;
+}
+.responsive-table .responsive-table-toggle {
+  width: calc(var(--tap-target) + 8px);
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: right;
+}
+.responsive-table tr.clickable-row {
+  cursor: pointer;
+}
+.responsive-table-details > td,
+tr.responsive-table-details:hover > td {
+  background: var(--background);
+}
+.responsive-table-details dl {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 0;
+}
+.responsive-table-details dl > div {
+  display: contents;
+}
+.responsive-table-details dt {
+  color: var(--muted);
+}
+.responsive-table-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ── Widths ──────────────────────────────────────────────────────────── */
+@media (width < 1200px) {
+  :root {
+    --page-padding: 24px;
+  }
+}
+/* Narrow screens are mostly touch screens: everything tapped gets at least --tap-target. */
+@media (width < 900px) {
+  :root {
+    --page-padding: 18px;
+  }
+  .button,
+  .button.small {
+    min-height: var(--tap-target);
+  }
+  .icon-button {
+    width: var(--tap-target);
+    height: var(--tap-target);
+  }
+  .page-header {
+    align-items: flex-start;
+  }
+  .section-heading {
+    flex-wrap: wrap;
+  }
+  .page-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  /* Screens marked `touch-targets` also give finger-sized targets to links, summaries and labels. */
+  .touch-targets .button {
+    min-width: var(--tap-target);
+  }
+  .touch-targets summary {
+    padding-block: 11px;
+  }
+  .touch-targets .link-button {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+    display: inline-flex;
+    align-items: center;
+  }
+  .touch-targets label:has(> input[type='checkbox']) {
+    min-height: var(--tap-target);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .touch-targets input[type='range'] {
+    min-height: var(--tap-target);
+  }
+}
+/* Below 640px a dialog fills the screen; a short confirmation becomes a sheet on the bottom edge. */
+@media (width < 640px) {
+  :root {
+    --page-padding: 14px;
+  }
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .page-actions {
+    justify-content: flex-start;
+  }
+  .section-heading > div {
+    flex-wrap: wrap;
+  }
+  .wizard-steps {
+    gap: 12px;
+    font-size: 11px;
+  }
+  .dialog.fullscreen-on-narrow {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .dialog.sheet-on-narrow {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 90dvh;
+    margin: auto 0 0;
+    border-width: 1px 0 0;
+  }
+  .dialog > header {
+    padding: 4px 4px 4px 16px;
+  }
+  .dialog > header h2 {
+    overflow-wrap: anywhere;
+  }
+  .dialog > form,
+  .dialog > .dialog-body,
+  .dialog > .details-list,
+  .dialog > .field,
+  .dialog > .notice,
+  .dialog > .state-message,
+  .dialog > footer {
+    margin: 16px;
+  }
+  .dialog footer {
+    flex-wrap: wrap;
+  }
+  .dialog footer .button {
+    flex: 1 1 auto;
+  }
+}

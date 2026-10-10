@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Navigate, Outlet, useParams } from 'react-router-dom';
 import { administrationApi } from '../api/administration';
 import { useAuth } from '../hooks/useAuth';
@@ -21,23 +22,30 @@ export function AppShell() {
   // A Project id from the URL that the user cannot open gets no Project navigation or alerts.
   const openProject = projects.value?.find((project) => project.id === projectId);
   const navigation = useNavigation(openProject?.id, openProject?.role);
-  // The Project selector heads the sidebar on wide screens and sits under the header otherwise.
+  // The Project selector heads the full sidebar; with the rail or the drawer it is the bar under
+  // the header.
+  const inSidebar = navigation.mode === 'sidebar';
   const projectPicker = projects.value?.length ? (
     <ProjectBar
       projects={projects.value}
       project={openProject}
-      placement={navigation.usesDrawer ? 'bar' : 'sidebar'}
+      placement={inSidebar ? 'sidebar' : 'bar'}
     />
   ) : null;
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-navigation={navigation.mode}
+      data-project-bar={projectPicker && !inSidebar ? 'true' : undefined}
+      style={{ '--navigation-width': `${navigation.width}px` } as CSSProperties}
+    >
       <TopBar projectId={openProject?.id} navigation={navigation} />
       <div className="app-body">
-        {!navigation.usesDrawer && (projectPicker || navigation.groups.length > 0) && (
-          <NavigationSidebar groups={navigation.groups}>{projectPicker}</NavigationSidebar>
+        {navigation.mode !== 'drawer' && (projectPicker || navigation.groups.length > 0) && (
+          <NavigationSidebar navigation={navigation}>{inSidebar && projectPicker}</NavigationSidebar>
         )}
         <div className="app-content">
-          {navigation.usesDrawer && projectPicker}
+          {!inSidebar && projectPicker}
           <Resource query={projects}>
             {(items) => {
               const project = items.find((item) => item.id === projectId);

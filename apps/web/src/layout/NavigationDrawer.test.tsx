@@ -9,7 +9,12 @@ describe('NavigationDrawer', () => {
     const markup = renderToStaticMarkup(
       <MemoryRouter>
         <NavigationDrawer
-          groups={[{ label: '記録', links: [{ to: '/projects/p1/experiments', label: 'Experiments' }] }]}
+          groups={[
+            {
+              label: '記録',
+              links: [{ screen: 'experiments', to: '/projects/p1/experiments', label: 'Experiments' }],
+            },
+          ]}
         />
       </MemoryRouter>,
     );

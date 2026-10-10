@@ -57,7 +57,10 @@ describe('navigationLinks', () => {
 
   it('Project を開いていない全体管理者には管理の組だけを出す', () => {
     expect(navigationGroups({ isGlobalAdmin: true })).toEqual([
-      { label: text.navigationGroupManagement, links: [{ to: ADMIN_PATH, label: text.administration }] },
+      {
+        label: text.navigationGroupManagement,
+        links: [{ screen: 'administration', to: ADMIN_PATH, label: text.administration }],
+      },
     ]);
   });
 });

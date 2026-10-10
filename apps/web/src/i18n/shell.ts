@@ -2,6 +2,9 @@
 export const shellText = {
   openNavigation: 'メニューを開く',
   closeNavigation: 'メニューを閉じる',
+  collapseNavigation: 'サイドバーをアイコンだけにする',
+  expandNavigation: 'サイドバーを広げる',
+  resizeNavigation: 'サイドバーの幅',
   navigationGroupTracking: '記録',
   navigationGroupModels: 'モデル',
   navigationGroupData: 'データ',

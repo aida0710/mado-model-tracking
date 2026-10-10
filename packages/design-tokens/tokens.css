@@ -103,6 +103,9 @@
     sans-serif;
   --mono: 'IBM Plex Mono', 'Noto Sans JP', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --font-size-base: 13px;
+
+  /* The smallest size of anything tapped on a narrow (touch) screen. */
+  --tap-target: 40px;
 }
 
 :root[data-theme='dark'] {

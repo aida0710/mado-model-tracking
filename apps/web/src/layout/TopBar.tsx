@@ -16,7 +16,7 @@ export { ADMIN_PATH } from './navigationLinks';
 
 /**
  * The header: the app name, theme, the signed-in user and logout. The screen navigation sits in
- * the sidebar on wide screens; on narrow ones this header opens it in the drawer.
+ * the sidebar or the rail; below --bp-md this header opens it in the drawer.
  */
 export function TopBar({ projectId, navigation }: { projectId?: string; navigation: Navigation }) {
   const auth = useAuth();
@@ -28,7 +28,7 @@ export function TopBar({ projectId, navigation }: { projectId?: string; navigati
         {text.skipContent}
       </a>
       <header className="topbar">
-        {navigation.usesDrawer && navigation.groups.length > 0 && (
+        {navigation.mode === 'drawer' && navigation.groups.length > 0 && (
           <NavigationDrawer groups={navigation.groups} />
         )}
         <Link to="/" className="brand">

@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useNavigation } from '../hooks/useNavigation';
 import { NavigationSidebar } from './NavigationSidebar';
@@ -7,11 +8,15 @@ import { TopBar } from './TopBar';
 export function AccountShell() {
   const navigation = useNavigation();
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-navigation={navigation.mode}
+      style={{ '--navigation-width': `${navigation.width}px` } as CSSProperties}
+    >
       <TopBar navigation={navigation} />
       <div className="app-body">
-        {!navigation.usesDrawer && navigation.groups.length > 0 && (
-          <NavigationSidebar groups={navigation.groups} />
+        {navigation.mode !== 'drawer' && navigation.groups.length > 0 && (
+          <NavigationSidebar navigation={navigation} />
         )}
         <main id="content" className="page app-content">
           <Outlet />

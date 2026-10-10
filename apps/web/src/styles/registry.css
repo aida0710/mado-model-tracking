@@ -1,4 +1,5 @@
-/* Registry list/detail, details lists, automation panels, charts, logs, jobs, and the lineage graph. */
+/* Registry list/detail, automation panels, charts, logs, jobs, and the lineage graph. Section headings,
+   details lists and the JSON view come from @mado/design-tokens/components.css. */
 .registry-layout {
   display: grid;
   grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
@@ -9,20 +10,6 @@
   min-width: 0;
   border-left: 1px solid var(--border);
   padding-left: 28px;
-}
-.section-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.section-heading h2 {
-  margin: 0;
-}
-.section-heading > div {
-  display: flex;
-  gap: 8px;
 }
 .version-detail {
   padding-top: 20px;
@@ -58,33 +45,9 @@
   color: var(--muted);
   font-size: 12px;
 }
-.details-list {
-  margin: 0;
-  font-size: 12px;
-}
-.details-list > div {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: 14px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-}
-.details-list dt {
-  color: var(--muted);
-}
-.details-list dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
 .version-link {
   display: block;
   margin-bottom: 5px;
-}
-.json-view {
-  padding: 16px;
-  background: var(--surface);
-  overflow: auto;
-  line-height: 1.6;
 }
 .details-grid {
   display: grid;

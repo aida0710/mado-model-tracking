@@ -30,7 +30,11 @@ const SCREEN_GROUPS: { label: string; screens: ProjectScreen[] }[] = [
   { label: text.navigationGroupManagement, screens: ['plugins', 'settings'] },
 ];
 
+/** A Project screen, or the global administration page. */
+export type NavigationScreen = ProjectScreen | 'administration';
+
 export interface NavigationLink {
+  screen: NavigationScreen;
   to: string;
   label: string;
 }
@@ -61,11 +65,15 @@ export function navigationGroups({
     links: projectId
       ? screens
           .filter((screen) => screen !== 'plugins' || canManagePlugins(projectRole, isGlobalAdmin))
-          .map((screen) => ({ to: `/projects/${projectId}/${screen}`, label: text[screen] }))
+          .map((screen) => ({ screen, to: `/projects/${projectId}/${screen}`, label: text[screen] }))
       : [],
   }));
   if (isGlobalAdmin)
-    groups[groups.length - 1]!.links.push({ to: ADMIN_PATH, label: text.administration });
+    groups[groups.length - 1]!.links.push({
+      screen: 'administration',
+      to: ADMIN_PATH,
+      label: text.administration,
+    });
   return groups.filter((group) => group.links.length > 0);
 }
 

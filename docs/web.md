@@ -4,19 +4,19 @@
 
 ## スタイルシート
 
-フォントと、色・影・角丸・書体の変数は`packages/design-tokens`（`@mado/design-tokens`、Madoと共有）にあり、`apps/web/src/main.tsx`が日本語のNoto Sans JPとあわせて最初に読み込みます。変数の役割と決まりは[パッケージのREADME](../packages/design-tokens/README.md)にあります。
+フォント、色・影・角丸・書体の変数、要素の既定、共通の部品（ボタン、入力欄、ダイアログ、タブ、表、状態バッジ、ページの見出し）、画面の枠（上部バー、サイドバー、ドロワー、ログイン画面）は`packages/design-tokens`（`@mado/design-tokens`、Madoと共有）にあり、`apps/web/src/main.tsx`が日本語のNoto Sans JPとあわせて最初に読み込みます。ファイルの分け方と決まりは[パッケージのREADME](../packages/design-tokens/README.md)にあります。Madoも同じclass名を使うので、両方の見た目を変えるときはパッケージを直し、このアプリだけの見た目は下の領域のファイルで上書きします。
 
 そのあと、`apps/web/src/styles/`に置いた領域別のファイルを次の順に読み込みます。
 
 | ファイル | 対象 |
 |---|---|
-| breakpoints | 画面幅の切り替え点（`--bp-sm`・`--bp-md`・`--bp-lg`）とタップ領域の最小サイズ（`--tap-target`） |
-| base | 要素の既定、文字組み、ボタン、通知・読み込み表示 |
-| layout | 上部バー、ナビゲーションのドロワー、プロジェクトバー、ページ枠と見出し、タブ、ログイン画面 |
-| tables | 実験サイドバー、Runのツールバー・選択バー、表、状態バッジ |
+| breakpoints | 画面幅の切り替え点（`--bp-sm`・`--bp-md`・`--bp-lg`） |
+| base | このアプリの高さと幅（プロジェクトバー、Experimentsの実験一覧）、描画に失敗したときの画面 |
+| layout | Projectの選択欄（サイドバーの一番上とプロジェクトバー）、作業領域の高さ |
+| tables | Experimentsの実験一覧、Runのツールバー・選択バー、Runの表 |
 | registry | Registryの一覧・詳細、詳細リスト、自動実行パネル、グラフ、ログ、Job、Lineage |
 | artifacts | Artifactの一覧・プレビュー・アップロード結果 |
-| forms | ダイアログ、入力欄、ウィザード |
+| forms | このアプリだけのダイアログの幅と、ダイアログの中の詳細リスト |
 | workbench | コード編集、ファイルツリー、Task、実行スナップショット |
 | admin | 設定のセクション、plugin検索、容量メトリクス |
 | uploads | Artifactのアップロードダイアログ、ドロップ領域、進み具合、途中のアップロード |
@@ -41,8 +41,8 @@
 
 ## 画面の枠
 
-- `layout/TopBar.tsx`: 上部バー（アプリ名、テーマ、ユーザー表示、ログアウト）。画面の切り替えは置きません。ローカルアカウントの利用者は、ユーザー表示から`/account/password`（パスワード変更）を開けます。
-- 画面の切り替え: 切り替え先と組（記録・モデル・データ・実行・管理）は`layout/navigationLinks.ts`の`navigationGroups`が決めます。広い幅では左のサイドバー（`layout/NavigationSidebar.tsx`）に、狭い幅では`layout/NavigationDrawer.tsx`に、組の見出しを付けて並べます。どちらにするかは`hooks/useNavigation.ts`が決めます。
+- `layout/TopBar.tsx`: 上部バー（アプリ名、テーマ、ユーザー表示、ログアウト）。画面の切り替えは置きません。ローカルアカウントの利用者は、ユーザー表示から`/account/password`（パスワード変更）を開けます。テーマ（`hooks/useTheme.ts`）は、利用者が切り替えるまでOSの設定（`prefers-color-scheme`）に合わせ、切り替えたらブラウザの`localStorage`（`mmt.theme`）に保存します。`main.tsx`がログイン画面を含む最初の描画の前に`<html data-theme>`へ書きます。
+- 画面の切り替え: 切り替え先と組（記録・モデル・データ・実行・管理）は`layout/navigationLinks.ts`の`navigationGroups`が、各画面のアイコン（lucide-react）は`layout/navigationIcons.ts`が決めます。広い幅では左のサイドバー（`layout/NavigationSidebar.tsx`）に、狭い幅では`layout/NavigationDrawer.tsx`に、組の見出しを付けて並べます。サイドバーは、名前とアイコンを並べる`sidebar`と、アイコンだけの細い列の`rail`の2つの形を持ちます。どの形にするか、畳んだかどうか、幅は`hooks/useNavigation.ts`が決めて覚えます。幅を変える境目は`layout/NavigationResizeHandle.tsx`、幅の範囲は`lib/navigationWidth.ts`です。
 - `layout/AppShell.tsx`: Projectの画面の枠。Projectの選択欄（`layout/ProjectBar.tsx`）はProjectの選択と自分の権限の表示だけを置き、広い幅ではサイドバーの一番上、狭い幅では上部バーの下の1行（プロジェクトバー）に出します。参加しているProjectが無いときは出しません。Projectの一覧と作成は設定画面の「Projects」セクション（`components/ProjectList.tsx`）です。参加しているProjectが無いときは、作成できる人には作成の案内と「Projects」セクションを、作成できない人には管理者への依頼を表示します。
 - `layout/AccountShell.tsx`: Projectに属さない、ログイン中の利用者向けの画面の枠。
 
@@ -50,9 +50,9 @@
 
 切り替え点は`styles/breakpoints.css`の`--bp-sm`（640px）・`--bp-md`（900px）・`--bp-lg`（1200px）です。CSSの変数は`@media`の中に書けないので、メディアクエリは同じ値を範囲の書き方で`@media (width < 640px)`・`(width < 900px)`・`(width < 1200px)`と書きます。スクリプトで幅を見るときは`lib/breakpoints.ts`の`narrowerThan('md')`を`lib/useMediaQuery.ts`に渡します。`lib/breakpoints.test.ts`が、CSSの変数とTSの値の一致と、ほかの数値のメディアクエリが無いことを確かめます。幅の広いタッチ画面も対象にするときだけ、`(width < 1200px), (pointer: coarse)`のように`(pointer: coarse)`を併記できます。
 
-- 画面の切り替え: `--bp-lg`以上では左のサイドバー（幅`--navigation-width`）に並べ、未満では上部バーのメニューボタンから左に出るドロワー（`layout/NavigationDrawer.tsx`）へ移します。サイドバーとExperimentsの実験一覧が並ぶと、`--bp-lg`未満ではRunの表の幅が足りないためです。メニューボタンは`aria-expanded`で開閉を示し、Esc、ドロワーの外側のタップ、リンクの選択で閉じます。
-- プロジェクトバー: `--bp-lg`未満だけに出し、どの幅でも1行です。狭い幅ではProjectの選択欄が縮み、名前を省略します。画面の上に並ぶものの高さは`--chrome-height`（上部バーと、出ていればプロジェクトバー）です。
-- タップ領域: `--bp-md`未満では、ボタン・アイコンボタン・入力欄・選択欄の高さを`--tap-target`（40px）以上にします（`base.css`）。リンクボタン・summary・チェックボックスのラベル・スライダーも広げる画面は、根元の要素に`touch-targets`のclassを付けます（`styles/touchTargets.css`）。
+- 画面の切り替え: `--bp-lg`以上では左のサイドバーに名前とアイコンを並べます。サイドバーの下のボタンでアイコンだけの列（幅`--navigation-rail-width`、名前はツールチップと読み上げで伝えます）に畳め、右の境目をドラッグするか、境目にフォーカスして左右の矢印キーで幅（`--navigation-width`）を160〜360pxの間で変えられます。ダブルクリックかEnterで既定の192pxに戻ります。畳んだかどうかと幅は、ブラウザの`localStorage`（`mmt.navigation.collapsed`・`mmt.navigation.width`）に保存します。`--bp-md`以上`--bp-lg`未満では、サイドバーとExperimentsの実験一覧が並ぶとRunの表の幅が足りないので、いつもアイコンだけの列にします。`--bp-md`未満では上部バーのメニューボタンから左に出るドロワー（`layout/NavigationDrawer.tsx`）へ移します。メニューボタンは`aria-expanded`で開閉を示し、Esc、ドロワーの外側のタップ、リンクの選択で閉じます。
+- プロジェクトバー: サイドバーを名前つきで広げていないとき（アイコンだけの列とドロワー）に出し、どの幅でも1行です。狭い幅ではProjectの選択欄が縮み、名前を省略します。画面の上に並ぶものの高さは`--chrome-height`（上部バーと、出ていればプロジェクトバー）です。
+- タップ領域: `--bp-md`未満では、ボタン・アイコンボタン・入力欄・選択欄の高さを`--tap-target`（40px）以上にします（パッケージの`base.css`と`components.css`）。リンクボタン・summary・チェックボックスのラベル・スライダーも広げる画面は、根元の要素に`touch-targets`のclassを付けます（`components.css`）。
 - 表: 狭い幅で列を減らす一覧は`components/ResponsiveTable.tsx`を使います。列ごとに`priority: 'primary' | 'secondary'`を指定し、`--bp-md`未満では`primary`の列だけを行に残して、行の右端のボタンで`secondary`の列を行の下に開きます。`selectedKey`で選択中の行に印を付け、`empty`で行が無いときの表示を渡します。テストでは幅を引数で受ける`ResponsiveTableView`を描画します。`onRowClick`はポインタ用の近道なので、キーボードで開けるリンクかボタンを`primary`の列に置きます。`components/DataTable.tsx`は表の中だけで横にスクロールします。
 - ダイアログ: `components/Dialog.tsx`は`--bp-sm`未満で全画面になります。`fullScreenOnNarrow={false}`を渡すと、全画面ではなく下から出るシートになります（`ConfirmDialog`はシート）。
 
