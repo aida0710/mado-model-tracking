@@ -1,6 +1,6 @@
 import { accessText } from './access';
 import { artifactsText } from './artifacts';
-import { artifactPreviewsText } from './artifactPreviews';
+import { artifactPreviewsText, artifactPreviewsTextTemplates } from './artifactPreviews';
 import { modelsText } from './models';
 import { computeText } from './compute';
 import { runsText, runsTextTemplates } from './runs';
@@ -69,6 +69,7 @@ export const textTemplates = {
   ...artifactLifecycleTextTemplates,
   ...reportsTextTemplates,
   ...savedViewsTextTemplates,
+  ...artifactPreviewsTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このAPI tokenを使うクライアントは、以後APIへ接続できなくなります。`,

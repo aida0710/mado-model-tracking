@@ -11,8 +11,9 @@ const resolvePackageFile = createRequire(import.meta.url).resolve;
 const readPackageFile = (name: string) =>
   withoutComments(readFileSync(resolvePackageFile(`@mado/design-tokens/${name}`), 'utf8'));
 const tokensCss = readPackageFile('tokens.css');
-// The shared element defaults, components and app frame, which use the tokens like this app does.
-const sharedStylesheets = ['base.css', 'components.css', 'shell.css'].map((name) => ({
+// The shared element defaults, components, app frame and code view, which use the tokens like this
+// app does.
+const sharedStylesheets = ['base.css', 'components.css', 'shell.css', 'code.css'].map((name) => ({
   name: `@mado/design-tokens/${name}`,
   css: readPackageFile(name),
 }));

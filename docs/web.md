@@ -60,6 +60,15 @@
 
 入力欄の無い確認は`components/ConfirmDialog.tsx`を使います。`fields={[]}`の`FormDialog`で代用しません。
 
+## テキストのプレビュー
+
+Artifactのテキストのプレビュー（`components/preview/CodeView.tsx`）は、形式に合わせて色を付けます。形式の判定と色付けは、Madoと共有する`@mado/design-tokens/code`（highlight.jsと、CSV・TSV・ログの色付け）にあります。対応する形式と判定の順は[パッケージのREADME](../packages/design-tokens/README.md#テキストの色付け)にあります。
+
+- 形式は、ファイル名、メディアタイプ、中身の先頭の順に決めます。どれにも当たらなければ色を付けません。
+- プレビューの上の「表示形式」で形式を選び直せます。選んだ形式は拡張子ごとにブラウザの`localStorage`（`mmt.codeLanguage`）に保存し（`hooks/useCodeLanguage.ts`）、同じ拡張子のファイルを次に開いたときにも使います。「自動」に戻すと保存を消します。`.env`と`Dockerfile`は名前で覚えます。何でも入る`.txt`と、拡張子の無いほかのファイルは覚えません。
+- プレビューできる大きさは1MiBまで（`TEXT_PREVIEW_MAX_BYTES`）で、色を付けるのは先頭の200,000文字までです。
+- 表示は、テーマにかかわらずログと同じ暗い地（`--code-background`）です。
+
 ## Artifactのアップロード
 
 `dialogs/ArtifactUploadDialog.tsx`が[再開可能なArtifact upload](api-contract.md#再開可能なartifact-upload)を使います。`multiple`を付けると複数ファイル・フォルダ（`webkitdirectory`とdrag&drop）を受け付け、フォルダ内の相対pathを保存先フォルダの下に置きます。付けないと1ファイルだけで、Artifactができたら呼び出し側が閉じます（コード版の登録）。

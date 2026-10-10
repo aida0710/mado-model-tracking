@@ -68,12 +68,23 @@
   --avatar: #007b77;
   --avatar-hover: #006e6a;
 
-  /* Logs and terminal output stay dark in both themes. */
+  /* Logs, terminal output and file previews (code.css) stay dark in both themes. */
   --code-background: #13171b;
   --code-text: #d8e1e5;
   --code-muted: #788c95;
   --code-error: #ff9ca7;
   --code-warning: #efcf8e;
+  /* Syntax colors on --code-background, each at least 4.5:1. The dark theme keeps them, since the
+     background does not change. */
+  --code-property: #9cdcfe;
+  --code-string: #ce9178;
+  --code-number: #b5cea8;
+  --code-literal: #569cd6;
+  --code-keyword: #c586c0;
+  --code-function: #dcdcaa;
+  --code-type: #4ec9b0;
+  --code-heading: #4fc1ff;
+  --code-meta: #d7ba7d;
 
   /* Data marks other than series colors. */
   --chart-positive: #2a78d6;

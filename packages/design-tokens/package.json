@@ -1,14 +1,18 @@
 {
   "name": "@mado/design-tokens",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "MadoとMado Model Trackingが共有する色・書体・角丸の変数、要素の既定、部品、画面の枠のCSSとIBM Plexの書体ファイル",
+  "description": "MadoとMado Model Trackingが共有する色・書体・角丸の変数、要素の既定、部品、画面の枠、コードの色付けとIBM Plexの書体ファイル",
+  "type": "module",
   "files": [
     "tokens.css",
     "fonts.css",
     "base.css",
     "components.css",
     "shell.css",
+    "code.css",
+    "code.js",
+    "code.d.ts",
     "fonts",
     "README.md"
   ],
@@ -17,9 +21,23 @@
     "./fonts.css": "./fonts.css",
     "./base.css": "./base.css",
     "./components.css": "./components.css",
-    "./shell.css": "./shell.css"
+    "./shell.css": "./shell.css",
+    "./code.css": "./code.css",
+    "./code": {
+      "types": "./code.d.ts",
+      "default": "./code.js"
+    }
   },
   "sideEffects": [
-    "*.css"
-  ]
+    "*.css",
+    "./code.js"
+  ],
+  "peerDependencies": {
+    "highlight.js": "^11.11.0"
+  },
+  "peerDependenciesMeta": {
+    "highlight.js": {
+      "optional": true
+    }
+  }
 }

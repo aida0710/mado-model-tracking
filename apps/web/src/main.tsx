@@ -11,10 +11,12 @@ import '@fontsource/noto-sans-jp/japanese-500.css';
 import '@fontsource/noto-sans-jp/japanese-700.css';
 import '@mado/design-tokens/fonts.css';
 import '@mado/design-tokens/tokens.css';
-// Element defaults, components and the app frame shared with Mado, before this app's area files.
+// Element defaults, components, the app frame and the code view shared with Mado, before this
+// app's area files.
 import '@mado/design-tokens/base.css';
 import '@mado/design-tokens/components.css';
 import '@mado/design-tokens/shell.css';
+import '@mado/design-tokens/code.css';
 // Area stylesheets. Order matters for equal-specificity rules: keep breakpoints (the width
 // breakpoints every other stylesheet uses) and base first, and add new rules to the file of the
 // area they style instead of creating a catch-all stylesheet.

@@ -1,6 +1,6 @@
 # @mado/design-tokens
 
-MadoとMado Model Trackingの画面が共有するCSSとIBM Plexの書体ファイルです。色・書体・角丸の変数のほか、要素の既定、共通の部品、画面の枠（上部バー・サイドバー・ドロワー・ログイン画面）を持ち、両アプリが同じclass名で使います。
+MadoとMado Model Trackingの画面が共有するCSSとIBM Plexの書体ファイルです。色・書体・角丸の変数のほか、要素の既定、共通の部品、画面の枠（上部バー・サイドバー・ドロワー・ログイン画面）、テキストのプレビューの色付けを持ち、両アプリが同じclass名で使います。
 
 | ファイル | 内容 |
 |---|---|
@@ -9,6 +9,8 @@ MadoとMado Model Trackingの画面が共有するCSSとIBM Plexの書体ファ�
 | `base.css` | 要素の既定（本文の書体と大きさ、入力欄、リンク、フォーカスの枠、見出し、コード）と小さな補助class（`.muted`・`.mono`・`.sr-only`など） |
 | `components.css` | ボタン（`.button`・`.icon-button`・`.link-button`）、通知（`.notice`）、ページの見出し（`.page-header`）、区切りの見出し（`.section-heading`）、項目と値の一覧（`.details-list`）、JSONの表示（`.json-view`）、タブ（`.tabs`・`.tab`）、入力欄（`.field`）、ダイアログ（`.dialog`）、表、状態バッジ（`.status-badge`）、ポップオーバー、狭い幅で列を減らす表（`.responsive-table`） |
 | `shell.css` | 上部バー（`.topbar`）、サイドバー（`.navigation-sidebar`）とアイコンだけの列、幅を変える境目、ドロワー（`.navigation-drawer`）、ログイン画面（`.login-page`） |
+| `code.css` | 暗い地のコード表示（`.code-view`）と表示形式の選択欄（`.code-format`）、`code.js`が付ける色のclass |
+| `code.js`・`code.d.ts` | テキストの形式の判定と色付け（`@mado/design-tokens/code`）。highlight.js（BSD-3-Clause）を使います |
 
 日本語の書体（Noto Sans JP）は各アプリが`@fontsource/noto-sans-jp`で同梱します。
 
@@ -26,6 +28,8 @@ import '@mado/design-tokens/shell.css';
 
 ダークテーマは`<html data-theme="dark">`のときに有効になります。
 
+テキストのプレビューに色を付けるアプリは、`code.css`もほかの共通のCSSのあとに読み込みます（Madoは`layer(components)`に入れます）。
+
 - Mado Model Tracking: npm workspaceのパッケージとして`apps/web`が依存し、`main.tsx`で上の順に読み込みます。
 - Mado: `npm pack`で作ったtarballを`front/vendor/`に置き、`file:`で依存します（置き場所が決まるまでの暫定）。`base.css`・`components.css`・`shell.css`は、3つとも`@layer components`に入れて読み込みます（`@import "@mado/design-tokens/base.css" layer(components);`）。Tailwind v4のpreflight（`@layer base`）より強く、ユーティリティclassより弱くなり、共通のCSSどうしの優先順位はlayerを使わないMado Model Trackingと同じになります（要素の指定より`.numeric`などのclassが勝つ）。
 
@@ -35,6 +39,24 @@ import '@mado/design-tokens/shell.css';
 - `.navigation-sidebar[data-collapsed='true']`: アイコンだけの列にします。名前は`.navigation-label`に入れて読み上げ用に残し、`title`でツールチップにします。
 - `.navigation-resize-handle`: サイドバーの右の境目。幅はアプリが`.app-shell`に`--navigation-width`を書いて変えます。ドラッグ中は`data-dragging='true'`を付けます。
 - 切り替える幅は両アプリで同じにします。1200px以上は`sidebar`（手で`rail`に畳める）、900px以上1200px未満は`rail`、900px未満は`drawer`です。
+
+### テキストの色付け
+
+`code.js`はhighlight.jsを使います。highlight.jsは省略できるpeer dependencyなので、色付けを使うアプリは`highlight.js`（11.11以上）を自分の依存に入れます。
+
+```ts
+import { detectLanguage, highlightCode } from '@mado/design-tokens/code';
+
+const language = detectLanguage({ fileName, mimeType, text });
+// <pre class="code-view"><code>の中身。文字は逃がしてあり、足すのは色のための<span class>だけです。
+const html = highlightCode(text, language);
+```
+
+- 形式は`CODE_LANGUAGES`の15種類です。テキスト（色なし）、JSON（JSON Linesも）、YAML、TOML、INI（`.cfg`・`.conf`も）、.env / properties、XML / HTML、Markdown、Python、Shell、SQL、Dockerfile、CSV、TSV、ログです。TOMLはhighlight.jsのINIの文法で色を付けます。CSVとTSVは列ごとに6色を繰り返し、ログは行頭の時刻とレベル（ERROR・WARN・INFO・DEBUGなど）に色を付けます。
+- `detectLanguage`は、ファイル名（拡張子と`Dockerfile`・`.env`などの名前）、メディアタイプ、中身の先頭8,192文字の順に形式を決め、どれにも当たらなければ`plaintext`にします。
+- 色を付けるのは先頭の`HIGHLIGHT_MAX_CHARS`（200,000文字）までで、残りは逃がすだけにします。
+- 色は`tokens.css`の`--code-*`です。地の`--code-background`はライトとダークで同じ暗い色で、どの色も地に対して4.5:1以上にしています。
+- 利用者が選び直した形式の保存は各アプリが持ちます（Mado Model Trackingは`mmt.codeLanguage`、Madoは`mado.codeLanguage`）。
 
 ## 変数と部品を足す・変えるときの決まり
 
