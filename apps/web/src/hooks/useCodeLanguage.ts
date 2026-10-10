@@ -34,6 +34,13 @@ function readChoices(): Record<string, CodeLanguage> {
   }
 }
 
+function storedChoice(key: string): CodeLanguageChoice {
+  if (!key) return 'auto';
+  const choices = readChoices();
+  // Own keys only, so a file named "notes.constructor" does not read Object's members.
+  return Object.hasOwn(choices, key) ? choices[key]! : 'auto';
+}
+
 function writeChoice(key: string, choice: CodeLanguageChoice) {
   const choices: Record<string, CodeLanguage> = readChoices();
   if (choice === 'auto') delete choices[key];
@@ -62,8 +69,7 @@ export function useCodeLanguage({
   const key = codeLanguageKey(fileName);
   // A pick made in this preview; another file (another key) reads its own pick from storage.
   const [picked, setPicked] = useState<{ key: string; choice: CodeLanguageChoice } | null>(null);
-  const choice: CodeLanguageChoice =
-    picked?.key === key ? picked.choice : ((key && readChoices()[key]) || 'auto');
+  const choice = picked?.key === key ? picked.choice : storedChoice(key);
   return {
     detected,
     choice,

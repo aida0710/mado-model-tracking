@@ -39,6 +39,12 @@ describe('CodeView', () => {
     expect(markup).toContain('<span class="code-log-level code-log-error">ERROR</span>');
   });
 
+  it('Object のメンバーと同じ名前の拡張子でも、覚えていなければ推測を使う', () => {
+    vi.stubGlobal('localStorage', storage({ 'mmt.codeLanguage': '{}' }));
+    const markup = renderToStaticMarkup(<CodeView content="plain" fileName="notes.constructor" />);
+    expect(markup).toContain('<option value="auto" selected="">自動（テキスト）</option>');
+  });
+
   it('覚えている値が形式でなければ無視して推測に戻る', () => {
     vi.stubGlobal('localStorage', storage({ 'mmt.codeLanguage': JSON.stringify({ json: 'javascript' }) }));
     const markup = renderToStaticMarkup(<CodeView content={'{"a": 1}'} fileName="a.json" />);
