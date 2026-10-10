@@ -1,6 +1,7 @@
 import type {
   ComputeTargetDetails,
   ComputeTargetSharing,
+  ShareableProject,
   SiteConnectionCheck,
   SiteConnectionCheckRequest,
   SiteJobShell,
@@ -39,6 +40,12 @@ export const siteComputersApi = {
   /** Owned computers only: the Projects whose members may use it besides its owner. */
   setProjects: (targetId: string, body: ComputeTargetSharing) =>
     request<ComputeTargetDetails>(`${targetPath(targetId)}/projects`, jsonRequest('PUT', body)),
+  /** What adding a computer of one's own accepts as projectIds: one's own Projects. */
+  ownShareableProjects: (signal?: AbortSignal) =>
+    requestItems<ShareableProject>('/targets/shareable-projects', signal),
+  /** What setProjects accepts: its owner's Projects, also when someone else edits the computer. */
+  shareableProjects: (targetId: string, signal?: AbortSignal) =>
+    requestItems<ShareableProject>(`${targetPath(targetId)}/shareable-projects`, signal),
   /** The job shell's versions, newest (the current one) first. */
   jobShells: (targetId: string, signal?: AbortSignal) =>
     requestItems<SiteJobShellSummary>(jobShellsPath(targetId), signal),

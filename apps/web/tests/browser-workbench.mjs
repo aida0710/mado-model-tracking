@@ -109,6 +109,9 @@ page.on('worker', (worker) => workerUrls.push(worker.url()));
 const projectBase = `${process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182'}/projects/${api.state.project.id}`;
 const dialog = () => page.getByRole('dialog').last();
 const fill = (label, value) => dialog().getByLabel(label).fill(value);
+// getByLabel matches part of a label, and '版' is also in '編集元のコード版'; the exact accessible
+// name tells the two apart (the label text with its required mark is '版 *', so exact getByLabel fails).
+const versionField = () => dialog().getByRole('textbox', { name: '版', exact: true });
 const clickSave = () => dialog().getByTestId('code-version-save').click();
 try {
   console.log('Workbench: Git overlay, multiple files, save failure and immutable version');
@@ -116,7 +119,7 @@ try {
   await page.getByRole('heading', { name: 'Code', exact: true }).waitFor();
   assert.equal(editorRequests.length, 0, 'Monaco loaded before opening the editor');
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('版', 'edited-v2');
+  await versionField().fill('edited-v2');
   controls.failRepository = true;
   await dialog().getByTestId('repository-load').click();
   await dialog().getByRole('alert').filter({ hasText: 'repository unavailable' }).waitFor();
@@ -161,7 +164,7 @@ try {
   controls.failSave = true;
   await clickSave();
   await dialog().getByRole('alert').filter({ hasText: 'code save unavailable' }).waitFor();
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'edited-v2');
+  assert.equal(await versionField().inputValue(), 'edited-v2');
   await clickSave();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   const edited = api.state.codeVersions.find((version) => version.version === 'edited-v2');
@@ -173,10 +176,10 @@ try {
 
   console.log('Workbench: unsaved changes and mobile modal');
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('版', 'discard-me');
+  await versionField().fill('discard-me');
   await dialog().getByRole('button', { name: '閉じる', exact: true }).click();
   await dialog().getByRole('button', { name: '編集を続ける', exact: true }).click();
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'discard-me');
+  assert.equal(await versionField().inputValue(), 'discard-me');
   await page.setViewportSize({ width: 390, height: 844 });
   const bounds = await dialog().boundingBox();
   assert.ok(bounds.width <= 390 && bounds.x >= 0, 'workspace modal overflows the mobile viewport');
@@ -188,7 +191,7 @@ try {
   console.log('Workbench: standalone samples and test command');
   await page.getByRole('button', { name: '版を作成', exact: true }).click();
   await dialog().getByLabel('編集元のコード版').selectOption('');
-  await fill('版', 'smoke-v3');
+  await versionField().fill('smoke-v3');
   await dialog().getByLabel('リポジトリの選択').selectOption('standalone');
   await dialog().getByLabel('サンプル').selectOption('sdk');
   await dialog().getByRole('button', { name: 'サンプルを追加', exact: true }).click();
@@ -233,7 +236,7 @@ try {
   await page.getByTestId('task-revision').getByText('1', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Taskを編集', exact: true }).click();
   await dialog().getByTestId('task-edit-code').click();
-  await fill('版', 'task-code-v4');
+  await versionField().fill('task-code-v4');
   await clickSave();
   await dialog().getByLabel('コード版').locator('option:checked').getByText(/task-code-v4/).waitFor({ state: 'attached' });
   const taskCode = api.state.codeVersions.find((version) => version.version === 'task-code-v4');

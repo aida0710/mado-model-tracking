@@ -5,6 +5,8 @@ description: スーパーコンピュータ、研究室のGPUサーバー、自�
 
 # 外部の計算機（site）
 
+![計算機の詳細。job shellの版の履歴、自分の設定、あなた用の鍵と接続確認](/images/compute-site-details.png)
+
 siteは、スーパーコンピュータ、SSHで入るGPUサーバー、研究者のPCのような計算機です。launcherがsiteに入ってjob shellを実行し、スケジューラへJobを投入します（自分で投入する計算機では、Jobを依頼した本人の`mado-tracking submit`が投入します）。計算ノードのrunnerは、Job tokenでtrackingへ直接報告します。
 
 ## 誰が足せるか
@@ -27,7 +29,7 @@ Jobを作る画面の実行先には、そのProjectで自分が使える計算�
 5. job shellの雛形（PBS、Slurm、Grid Engine、Fujitsu TCS、スケジューラのないDocker・Apptainerのホスト）を選び、キュー名・資源・グループをsiteの資料に合わせて直します。
 6. 自分の計算機は、共有するProjectを選べます。
 
-job shellは保存のたびに新しい版になり、Jobには投入に使った版が残ります。job shellと設定を変えられるのは、計算機の所有者と全体管理者です。
+job shellは内容を変えて保存するたびに新しい版になり、Jobには投入に使った版が残ります。job shellと設定を変えられるのは、計算機の所有者と全体管理者です。
 
 ## 鍵と接続確認
 
@@ -35,7 +37,7 @@ job shellは保存のたびに新しい版になり、Jobには投入に使っ�
 
 - **共用のアカウント**: 所有者が、出た公開鍵を共用アカウントの`~/.ssh/authorized_keys`に登録します。利用者がすることはありません。
 - **本人のアカウント**: 各自が計算機の［自分の設定］でアカウント名（と`GROUP`などの変数）を保存すると、launcherがその人用の鍵を作ります。出た公開鍵を、サイトの方法（利用者ポータルなど）で自分のアカウントに登録します。保存するまで、その計算機にはJobを作れません。
-- ［接続確認］で、launcherがその鍵とアカウントで実際にログインできるかを確かめます。
+- ［接続を確認］で、launcherがその鍵とアカウントで実際にログインできるかを確かめます。
 - サイトの利用規程で、他のホストからの自動ログインや公開鍵の追加が許されるか確かめてください。許されないsiteは手動にします。
 
 ## 手動で投入する
@@ -50,7 +52,9 @@ mado-tracking submit --site <計算機のID> --watch        # 止めるまで繰
 mado-tracking submit --site <計算機のID> --watch --all  # 所有者: 共有した人のJobも投入する
 ```
 
-tokenは、`jobs:write`（件数の表示には`read`も）を持つ本人のAPI tokenです。`--watch`を使わなければ何も常駐しません。`--all`のJobも、実行した人のアカウントで動きます。
+他の人が足した手動投入の計算機のJobは、自分のアカウントで入れる計算機（共有されたスパコンなど）なら、自分でそこから`mado-tracking submit`を実行して投入します。所有者のPCのように、所有者が`--watch --all`で待ち受けている計算機では、所有者の側で投入されます。
+
+tokenは、`jobs:write`（件数の表示には`read`も）を持つ本人のAPI tokenです。`--watch`を使わなければ何も常駐しません。`--all`のJobも、実行した人のアカウントで動きます。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 
 ## 共有された計算機を使う前に
 

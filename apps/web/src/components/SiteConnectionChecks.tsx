@@ -19,16 +19,20 @@ const checkBadgeClass: Record<SiteConnectionCheckStatus, string> = {
 
 /**
  * Asks the launcher to log in once with the key and account (one's own, or the shared account's)
- * and lists the newest results, polling while the newest one waits for the launcher.
+ * and lists the newest results, polling while the newest one waits for the launcher. A check
+ * needs the key the launcher made, so it waits for that key.
  */
 export function SiteConnectionChecks({
   targetId,
   personal,
   userId,
+  isKeyReady,
 }: {
   targetId: string;
   personal: boolean;
   userId: string;
+  /** The launcher has made the account's key; until then the API refuses a check. */
+  isKeyReady: boolean;
 }) {
   const mutation = useMutation();
   // A global administrator may be sent other people's checks too; only this account's are shown.
@@ -53,7 +57,7 @@ export function SiteConnectionChecks({
         <button
           type="button"
           className="button small"
-          disabled={mutation.pending || isInProgress}
+          disabled={mutation.pending || isInProgress || !isKeyReady}
           onClick={requestCheck}
         >
           <PlugZap size={14} />

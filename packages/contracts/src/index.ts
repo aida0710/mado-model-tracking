@@ -235,6 +235,7 @@ export type {
   LauncherKeyPublish,
   LauncherSite,
   ManualSiteConfiguration,
+  ShareableProject,
   SiteAccountMode,
   SiteConnection,
   SiteConnectionCheck,

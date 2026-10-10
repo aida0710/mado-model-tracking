@@ -77,6 +77,12 @@ function makeRequestedKeys() {
       });
 }
 
+// GET /targets/shareable-projects answers one's own Projects (adding a computer), and
+// GET /targets/:id/shareable-projects its owner's; a step changes the owner's or makes them
+// unreadable.
+const ownProjects = [{ id: api.state.project.id, name: api.state.project.name }];
+let ownerProjects = ownProjects;
+
 const calls = [];
 await context.route(
   (url) => url.pathname.startsWith('/api/'),
@@ -111,6 +117,9 @@ await context.route(
       if (settings?.accountMode === 'shared' && settings.launcherId) requestKey(target.id, null);
       return reply(target, 201);
     }
+    // Before the /targets/:id routes, as in the API.
+    if (path === '/targets/shareable-projects' && method === 'GET')
+      return reply({ items: ownProjects });
     if (parts[0] === 'targets' && parts.length >= 2) {
       const target = api.state.targets.find((item) => item.id === parts[1]);
       const [, , resource, key] = parts;
@@ -124,6 +133,10 @@ await context.route(
         target.projectIds = body.projectIds;
         return reply(target);
       }
+      if (resource === 'shareable-projects' && method === 'GET')
+        return ownerProjects
+          ? reply({ items: ownerProjects })
+          : reply({ error: 'ComputeTargetが見つかりません', code: 'not_found' }, 404);
       if (resource === 'job-shells') {
         const versions = site.jobShells.get(target.id) ?? [];
         if (method === 'GET' && !key) return reply({ items: versions.map(summary) });
@@ -353,6 +366,8 @@ assert.deepEqual(createdPc.projectIds, [api.state.project.id]);
 assert.equal(createdPc.site.connection, null);
 assert.equal(createdPc.site.gpuAssignment, 'lease');
 assert.equal(createdPc.jobShell, exampleJobShell('direct-docker'));
+// The choices were the adder's own Projects, as the API lists them.
+assert.ok(lastCall('GET', /^\/targets\/shareable-projects$/));
 const pc = api.state.targets.find((target) => target.name === 'Alice PC');
 
 console.log('Site computers: its owner waits with --watch, takes everyone\'s Jobs with --all');
@@ -384,6 +399,44 @@ await page.getByRole('dialog').waitFor({ state: 'hidden' });
 assert.deepEqual(lastCall('PUT', /\/projects$/).body, { projectIds: [] });
 assert.equal(lastCall('PATCH', /^\/targets\/[^/]+$/).path, `/targets/${pc.id}`);
 await page.getByRole('row').filter({ hasText: 'Alice PC' }).getByText('共有なし（本人だけ）').waitFor();
+
+console.log("Site computers: a global administrator editing someone else's PC chooses among its owner's Projects");
+api.state.user.isAdmin = true;
+Object.assign(pc, { ownerUserId: id(), ownerName: 'Bob', projectIds: [api.state.project.id] });
+ownerProjects = [{ id: id(), name: 'Owner Lab' }];
+await page.goto(`${projectBase}/compute`);
+await page.getByRole('row').filter({ hasText: 'Alice PC' }).getByText('Bobさんの計算機').waitFor();
+await page.getByTestId(`target-edit-${pc.id}`).click();
+const ownerSharing = dialog().getByLabel('共有するProject');
+await ownerSharing.waitFor();
+// Bob may no longer share it with the Project it is shared with, which stays to be taken off.
+assert.deepEqual(await ownerSharing.locator('option').allTextContents(), [
+  'Owner Lab',
+  `${api.state.project.name}（所有者がEditor以上ではありません）`,
+]);
+await dialog().getByText('選べるのは、所有者がEditor以上のProjectです。', { exact: false }).waitFor();
+assert.equal(lastCall('GET', /shareable-projects$/).path, `/targets/${pc.id}/shareable-projects`);
+await select('共有するProject', [ownerProjects[0].id]);
+await dialog().getByRole('button', { name: '保存', exact: true }).click();
+await page.getByRole('dialog').waitFor({ state: 'hidden' });
+assert.deepEqual(lastCall('PUT', /\/projects$/).body, { projectIds: [ownerProjects[0].id] });
+
+console.log("Site computers: when the owner's Projects cannot be read, an edit leaves the sharing alone");
+const sharingPuts = () =>
+  calls.filter((call) => call.method === 'PUT' && /\/projects$/.test(call.path)).length;
+const sharingPutsBefore = sharingPuts();
+ownerProjects = null;
+await page.getByTestId(`target-edit-${pc.id}`).click();
+await dialog().getByRole('alert').waitFor();
+assert.equal(await dialog().getByLabel('共有するProject').count(), 0);
+await dialog().getByRole('button', { name: '保存', exact: true }).click();
+await page.getByRole('dialog').waitFor({ state: 'hidden' });
+assert.equal(sharingPuts(), sharingPutsBefore);
+// The researcher again, owning the PC.
+api.state.user.isAdmin = false;
+ownerProjects = ownProjects;
+Object.assign(pc, { ownerUserId: api.state.user.id, ownerName: api.state.user.displayName });
+await page.goto(`${projectBase}/compute`);
 
 console.log('Site computers: on a site of personal accounts, a researcher saves theirs and gets a key');
 // As a researcher sees a global site: its account mode, not its settings.

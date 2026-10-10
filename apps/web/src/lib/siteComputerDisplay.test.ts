@@ -9,13 +9,14 @@ import {
 } from '../../tests/fixtures/siteComputers';
 import {
   isConnectionCheckInProgress,
+  isKeyReady,
   isKeyRequested,
   launcherOptions,
-  shareableProjectOptions,
   sharedAccountKey,
   shortSha256,
   targetOwnerLabel,
   targetSharingLabel,
+  targetSharingOptions,
 } from './siteComputerDisplay';
 
 const projects = [
@@ -44,16 +45,34 @@ describe('計算機の所有者と共有先の表示', () => {
     expect(targetSharingLabel(ownedSiteDetails, projects, false)).toBeNull();
   });
 
-  it('共有できるのはEditor以上のProjectと、すでに共有しているProject', () => {
-    expect(shareableProjectOptions(projects, [])).toEqual([
+});
+
+describe('自分の計算機の共有先の選択肢', () => {
+  // What the API lists as the owner's Projects (editor or above), in its order.
+  const ownerProjects = [
+    { id: 'owner-lab', name: 'Owner Lab' },
+    { id: 'project', name: 'Speech' },
+  ];
+
+  it('所有者が共有できるProjectを、APIが並べた順に出す', () => {
+    expect(targetSharingOptions(ownerProjects, [], projects)).toEqual([
+      { value: 'owner-lab', label: 'Owner Lab' },
       { value: 'project', label: 'Speech' },
-      { value: 'managed', label: 'Music' },
     ]);
-    expect(shareableProjectOptions(projects, ['viewed']).map((option) => option.value)).toEqual([
-      'project',
-      'managed',
-      'viewed',
+    expect(targetSharingOptions(ownerProjects, ['project'], projects)).toHaveLength(2);
+  });
+
+  it('共有済みでも所有者がもう共有できないProjectは、外せるように印を付けて残す', () => {
+    expect(targetSharingOptions([ownerProjects[1]!], ['project', 'viewed', 'gone'], projects)).toEqual([
+      { value: 'project', label: 'Speech' },
+      { value: 'viewed', label: 'Vision（所有者がEditor以上ではありません）' },
+      // Not among the editor's Projects either: shown by its ID.
+      { value: 'gone', label: 'gone（所有者がEditor以上ではありません）' },
     ]);
+  });
+
+  it('所有者が共有できるProjectが無く、共有もしていなければ選択肢は無い', () => {
+    expect(targetSharingOptions([], [], projects)).toEqual([]);
   });
 });
 
@@ -84,6 +103,13 @@ describe('鍵と接続確認の状態', () => {
     expect(isKeyRequested({ ...readyKey, status: 'requested', publicKey: null })).toBe(true);
     expect(isKeyRequested(readyKey)).toBe(false);
     expect(isKeyRequested(null)).toBe(false);
+  });
+
+  it('接続確認ができるのは、launcherが作り終えた鍵だけ', () => {
+    expect(isKeyReady(readyKey)).toBe(true);
+    expect(isKeyReady({ ...readyKey, status: 'requested', publicKey: null })).toBe(false);
+    expect(isKeyReady(null)).toBe(false);
+    expect(isKeyReady(undefined)).toBe(false);
   });
 
   it('一番新しい確認がlauncherの答えを待っている間だけ確認中とする', () => {

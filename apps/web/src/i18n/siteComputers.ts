@@ -15,6 +15,10 @@ export const siteComputersText = {
   targetProjectsHint:
     '選んだProjectのメンバーが、この計算機でJobを動かせます。そのJobもこの計算機のアカウント（PCではあなたのアカウント）で動くので、コードを動かしてよい相手のProjectだけを選んでください。選ばなければ自分だけが使います。Editor以上のProjectだけを選べます。',
   noShareableProjects: '共有できるProject（自分がEditor以上のもの）はありません。',
+  // Editing an owned computer: its editor may be a global administrator, not its owner.
+  ownedTargetProjectsHint:
+    '選んだProjectのメンバーが、この計算機でJobを動かせます。そのJobもこの計算機のアカウント（PCでは所有者のアカウント）で動くので、コードを動かしてよい相手のProjectだけを選んでください。選ばなければ所有者だけが使います。選べるのは、所有者がEditor以上のProjectです。',
+  noOwnedTargetShareableProjects: '共有できるProject（所有者がEditor以上のもの）はありません。',
   personalTargetNotice:
     '自分の計算機として追加します。使えるのは自分と、共有したProjectのメンバーです。',
   siteSubmissionSection: '投入と接続',
@@ -100,6 +104,7 @@ export const siteComputersText = {
   siteKeyFingerprint: '指紋',
   siteKeyStatus: '鍵の状態',
   siteKeyReadyAt: '作成日時',
+  siteKeyRequestedAt: '依頼日時',
   siteKeyRotate: '鍵を作り直す',
   siteKeyRequest: '鍵を依頼する',
   siteKeyRotateConfirm:
@@ -141,6 +146,8 @@ export const siteComputersText = {
   manualGuideWatch: 'PCで待ち受ける（止めるまで繰り返し投入する）',
   manualGuideAll:
     '所有者: 共有したProjectのメンバーのJobも待ち受けて投入する（あなたのアカウントで動きます）',
+  manualGuideAllScope:
+    '--allで受け取るのは、使ったtokenのProjectのJobです。複数のProjectに共有したときは、Projectごとに、そのProjectのtokenで--watch --allを動かします。',
   manualGuideToken:
     '実行する前に、MMT_API_URLと、jobs:writeを持つ本人のAPI token（MMT_API_TOKEN）を設定します。',
 } as const;
@@ -148,6 +155,11 @@ export const siteComputersText = {
 // Text that embeds values.
 export const siteComputersTextTemplates = {
   targetOwnerName: (name: string) => `${name}さんの計算機`,
+  // Someone else's manual computer may be their PC (they take everyone's Jobs) or, for example, a
+  // supercomputer each requester submits to with their own account.
+  manualGuideOwnerSubmits: (owner: string) =>
+    `この計算機は${owner}さんの計算機です。所有者が--watch --allで待ち受けている計算機（所有者のPCなど）では、所有者の側で投入されます。`,
+  projectNoLongerShareable: (name: string) => `${name}（所有者がEditor以上ではありません）`,
   siteJumpHostError: (value: string) =>
     `経由するホスト「${value}」は[user@]host[:port]の形で入力してください。`,
   siteJumpHostsTooMany: (max: number) => `経由するホストは${max}個までです。`,

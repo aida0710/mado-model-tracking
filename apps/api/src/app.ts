@@ -524,6 +524,7 @@ export function createApplication(options: ApplicationOptions) {
   app.route(
     '/api/targets',
     siteComputerRoutes({
+      targets,
       jobShells: new SiteJobShellService(database),
       personalSettings: new SitePersonalSettingsService(database),
       keys: new SiteKeyService(database),

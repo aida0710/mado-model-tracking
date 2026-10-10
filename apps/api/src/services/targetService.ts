@@ -1,4 +1,4 @@
-import type { ComputeTarget, ComputeTargetDetails } from '@mmt/contracts';
+import type { ComputeTarget, ComputeTargetDetails, ShareableProject } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
@@ -18,6 +18,7 @@ import type { TargetCreate, TargetPatch } from '../domain/validation.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import {
+  listShareableProjects,
   listTargetProjects,
   replaceTargetProjects,
   targetUsableSql,
@@ -68,6 +69,29 @@ function withoutConnection(target: TargetRow): TargetRow {
 
 function siteOnly(message: string): never {
   throw new DomainError(422, message, 'site_only_setting');
+}
+
+// Only owned computers have Projects to share with.
+function targetNotOwned(): never {
+  throw new DomainError(
+    422,
+    '全体の計算機はどのProjectからも使えるので、共有先を選びません',
+    'target_not_owned',
+  );
+}
+
+async function findTarget(
+  connection: Connection,
+  targetId: string,
+  options: { lock?: boolean } = {},
+): Promise<ComputeTarget> {
+  const target = await first<ComputeTarget>(
+    connection,
+    `SELECT * FROM compute_targets WHERE id=$1${options.lock ? ' FOR UPDATE' : ''}`,
+    [targetId],
+  );
+  if (!target) notFound('ComputeTarget');
+  return target;
 }
 
 export class TargetService {
@@ -122,12 +146,7 @@ export class TargetService {
     validateTargetConfiguration(input, this.config.allowLocalExecutor);
     if (input.executor !== 'site' && (site || personal || projectIds.length || jobShell))
       siteOnly('全体設定・所有者・共有・job shellはsiteだけの設定です');
-    if (!personal && projectIds.length)
-      throw new DomainError(
-        422,
-        '全体の計算機はどのProjectからも使えるので、共有先を選びません',
-        'target_not_owned',
-      );
+    if (!personal && projectIds.length) targetNotOwned();
     const settings = mergeSiteSettings(DEFAULT_SITE_SETTINGS, site ?? {});
     if (input.executor === 'site') validateSiteSettings(input, settings);
     return transaction(this.database, async (connection) => {
@@ -215,12 +234,7 @@ export class TargetService {
     };
     return recordDenial(this.database, draft, () =>
       transaction(this.database, async (connection) => {
-        const target = await first<ComputeTarget>(
-          connection,
-          'SELECT * FROM compute_targets WHERE id=$1 FOR UPDATE',
-          [targetId],
-        );
-        if (!target) notFound('ComputeTarget');
+        const target = await findTarget(connection, targetId, { lock: true });
         await requireTargetManager(connection, principal, target);
         const updated = { ...target, ...input };
         validateTargetConfiguration(updated, this.config.allowLocalExecutor);
@@ -293,24 +307,37 @@ export class TargetService {
     };
     return recordDenial(this.database, draft, () =>
       transaction(this.database, async (connection) => {
-        const target = await first<ComputeTarget>(
-          connection,
-          'SELECT * FROM compute_targets WHERE id=$1 FOR UPDATE',
-          [targetId],
-        );
-        if (!target) notFound('ComputeTarget');
+        const target = await findTarget(connection, targetId, { lock: true });
         await requireTargetManager(connection, principal, target);
-        if (!target.ownerUserId)
-          throw new DomainError(
-            422,
-            '全体の計算機はどのProjectからも使えるので、共有先を選びません',
-            'target_not_owned',
-          );
+        if (!target.ownerUserId) targetNotOwned();
         await this.share(connection, { target, projectIds: sharing.projectIds, sharedBy: principal.user.id });
         await writeAuditEvent(connection, { ...draft, outcome: 'success' });
         return this.detail(connection, principal, targetId);
       }),
     );
+  }
+
+  /**
+   * GET /targets/shareable-projects: the projectIds POST /targets accepts for a computer of one's
+   * own, for whoever may add one (a browser session, or a global administrator's admin token). A
+   * global administrator sees every Project but shares only with those they are a member of.
+   */
+  async ownShareableProjects(principal: Principal): Promise<ShareableProject[]> {
+    if (!isGlobalAdministrator(principal)) requireSession(principal, '計算機の追加');
+    return listShareableProjects(this.database, principal.user.id);
+  }
+
+  /**
+   * GET /targets/:id/shareable-projects: what PUT /targets/:id/projects accepts. They are the
+   * owner's Projects, so a global administrator editing someone else's computer is offered
+   * those rather than their own.
+   */
+  async shareableProjects(principal: Principal, targetId: string): Promise<ShareableProject[]> {
+    requireScope(principal, 'read');
+    const target = await findTarget(this.database, targetId);
+    await requireTargetManager(this.database, principal, target);
+    if (!target.ownerUserId) targetNotOwned();
+    return listShareableProjects(this.database, target.ownerUserId);
   }
 
   private async updateSite(
@@ -345,20 +372,17 @@ export class TargetService {
       throw new DomainError(422, '選んだlauncherはありません（失効しています）', 'site_launcher_invalid');
   }
 
-  // The owner may share a computer with the Projects where they create Jobs themselves.
+  // Accepts exactly what ownShareableProjects (a new computer) and shareableProjects list.
   private async share(
     connection: Connection,
     sharing: { target: ComputeTarget; projectIds: string[]; sharedBy: string },
   ): Promise<void> {
     const { target, projectIds } = sharing;
     if (!target.ownerUserId) return;
-    const allowed = await rows<{ projectId: string }>(
-      connection,
-      `SELECT project_id FROM effective_project_roles
-      WHERE user_id=$1 AND project_id=ANY($2::uuid[]) AND role IN ('editor','admin')`,
-      [target.ownerUserId, projectIds],
+    const shareable = new Set(
+      (await listShareableProjects(connection, target.ownerUserId)).map((project) => project.id),
     );
-    if (allowed.length !== projectIds.length)
+    if (!projectIds.every((projectId) => shareable.has(projectId)))
       throw new DomainError(
         422,
         '共有できるのは、計算機の所有者がeditor以上のProjectだけです',

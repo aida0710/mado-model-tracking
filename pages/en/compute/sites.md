@@ -5,6 +5,8 @@ description: Add supercomputers, lab GPU servers and your own PC on the Web and 
 
 # External computers (sites)
 
+![A computer's details: the job shell's versions, your own settings, and the key made for you with its connection checks](/images/compute-site-details.png)
+
 A site is a computer such as a supercomputer, a GPU server reached over SSH, or a researcher's PC. A launcher logs in to the site, runs its job shell and submits the Job to the scheduler (on computers you submit to yourself, the requester's `mado-tracking submit` does this). The runner on the compute node reports to tracking directly with the Job token.
 
 ## Who can add one
@@ -27,7 +29,7 @@ The target list on the Job screens shows only the computers you can use in that 
 5. Pick a job shell template (PBS, Slurm, Grid Engine, Fujitsu TCS, or a GPU host without a scheduler using Docker or Apptainer) and adapt the queue, resources and groups to the site's documentation.
 6. For your own computer, choose the Projects to share it with.
 
-Every save of the job shell makes a new version, and each Job records the version it was submitted with. Only the owner and global administrators can change the job shell and the settings.
+Each save that changes the job shell makes a new version, and each Job records the version it was submitted with. Only the owner and global administrators can change the job shell and the settings.
 
 ## Keys and connection checks
 
@@ -35,7 +37,7 @@ On automatic sites, the launcher makes the login key and shows its public key in
 
 - **Shared account**: the owner adds the public key to the shared account's `~/.ssh/authorized_keys`. Users do nothing.
 - **Each requester's account**: when you save your account name (and variables such as `GROUP`) in the computer's **自分の設定** (My settings), the launcher makes a key for you. Register its public key with your account in the site's way (a user portal, for example). Until you save your settings, you cannot create Jobs on that computer.
-- **接続確認** (Connection check) makes the launcher log in once with that key and account.
+- **接続を確認** (Check the connection) makes the launcher log in once with that key and account.
 - Check that the site's rules allow automatic logins from another host and extra public keys. If they do not, use manual submission for that site.
 
 ## Submit manually
@@ -50,7 +52,9 @@ mado-tracking submit --site <computer ID> --watch        # repeat until stopped 
 mado-tracking submit --site <computer ID> --watch --all  # owner: also the Jobs of the people you share it with
 ```
 
-The token is your own API token with `jobs:write` (and `read` to show the counts). Nothing keeps running unless you use `--watch`. Jobs taken with `--all` also run as the account that ran the command.
+For a Job on a manual computer someone else added: if you can log in to that computer with your own account (a shared supercomputer, for example), submit it yourself with `mado-tracking submit` there. On a computer where the owner waits with `--watch --all` (such as the owner's PC), the owner's side submits it.
+
+The token is your own API token with `jobs:write` (and `read` to show the counts). Nothing keeps running unless you use `--watch`. Jobs taken with `--all` also run as the account that ran the command. `--all` takes only the Jobs of the token's Project (write tokens are made per Project); when you share a computer with several Projects, run one `--watch --all` per Project with that Project's token.
 
 ## Before you use a shared computer
 

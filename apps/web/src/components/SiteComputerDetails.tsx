@@ -4,7 +4,8 @@ import { SiteJobShellPanel } from './SiteJobShellPanel';
 import { SitePersonalSettingsPanel } from './SitePersonalSettingsPanel';
 import { SitePersonalSettingsTable } from './SitePersonalSettingsTable';
 import { SiteSharedKeyPanel } from './SiteSharedKeyPanel';
-import { canManageTarget, isTargetOwner } from '../lib/permissions';
+import { manualSiteOwnership } from '../lib/manualSubmission';
+import { canManageTarget } from '../lib/permissions';
 import { personalSettingsScope } from '../lib/sitePersonalSettingsInput';
 
 /**
@@ -30,7 +31,7 @@ export function SiteComputerDetails({
         <h2>{target.name}</h2>
       </div>
       {!isAutomatic && (
-        <ManualSubmissionGuide targetId={target.id} isOwner={isTargetOwner(user, target)} />
+        <ManualSubmissionGuide targetId={target.id} ownership={manualSiteOwnership(target, user)} />
       )}
       <SiteJobShellPanel targetId={target.id} canEdit={canManage} onSaved={onTargetChanged} />
       {isAutomatic && canManage && target.siteAccountMode === 'shared' && (

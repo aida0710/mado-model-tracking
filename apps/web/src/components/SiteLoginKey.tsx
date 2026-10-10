@@ -13,8 +13,9 @@ import { siteComputersTextTemplates, siteKeyStatusLabels } from '../i18n/siteCom
 
 /**
  * A key the launcher made for logging in on the site: the public half to add to the account's
- * authorized_keys, or a note while the launcher has not made it yet. Rotating revokes it and asks
- * the launcher for a new one; with no key yet, the request needs no confirmation.
+ * authorized_keys, or, while the launcher has not made it yet, its state and when it was asked
+ * for. Rotating revokes it and asks the launcher for a new one; with no key yet, the request
+ * needs no confirmation.
  */
 export function SiteLoginKey({
   targetId,
@@ -66,8 +67,18 @@ export function SiteLoginKey({
             ]}
           />
         </>
+      ) : siteKey ? (
+        <>
+          <p className="notice">{text.siteKeyRequested}</p>
+          <DetailsList
+            entries={[
+              [text.siteKeyStatus, siteKeyStatusLabels[siteKey.status]],
+              [text.siteKeyRequestedAt, formatDate(siteKey.requestedAt)],
+            ]}
+          />
+        </>
       ) : (
-        <p className="notice">{siteKey ? text.siteKeyRequested : text.siteKeyNone}</p>
+        <p className="notice">{text.siteKeyNone}</p>
       )}
       <ErrorNotice message={mutation.error} />
       <div className="site-computer-actions">

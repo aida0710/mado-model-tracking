@@ -37,6 +37,28 @@ describe('計算機の共有とjob shellのAPI呼び出し', () => {
     });
   });
 
+  it('共有先の候補は、足すときは自分の、編集では計算機のshareable-projectsを読み、itemsの無い応答を空として扱わない', async () => {
+    const items = [{ id: 'p1', name: 'Speech' }];
+    const fetch = stubJsonResponse({ items });
+    await expect(siteComputersApi.ownShareableProjects()).resolves.toEqual(items);
+    await expect(siteComputersApi.shareableProjects('pc/1')).resolves.toEqual(items);
+    expect(call(fetch, 0)).toEqual({ path: '/api/targets/shareable-projects', method: 'GET', body: undefined });
+    expect(call(fetch, 1)).toEqual({
+      path: '/api/targets/pc%2F1/shareable-projects',
+      method: 'GET',
+      body: undefined,
+    });
+    stubJsonResponse({});
+    await expect(siteComputersApi.shareableProjects('pc')).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+    stubJsonResponse({ error: '所有者か全体管理者だけです', code: 'target_owner_required' }, 403);
+    await expect(siteComputersApi.shareableProjects('pc')).rejects.toMatchObject({
+      status: 403,
+      code: 'target_owner_required',
+    });
+  });
+
   it('版の一覧・1つの版・新しい版の保存はtargetのjob-shellsを使う', async () => {
     const fetch = stubJsonResponse({ items: [] });
     await expect(siteComputersApi.jobShells('site')).resolves.toEqual([]);

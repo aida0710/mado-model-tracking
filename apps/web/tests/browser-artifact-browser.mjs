@@ -132,14 +132,23 @@ try {
   await preview().getByText('new config').waitFor();
   assert.equal(await file('config.txt').count(), 1, 'the latest list shows one row per path');
   assert.equal(latestConfig.path, 'config.txt');
-  // An upload reloads the open folder.
+  // An upload reloads the open folder. The Run's upload dialog takes several files, so it stays
+  // open with its queue until it is closed.
   await page.getByRole('button', { name: 'Artifactをアップロード' }).click();
-  await page.getByLabel('ファイル', { exact: true }).setInputFiles({
+  const uploadDialog = page.getByRole('dialog');
+  await uploadDialog.getByLabel('ファイルを選ぶ', { exact: true }).setInputFiles({
     name: 'uploaded.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('uploaded from the browser'),
   });
-  await page.getByRole('dialog').getByRole('button', { name: 'アップロード', exact: true }).click();
+  await uploadDialog.getByRole('button', { name: 'アップロードを開始', exact: true }).click();
+  await uploadDialog
+    .getByTestId('upload-queue-row')
+    .filter({ hasText: 'uploaded.txt' })
+    .and(page.locator('[data-status="completed"]'))
+    .waitFor();
+  await uploadDialog.locator('footer').getByRole('button', { name: '閉じる', exact: true }).click();
+  await uploadDialog.waitFor({ state: 'hidden' });
   await file('uploaded.txt').waitFor();
 
   console.log('Browser check: Project-wide search and the link to the Run');

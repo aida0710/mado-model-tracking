@@ -74,7 +74,7 @@ job shellは保存のたびに新しい版になり、古い版は変わりま�
 - **本人アカウント**: 各研究者が計算機の「自分の設定」でアカウント名（と必要なら作業ディレクトリ・`GROUP`などの変数）を保存すると、launcherがその人用の鍵を作ります。出た公開鍵を、サイトの利用者ポータルなどで自分のアカウントに登録します。個人設定が無い人は、このsiteにJobを作れません（422 `site_account_required`）。
 - 本人アカウントの計算機と手動投入の計算機では、所有者が決めたjob shellが、あなたのアカウントで動きます。本人アカウントの計算機に公開鍵を登録すると、所有者と全体管理者は、job shellを書き換えてあなたのアカウントで何でも実行できるようになります。手動投入では、`mado-tracking submit`が実行のたびに今の版を使います（`--dry-run`で版を確かめられます）。他の研究者の計算機を使う前に、その人を信頼できるか確かめてください。
 - 手動投入の計算機では、`mado-tracking submit`を実行した人の個人設定（作業ディレクトリ・変数）を使います。所有者が`--all`で全員のJobを投入するときも、所有者の設定です。
-- 登録できたかは「接続確認」で確かめます。launcherがその鍵とアカウントでログインし、`true`だけを実行します。
+- 登録できたかは「接続確認」で確かめます。launcherがその鍵とアカウントでログインし、`true`だけを実行します。鍵が未登録の間にログインが拒まれて待っていた取消も、接続確認が通るとすぐ再開します。
 - 鍵を作り直すと古い鍵は失効し、新しい公開鍵を登録し直します。launcherの状態の置き場を失った場合も、launcherが鍵を作り直します。
 - サイトの利用規程で、他のホストからの自動ログインや追加の公開鍵の登録が許されるか確かめてください。許されないsiteは手動投入にします。
 
@@ -116,7 +116,9 @@ launcherのtokenは、launcherのAPI（`/api/launcher/*`）にしか届きませ
   mado-tracking submit --site <siteのID> --watch --all  # 自分の計算機を共有したとき、全員のJobを投入する
   ```
 
-  tokenは`jobs:write`（件数の表示には`read`も）を持つ本人のAPI tokenです。`--watch`を使わなければ何も常駐しません。
+  他の人が足した手動投入の計算機のJobは、自分のアカウントで入れる計算機（共有されたスパコンなど）なら、自分でそこから`mado-tracking submit`を実行して投入します。所有者のPCのように、所有者が`--watch --all`で待ち受けている計算機では、所有者の側で投入されます。
+
+  tokenは`jobs:write`（件数の表示には`read`も）を持つ本人のAPI tokenです。`--watch`を使わなければ何も常駐しません。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 
 ## runner
 
@@ -151,7 +153,12 @@ runnerは`mado-tracking site-run <仕様の置き場>`で、launcherと`submit`�
 
 ## まだ確かめていないこと
 
-- 実際のスケジューラ（PBS・Slurm・Grid Engine・Fujitsu TCS）、OTPのあるsite、GH200（arm64）、実SSHでの投入、launcherが作った鍵での実際のログイン。雛形のoptionと資源タイプは各サイトの資料に基づく例です。
+- 実際のスケジューラ（PBS・Slurm・Grid Engine・Fujitsu TCS）と計算ノードでのrunner、OTPのあるsite、GH200（arm64）。雛形のoptionと資源タイプは、各サイトの資料に基づく例です。
+- 実SSHは、OpenSSH 9.2のsshdのcontainerでだけ確かめました（2026-10-10）。確かめたのは次のことです。スケジューラはスタブにし、runnerは起動していません。
+  - launcherのimageで、launcherが作った鍵でログインする（共用・本人アカウント）。
+  - 経由するホスト（`-J`）、ControlMasterの共有、接続確認、投入、取消。
+  - 鍵が未登録のときに、ログインを試す回数。
+- 確かめていないもの: OpenSSH 9.8以降の`PerSourcePenalties`やfail2banのあるsite、`from=`つきのauthorized_keys。
 - 数千件のarrayの作成時間（1件ずつ検証して作るので、作成に数十秒かかる見込みです）。
 - スケジューラのない直実行のホストでは、時間の上限をrunnerの起動から数えるので、GPUの空き待ちも含みます。runnerがSIGKILLで落ちると、Dockerのコンテナは残ります（GPUの割り当てでは使用中として扱います）。
 - 計算ノードのPythonが3.11・3.12のとき、zipappにhttpxの依存が足りるか（3.13でだけ確かめました）。

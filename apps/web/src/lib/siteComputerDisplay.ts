@@ -2,11 +2,11 @@ import type {
   ComputeTargetDetails,
   Launcher,
   Project,
+  ShareableProject,
   SiteConnectionCheck,
   SiteKey,
 } from '@mmt/contracts';
 import type { SelectOption } from '../types/form';
-import { canEditProject } from './permissions';
 import { text } from '../i18n/catalog';
 import { siteComputersTextTemplates } from '../i18n/siteComputers';
 
@@ -42,21 +42,26 @@ const projectName = (projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>, id: 
   projects.find((project) => project.id === id)?.name ?? id;
 
 /**
- * The Projects an owned computer may be shared with: those where one is an editor or above (the
- * API refuses others with target_project_forbidden), and those it is already shared with, so they
- * can still be taken off.
+ * The Projects an owned computer may be shared with: those its owner may share it with, as the API
+ * lists them, then those an edited one is already shared with that its owner no longer may
+ * (marked, and named from the editor's Projects), so they can be taken off. Keeping one of those
+ * while changing the others is refused.
  */
-export function shareableProjectOptions(
-  projects: ReadonlyArray<Pick<Project, 'id' | 'name' | 'role'>>,
+export function targetSharingOptions(
+  ownerProjects: readonly ShareableProject[],
   sharedProjectIds: readonly string[],
+  projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>,
 ): SelectOption[] {
-  const editable = projects
-    .filter((project) => canEditProject(project.role))
-    .map((project) => project.id);
-  return [...new Set([...editable, ...sharedProjectIds])].map((id) => ({
-    value: id,
-    label: projectName(projects, id),
-  }));
+  const shareableIds = new Set(ownerProjects.map((project) => project.id));
+  return [
+    ...ownerProjects.map((project) => ({ value: project.id, label: project.name })),
+    ...sharedProjectIds
+      .filter((id) => !shareableIds.has(id))
+      .map((id) => ({
+        value: id,
+        label: siteComputersTextTemplates.projectNoLongerShareable(projectName(projects, id)),
+      })),
+  ];
 }
 
 /**
@@ -87,6 +92,12 @@ export function sharedAccountKey(keys: readonly SiteKey[]): SiteKey | null {
 /** The launcher has not published the key's public half yet. */
 export const isKeyRequested = (key: SiteKey | null | undefined): boolean =>
   key?.status === 'requested';
+
+/**
+ * The launcher has made the key, so it can log in with it; the API refuses a login check before
+ * that (site_check_unavailable).
+ */
+export const isKeyReady = (key: SiteKey | null | undefined): boolean => key?.status === 'ready';
 
 /** The newest check (the API lists them newest first) still waits for the launcher. */
 export const isConnectionCheckInProgress = (checks: readonly SiteConnectionCheck[]): boolean =>

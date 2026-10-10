@@ -1,4 +1,21 @@
+import type { ShareableProject } from '@mmt/contracts';
 import { rows, type Connection } from '../db/database.js';
+
+/**
+ * The Projects an owner may share their computer with: those where they create Jobs themselves,
+ * as an editor or above by their effective role (direct grant or SSO group binding).
+ */
+export async function listShareableProjects(
+  connection: Connection,
+  ownerUserId: string,
+): Promise<ShareableProject[]> {
+  return rows<ShareableProject>(
+    connection,
+    `SELECT p.id,p.name FROM projects p JOIN effective_project_roles e ON e.project_id=p.id
+    WHERE e.user_id=$1 AND e.role IN ('editor','admin') ORDER BY p.name,p.id`,
+    [ownerUserId],
+  );
+}
 
 /** The Projects each owned computer is shared with, by target ID. */
 export async function listTargetProjects(

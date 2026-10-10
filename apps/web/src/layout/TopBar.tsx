@@ -20,7 +20,8 @@ export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
 export { ADMIN_PATH } from './navigationLinks';
 
 // Below --bp-lg the fourteen Project screens no longer fit beside the brand and actions, so the
-// navigation moves into the drawer.
+// navigation moves into the drawer. Above it they wrap onto a second row where they do not fit
+// (styles/layout.css).
 const DRAWER_NAVIGATION_QUERY = narrowerThan('lg');
 
 /** The header: screen navigation for the open Project, theme, the signed-in user and logout. */

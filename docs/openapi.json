@@ -23904,6 +23904,235 @@
         }
       }
     },
+    "/api/targets/shareable-projects": {
+      "get": {
+        "operationId": "getTargetsShareableProjects",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の計算機を足すときに共有できるProject（自分がeditor以上のもの）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ShareableProject"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "session_required",
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/{id}/shareable-projects": {
+      "get": {
+        "operationId": "getTargetsByIdShareableProjects",
+        "tags": [
+          "sites"
+        ],
+        "summary": "自分の計算機を共有できるProject（所有者がeditor以上のもの）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "対象のID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ShareableProject"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "target_owner_required",
+              "session_required",
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "target_not_owned",
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/targets/{id}/job-shells": {
       "get": {
         "operationId": "getTargetsByIdJobShells",
@@ -56869,6 +57098,23 @@
           "role",
           "status",
           "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "ShareableProject": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "additionalProperties": false
       },

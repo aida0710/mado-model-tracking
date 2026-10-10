@@ -5,6 +5,7 @@ import type {
   LauncherConfiguration,
   LauncherCreated,
   ManualSiteConfiguration,
+  ShareableProject,
   SiteConnectionCheck,
   SiteJobShell,
   SiteJobShellSummary,
@@ -79,6 +80,10 @@ export const computeTargetDetailsSchema = namedContractSchema(
     site: siteSettingsSchema.nullable(),
     siteAccountMode: siteAccountModeSchema.nullable(),
   }),
+);
+export const shareableProjectSchema = namedContractSchema(
+  'ShareableProject',
+  z.strictObject({ id: idSchema, name: z.string() }),
 );
 export const siteKeySchema = namedContractSchema(
   'SiteKey',
@@ -188,6 +193,9 @@ type _SiteJobShell = Expect<MutuallyAssignable<z.infer<typeof siteJobShellSchema
 type _SiteSettings = Expect<MutuallyAssignable<z.infer<typeof siteSettingsSchema>, SiteSettings>>;
 type _ComputeTargetDetails = Expect<
   MutuallyAssignable<z.infer<typeof computeTargetDetailsSchema>, ComputeTargetDetails>
+>;
+type _ShareableProject = Expect<
+  MutuallyAssignable<z.infer<typeof shareableProjectSchema>, ShareableProject>
 >;
 type _SiteKey = Expect<MutuallyAssignable<z.infer<typeof siteKeySchema>, SiteKey>>;
 type _SitePersonalSettings = Expect<

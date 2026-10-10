@@ -5,7 +5,7 @@ description: Jobを実行するGPUマシンをCompute targetとして登録す�
 
 # Compute target
 
-![Compute画面のtarget一覧とWorkers](/images/compute-targets.png)
+![Compute画面の計算機の一覧（所有者・共有先）とWorkers](/images/compute-targets.png)
 
 Compute targetは、Jobを実行するマシンの登録です。SSHの接続先、使えるGPU、対応するRuntime（Python、Docker、Singularity、Apptainer）、作業ディレクトリを登録します。targetへの接続とJobの実行はworkerが行い、API serverはtargetへ接続しません。
 
@@ -90,7 +90,7 @@ ssh-keygen -lf ~/.ssh/mmt_known_hosts
 
 ## targetを登録する
 
-![Compute targetの登録ダイアログ](/images/compute-target-dialog.png)
+![［計算機を追加］のダイアログ（SSHのtarget）](/images/compute-target-dialog.png)
 
 SSH・Localのtargetの登録と変更は、全体管理者が行います。研究者が自分で足せるのは、外部の計算機（site）だけです（[外部の計算機（site）](/compute/sites)）。
 
@@ -100,7 +100,7 @@ SSH・Localのtargetの登録と変更は、全体管理者が行います。研
 | 項目 | 入力例 | 内容 |
 | --- | --- | --- |
 | 名前 | `gpu-host-1` | 画面とTaskの選択肢に表示する名前 |
-| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます |
+| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます。Site（外部の計算機。[外部の計算機（site）](/compute/sites)）も選べます |
 | Host、Port | `gpu-host-1.example.internal`、`22` | targetのSSHの接続先 |
 | SSHユーザー | `mmt` | SSHで接続するユーザー |
 | SSH鍵のパス | `/home/worker/.ssh/mmt_worker_ed25519` | workerのマシン上の秘密鍵のパス |

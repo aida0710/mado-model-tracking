@@ -5,7 +5,7 @@ description: Register GPU machines that run Jobs as Compute targets. SSH setting
 
 # Compute targets
 
-![Compute targets and workers](/images/compute-targets.png)
+![The computers with their owners and sharing, and the workers](/images/compute-targets.png)
 
 A Compute target is a machine that runs Jobs. It registers the SSH destination, available GPUs, supported runtimes (Python, Docker, Singularity, Apptainer), and a working directory. The worker connects to the target and runs Jobs; the API server never connects to targets.
 
@@ -92,7 +92,7 @@ Compare the fingerprint from the last command with the output of `ssh-keygen -lf
 
 ## Register the target
 
-![The Compute target dialog](/images/compute-target-dialog.png)
+![The 計算機を追加 (Add a computer) dialog for an SSH target](/images/compute-target-dialog.png)
 
 Global administrators register and change SSH and Local targets. Researchers can add only external computers (sites) themselves ([External computers (sites)](/en/compute/sites)).
 
@@ -102,7 +102,7 @@ Global administrators register and change SSH and Local targets. Researchers can
 | Field | Example | Meaning |
 | --- | --- | --- |
 | **名前** (Name) | `gpu-host-1` | Shown on screen and in Task choices |
-| **Executor** | SSH | Normally SSH. Local (development only) appears only in development mode |
+| **Executor** | SSH | Normally SSH. Local (development only) appears only in development mode. Site is for external computers ([External computers (sites)](/en/compute/sites)) |
 | **Host**, **Port** | `gpu-host-1.example.internal`, `22` | SSH destination of the target |
 | **SSHユーザー** (SSH user) | `mmt` | User to connect as |
 | **SSH鍵のパス** (SSH key path) | `/home/worker/.ssh/mmt_worker_ed25519` | Path of the private key on the worker machine |

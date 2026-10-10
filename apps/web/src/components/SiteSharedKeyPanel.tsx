@@ -4,7 +4,7 @@ import { useQueryPolledWhileActive } from '../hooks/useQueryPolledWhileActive';
 import { Resource } from './Feedback';
 import { SiteConnectionChecks } from './SiteConnectionChecks';
 import { SiteLoginKey } from './SiteLoginKey';
-import { isKeyRequested, sharedAccountKey } from '../lib/siteComputerDisplay';
+import { isKeyReady, isKeyRequested, sharedAccountKey } from '../lib/siteComputerDisplay';
 import { text } from '../i18n/catalog';
 
 /**
@@ -38,7 +38,12 @@ export function SiteSharedKeyPanel({
           />
         )}
       </Resource>
-      <SiteConnectionChecks targetId={target.id} personal={false} userId={userId} />
+      <SiteConnectionChecks
+        targetId={target.id}
+        personal={false}
+        userId={userId}
+        isKeyReady={isKeyReady(sharedAccountKey(keys.value ?? []))}
+      />
     </section>
   );
 }

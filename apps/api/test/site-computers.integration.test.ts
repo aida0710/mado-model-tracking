@@ -196,6 +196,121 @@ describe.skipIf(!testDatabaseUrl)('Webで足す計算機（独立PostgreSQL）',
     expect(audits.rows.map((row) => row.action)).toEqual(['compute_target.create', 'compute_target.share']);
   });
 
+  it('共有先の候補は所有者がeditor以上（実効role）のProjectで、全体管理者にも所有者の候補を返す', async () => {
+    const own = await ownComputer();
+    const candidates = (cookie: string, targetId = own.id) =>
+      request(harness.app, `/api/targets/${targetId}/shareable-projects`, { cookie });
+    const newProject = async (name: string, cookie = fixture.administrator.cookie) =>
+      entity<Project>(await request(harness.app, '/api/projects', { method: 'POST', cookie, body: { name } }));
+    const makeOwnerViewer = async (project: Project) =>
+      entity(
+        await request(harness.app, `/api/projects/${project.id}/members/${fixture.editor.userId}`, {
+          method: 'PUT',
+          cookie: fixture.administrator.cookie,
+          body: { role: 'viewer' },
+        }),
+        200,
+      );
+    // The owner only views one Project, is an editor of another through an SSO group (on top of
+    // a direct viewer grant), created a third (admin), and is not in the administrator's fourth.
+    const viewed = await newProject('Viewed Project');
+    await makeOwnerViewer(viewed);
+    const grouped = await newProject('Grouped Project');
+    await makeOwnerViewer(grouped);
+    await harness.database.query("INSERT INTO user_groups(user_id,group_name) VALUES($1,'ml-team')", [
+      fixture.editor.userId,
+    ]);
+    await entity(
+      await request(harness.app, `/api/projects/${grouped.id}/group-bindings/ml-team`, {
+        method: 'PUT',
+        cookie: fixture.administrator.cookie,
+        body: { role: 'editor' },
+      }),
+      200,
+    );
+    const created = await newProject('Own Project', fixture.editor.cookie);
+    await newProject('Administrator Project');
+    const shareable = {
+      items: [
+        { id: grouped.id, name: 'Grouped Project' },
+        { id: created.id, name: 'Own Project' },
+        { id: fixture.project.id, name: 'Test Project' },
+      ],
+    };
+    expect(await entity(await candidates(fixture.editor.cookie), 200)).toEqual(shareable);
+    // A global administrator editing the researcher's computer gets the owner's Projects, not theirs.
+    expect(await entity(await candidates(fixture.administrator.cookie), 200)).toEqual(shareable);
+
+    // Someone who may not use the computer does not see it; a user of it may not manage it.
+    expect((await candidates(fixture.viewer.cookie)).status).toBe(404);
+    const share = (projectIds: string[]) =>
+      request(harness.app, `/api/targets/${own.id}/projects`, {
+        method: 'PUT',
+        cookie: fixture.administrator.cookie,
+        body: { projectIds },
+      });
+    const shared = await entity<ComputeTargetDetails>(
+      await share(shareable.items.map((project) => project.id)),
+      200,
+    );
+    expect([...shared.projectIds].sort()).toEqual(shareable.items.map((project) => project.id).sort());
+    expect(await (await share([viewed.id])).json()).toMatchObject({ code: 'target_project_forbidden' });
+    const member = await candidates(fixture.viewer.cookie);
+    expect(member.status).toBe(403);
+    expect(await member.json()).toMatchObject({ code: 'target_owner_required' });
+    const outsider = await candidates(fixture.outsider.cookie);
+    expect(outsider.status).toBe(404);
+    expect(await outsider.json()).toMatchObject({ code: 'not_found' });
+
+    // A global computer serves every Project, so it has nothing to share.
+    const global = await candidates(fixture.administrator.cookie, fixture.target.id);
+    expect(global.status).toBe(422);
+    expect(await global.json()).toMatchObject({ code: 'target_not_owned' });
+    expect((await candidates(fixture.editor.cookie, fixture.target.id)).status).toBe(403);
+  });
+
+  it('自分の計算機を足すときの候補は本人がeditor以上のProjectで、全体管理者もメンバーでないProjectは出ない', async () => {
+    const newProject = async (name: string, cookie: string) =>
+      entity<Project>(await request(harness.app, '/api/projects', { method: 'POST', cookie, body: { name } }));
+    const researchers = await newProject('Own Project', fixture.editor.cookie);
+    const administrators = await newProject('Administrator Project', fixture.administrator.cookie);
+    const candidates = (options: { cookie?: string; token?: string }) =>
+      request(harness.app, '/api/targets/shareable-projects', options);
+    expect(await entity(await candidates({ cookie: fixture.editor.cookie }), 200)).toEqual({
+      items: [
+        { id: researchers.id, name: 'Own Project' },
+        { id: fixture.project.id, name: 'Test Project' },
+      ],
+    });
+    // A global administrator sees every Project, but shares only with those they are a member of.
+    const forAdministrator = {
+      items: [
+        { id: administrators.id, name: 'Administrator Project' },
+        { id: fixture.project.id, name: 'Test Project' },
+      ],
+    };
+    expect(await entity(await candidates({ cookie: fixture.administrator.cookie }), 200)).toEqual(forAdministrator);
+    const addOwn = (name: string, projectIds: string[]) =>
+      createTarget(fixture.administrator.cookie, {
+        ...siteTargetInput({ name, submissionMode: 'manual', runtimeKinds: ['docker'] }),
+        site: { workDirectory: '/home/admin/mmt', gpuAssignment: 'lease' },
+        personal: true,
+        projectIds,
+      });
+    const refused = await addOwn('Not a member', [researchers.id]);
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ code: 'target_project_forbidden' });
+    const added = await entity<ComputeTargetDetails>(
+      await addOwn('Administrator PC', forAdministrator.items.map((project) => project.id)),
+    );
+    expect([...added.projectIds].sort()).toEqual(forAdministrator.items.map((project) => project.id).sort());
+
+    // Only those who may add a computer of their own: a browser session or a global administrator.
+    const byToken = await candidates({ token: await personalToken(fixture.editor.cookie) });
+    expect(byToken.status).toBe(403);
+    expect(await byToken.json()).toMatchObject({ code: 'session_required' });
+  });
+
   it('共有していない計算機にはJobを作れず、job shellの無い計算機にも作れない', async () => {
     const own = await ownComputer();
     const notShared = await createJob(fixture.administrator.cookie, own.id);

@@ -23,12 +23,15 @@
 .brand strong {
   font-weight: 600;
 }
+/* From --bp-lg up the screens stay in the bar (narrower windows use the drawer). When they do not
+   fit beside the brand and the actions, they wrap onto a second row instead of scrolling out of
+   sight, so every screen, 全体管理 included, stays visible. */
 .topbar > nav {
   display: flex;
+  flex-wrap: wrap;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
 }
+/* A single row stretches to the bar's height; wrapped rows keep at least a tap target each. */
 .topbar > nav a {
   color: #ddd;
   display: flex;
@@ -36,7 +39,7 @@
   padding: 0 16px;
   border-bottom: 3px solid transparent;
   white-space: nowrap;
-  min-height: 49px;
+  min-height: var(--tap-target);
 }
 .topbar > nav a.active {
   background: #282828;
@@ -180,8 +183,18 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* The Project's screens fill the window below the bars, however tall the wrapped navigation or the
+   narrow Project bar make them. No height is computed from the bars' heights: a screen that fills
+   the rest (such as .experiments-layout) grows inside the workspace's column instead. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
 .workspace {
-  min-height: calc(100vh - 92px);
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
 }
 .page {
   padding: 26px var(--page-padding) 40px;

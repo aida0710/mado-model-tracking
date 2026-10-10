@@ -9,7 +9,7 @@ import { ErrorNotice, Resource } from './Feedback';
 import { FormFields } from './FormFields';
 import { SiteConnectionChecks } from './SiteConnectionChecks';
 import { SiteLoginKey } from './SiteLoginKey';
-import { isKeyRequested } from '../lib/siteComputerDisplay';
+import { isKeyReady, isKeyRequested } from '../lib/siteComputerDisplay';
 import {
   buildPersonalSettingsInput,
   personalSettingsFormValues,
@@ -168,7 +168,12 @@ function PersonalSettingsForm({
             accountName={item.accountName}
             onRequested={onChanged}
           />
-          <SiteConnectionChecks targetId={targetId} personal userId={userId} />
+          <SiteConnectionChecks
+            targetId={targetId}
+            personal
+            userId={userId}
+            isKeyReady={isKeyReady(item.key)}
+          />
         </div>
       )}
       {isDeleting && (

@@ -157,6 +157,16 @@ export interface ComputeTargetSharing {
   projectIds: string[];
 }
 
+/**
+ * GET /targets/:id/shareable-projects: a Project that PUT /targets/:id/projects accepts for an
+ * owned computer, one where its owner is an editor or above. A global administrator editing
+ * someone else's computer chooses among these, not among their own Projects.
+ */
+export interface ShareableProject {
+  id: string;
+  name: string;
+}
+
 export type SiteKeyStatus = 'requested' | 'ready';
 export const SITE_KEY_STATUSES: readonly SiteKeyStatus[] = ['requested', 'ready'];
 
