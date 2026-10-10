@@ -1,5 +1,5 @@
 /* Layout values of this app and the screen shown when rendering fails. Fonts, theme colors,
-   element defaults, components and the app frame come from @mado/design-tokens (imported first in
+   element defaults, components and the app frame come from @mado/design-system (imported first in
    main.tsx). */
 :root {
   /* The project bar under the header, and everything above a screen (--chrome-height). */

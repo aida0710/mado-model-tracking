@@ -4,7 +4,7 @@
 
 ## スタイルシート
 
-フォント、色・影・角丸・書体の変数、要素の既定、共通の部品（ボタン、入力欄、ダイアログ、タブ、表、状態バッジ、ページの見出し）、画面の枠（上部バー、サイドバー、ドロワー、ログイン画面）は`packages/design-tokens`（`@mado/design-tokens`、Madoと共有）にあり、`apps/web/src/main.tsx`が日本語のNoto Sans JPとあわせて最初に読み込みます。ファイルの分け方と決まりは[パッケージのREADME](../packages/design-tokens/README.md)にあります。Madoも同じclass名を使うので、両方の見た目を変えるときはパッケージを直し、このアプリだけの見た目は下の領域のファイルで上書きします。
+フォント、色・影・角丸・書体の変数、要素の既定、共通の部品（ボタン、入力欄、ダイアログ、タブ、表、状態バッジ、ページの見出し）、画面の枠（上部バー、サイドバー、ドロワー、ログイン画面）はMadoと共有するデザインシステム（`@mado/design-system`、[aida0710/mado-design-systems](https://github.com/aida0710/mado-design-systems)）にあり、`apps/web/src/main.tsx`が日本語のNoto Sans JPとあわせて最初に読み込みます。ファイルの分け方と決まり、版の上げ方は[リポジトリのREADME](https://github.com/aida0710/mado-design-systems#readme)にあります。依存はGitHub Releaseのtarball（`apps/web/package.json`）で、版を上げるときはそのURLを替えて`npm install`します。Madoも同じclass名を使うので、両方の見た目を変えるときはそのリポジトリを直して版を上げ、このアプリだけの見た目は下の領域のファイルで上書きします。
 
 そのあと、`apps/web/src/styles/`に置いた領域別のファイルを次の順に読み込みます。
 
@@ -23,7 +23,7 @@
 | siteComputers | Compute画面の計算機の詳細（job shellの版、鍵と接続確認、自分の設定、利用者の設定、手動投入の案内）とjob shellの編集欄。最後に読み込む |
 
 - 新しいCSSは、そのclassが属する領域のファイルへ足します。`styles.css`のような何でも入るファイルを作り直しません。
-- 色・影・角丸は`@mado/design-tokens`の変数で書き、領域のファイルに色の値を直接書きません。合う変数が無いときは、役割の名前でパッケージに足し、ライトとダークの両方の値を決めます。リンクなど文字に使う青緑は`--link`、選択中の印や枠は`--accent`です。
+- 色・影・角丸は`@mado/design-system`の変数で書き、領域のファイルに色の値を直接書きません。合う変数が無いときは、役割の名前でデザインシステムに足し、ライトとダークの両方の値を決めます。リンクなど文字に使う青緑は`--link`、選択中の印や枠は`--accent`です。
 - 画面幅による上書き（`@media`）は、対象の領域ファイルの末尾にまとめます。切り替え点は下の「画面幅への対応」の3つだけを使います。
 - 詳細度が同じルールは読み込み順で勝ち負けが決まります。新しい領域ファイルを作るときは`main.tsx`の末尾に足し、既存の順番を入れ替えません。
 
@@ -63,7 +63,7 @@
 
 ## テキストのプレビュー
 
-Artifactのテキストのプレビュー（`components/preview/CodeView.tsx`）は、形式に合わせて色を付けます。形式の判定と色付けは、Madoと共有する`@mado/design-tokens/code`（highlight.jsと、CSV・TSV・ログの色付け）にあります。対応する形式と判定の順は[パッケージのREADME](../packages/design-tokens/README.md#テキストの色付け)にあります。
+Artifactのテキストのプレビュー（`components/preview/CodeView.tsx`）は、形式に合わせて色を付けます。形式の判定と色付けは、Madoと共有する`@mado/design-system/code`（highlight.jsと、CSV・TSV・ログの色付け）にあります。対応する形式と判定の順は[デザインシステムのREADME](https://github.com/aida0710/mado-design-systems#テキストの色付け)にあります。
 
 - 形式は、ファイル名、メディアタイプ、中身の先頭の順に決めます。どれにも当たらなければ色を付けません。
 - プレビューの上の「表示形式」で形式を選び直せます。選んだ形式は拡張子ごとにブラウザの`localStorage`（`mmt.codeLanguage`）に保存し（`hooks/useCodeLanguage.ts`）、同じ拡張子のファイルを次に開いたときにも使います。「自動」に戻すと保存を消します。`.env`と`Dockerfile`は名前で覚えます。何でも入る`.txt`と、拡張子の無いほかのファイルは覚えません。

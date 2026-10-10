@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { detectLanguage, isCodeLanguage, type CodeLanguage } from '@mado/design-tokens/code';
+import { detectLanguage, isCodeLanguage, type CodeLanguage } from '@mado/design-system/code';
 
 /** 'auto' follows the detected format; any other value is the format the user picked. */
 export type CodeLanguageChoice = CodeLanguage | 'auto';

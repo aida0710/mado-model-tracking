@@ -1,5 +1,5 @@
 /* Dialogs of this app only. Dialogs, fields, wizard steps and details lists themselves come from
-   @mado/design-tokens/components.css. */
+   @mado/design-system/components.css. */
 .dialog.workspace-dialog {
   width: min(1280px, calc(100vw - 32px));
 }

@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react';
-import { CODE_LANGUAGES, highlightCode, type CodeLanguage } from '@mado/design-tokens/code';
+import { CODE_LANGUAGES, highlightCode, type CodeLanguage } from '@mado/design-system/code';
 import { useCodeLanguage, type CodeLanguageChoice } from '../../hooks/useCodeLanguage';
 import { text, textTemplates } from '../../i18n/catalog';
 
@@ -10,7 +10,7 @@ function formatName(language: CodeLanguage) {
 }
 
 /**
- * A text preview colored by its format (@mado/design-tokens/code). The format is detected from the
+ * A text preview colored by its format (@mado/design-system/code). The format is detected from the
  * file name, media type and content; the select above the text overrides it for files with the
  * same extension.
  */

@@ -1,5 +1,5 @@
 /* Experiments sidebar, run toolbar and selection, and the run table. Generic tables, status badges
-   and the responsive table come from @mado/design-tokens/components.css. */
+   and the responsive table come from @mado/design-system/components.css. */
 .experiments-layout {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);

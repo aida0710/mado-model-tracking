@@ -5,7 +5,7 @@
  *   (width < 900px)  tablets, narrow windows  — --bp-md
  *   (width < 1200px) small laptops            — --bp-lg
  * Scripts read the same values from lib/breakpoints.ts; breakpoints.test.ts keeps all three in step.
- * @mado/design-tokens uses the same three, and its --tap-target sizes tapped controls below 900px.
+ * @mado/design-system uses the same three, and its --tap-target sizes tapped controls below 900px.
  */
 :root {
   --bp-sm: 640px;

@@ -1,6 +1,6 @@
 /* The Project selector (in the sidebar or as the bar under the header) and the workspace height.
    The header, sidebar, drawer, page header, tabs and login card come from
-   @mado/design-tokens/shell.css and components.css. */
+   @mado/design-system/shell.css and components.css. */
 .sidebar-project {
   display: grid;
   gap: 6px;

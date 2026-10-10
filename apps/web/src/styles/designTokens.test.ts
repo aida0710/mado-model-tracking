@@ -9,12 +9,12 @@ const withoutComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const readStylesheet = (name: string) => withoutComments(readFileSync(new URL(name, stylesDirectory), 'utf8'));
 const resolvePackageFile = createRequire(import.meta.url).resolve;
 const readPackageFile = (name: string) =>
-  withoutComments(readFileSync(resolvePackageFile(`@mado/design-tokens/${name}`), 'utf8'));
+  withoutComments(readFileSync(resolvePackageFile(`@mado/design-system/${name}`), 'utf8'));
 const tokensCss = readPackageFile('tokens.css');
 // The shared element defaults, components, app frame and code view, which use the tokens like this
 // app does.
 const sharedStylesheets = ['base.css', 'components.css', 'shell.css', 'code.css'].map((name) => ({
-  name: `@mado/design-tokens/${name}`,
+  name: `@mado/design-system/${name}`,
   css: readPackageFile(name),
 }));
 const appStylesheets = stylesheetNames.map((name) => ({ name, css: readStylesheet(name) }));
@@ -41,7 +41,7 @@ const ruleBody = (css: string, selector: string) => {
 };
 
 describe('design tokens', () => {
-  it('共通の部品とこのアプリのスタイルシートは色を値で書かず、@mado/design-tokens の変数を使う', () => {
+  it('共通の部品とこのアプリのスタイルシートは色を値で書かず、@mado/design-system の変数を使う', () => {
     const offending = allStylesheets.flatMap(({ name, css }) =>
       declarations(css)
         .filter(({ value }) => LITERAL_COLOR.test(value))

@@ -9,14 +9,14 @@ import { initialTheme } from './hooks/useTheme';
 import '@fontsource/noto-sans-jp/japanese-400.css';
 import '@fontsource/noto-sans-jp/japanese-500.css';
 import '@fontsource/noto-sans-jp/japanese-700.css';
-import '@mado/design-tokens/fonts.css';
-import '@mado/design-tokens/tokens.css';
+import '@mado/design-system/fonts.css';
+import '@mado/design-system/tokens.css';
 // Element defaults, components, the app frame and the code view shared with Mado, before this
 // app's area files.
-import '@mado/design-tokens/base.css';
-import '@mado/design-tokens/components.css';
-import '@mado/design-tokens/shell.css';
-import '@mado/design-tokens/code.css';
+import '@mado/design-system/base.css';
+import '@mado/design-system/components.css';
+import '@mado/design-system/shell.css';
+import '@mado/design-system/code.css';
 // Area stylesheets. Order matters for equal-specificity rules: keep breakpoints (the width
 // breakpoints every other stylesheet uses) and base first, and add new rules to the file of the
 // area they style instead of creating a catch-all stylesheet.

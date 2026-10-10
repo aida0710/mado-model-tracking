@@ -1,5 +1,5 @@
 /* Registry list/detail, automation panels, charts, logs, jobs, and the lineage graph. Section headings,
-   details lists and the JSON view come from @mado/design-tokens/components.css. */
+   details lists and the JSON view come from @mado/design-system/components.css. */
 .registry-layout {
   display: grid;
   grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);

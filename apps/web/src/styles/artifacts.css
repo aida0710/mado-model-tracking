@@ -31,7 +31,7 @@
   font-size: 11px;
   line-height: 1.6;
 }
-/* Text previews: the format select above the colored text (@mado/design-tokens/code.css). */
+/* Text previews: the format select above the colored text (@mado/design-system/code.css). */
 .code-preview-toolbar {
   display: flex;
   justify-content: flex-end;
