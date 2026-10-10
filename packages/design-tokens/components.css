@@ -49,12 +49,15 @@
   justify-content: center;
   border: 0;
   background: transparent;
+  /* A link drawn as an icon button keeps the text colour, like a button does. */
+  color: inherit;
   width: 32px;
   height: 32px;
   padding: 6px;
 }
 .icon-button:hover:not(:disabled) {
   background: var(--surface-hover);
+  text-decoration: none;
 }
 .link-button {
   border: 0;
