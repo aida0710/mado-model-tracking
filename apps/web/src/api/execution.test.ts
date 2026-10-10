@@ -48,3 +48,65 @@ describe('checkpointの一覧と再開のAPI呼び出し', () => {
     ).rejects.toThrow('別のcheckpointで再実行済みです');
   });
 });
+
+describe('計算機の一覧と追加・編集のAPI呼び出し', () => {
+  it('Compute画面は見られる計算機を全部、実行先の選択はProjectで使える計算機だけを読む', async () => {
+    const fetch = stubJsonResponse({ items: [] });
+    await executionApi.targets();
+    await executionApi.projectTargets('project/1');
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/targets');
+    expect(fetch.mock.calls[1]?.[0]).toBe('/api/targets?projectId=project%2F1');
+  });
+
+  it('itemsの無い一覧を空として扱わない', async () => {
+    stubJsonResponse({});
+    await expect(executionApi.projectTargets('project')).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+  });
+
+  it('追加はsiteの全体設定・所有・最初のjob shellをPOSTし、編集は変えた値をPATCHする', async () => {
+    const fetch = stubJsonResponse({ id: 'site' }, 201);
+    const body = {
+      name: 'PC',
+      host: '',
+      port: 22,
+      username: '',
+      sshKeyPath: '',
+      knownHostsPath: '',
+      workDirectory: '',
+      pythonExecutable: '',
+      runtimeKinds: ['docker' as const],
+      gpuIds: [],
+      maxConcurrentJobs: 1,
+      enabled: true,
+      executor: 'site' as const,
+      datasetCacheMaxBytes: 1024 ** 3,
+      datasetTransfer: 'direct' as const,
+      submissionMode: 'manual' as const,
+      cpuArch: 'amd64' as const,
+      supportsArray: false,
+      queueTimeoutSeconds: null,
+      site: { runnerPython: 'python3' },
+      personal: true,
+      projectIds: ['project'],
+      jobShell: '#!/bin/sh\n',
+    };
+    await executionApi.createTarget(body);
+    expect(fetch.mock.calls[0]?.[0]).toBe('/api/targets');
+    expect(fetch.mock.calls[0]?.[1].method).toBe('POST');
+    expect(JSON.parse(fetch.mock.calls[0]?.[1].body)).toEqual(body);
+    await executionApi.updateTarget('site/1', { enabled: false });
+    expect(fetch.mock.calls[1]?.[0]).toBe('/api/targets/site%2F1');
+    expect(fetch.mock.calls[1]?.[1].method).toBe('PATCH');
+    expect(JSON.parse(fetch.mock.calls[1]?.[1].body)).toEqual({ enabled: false });
+  });
+
+  it('所有者がsite以外へ変えようとしたときの拒否を、サーバーの理由つきで返す', async () => {
+    stubJsonResponse({ error: '自分の計算機はsiteのままにしてください' }, 422);
+    await expect(executionApi.updateTarget('pc', { executor: 'ssh' })).rejects.toMatchObject({
+      status: 422,
+      serverMessage: '自分の計算機はsiteのままにしてください',
+    });
+  });
+});

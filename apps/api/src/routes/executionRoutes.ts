@@ -3,11 +3,15 @@ import type { JobService } from '../services/jobService.js';
 import type { TargetService } from '../services/targetService.js';
 import type { WorkerService } from '../services/workerService.js';
 import {
+  computeTargetSharingSchema,
+  targetCreateSchema,
+  targetListQuerySchema,
+  targetUpdateSchema,
+} from '../domain/siteSettingsValidation.js';
+import {
   completeSchema,
   heartbeatSchema,
   jobCreateSchema,
-  targetSchema,
-  targetPatchSchema,
   workerClaimSchema,
   workerResumeSchema,
   workerLogSchema,
@@ -17,11 +21,13 @@ import { workerOutputsSchema } from '../domain/workerOutputValidation.js';
 import { jobRetryRequestSchema, type JobRetryInput } from '../domain/checkpointValidation.js';
 import {
   jsonBody,
+  parse,
   principal,
   uuidParam,
   type ApiContext,
   type ApiEnvironment,
 } from '../http/request.js';
+import { requestMetadata } from '../http/requestMetadata.js';
 
 // Clients from before checkpoints send the retry without a body; that means "from scratch".
 async function retryRequestBody(context: ApiContext): Promise<JobRetryInput> {
@@ -33,11 +39,20 @@ async function retryRequestBody(context: ApiContext): Promise<JobRetryInput> {
 export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/', async (context) =>
-    context.json({ items: await targets.list(principal(context)) }),
+    context.json({
+      items: await targets.list(
+        principal(context),
+        parse(targetListQuerySchema, context.req.query()),
+      ),
+    }),
   );
   routes.post('/', async (context) =>
     context.json(
-      await targets.create(principal(context), await jsonBody(context, targetSchema)),
+      await targets.create(
+        principal(context),
+        await jsonBody(context, targetCreateSchema),
+        requestMetadata(context),
+      ),
       201,
     ),
   );
@@ -46,8 +61,17 @@ export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
       await targets.patch(
         principal(context),
         uuidParam(context, 'id'),
-        await jsonBody(context, targetPatchSchema),
+        await jsonBody(context, targetUpdateSchema),
+        requestMetadata(context),
       ),
+    ),
+  );
+  routes.put('/:id/projects', async (context) =>
+    context.json(
+      await targets.replaceProjects(principal(context), uuidParam(context, 'id'), {
+        projectIds: (await jsonBody(context, computeTargetSharingSchema)).projectIds,
+        metadata: requestMetadata(context),
+      }),
     ),
   );
   return routes;

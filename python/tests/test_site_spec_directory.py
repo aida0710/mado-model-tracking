@@ -47,6 +47,13 @@ def test_job_files_follow_the_array_order_and_only_they_hold_the_job_token():
     assert all(mode == 0o600 for _content, mode in files.values())
     summary = json.loads(files["submission.json"][0])
     assert [job["jobToken"] for job in summary["jobs"]] == [None, None, None]
+    # The job shell is named by its version; its content (up to 1 MiB) is installed on its own.
+    job_shell = submission["jobShell"]
+    assert summary["jobShell"] == {
+        "id": job_shell["id"],
+        "version": job_shell["version"],
+        "sha256": job_shell["sha256"],
+    }
     for index in range(3):
         job = json.loads(files[f"jobs/{index}.json"][0])
         assert job["job"]["arrayIndex"] == index and job["jobToken"].startswith("mmtj_")

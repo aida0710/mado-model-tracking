@@ -141,6 +141,10 @@
 .manual-submission li + li {
   margin-top: 6px;
 }
+/* In the list, the owner's --all command keeps apart from the requester's own command. */
+.manual-submission li .manual-submit-owner {
+  margin-top: 8px;
+}
 /* Hooks: the one-time webhook secret and a hook's start form. */
 .dialog > .hook-webhook-values {
   margin: 0 22px;

@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRole } from '@mmt/contracts';
 import {
+  canAddGlobalTarget,
+  canAddTarget,
   canChangeOwnPassword,
   canControlSweep,
   canManageHooks,
+  canManageTarget,
+  canTransferHookOwners,
   canCreateProject,
   canEditProject,
   canManageAutomationRules,
   canManagePlugins,
   canManageProject,
   isGlobalAdmin,
+  isTargetOwner,
 } from './permissions';
 
 const roles: ProjectRole[] = ['viewer', 'editor', 'admin'];
@@ -80,5 +85,42 @@ describe('フックの権限判定', () => {
     ['admin', true],
   ] as const)('%sのフックの作成・有効と無効の切り替え・手動の起動は%sになる', (role, expected) => {
     expect(canManageHooks(role)).toBe(expected);
+  });
+
+  it.each([
+    ['viewer', false, false],
+    ['editor', false, false],
+    ['admin', false, true],
+    ['viewer', true, true],
+  ] as const)('%s（全体管理者=%s）のフックの所有者の移管は%sになる', (role, globalAdmin, expected) => {
+    expect(canTransferHookOwners(role, globalAdmin)).toBe(expected);
+  });
+});
+
+describe('計算機の権限判定', () => {
+  const ownedByAlice = { ownerUserId: 'alice' };
+  const global = { ownerUserId: null };
+
+  it('サインインしている人は誰でも自分の計算機を追加でき、全体の計算機は全体管理者だけが追加する', () => {
+    expect(canAddTarget({ status: 'active' })).toBe(true);
+    expect(canAddTarget({ status: 'disabled' })).toBe(false);
+    expect(canAddGlobalTarget({ isAdmin: true })).toBe(true);
+    expect(canAddGlobalTarget({ isAdmin: false })).toBe(false);
+  });
+
+  it.each([
+    ['研究者の計算機の所有者', true, { id: 'alice', isAdmin: false }, ownedByAlice],
+    ['研究者の計算機の所有者でない研究者', false, { id: 'bob', isAdmin: false }, ownedByAlice],
+    ['研究者の計算機の全体管理者', true, { id: 'admin', isAdmin: true }, ownedByAlice],
+    ['全体の計算機の研究者', false, { id: 'alice', isAdmin: false }, global],
+    ['全体の計算機の全体管理者', true, { id: 'admin', isAdmin: true }, global],
+  ] as const)('%sは管理（編集・job shell・共用の鍵・全員の設定）=%s', (_who, expected, user, target) => {
+    expect(canManageTarget(user, target)).toBe(expected);
+  });
+
+  it('所有者は自分が足した計算機の持ち主だけで、全体管理者でも全体の計算機の所有者ではない', () => {
+    expect(isTargetOwner({ id: 'alice' }, ownedByAlice)).toBe(true);
+    expect(isTargetOwner({ id: 'admin' }, ownedByAlice)).toBe(false);
+    expect(isTargetOwner({ id: 'admin' }, global)).toBe(false);
   });
 });

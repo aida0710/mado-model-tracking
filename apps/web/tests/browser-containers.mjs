@@ -22,6 +22,9 @@ const projectBase = base + '/projects/' + api.state.project.id;
 const dialog = () => page.getByRole('dialog').last();
 const fill = (label, value) => dialog().getByLabel(label).fill(value);
 const select = (label, value) => dialog().getByLabel(label).selectOption(value);
+// getByLabel matches part of a label, and '版' is also in '編集元のコード版'; the exact accessible
+// name tells the two apart (the label text with its required mark is '版 *', so exact getByLabel fails).
+const versionField = () => dialog().getByRole('textbox', { name: '版', exact: true });
 const clickSave = async () => {
   const versionSave = dialog().getByTestId('code-version-save');
   if (await versionSave.count()) await versionSave.click();
@@ -49,7 +52,7 @@ try {
   console.log('Browser containers: Docker, command, optional source, digest validation');
   await page.goto(projectBase + '/codes');
   await openNewVersion();
-  await fill('版', 'docker-v1');
+  await versionField().fill('docker-v1');
   await select('Runtime', 'docker');
   assert.equal(await dialog().getByLabel('ソース形式').inputValue(), 'none');
   assert.equal(await dialog().getByLabel('依存パッケージ（1行に1件）').count(), 0);
@@ -93,7 +96,7 @@ try {
   };
   api.state.artifacts.push(storedSif);
   await openNewVersion();
-  await fill('版', 'singularity-v1');
+  await versionField().fill('singularity-v1');
   await select('Runtime', 'singularity');
   api.state.failProjectArtifacts = true;
   await fill('Artifactを検索', 'stored.sif');
@@ -130,17 +133,22 @@ try {
   });
   assert.equal(singularityVersion.source.kind, 'inline');
   await openNewVersion();
-  await fill('版', 'apptainer-v1');
+  await versionField().fill('apptainer-v1');
   await select('Runtime', 'apptainer');
   await dialog().getByRole('button', { name: 'Artifactをアップロード', exact: true }).click();
+  // The resumable upload dialog: pick the file, check the path it fills in, then start.
   await dialog()
-    .getByLabel('ファイル')
+    .getByLabel('ファイルを選ぶ', { exact: true })
     .setInputFiles({
       name: 'uploaded.sif',
       mimeType: 'application/octet-stream',
       buffer: Buffer.from('SIF browser fixture'),
     });
-  await dialog().getByRole('button', { name: 'アップロード', exact: true }).click();
+  assert.equal(
+    await dialog().getByRole('textbox', { name: '保存パス', exact: true }).inputValue(),
+    'uploaded.sif',
+  );
+  await dialog().getByRole('button', { name: 'アップロードを開始', exact: true }).click();
   await page
     .getByRole('heading', { name: 'Artifactをアップロード', exact: true })
     .waitFor({ state: 'hidden' });
@@ -162,7 +170,7 @@ try {
 
   console.log('Browser containers: target runtimes and launch compatibility');
   await page.goto(projectBase + '/compute');
-  await page.getByRole('button', { name: 'Compute targetを登録', exact: true }).click();
+  await page.getByRole('button', { name: '計算機を追加', exact: true }).click();
   await fill('名前', 'Container target');
   await select('Executor', 'local');
   await fill('Host', 'localhost');
@@ -174,6 +182,8 @@ try {
   await waitClosed();
   const containerTarget = api.state.targets.find((target) => target.name === 'Container target');
   assert.deepEqual(containerTarget.runtimeKinds, ['python', 'docker', 'singularity', 'apptainer']);
+  // Only a new site asks whose it is ('使える範囲'); a global admin's local computer is global.
+  assert.equal(containerTarget.ownerUserId, null);
   await page
     .locator('tr')
     .filter({ hasText: 'Container target' })
@@ -236,7 +246,7 @@ try {
   await select('GPU ID · CPUのみ', '0');
   await select('入力データセット版', api.state.datasetVersions[0].id);
   await fill('パラメータ（JSON）', '{"batch_size":4}');
-  await fill('Tags（JSON）', '{"suite":"regression"}');
+  await fill('タグ（JSON）', '{"suite":"regression"}');
   api.state.failNextAutomation = true;
   await dialog().getByRole('button', { name: '作成', exact: true }).click();
   await dialog().getByRole('alert').filter({ hasText: 'automation storage unavailable' }).waitFor();
@@ -273,53 +283,49 @@ try {
 
   console.log('Browser automation: enrollment outcome, current statuses and Run/Job links');
   const job = api.state.jobs.at(-1);
-  const execution = {
-    id: 'execution-queued',
+  // A first-stage automatic execution of the rule, as GET .../automation-executions returns it.
+  const firstStageExecution = (fields) => ({
     projectId: api.state.project.id,
     ruleId: rule.id,
     modelVersionId: api.state.modelVersions[0].id,
-    runId: manualRun.id,
-    jobId: job.id,
-    status: 'queued',
-    runStatus: 'finished',
-    jobStatus: 'finished',
+    runId: null,
+    jobId: null,
+    sourceRunId: null,
+    runStatus: null,
+    jobStatus: null,
     error: null,
+    triggerRunId: null,
+    pipelineRootExecutionId: fields.id,
+    attempt: 1,
+    source: 'automatic',
+    requestedBy: null,
+    retryOfExecutionId: null,
     createdAt: '2026-10-08T00:01:00Z',
-  };
+    ...fields,
+  });
   api.state.automationExecutions.push(
-    execution,
-    {
-      ...execution,
-      id: 'execution-failed',
-      runId: null,
-      jobId: null,
-      status: 'failed',
-      runStatus: null,
-      jobStatus: null,
-      error: 'Target disabled',
-    },
-    {
-      ...execution,
-      id: 'execution-skipped',
-      runId: null,
-      jobId: null,
-      status: 'skipped',
-      runStatus: null,
-      jobStatus: null,
-      error: 'No model weights',
-    },
+    firstStageExecution({
+      id: 'execution-queued',
+      runId: manualRun.id,
+      jobId: job.id,
+      status: 'queued',
+      runStatus: 'finished',
+      jobStatus: 'finished',
+    }),
+    firstStageExecution({ id: 'execution-failed', status: 'failed', error: 'Target disabled' }),
+    firstStageExecution({ id: 'execution-skipped', status: 'skipped', error: 'No model weights' }),
   );
   await page.getByRole('tab', { name: '自動実行履歴', exact: true }).click();
   await page.getByRole('button', { name: '再読み込み', exact: true }).last().click();
   for (const label of [
-    '起動を登録',
-    '登録に失敗',
+    'Jobを登録',
+    '起動に失敗',
     '起動せず',
     'Target disabled',
     'No model weights',
   ])
     await page.getByText(label, { exact: true }).waitFor();
-  for (const label of ['登録結果', 'Run status', 'Job status'])
+  for (const label of ['起動結果', 'Runの状態', 'Jobの状態'])
     assert.equal(await page.getByRole('columnheader', { name: label, exact: true }).count(), 1);
   assert.equal(
     await page.getByRole('link', { name: 'Runを開く', exact: true }).getAttribute('href'),
@@ -334,7 +340,10 @@ try {
   await page.goto(projectBase + '/models');
   await page.getByRole('tab', { name: '自動実行履歴', exact: true }).click();
   await page.getByRole('link', { name: 'Jobを開く', exact: true }).click();
-  await page.locator('.job-detail').getByRole('heading', { name: job.id, exact: true }).waitFor();
+  // The Job's detail is headed by its Run's name and lists the Job ID.
+  const jobDetail = page.locator('.job-detail');
+  await jobDetail.getByRole('heading', { name: manualRun.name, exact: true }).waitFor();
+  await jobDetail.getByText(job.id, { exact: true }).waitFor();
 
   console.log('Browser automation: Viewer/Editor read-only and global admin');
   for (const role of ['viewer', 'editor']) {

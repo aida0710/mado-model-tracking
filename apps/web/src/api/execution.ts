@@ -1,5 +1,5 @@
 import type {
-  ComputeTarget,
+  ComputeTargetDetails,
   Job,
   JobListItem,
   JobRetryRequest,
@@ -7,7 +7,7 @@ import type {
   RunCheckpointPage,
   WorkerPresence,
 } from '@mmt/contracts';
-import type { CreateJob, CreateTarget } from './inputs';
+import type { CreateJob, CreateTarget, UpdateTarget } from './inputs';
 import {
   encodeId,
   invalidResponseError,
@@ -42,11 +42,15 @@ async function listRunCheckpoints(
 }
 
 export const executionApi = {
-  targets: (signal?: AbortSignal) => requestItems<ComputeTarget>('/targets', signal),
+  /** Every target the signed-in person may see: global ones, their own and those shared with them. */
+  targets: (signal?: AbortSignal) => requestItems<ComputeTargetDetails>('/targets', signal),
+  /** The targets the signed-in person may run on in the Project: global, their own and shared ones. */
+  projectTargets: (projectId: string, signal?: AbortSignal) =>
+    requestItems<ComputeTargetDetails>(`/targets?${new URLSearchParams({ projectId })}`, signal),
   createTarget: (body: CreateTarget) =>
-    request<ComputeTarget>('/targets', jsonRequest('POST', body)),
-  updateTarget: (id: string, body: Partial<CreateTarget>) =>
-    request<ComputeTarget>(`/targets/${encodeId(id)}`, jsonRequest('PATCH', body)),
+    request<ComputeTargetDetails>('/targets', jsonRequest('POST', body)),
+  updateTarget: (id: string, body: UpdateTarget) =>
+    request<ComputeTargetDetails>(`/targets/${encodeId(id)}`, jsonRequest('PATCH', body)),
   jobs: (projectId: string, signal?: AbortSignal) => requestItems<JobListItem>(jobPath(projectId), signal),
   createJob: (projectId: string, body: CreateJob) =>
     request<Job>(jobPath(projectId), jsonRequest('POST', body)),

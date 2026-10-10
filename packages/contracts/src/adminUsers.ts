@@ -1,6 +1,7 @@
 import type { User } from './index.js';
 
-export type UserKind = 'human' | 'service';
+// A launcher's user owns only its token (docs/sites.md); it is never a Project member.
+export type UserKind = 'human' | 'service' | 'launcher';
 
 /** A user as the global administrator sees it (GET /admin/users). */
 export interface AdminUser extends User {

@@ -6,6 +6,7 @@ import { hooksApi } from '../api/hooks';
 import { trackingApi } from '../api/tracking';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { EXECUTION_POLL_MS, useQuery } from '../hooks/useQuery';
 import { PageHeader } from '../components/PageHeader';
 import { Resource } from '../components/Feedback';
@@ -15,13 +16,17 @@ import { FormDialog } from '../components/FormDialog';
 import { JobsTable, type JobAction } from '../components/JobsTable';
 import { JobArraysTable } from '../components/JobArraysTable';
 import { JobDetailsList } from '../components/JobDetailsList';
-import { ManualSubmissionNotice, ManualSubmitCommand } from '../components/ManualSubmissionNotice';
+import { ManualSubmissionNotice, WaitingJobNotice } from '../components/ManualSubmissionNotice';
 import { LaunchDialog } from '../dialogs/LaunchDialog';
 import { ResumeDialog } from '../dialogs/ResumeDialog';
 import { useResumedRunIds } from '../hooks/useResumedRunIds';
 import { summarizeJobArrays } from '../lib/jobArrays';
 import { shortId } from '../lib/jobDisplay';
-import { isWaitingManualSubmission, manualSubmissionGroups } from '../lib/manualSubmission';
+import {
+  isWaitingManualSubmission,
+  manualSiteOwnership,
+  manualSubmissionGroups,
+} from '../lib/manualSubmission';
 import { text } from '../i18n/catalog';
 import { jobsTextTemplates } from '../i18n/jobs';
 
@@ -42,7 +47,7 @@ export function JobsPage() {
     (signal) => executionApi.jobs(project.id, signal),
     EXECUTION_POLL_MS,
   );
-  const targets = useQuery('job-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   // Hook names for the origin column; without them the column shows the hook's id.
   const hooks = useQuery(`${project.id}:job-hooks`, (signal) => hooksApi.list(project.id, signal));
   const resumedRunIds = useResumedRunIds(project.id, jobs.value);
@@ -57,6 +62,7 @@ export function JobsPage() {
     EXECUTION_POLL_MS,
   );
   const targetItems = targets.value ?? [];
+  const selectedTarget = selected && targetItems.find((target) => target.id === selected.targetId);
   const hookItems = hooks.value ?? [];
   const setParam = (name: string, value: string) =>
     setParams((previous) => {
@@ -87,7 +93,7 @@ export function JobsPage() {
         }
       />
       {jobs.value && (
-        <ManualSubmissionNotice groups={manualSubmissionGroups(jobs.value, targetItems)} />
+        <ManualSubmissionNotice groups={manualSubmissionGroups(jobs.value, targetItems, user)} />
       )}
       <label className="chart-selector">
         <span>{text.status}</span>
@@ -154,21 +160,18 @@ export function JobsPage() {
           <h2>{selected.runName}</h2>
           <JobDetailsList
             job={selected}
-            target={targetItems.find((target) => target.id === selected.targetId)}
+            target={selectedTarget}
             hooks={hookItems}
             projectId={project.id}
             onSelectJob={selectJob}
             onSelectArray={selectArray}
           />
           {isWaitingManualSubmission(selected) && (
-            <div className="notice manual-submission">
-              <p>
-                {selectedRun.value?.createdBy === user.id
-                  ? text.manualSubmissionOwnHint
-                  : text.manualSubmissionHint}
-              </p>
-              <ManualSubmitCommand targetId={selected.targetId} />
-            </div>
+            <WaitingJobNotice
+              targetId={selected.targetId}
+              ownership={manualSiteOwnership(selectedTarget, user)}
+              isRequester={selectedRun.value?.createdBy === user.id}
+            />
           )}
           <Resource query={selectedRun}>
             {(run) => (

@@ -1,11 +1,11 @@
 #!/bin/sh
 # Job shell for Slurm. The partition, CPU count and account variable are examples only: adapt
-# the site settings below (README.md).
+# the site settings below (deploy/sites/examples/slurm/README.md).
 #
 # The launcher, or `mado-tracking submit`, runs this file on a login node with the request in
-# MMT_* environment variables (../../README.md). Request values never become script text: they
-# reach sbatch only as separate, validated arguments, and the batch script written below is a
-# constant that reads them from its own environment on the compute node.
+# MMT_* environment variables (deploy/sites/README.md). Request values never become script
+# text: they reach sbatch only as separate, validated arguments, and the batch script written
+# below is a constant that reads them from its own environment on the compute node.
 # Standard output carries only the scheduler job ID, on the last line; messages go to stderr.
 set -eu
 umask 077

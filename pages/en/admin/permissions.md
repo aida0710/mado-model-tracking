@@ -14,7 +14,7 @@ Global administrators manage application-wide settings.
 - Creating, disabling, and resetting passwords of users (**全体管理** → **ユーザー**)
 - Adding storage backends and choosing the default backend (**全体管理** → **ストレージ**; see [Storage](/en/data/storage))
 - The global audit log (**全体管理** → **監査ログ**)
-- Creating and changing Compute targets
+- Creating and changing Compute targets (SSH and Local) and global computers, and registering launchers. Researchers can also add their own external computers ([External computers (sites)](/en/compute/sites))
 - Creating, changing, and testing notification channels ([Notifications and operations alerts](/en/admin/notifications))
 - Registering and changing plugins ([Plugins and Mado integration](/en/admin/plugins))
 

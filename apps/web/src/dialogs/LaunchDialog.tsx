@@ -2,10 +2,9 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { MAX_JOB_GPU_COUNT, type Job, type Run, type RunKind } from '@mmt/contracts';
 import { useProject } from '../hooks/useProject';
+import { useProjectTargets } from '../hooks/useProjectTargets';
 import { useExecutionCatalog } from '../hooks/useExecutionCatalog';
-import { useQuery } from '../hooks/useQuery';
 import { useLaunch } from '../hooks/useLaunch';
-import { executionApi } from '../api/execution';
 import { Dialog } from '../components/Dialog';
 import { FormFields } from '../components/FormFields';
 import type { FormField } from '../types/form';
@@ -59,7 +58,7 @@ export function LaunchDialog({
 }) {
   const { project } = useProject();
   const catalog = useExecutionCatalog(project.id);
-  const targets = useQuery('launch-targets', executionApi.targets);
+  const targets = useProjectTargets(project.id);
   const launch = useLaunch(project.id, existingRun);
   const [stage, setStage] = useState(0);
   const [validationError, setValidationError] = useState<string | null>(null);

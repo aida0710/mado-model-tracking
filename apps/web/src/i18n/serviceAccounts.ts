@@ -20,6 +20,9 @@ export const serviceAccountsText = {
   projectTokensDescription:
     'このProjectに限定された、全員とService Accountのtokenです。tokenの値は表示されません。',
   projectTokensEmpty: 'このProjectのtokenはありません',
+  ownerTransfer: 'Service Accountへ移す',
+  ownerTransferTarget: '移管先のService Account',
+  ownerTransferred: '所有者を移しました。',
   tokenOwner: '所有者',
   tokenOwnerUser: 'ユーザー',
   tokenOwnerServiceAccount: 'Service Account',

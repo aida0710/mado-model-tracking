@@ -51,11 +51,13 @@ export async function lockEnabledHooks(
   );
 }
 
+// share: a start reads the hook; update: an owner transfer reads the owner it replaces.
 export async function lockHook(
   connection: Connection,
-  reference: { projectId: string; id: string },
+  reference: { projectId: string; id: string; mode?: 'share' | 'update' },
 ): Promise<Hook | undefined> {
-  return first(connection, `${hookSelect} WHERE h.project_id=$1 AND h.id=$2 FOR SHARE OF h`, [
+  const lock = reference.mode === 'update' ? 'FOR UPDATE OF h' : 'FOR SHARE OF h';
+  return first(connection, `${hookSelect} WHERE h.project_id=$1 AND h.id=$2 ${lock}`, [
     reference.projectId,
     reference.id,
   ]);
@@ -89,6 +91,16 @@ export async function insertHook(
       hook.id,
     ],
   );
+}
+
+export async function updateHookOwner(
+  connection: Connection,
+  owner: { hookId: string; runAsUserId: string },
+): Promise<void> {
+  await connection.query('UPDATE hooks SET run_as_user_id=$2 WHERE id=$1', [
+    owner.hookId,
+    owner.runAsUserId,
+  ]);
 }
 
 export async function findWebhookSecret(

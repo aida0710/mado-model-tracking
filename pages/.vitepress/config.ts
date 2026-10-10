@@ -34,6 +34,7 @@ const jaSidebar = [
   ] },
   { text: "実行環境", items: [
     { text: "Compute target", link: "/compute/targets" },
+    { text: "外部の計算機（site）", link: "/compute/sites" },
     { text: "workerの導入", link: "/compute/worker" },
   ] },
   { text: "データと保存先", items: [
@@ -87,6 +88,7 @@ const enSidebar = [
   ] },
   { text: "Compute", items: [
     { text: "Compute targets", link: "/en/compute/targets" },
+    { text: "External computers (sites)", link: "/en/compute/sites" },
     { text: "Install a worker", link: "/en/compute/worker" },
   ] },
   { text: "Data and storage", items: [

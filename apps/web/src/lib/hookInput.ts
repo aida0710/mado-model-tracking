@@ -22,6 +22,7 @@ import type { HookCatalog } from '../types/hooks';
 import {
   getFieldValue,
   getSelectedValues,
+  parseChoice,
   parseJsonObject,
   parsePositiveInteger,
   parseStringMap,
@@ -165,11 +166,6 @@ export function updateHookValues({
   )
     updated.datasetPartitionVersionId = '';
   return updated;
-}
-
-function parseChoice<T extends string>(value: string, choices: readonly T[], message: string): T {
-  if (!choices.includes(value as T)) throw new Error(message);
-  return value as T;
 }
 
 function buildFilter(values: FormValues, trigger: HookTrigger): HookFilter {

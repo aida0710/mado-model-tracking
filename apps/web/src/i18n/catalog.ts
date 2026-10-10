@@ -28,6 +28,8 @@ import { reportsText, reportsTextTemplates } from './reports';
 import { savedViewsText, savedViewsTextTemplates } from './savedViews';
 import { jobsText } from './jobs';
 import { hooksText } from './hooks';
+import { siteComputersText } from './siteComputers';
+import { launchersText } from './launchers';
 import { shellText } from './shell';
 
 export const lineageNodeKindLabels = {
@@ -106,6 +108,8 @@ export const text = {
   ...savedViewsText,
   ...jobsText,
   ...hooksText,
+  ...siteComputersText,
+  ...launchersText,
   ...shellText,
   appName: 'Mado Model Tracking',
   experiments: 'Experiments',
@@ -308,7 +312,7 @@ export const text = {
   launchBlocked: '実行種別とモデル系列に対応するコード版が必要です。',
   createdRunNoJob:
     'Runを保存しました。ジョブの作成に失敗したため、このRunから起動を再試行できます。',
-  newTarget: 'Compute targetを登録',
+  newTarget: '計算機を追加',
   host: 'Host',
   port: 'Port',
   sshUsername: 'SSHユーザー',

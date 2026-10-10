@@ -13,7 +13,13 @@ import type {
   WorkerJob,
 } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
-import { runnerRequest, siteFixture, siteTargetInput, type SiteFixture } from './siteFixtures.js';
+import {
+  runnerRequest,
+  siteFixture,
+  siteTargetInput,
+  TEST_JOB_SHELL,
+  type SiteFixture,
+} from './siteFixtures.js';
 
 async function startRunner(
   harness: Harness,
@@ -257,41 +263,103 @@ describe.skipIf(!testDatabaseUrl)('site実行先・投入・runner報告（独�
     expect(canceled.status).toBe('canceled');
     expect(await findRunStatus(harness, job.runId)).toBe('canceled');
     const cancellations = await entity<{ items: SiteSchedulerCancellation[] }>(
-      await request(harness.app, '/api/worker/site-submissions/cancellations', {
+      await request(harness.app, '/api/launcher/site-submissions/cancellations', {
         method: 'POST',
-        token: fixture.workerToken,
-        body: { launcherId: 'launcher-1' },
+        token: fixture.launcherToken,
+        body: {},
       }),
       200,
     );
+    // The cancel command runs as the account that queued the Job.
     expect(cancellations.items).toEqual([
-      { jobId: job.id, targetId: fixture.site.id, schedulerJobId: '777' },
+      {
+        jobId: job.id,
+        targetId: fixture.site.id,
+        schedulerJobId: '777',
+        account: expect.objectContaining({ mode: 'shared', accountName: 'mmt' }),
+      },
     ]);
     expect(
       (
-        await request(harness.app, '/api/worker/site-submissions/cancellations/report', {
+        await request(harness.app, '/api/launcher/site-submissions/cancellations/report', {
           method: 'POST',
-          token: fixture.workerToken,
-          body: { launcherId: 'launcher-1', jobIds: [job.id] },
+          token: fixture.launcherToken,
+          body: { jobIds: [job.id] },
         })
       ).status,
     ).toBe(204);
     const after = await entity<{ items: SiteSchedulerCancellation[] }>(
-      await request(harness.app, '/api/worker/site-submissions/cancellations', {
+      await request(harness.app, '/api/launcher/site-submissions/cancellations', {
         method: 'POST',
-        token: fixture.workerToken,
-        body: { launcherId: 'launcher-1' },
+        token: fixture.launcherToken,
+        body: {},
       }),
       200,
     );
     expect(after.items).toEqual([]);
   });
 
+  it('担当のlauncherを変えると、待ち行列からの取消は新しいlauncherが自分の鍵で受け持つ', async () => {
+    const fixture = await siteFixture(harness);
+    const job = await fixture.newSiteJob();
+    await fixture.claim();
+    await fixture.report([job.id], { outcome: 'submitted', schedulerJobId: '778' });
+    await entity<Job>(
+      await request(harness.app, `${fixture.basePath}/jobs/${job.id}/cancel`, {
+        method: 'POST',
+        cookie: fixture.editor.cookie,
+      }),
+      200,
+    );
+    const next = await fixture.newLauncher('launcher-2');
+    await entity(
+      await request(harness.app, `/api/targets/${fixture.site.id}`, {
+        method: 'PATCH',
+        cookie: fixture.administrator.cookie,
+        body: { site: { launcherId: next.launcher.id } },
+      }),
+      200,
+    );
+    const pendingFor = async (token: string) =>
+      (
+        await entity<{ items: SiteSchedulerCancellation[] }>(
+          await request(harness.app, '/api/launcher/site-submissions/cancellations', {
+            method: 'POST',
+            token,
+            body: {},
+          }),
+          200,
+        )
+      ).items;
+    const reportDone = (token: string) =>
+      request(harness.app, '/api/launcher/site-submissions/cancellations/report', {
+        method: 'POST',
+        token,
+        body: { jobIds: [job.id] },
+      });
+    expect(await pendingFor(fixture.launcherToken)).toEqual([]);
+    const [key] = await fixture.publishKeys(next.token);
+    expect(await pendingFor(next.token)).toEqual([
+      {
+        jobId: job.id,
+        targetId: fixture.site.id,
+        schedulerJobId: '778',
+        account: expect.objectContaining({ accountName: 'mmt', keyId: key!.id }),
+      },
+    ]);
+    // The launcher that queued it no longer submits there, so its report changes nothing.
+    expect((await reportDone(fixture.launcherToken)).status).toBe(204);
+    expect(await pendingFor(next.token)).toHaveLength(1);
+    expect((await reportDone(next.token)).status).toBe(204);
+    expect(await pendingFor(next.token)).toEqual([]);
+  });
+
   it('job shellの失敗はsubmit_failedで終わり、他のlauncherのJobは報告できない', async () => {
     const fixture = await siteFixture(harness);
     const job = await fixture.newSiteJob();
     await fixture.claim();
-    const foreign = await fixture.report([job.id], { outcome: 'submitted' }, 'launcher-2');
+    const other = await fixture.newLauncher('launcher-2');
+    const foreign = await fixture.report([job.id], { outcome: 'submitted' }, other.token);
     expect(foreign.status).toBe(409);
     expect(await foreign.json()).toMatchObject({ code: 'invalid_submission' });
     const failed = await entity<{ items: Job[] }>(
@@ -323,7 +391,7 @@ describe.skipIf(!testDatabaseUrl)('site実行先・投入・runner報告（独�
       200,
     );
     expect(waiting.items).toEqual([
-      { targetId: fixture.site.id, targetName: fixture.site.name, waitingJobs: 1 },
+      { targetId: fixture.site.id, targetName: fixture.site.name, waitingJobs: 1, allWaitingJobs: null },
     ]);
     const claimed = await entity<{ items: SiteSubmission[] }>(
       await request(harness.app, '/api/manual-submissions/claim', {
@@ -335,6 +403,12 @@ describe.skipIf(!testDatabaseUrl)('site実行先・投入・runner報告（独�
     );
     expect(claimed.items).toHaveLength(1);
     expect(claimed.items[0]!.jobs[0]!.job).toMatchObject({ id: job.id, phase: 'submitting' });
+    // The submitter runs the site's job shell as themselves, with the site's work directory.
+    expect(claimed.items[0]).toMatchObject({
+      jobShell: { version: 1, content: TEST_JOB_SHELL },
+      account: { mode: 'personal', accountName: '', workDirectory: '/work/mmt', keyId: null },
+    });
+    expect(claimed.items[0]!.jobs[0]!.job.siteJobShellId).toBe(claimed.items[0]!.jobShell.id);
     const reported = await entity<{ items: Job[] }>(
       await request(harness.app, '/api/manual-submissions/report', {
         method: 'POST',

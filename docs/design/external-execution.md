@@ -1,12 +1,14 @@
 # 外部実行の設計案
 
-状態：設計案（未実装）。2026-10-09までの議論をまとめたものです。実装した部分は、[worker.md](../worker.md)や[containers-automation.md](../containers-automation.md)などの手順書へ移し、この文書からは外します。
+状態：設計案。2026-10-09までの議論をまとめたものです。実装した部分の手順は[sites.md](../sites.md)、[hooks.md](../hooks.md)などにあります。
+
+**2026-10-10の変更**：計算機をWebから追加できるようにしました。そのため「trackingと外部実行を分ける」「接続情報や鍵はtrackingに置かない」をやめ、接続先・job shell・個人設定をtrackingで管理します。鍵だけはlauncherが自分のホストで作り、trackingには公開鍵だけを置きます。下の表と「実行先の設定」は、この変更に合わせて書き直しています。
 
 ## 目的
 
 - モデル版の登録時だけでなく、決めたきっかけ（フック）でコードを実行できるようにする。
 - 実行はコンテナだけにする。実行先には、DockerかSingularity/Apptainerがあればよい。
-- trackingと外部実行を分ける。trackingは、計算機やスパコンの事情を知らない。
+- 計算機はWebから足す。全体管理者は全員で使う計算機を、研究者は自分の計算機（PC・研究室のサーバー）を足す（2026-10-10に変更。以前は「trackingと外部実行を分け、trackingは計算機の事情を知らない」）。
 - SSHで入るGPUサーバーと、いろいろなスパコンで動かす。OTPが必要なサイトや、CPUがArmのサイトも含む。
 - 音声・動画・テキストの合成データを大量に作り（例：音声3000時間）、段階の間で受け渡す。
 
@@ -17,7 +19,11 @@
 | パイプライン（DAG） | 作らない（保留）。フック、ドライバー、起動の経緯の記録で代わりにする |
 | 実行の形 | コンテナだけにする。Python runtime（Jobごとのvenv）はやめる |
 | 実行先 | SSHで入るGPUサーバー（Docker）と、スケジューラのあるスパコン（Singularity/Apptainer）の混在 |
-| 実行先の設定 | 計算機ごとに、全体設定と個人設定を持つ |
+| 実行先の設定 | 計算機ごとに、全体設定と個人設定を持つ。どちらもWebで編集し、trackingに保存する |
+| 計算機の追加 | Webで行う。全体管理者は全員の計算機、研究者は自分の計算機（本人と、本人が選んだProjectのメンバーが使う） |
+| 鍵 | launcherが作り、Webには公開鍵だけを出す。利用者はその公開鍵をサイトに登録する。秘密鍵はlauncherのホストから出ない |
+| launcher | 全体管理者がWebで登録し、tokenを1本発行する。担当の計算機の設定・job shell・鍵の依頼をAPIから読む |
+| 研究者のPC | launcherから入れない計算機は、そのPCで`mado-tracking submit --watch`を動かして待ち受ける |
 | 資源の指定 | 対応表を持たない。計算機ごとのjob shellが、スケジューラの書き方に直す |
 | 課金グループ | 持たない。必要なサイトでは、job shellに変数で渡す |
 | Dockerの計算機 | 共用アカウントで動かす。利用者どうしの隔離はしない |
@@ -98,9 +104,9 @@ SIF変換           imageのdigest×CPUの組ごとに1回変換して、S3へ�
 
 trackingは取消の印を付けるだけです。runnerがheartbeatの応答で印に気づいて止まります。待ち行列にいる間に取り消されたJobは、起動した直後に終わります。SSHで入れるサイトでは、launcherが取消コマンドで待ち行列から外すこともできます。
 
-### 実行先の情報（実行側→tracking）
+### 実行先の情報
 
-渡すのは名前、CPU（amd64/arm64）、runtime、GPUの有無、投入方式（自動/手動）だけです。trackingはこれを、imageのCPUの照合と画面の表示に使います。接続情報や鍵は、trackingに置きません。
+trackingは名前、CPU（amd64/arm64）、runtime、投入方式（自動/手動）に加えて、全体設定（接続先、known_hosts、アカウント方式、作業ディレクトリ、取消コマンド、GPUの渡し方、変数）とjob shellの版、各人の個人設定を持ちます（2026-10-10に変更）。鍵の秘密の半分は持ちません。
 
 ## 実行側
 
@@ -108,32 +114,34 @@ trackingは取消の印を付けるだけです。runnerがheartbeatの応答で
 
 **全体設定**
 
-管理者が管理するrepo（以下、サイトrepo）に、実行先ごとの`site.yaml`と`job.sh`を置き、版で管理します。Runには、どの版のjob shellで動いたかを記録します。
+計算機の所有者と全体管理者（全体の計算機は全体管理者だけ）がWebで編集します。job shellは保存のたびに不変の版になり、Jobにはどの版で投入したかを記録します（2026-10-10に変更。以前は管理者のrepoに`site.yaml`と`job.sh`を置く案でした）。
 
-| `site.yaml`の項目 | 内容 |
+| 全体設定の項目 | 内容 |
 |---|---|
-| 投入方式 | `ssh`（launcherが投入する）か`manual`（本人が`mmt submit`で投入する） |
+| 投入方式 | `automatic`（launcherが投入する）か`manual`（本人が`mado-tracking submit`で投入する） |
 | 接続 | host、port、経由するホスト（0個以上）、known_hosts |
 | アカウント方式 | 共用か本人か |
 | CPU | `amd64`か`arm64` |
 | runtime | `docker`、`apptainer`、`singularity` |
-| GPUの渡し方 | 既定は`--nv`。管理者だけが変えられる |
+| GPUの渡し方 | スケジューラが割り当てる（既定）か、スケジューラのないホストでrunnerが空いたGPUを選ぶか |
 | 作業ディレクトリ | 計算ノードから見える共有の場所 |
 | 取消コマンド | 例：`qdel "$MMT_SCHEDULER_JOB_ID"` |
 | array | job shellがスケジューラのarrayに対応しているか |
 | 待ち行列の上限時間 | 任意 |
-| GPU番号 | 直実行のホストだけ |
+| 選んでよいGPU | runnerが選ぶホストだけ。空ならすべて |
 
 **個人設定**
 
-本人が設定します。
+本人がWebで設定します。
 - アカウント名
-- 鍵：SSHで入る、本人アカウントのサイトだけに必要です。暗号化して保存し、使う間だけssh-agentへ読み込みます。OTPのサイトは本人が投入するので、鍵を預ける必要はありません。
-- 変数（`MMT_VAR_*`）
+- 鍵：SSHで入る、本人アカウントのサイトだけに必要です。launcherが本人用の鍵を作り、Webに公開鍵を出します。本人はその公開鍵をサイトに登録します（2026-10-10に変更。以前は本人の鍵を暗号化して預かる案でした）。OTPのサイトは本人が投入するので、鍵は要りません。
+- 作業ディレクトリ・変数（`MMT_VAR_*`）：全体設定を上書きします。
+
+共用アカウントで自動投入する計算機には、個人設定はありません（利用者が共用アカウントの作業ディレクトリや変数を変えられないようにするため）。手動投入の計算機では、投入した人の個人設定を使います。所有者が`--all`で全員のJobを投入するときも、所有者の設定です。研究者が自分の個人設定の要否を知れるように、計算機の一覧はアカウント方式（`siteAccountMode`）を、その計算機を使える全員に出します。
 
 **共用アカウントのDockerホスト**
 
-job shellは管理者だけが書けるようにします。job shellはコンテナの外で、共用アカウントとして動きます。そのため、他の人のJobの秘密ファイルも読めてしまうからです。
+job shellを変えられるのは所有者と全体管理者だけです。job shellはコンテナの外で、共用アカウントとして動くので、他の人のJobの秘密ファイルも読めてしまうからです。
 
 ### job shellの約束
 
@@ -306,9 +314,9 @@ M1・M3・M4の大部分と、M2・M5の一部を実装しました（APIの詳�
 
 | 設計 | 実装 | 理由 |
 |---|---|---|
-| ComputeTargetを実行側へ移す | ComputeTargetに`executor='site'`を足し、接続設定を持たないsiteとして残す | ssh/localの実行先と同じ一覧・権限・Job画面を使えます。siteは名前・CPU・runtime・投入方式だけを持ちます |
+| ComputeTargetを実行側へ移す | ComputeTargetに`executor='site'`を足す。全体設定・job shellの版・個人設定は別の表に持ち、Webで編集する（2026-10-10） | ssh/localの実行先と同じ一覧・権限・Job画面を使えます |
 | SIFへの変換はtracking側 | runnerがsiteの上で`apptainer pull --arch`し、cacheを使い回す | 全部のスパコンが外へ通信できるので、変換したSIFを運ぶより速く、trackingに大きいファイルが溜まりません |
-| ジョブの雛形・siteの設定はYAML（`site.yaml`） | TOML（`mmt-job.toml`、launcherの`launcher.toml`の`[[sites]]`） | Python標準のtomllibで読め、依存を増やしません |
+| ジョブの雛形・siteの設定はYAML（`site.yaml`） | ジョブの雛形はTOML（`mmt-job.toml`）。siteの設定はWebで編集し、launcherはAPIから読む（2026-10-10） | Python標準のtomllibで読め、依存を増やしません。siteの設定はWebから追加するため |
 | 署名付きURLでの直接upload | 既存のupload session（再開可能、part単位）をJob tokenで使う | 保存先ごとの署名を作る仕組みが要るので後回しにしました |
 | Python runtimeをbase imageへ置き換える | ssh/localではPython runtimeを残し、siteはコンテナだけ | 今のworkerの利用者を壊さないためです |
 

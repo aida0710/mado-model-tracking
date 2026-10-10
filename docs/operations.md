@@ -161,7 +161,8 @@ group同期はブラウザのloginかsessionの再確認でしか起きません
 
 - SDKだけを使う研究者のtokenは、ブラウザで7日間ログインしないと止まります。**ブラウザで一度ログインすれば、同じtokenがそのまま使えるようになります。**
 - 長期に動くworker・自動実行・CIは、人のtokenではなくService Account（上の「workerホストへworkerを導入する」の1.）のtokenを使います。Service Accountはこの期限の対象外です。
-- 自動実行のrule・自動昇格のpolicyの所有者（実行するUser）も、Projectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService AccountでRoleがadmin）。APIではruleが`PUT /api/projects/:p/automation-rules/:id/owner`、policyが`PUT /api/projects/:p/promotion-policies/:id/owner`で、bodyはどちらも`{serviceAccountId}`。移管先が条件に合わなければ422（ruleは`invalid_automation_owner`、policyは`promotion_owner_invalid`）です。人が所有したままだと、その人が7日ログインしないと自動実行が401で止まります。
+- 自動実行のrule・自動昇格のpolicy・フックの所有者（実行するUser）には、この期限を掛けません。どれもサーバーの中で所有者の権限を確かめて動き、Jobに渡すJob tokenも期限を見ません。所有者がProjectの権限を失う（Projectから外れる・無効化される）と止まるので、長く使うものはProjectの設定でService Accountへ移します（所有者の移管。Project adminが行い、移管先は同じProjectの有効なService Accountで、ruleとpolicyはRoleがadmin、フックはeditorかadmin）。APIではruleが`PUT /api/projects/:p/automation-rules/:id/owner`、policyが`PUT /api/projects/:p/promotion-policies/:id/owner`、フックが`PUT /api/projects/:p/hooks/:id/owner`で、bodyはどれも`{serviceAccountId}`。移管先が条件に合わなければ422（ruleは`invalid_automation_owner`、policyは`promotion_owner_invalid`、フックは`invalid_hook_owner`）です。
+- 期限が無い代わりに、Authentikでgroupから外した人が所有するrule・policy・フックは、次にgroupが同期される（その人のログインか、使用中のsessionの再確認）までgroup由来の権限で動き続けます。すぐ止めるときは、全体管理者がユーザーを無効化する（上の「ユーザーを止める・戻す」）か、所有者をService Accountへ移します。
 - emailで自動連携したLocal UserもSSO identityを持つので対象です。ローカルアカウントでログインしてもgroupは同期されないため、SSOで一度ログインします。
 - `AUTH_MODE=local`へ切り替えた後も、SSO identityを持つUserのtokenは期限で止まります。
 
@@ -370,7 +371,7 @@ SSH targetだけを使うworkerは `docker compose --profile worker up -d worker
 
 siteの考え方と手順は[sites.md](sites.md)、フックは[hooks.md](hooks.md)。ここではサーバー側で用意するものをまとめる。
 
-- launcher: `docker compose --profile launcher up -d launcher`。設定（`launcher.toml`と各siteの`job.sh`）は`MMT_LAUNCHER_CONFIG_DIR`、ProjectごとのService Accountのtoken（`read`と`worker:execute`、mode 600）は`MMT_LAUNCHER_SECRETS_DIR`、鍵とknown_hostsは`MMT_LAUNCHER_SSH_DIR`にread-onlyでmountする。投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せない）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。
+- launcher: Compute画面の「launcher」で登録してtokenを発行し、`docker compose --profile launcher up -d launcher`で動かす。起動設定（`launcher.toml`。APIのURL・tokenファイル・状態の置き場）は`MMT_LAUNCHER_CONFIG_DIR`、tokenファイル（mode 600）は`MMT_LAUNCHER_SECRETS_DIR`にread-onlyでmountする。担当の計算機の設定・job shell・鍵の依頼は巡回のたびにAPIから読む。launcherが作った鍵（秘密鍵）、known_hosts、投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せず、鍵も作り直しになり公開鍵を登録し直す）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。tokenが漏れたらCompute画面の「tokenの作り直し」で古いtokenを止める。
 - runner用の公開hostname: LANの外の計算ノードが報告するhostnameは、画面やSSOと分けて、Job tokenの要求と署名付きwebhookだけを通す（[deploy/edge](../deploy/edge/README.md)）。
 - Forgejo（ジョブのgit repoとcontainer registry）: `docker compose --profile forge up -d forgejo`。`SECRET_KEY`は先に作ったファイル（`MMT_FORGEJO_SECRET_KEY_FILE`）から読む。鍵が無いとForgejoは公開されている既定値を使うので、必ず作り、backupにも含める（[deploy/forgejo](../deploy/forgejo/README.md)）。公式のbase imageは[images/base](../images/base/README.md)。
 - `MMT_HOOK_SECRET_KEY`（base64の32 byte、`openssl rand -base64 32`）: webhookのフックのsecretを暗号化する。無いとwebhookのフックを作れない。鍵を替えると、それまでのwebhookのフックは503 `hook_secret_key_missing`になるので、作り直して送り手のsecretも替える。

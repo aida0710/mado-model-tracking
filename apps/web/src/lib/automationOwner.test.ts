@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceAccount } from '@mmt/contracts';
-import { automationOwnerLabel, automationOwnerOptions } from './automationOwner';
+import {
+  HOOK_OWNER_ROLES,
+  RULE_OWNER_ROLES,
+  automationOwnerLabel,
+  serviceAccountOwnerOptions,
+} from './automationOwner';
 
 function account(overrides: Partial<ServiceAccount> & Pick<ServiceAccount, 'id'>): ServiceAccount {
   return {
@@ -14,16 +19,28 @@ function account(overrides: Partial<ServiceAccount> & Pick<ServiceAccount, 'id'>
   };
 }
 
-describe('ruleの所有者', () => {
-  it('移管先には有効なrole adminのService Accountだけを、今の所有者を除いて出す', () => {
-    const accounts = [
-      account({ id: 'bot' }),
-      account({ id: 'current' }),
-      account({ id: 'editor-bot', role: 'editor' }),
-      account({ id: 'disabled-bot', status: 'disabled' }),
-    ];
-    expect(automationOwnerOptions(accounts, { runAsUserId: 'current' })).toEqual([
+describe('ruleとフックの所有者', () => {
+  const accounts = [
+    account({ id: 'bot' }),
+    account({ id: 'current' }),
+    account({ id: 'editor-bot', role: 'editor' }),
+    account({ id: 'viewer-bot', role: 'viewer' }),
+    account({ id: 'no-role-bot', role: null }),
+    account({ id: 'disabled-bot', status: 'disabled' }),
+  ];
+
+  it('ruleの移管先には有効なrole adminのService Accountだけを、今の所有者を除いて出す', () => {
+    expect(
+      serviceAccountOwnerOptions(accounts, { runAsUserId: 'current', roles: RULE_OWNER_ROLES }),
+    ).toEqual([{ value: 'bot', label: 'bot' }]);
+  });
+
+  it('フックの移管先にはrole editorのService Accountも出す', () => {
+    expect(
+      serviceAccountOwnerOptions(accounts, { runAsUserId: 'current', roles: HOOK_OWNER_ROLES }),
+    ).toEqual([
       { value: 'bot', label: 'bot' },
+      { value: 'editor-bot', label: 'editor-bot' },
     ]);
   });
 

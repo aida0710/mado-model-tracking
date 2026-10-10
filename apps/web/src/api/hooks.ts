@@ -4,6 +4,7 @@ import type {
   HookCreated,
   HookExecution,
   HookExecutionPage,
+  HookOwnerTransfer,
   HookToggle,
   HookTriggerRequest,
 } from '@mmt/contracts';
@@ -64,6 +65,9 @@ export const hooksApi = {
       hooksPath(projectId, hookId),
       jsonRequest('PATCH', { enabled } satisfies HookToggle),
     ),
+  /** Runs the hook as a Service Account of the Project from now on; Project admin only. */
+  transferOwner: (projectId: string, hookId: string, body: HookOwnerTransfer) =>
+    request<Hook>(`${hooksPath(projectId, hookId)}/owner`, jsonRequest('PUT', body)),
   /** Starts a 'manual' hook; a resend with the same idempotencyKey returns the first start. */
   trigger: (projectId: string, hookId: string, body: HookTriggerRequest) =>
     request<HookExecution>(`${hooksPath(projectId, hookId)}/trigger`, jsonRequest('POST', body)),

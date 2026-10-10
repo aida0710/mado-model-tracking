@@ -5,7 +5,7 @@ description: Register GPU machines that run Jobs as Compute targets. SSH setting
 
 # Compute targets
 
-![Compute targets and workers](/images/compute-targets.png)
+![The computers with their owners and sharing, and the workers](/images/compute-targets.png)
 
 A Compute target is a machine that runs Jobs. It registers the SSH destination, available GPUs, supported runtimes (Python, Docker, Singularity, Apptainer), and a working directory. The worker connects to the target and runs Jobs; the API server never connects to targets.
 
@@ -92,17 +92,17 @@ Compare the fingerprint from the last command with the output of `ssh-keygen -lf
 
 ## Register the target
 
-![The Compute target dialog](/images/compute-target-dialog.png)
+![The 計算機を追加 (Add a computer) dialog for an SSH target](/images/compute-target-dialog.png)
 
-Global administrators register and change targets.
+Global administrators register and change SSH and Local targets. Researchers can add only external computers (sites) themselves ([External computers (sites)](/en/compute/sites)).
 
-1. Open Compute and press **Compute targetを登録** (Register Compute target).
+1. Open Compute and press **計算機を追加** (Add a computer).
 2. Fill in the fields.
 
 | Field | Example | Meaning |
 | --- | --- | --- |
 | **名前** (Name) | `gpu-host-1` | Shown on screen and in Task choices |
-| **Executor** | SSH | Normally SSH. Local (development only) appears only in development mode |
+| **Executor** | SSH | Normally SSH. Local (development only) appears only in development mode. Site is for external computers ([External computers (sites)](/en/compute/sites)) |
 | **Host**, **Port** | `gpu-host-1.example.internal`, `22` | SSH destination of the target |
 | **SSHユーザー** (SSH user) | `mmt` | User to connect as |
 | **SSH鍵のパス** (SSH key path) | `/home/worker/.ssh/mmt_worker_ed25519` | Path of the private key on the worker machine |
@@ -140,7 +140,7 @@ Downloaded datasets are cached in `.mmt-cache/datasets/` under the working direc
 
 ### Change or disable a target
 
-Use **Compute targetを編集** (Edit Compute target). While queued or running Jobs reference the target, the destination, runtimes, GPUs, and dataset settings cannot be changed; save after the Jobs end.
+Use **計算機を編集** (Edit the computer). While queued or running Jobs reference the target, the destination, runtimes, GPUs, and dataset settings cannot be changed; save after the Jobs end.
 
 Clearing **有効** (Enabled) removes the target from new assignments. The worker keeps managing running Jobs.
 
@@ -192,4 +192,5 @@ A worker without `MMT_WORKER_TARGET_IDS` still processes Jobs but never picks up
 | Action | Required role |
 | --- | --- |
 | View targets and workers | viewer or higher |
-| Register, change, enable, or disable targets; run connection checks | Global administrator |
+| Register, change, enable, or disable SSH and Local targets; run connection checks | Global administrator |
+| Register or change external computers (sites) | Owner or global administrator ([External computers (sites)](/en/compute/sites)) |

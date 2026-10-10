@@ -37,6 +37,7 @@ const publicJobColumns = [
   'retry_on_failure',
   'retry_on_timeout',
   'dataset_partition_version_id',
+  'site_job_shell_id',
 ];
 
 export function jobColumns(alias = ''): string {

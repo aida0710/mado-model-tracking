@@ -1,6 +1,19 @@
 // Isolated browser-test API. This module is never imported by production code.
 import { createHash } from 'node:crypto';
 import { listProjectArtifacts, listRunArtifacts, runArtifactTree } from './artifactListingMock.mjs';
+// The API default of MMT_ARTIFACT_DELETE_GRACE_DAYS (apps/api/src/config.ts).
+const DEFAULT_ARTIFACT_DELETE_GRACE_DAYS = 7;
+// TokenSummary.tokenPrefix: the first characters of the token value.
+const TOKEN_PREFIX_LENGTH = 12;
+// Lists the Compute and Settings screens read when they open; the mock has none of these.
+const EMPTY_PROJECT_LISTS = [
+  'workers',
+  'group-bindings',
+  'service-accounts',
+  'notification-channels',
+  'notification-rules',
+  'notification-deliveries',
+];
 export function createBrowserApi() {
   let sequence = 100;
   const id = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, '0')}`;
@@ -188,6 +201,12 @@ export function createBrowserApi() {
     cpuArch: 'amd64',
     supportsArray: false,
     queueTimeoutSeconds: null,
+    // Migration 053: a global target, which GET /targets lists without site settings.
+    ownerUserId: null,
+    ownerName: null,
+    projectIds: [],
+    site: null,
+    siteAccountMode: null,
   };
   const plugin = {
     id: id(),
@@ -232,6 +251,7 @@ export function createBrowserApi() {
     datasetVersions: [datasetVersion],
     runs,
     targets: [target],
+    launchers: [],
     jobs: [],
     automationRules: [],
     automationExecutions: [],
@@ -312,21 +332,40 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     }
     if (path === '/targets') {
       if (method === 'GET') return list(state.targets);
-      const target = { id: id(), ...body };
+      // The create-only fields (owner, sharing, first job shell) are not part of the target.
+      const { personal, projectIds, jobShell: _jobShell, site, ...fields } = body;
+      const target = {
+        id: id(),
+        ...fields,
+        ownerUserId: personal ? user.id : null,
+        ownerName: personal ? user.displayName : null,
+        projectIds: personal ? (projectIds ?? []) : [],
+        site: site ? { ...site, jobShell: null } : null,
+        siteAccountMode: site ? (site.accountMode ?? 'personal') : null,
+      };
       state.targets.push(target);
-      return reply(target);
+      return reply(target, 201);
     }
+    if (path === '/launchers' && method === 'GET') return list(state.launchers);
     if (path === '/tokens') {
       if (method === 'GET') return list(state.tokens);
+      // TokenSummary of a token the signed-in user issues for themselves.
+      const value = 'browser-test-value-only';
       const token = {
         id: id(),
         ...body,
+        projectId: body.projectId ?? null,
         lastUsedAt: null,
         expiresAt: body.expiresAt ?? null,
         createdAt: now,
+        ownerType: 'user',
+        ownerId: user.id,
+        ownerName: user.displayName,
+        tokenPrefix: value.slice(0, TOKEN_PREFIX_LENGTH),
+        legacy: false,
       };
       state.tokens.push(token);
-      return reply({ token: 'browser-test-value-only', item: token });
+      return reply({ token: value, item: token });
     }
     if (path.startsWith('/tokens/') && method === 'DELETE') {
       state.tokens = state.tokens.filter((token) => token.id !== path.split('/')[2]);
@@ -373,6 +412,13 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (resource === 'promotion-evaluations' && method === 'GET')
       return reply({ items: [], nextCursor: null });
     if (resource === 'operations-alerts' && method === 'GET') return list([]);
+    if (EMPTY_PROJECT_LISTS.includes(resource) && !key && method === 'GET') return list([]);
+    // The Settings screen's usage per storage backend; the mock reports none.
+    if (resource === 'artifact-usage' && method === 'GET')
+      return reply({ backends: [], deleteGraceDays: DEFAULT_ARTIFACT_DELETE_GRACE_DAYS });
+    // Every token limited to the Project, so one issued on Settings is listed here too.
+    if (resource === 'tokens' && !key && method === 'GET')
+      return list(state.tokens.filter((token) => token.projectId === project.id));
     if (resource === 'members') {
       // ProjectMember: the mock grants the role directly and binds no SSO group.
       if (method === 'GET')
@@ -400,6 +446,10 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       return reply(experiment);
     }
     if (resource === 'runs') {
+      const isRunList = (key === 'search' && method === 'POST') || (!key && method === 'GET');
+      // The Runs screen lists through the native search; both ways of listing fail together.
+      if (state.failRunList && isRunList)
+        return reply({ error: 'UI verification: database unavailable' }, 503);
       // Native search without filter parsing: enough for screens that list recent Runs.
       if (key === 'search' && method === 'POST')
         return reply({
@@ -411,9 +461,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
           ),
           nextCursor: null,
         });
-      if (!key && method === 'GET') {
-        if (state.failRunList)
-          return reply({ error: 'UI verification: database unavailable' }, 503);
+      if (!key && method === 'GET')
         return list(
           state.runs.filter(
             (run) =>
@@ -422,7 +470,6 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
                 run.experimentId === url.searchParams.get('experimentId')),
           ),
         );
-      }
       if (!key && method === 'POST') {
         const run = makeRun(body);
         state.runs.push(run);
@@ -468,6 +515,9 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         return reply(artifact);
       }
     }
+    // The upload dialog lists the user's open sessions to offer a resume. The mock keeps none: its
+    // files are below SINGLE_PUT_MAX_BYTES (src/lib/uploadPlan.ts) and go through the PUT below.
+    if (resource === 'artifact-uploads' && !key && method === 'GET') return list([]);
     if (resource === 'artifacts' && !key && method === 'GET') {
       if (state.failProjectArtifacts)
         return reply({ error: 'UI verification: artifact catalog unavailable' }, 503);
@@ -545,6 +595,9 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
         item(collection, key).aliases[parts[3]] = body.versionId;
         return reply(item(collection, key));
       }
+      // The alias history of a Model; the mock records no events.
+      if (subresource === 'alias-events' && method === 'GET')
+        return reply({ items: [], nextCursor: null });
     }
     if (resource === 'jobs') {
       // GET returns JobListItem: the Job with its Run and Task names (see api-contract.md).
@@ -588,6 +641,7 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
           retryOnFailure: false,
           retryOnTimeout: false,
           datasetPartitionVersionId: null,
+          siteJobShellId: null,
           ...body,
           status: 'queued',
           cancelRequested: false,

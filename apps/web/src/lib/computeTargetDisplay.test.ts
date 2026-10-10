@@ -7,9 +7,21 @@ import {
   targetChoiceLabel,
 } from './computeTargetDisplay';
 import { computeTarget, siteTarget } from '../../tests/fixtures/execution';
+import {
+  automaticSiteSettings,
+  globalSiteDetails,
+  ownedSiteDetails,
+  sharedSiteForMember,
+} from '../../tests/fixtures/siteComputers';
 
-const sshTarget = { executor: 'ssh', host: 'gpu01', port: 2222, username: 'mmt' } as const;
-const localTarget = { executor: 'local', host: '127.0.0.1', port: 22, username: 'local' } as const;
+const sshTarget = { executor: 'ssh', host: 'gpu01', port: 2222, username: 'mmt', site: null } as const;
+const localTarget = {
+  executor: 'local',
+  host: '127.0.0.1',
+  port: 22,
+  username: 'local',
+  site: null,
+} as const;
 
 describe('Compute targetの表示', () => {
   it('SSHのtargetは接続先を表示し、localのtargetはhostが入っていてもSSHの接続先として出さない', () => {
@@ -26,8 +38,21 @@ describe('Compute targetの表示', () => {
     expect(targetCheckHintFor('ssh')).toContain('SSH');
   });
 
-  it('siteは接続先を持たないので、サイト側の設定とJobごとのGPU数として表示する', () => {
-    expect(formatTargetLocation(siteTarget)).toBe('サイト側の設定');
+  it('siteは設定の接続先を、共用アカウントならそのアカウントを付けて表示する', () => {
+    expect(formatTargetLocation(globalSiteDetails)).toBe('login.example.invalid:2222');
+    const shared = {
+      ...globalSiteDetails,
+      site: { ...automaticSiteSettings, accountMode: 'shared' as const, sharedAccount: 'mmt' },
+    };
+    expect(formatTargetLocation(shared)).toBe('mmt@login.example.invalid:2222');
+  });
+
+  it('手動投入のsiteと、設定を見られない人のsiteには接続先を出さない', () => {
+    expect(formatTargetLocation(ownedSiteDetails)).toBe('—');
+    expect(formatTargetLocation(sharedSiteForMember)).toBe('—');
+  });
+
+  it('siteのGPUはJobごとの数として表示する', () => {
     expect(formatTargetGpus(siteTarget)).toBe('Jobごとに数を指定');
     expect(formatTargetGpus(computeTarget)).toBe('0, 1');
     expect(formatTargetGpus({ ...computeTarget, gpuIds: [] })).toBe('CPUのみ');
@@ -39,10 +64,5 @@ describe('Compute targetの表示', () => {
     expect(targetChoiceLabel({ ...siteTarget, submissionMode: 'automatic' })).toBe(
       'Supercomputer · Site（自動投入）',
     );
-  });
-
-  it('siteの接続確認はworkerではなくlauncherの役目だと説明する', () => {
-    expect(targetCheckHintFor('site')).toContain('launcher');
-    expect(targetCheckHintFor('site')).toContain('mado-tracking submit');
   });
 });

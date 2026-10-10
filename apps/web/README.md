@@ -24,6 +24,7 @@ export MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs
 export MMT_CHROMIUM_PATH=/path/to/chromium
 node apps/web/tests/browser-smoke.mjs
 node apps/web/tests/browser-containers.mjs
+node apps/web/tests/browser-workbench.mjs
 node apps/web/tests/browser-integration.mjs
 node apps/web/tests/browser-followup-integration.mjs
 ```
@@ -35,6 +36,15 @@ node apps/web/tests/browser-followup-integration.mjs
 Model Registryの自動実行ルールはProject admin/global adminが作成・有効無効を切り替え、viewer/editorは閲覧する。実行種別はInference/Evaluation、実験・コード版・入力データセット版・Targetを固定する。設定変更は新規ルール作成で行い、PATCHはenabledだけを送る。履歴には起動登録の結果と現在のRun/Job状態を別々に表示し、Run・Jobへのリンクを付ける。
 
 `browser-containers.mjs`はAPI mocksでRuntime登録、保存済みSIFの選択とupload、Target互換性、ルール作成の保存失敗と再試行、enabledだけのPATCH、Project admin/global adminとviewer/editorのUI、履歴のRun/Jobリンクを検証する。実APIの登録・外部コンテナ実行は行わない。
+
+`browser-workbench.mjs`もAPI mocksを使い、次を検証する。
+- コード版の編集: Gitの固定commitに重ねる変更（追加・編集・削除）、複数ファイル、パスの衝突、保存失敗、元の版が変わらないこと。
+- 未保存の変更の確認と、スマホ幅のダイアログ。
+- Standaloneのサンプルとテストコマンド。
+- Task: 作成、コード版の編集、改訂番号を固定したテスト実行・通常実行、実行snapshot。
+- 計算機の編集と有効・無効（保存失敗を含む）。
+- Pluginの設定例・編集・有効無効・manifest、権限による表示の違い。
+- Monacoをエディタを開くまで読み込まず、workerを同じoriginから読むこと。
 
 `storage:metrics`対応Pluginの詳細には、Prometheusから読み取ったconnection/bucket/prefix別の容量・件数・計測時間・失敗回数を表示する。未計測値は補完せず、元の値はtooltipと折りたたみraw表示に残す。Parserは[Prometheus text exposition](https://prometheus.io/docs/instrumenting/exposition_formats/)のsample形式を扱う。Plugin登録は全体管理者、登録済みPluginの利用はProject adminに限る。
 

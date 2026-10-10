@@ -3,7 +3,7 @@ import type { ComputeTarget } from '@mmt/contracts';
 import { DomainError } from './errors.js';
 
 // What tracking stores for a site beyond its name: no address, account, keys or GPU IDs.
-function hasSiteOnlyDescription(target: Omit<ComputeTarget, 'id'>): boolean {
+function hasSiteOnlyDescription(target: Omit<ComputeTarget, 'id' | 'ownerUserId'>): boolean {
   const connection = [
     target.host,
     target.username,
@@ -21,7 +21,7 @@ function hasSiteOnlyDescription(target: Omit<ComputeTarget, 'id'>): boolean {
 }
 
 export function validateTargetConfiguration(
-  target: Omit<ComputeTarget, 'id'>,
+  target: Omit<ComputeTarget, 'id' | 'ownerUserId'>,
   allowLocalExecutor: boolean,
 ): void {
   if (target.executor === 'site') {

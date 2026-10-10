@@ -1,11 +1,12 @@
 #!/bin/sh
-# Job shell for a GPU host reached over SSH that runs containers with Docker and has no
-# scheduler (README.md). The runner leases free GPUs itself (gpu_assignment = "lease") and
-# reports to tracking; this script only starts it detached from the SSH session and returns.
+# Job shell for a GPU host without a scheduler that runs containers with Docker
+# (deploy/sites/examples/direct-docker/README.md). The runner leases free GPUs itself (the
+# site's GPU assignment "lease") and reports to tracking; this script only starts it detached
+# from the SSH session and returns.
 #
-# The launcher runs this file on the host with the request in MMT_* environment variables
-# (../../README.md). Request values never become script text: the runner script written below is
-# a constant that reads them from its environment.
+# The launcher, or `mado-tracking submit` on the host itself, runs this file with the request in
+# MMT_* environment variables (deploy/sites/README.md). Request values never become script text:
+# the runner script written below is a constant that reads them from its environment.
 # Standard output stays empty: a direct host has no scheduler job ID. Messages go to stderr.
 set -eu
 umask 077

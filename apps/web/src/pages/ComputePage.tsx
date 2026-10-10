@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, RefreshCw } from 'lucide-react';
-import type { ComputeTarget } from '@mmt/contracts';
+import type { ComputeTargetDetails } from '@mmt/contracts';
 import { executionApi } from '../api/execution';
 import { useAuth } from '../hooks/useAuth';
 import { useProject } from '../hooks/useProject';
@@ -12,14 +12,21 @@ import { WorkerPresenceTable } from '../components/WorkerPresenceTable';
 import { ErrorNotice, Resource } from '../components/Feedback';
 import { TargetDialog } from '../dialogs/TargetDialog';
 import { TargetCheckPanel } from '../components/TargetCheckPanel';
+import { SiteComputerDetails } from '../components/SiteComputerDetails';
+import { canAddTarget, canManageTarget } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 
+type TargetDialogState = { mode: 'create' } | { mode: 'edit'; target: ComputeTargetDetails };
+
+/**
+ * Every computer the signed-in person may see, open to everyone: researchers add sites of their
+ * own here, and the chosen computer's details (a site's settings, or a worker's check) follow.
+ */
 export function ComputePage() {
   const { user } = useAuth();
-  const { project } = useProject();
-  const [showDialog, setShowDialog] = useState(false);
-  const [editingTarget, setEditingTarget] = useState<ComputeTarget | undefined>();
-  const [checkedTargetId, setCheckedTargetId] = useState<string | null>(null);
+  const { project, projects } = useProject();
+  const [dialog, setDialog] = useState<TargetDialogState | null>(null);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   const mutation = useMutation();
   const targets = useQuery('compute-targets', executionApi.targets);
   const workers = useQuery(
@@ -27,7 +34,7 @@ export function ComputePage() {
     (signal) => executionApi.workers(project.id, signal),
     EXECUTION_POLL_MS,
   );
-  const checkedTarget = targets.value?.find((target) => target.id === checkedTargetId);
+  const selectedTarget = targets.value?.find((target) => target.id === selectedTargetId);
   return (
     <section className="page management-page">
       <PageHeader
@@ -35,8 +42,8 @@ export function ComputePage() {
         eyebrow={project.name}
         actions={
           <>
-            {user.isAdmin && (
-              <button className="button primary" onClick={() => { setEditingTarget(undefined); setShowDialog(true); }}>
+            {canAddTarget(user) && (
+              <button className="button primary" onClick={() => setDialog({ mode: 'create' })}>
                 <Plus size={15} />
                 {text.newTarget}
               </button>
@@ -52,8 +59,11 @@ export function ComputePage() {
         {(items) => (
           <ComputeTargetsTable
             targets={items}
-            canManage={user.isAdmin}
+            user={user}
+            projects={projects}
+            selectedTargetId={selectedTargetId}
             pending={mutation.pending}
+            onSelect={(target) => setSelectedTargetId(target.id)}
             onToggleEnabled={(target) =>
               void mutation
                 .run(() => executionApi.updateTarget(target.id, { enabled: !target.enabled }))
@@ -61,17 +71,27 @@ export function ComputePage() {
                   if (saved) targets.reload();
                 })
             }
-            onEdit={(target) => {
-              setEditingTarget(target);
-              setShowDialog(true);
-            }}
-            onCheck={(target) => setCheckedTargetId(target.id)}
+            onEdit={(target) => setDialog({ mode: 'edit', target })}
           />
         )}
       </Resource>
-      {checkedTarget && (
-        <TargetCheckPanel key={checkedTarget.id} target={checkedTarget} onTargetSaved={targets.reload} />
+      {selectedTarget?.executor === 'site' && (
+        <SiteComputerDetails
+          key={selectedTarget.id}
+          target={selectedTarget}
+          user={user}
+          onTargetChanged={targets.reload}
+        />
       )}
+      {selectedTarget &&
+        selectedTarget.executor !== 'site' &&
+        canManageTarget(user, selectedTarget) && (
+          <TargetCheckPanel
+            key={selectedTarget.id}
+            target={selectedTarget}
+            onTargetSaved={targets.reload}
+          />
+        )}
       <section className="settings-section">
         <div className="section-heading">
           <h2>{text.workers}</h2>
@@ -80,12 +100,14 @@ export function ComputePage() {
           {(items) => <WorkerPresenceTable workers={items} targets={targets.value ?? []} />}
         </Resource>
       </section>
-      {showDialog && (
+      {dialog && (
         <TargetDialog
-          target={editingTarget}
-          onClose={() => setShowDialog(false)}
-          onSaved={() => {
-            setShowDialog(false);
+          target={dialog.mode === 'edit' ? dialog.target : undefined}
+          onClose={() => setDialog(null)}
+          onSaved={(saved) => {
+            setDialog(null);
+            // A saved site opens its details, where its key and job shell are.
+            if (saved.executor === 'site') setSelectedTargetId(saved.id);
             targets.reload();
           }}
         />

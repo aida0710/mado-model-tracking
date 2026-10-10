@@ -34,6 +34,7 @@ export const computeTargetSchema = namedContractSchema(
     cpuArch: cpuArchSchema,
     supportsArray: z.boolean(),
     queueTimeoutSeconds: z.number().int().nullable(),
+    ownerUserId: idSchema.nullable(),
   }),
 );
 export const jobSchema = namedContractSchema(
@@ -74,6 +75,7 @@ export const jobSchema = namedContractSchema(
     retryOnFailure: z.boolean(),
     retryOnTimeout: z.boolean(),
     datasetPartitionVersionId: idSchema.nullable(),
+    siteJobShellId: idSchema.nullable(),
   }),
 );
 export const jobListItemSchema = namedContractSchema(

@@ -20,6 +20,7 @@
 | workbench | コード編集、ファイルツリー、Task、実行スナップショット |
 | admin | 設定のセクション、plugin検索、容量メトリクス |
 | uploads | Artifactのアップロードダイアログ、ドロップ領域、進み具合、途中のアップロード |
+| siteComputers | Compute画面の計算機の詳細（job shellの版、鍵と接続確認、自分の設定、利用者の設定、手動投入の案内）とjob shellの編集欄。最後に読み込む |
 
 - 新しいCSSは、そのclassが属する領域のファイルへ足します。`styles.css`のような何でも入るファイルを作り直しません。
 - 色・影・角丸は`@mado/design-tokens`の変数で書き、領域のファイルに色の値を直接書きません。合う変数が無いときは、役割の名前でパッケージに足し、ライトとダークの両方の値を決めます。リンクなど文字に使う青緑は`--link`、選択中の印や枠は`--accent`です。
@@ -37,7 +38,7 @@
 
 ## 権限判定
 
-画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canManageHooks`、`canCreateProject`、`canChangeOwnPassword`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
+画面の権限判定は`lib/permissions.ts`（`isGlobalAdmin`、`canEditProject`、`canManageProject`、`canManagePlugins`、`canManageAutomationRules`、`canManageHooks`、`canTransferHookOwners`、`canCreateProject`、`canChangeOwnPassword`、計算機の`canAddTarget`・`canAddGlobalTarget`・`isTargetOwner`・`canManageTarget`）に集めます。役割名との比較（`role === 'admin'`など）をcomponentに直接書きません。判定はAPIの検査（`accessService`）に合わせた表示の出し分けで、許可の正本はAPIです。
 
 ## 画面の枠
 

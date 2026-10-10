@@ -1,17 +1,28 @@
 import {
   CPU_ARCHES,
+  DEFAULT_DATASET_CACHE_MAX_BYTES,
   SITE_SUBMISSION_MODES,
   type ComputeTarget,
+  type ComputeTargetDetails,
   type CpuArch,
   type ExecutionRuntimeKind,
   type SiteSubmissionMode,
 } from '@mmt/contracts';
 import type { CreateTarget } from '../api/inputs';
 import type { FormValues } from '../types/form';
-import { getFieldValue, getSelectedValues, parsePositiveInteger, splitLines } from './formValues';
+import {
+  getFieldValue,
+  getSelectedValues,
+  parseChoice,
+  parsePositiveInteger,
+  splitLines,
+} from './formValues';
 import { parseRuntimeKinds } from './runtimeValidation';
 import { formatClockDuration } from './clockDuration';
 import { parseQueueTimeout } from './siteExecutionInput';
+import { buildSiteSettingsInput, siteSettingsFormValues } from './siteSettingsInput';
+import { findJobShellTemplate, type JobShellTemplate } from './jobShellTemplates';
+import { parseJobShellContent } from './jobShellContent';
 import { text } from '../i18n/catalog';
 
 // The dialog edits the dataset cache bound in GiB; the API stores bytes.
@@ -25,9 +36,11 @@ export const SITE_RUNTIME_KINDS: readonly ExecutionRuntimeKind[] = [
 // Supercomputers commonly offer Apptainer; a new site starts with it selected.
 export const DEFAULT_SITE_RUNTIME_KINDS: ExecutionRuntimeKind[] = ['apptainer'];
 const SSH_DEFAULT_PORT = 22;
+const DEFAULT_PYTHON_EXECUTABLE = 'python3';
+const DEFAULT_MAX_CONCURRENT_JOBS = 1;
 /**
- * What the API stores for a site: its launcher and job shell hold the connection, keys and
- * scheduler settings, and its runner downloads inputs itself with the Job token.
+ * The ComputeTarget fields a site keeps empty: its settings hold the connection and accounts, and
+ * its runner downloads inputs itself with the Job token.
  */
 const SITE_STORED_CONNECTION = {
   host: '',
@@ -46,6 +59,16 @@ const NON_SITE_SETTINGS = {
   queueTimeoutSeconds: null,
 } as const satisfies Partial<CreateTarget>;
 
+/**
+ * Who may use a site: every Project (a global computer, which only global administrators add), or
+ * its owner and the Projects the owner shares it with.
+ */
+export type TargetOwnership = 'global' | 'personal';
+export const TARGET_OWNERSHIPS: readonly TargetOwnership[] = ['global', 'personal'];
+
+/** A target's own fields with a site's global settings, as both POST and PATCH take them. */
+export type TargetInput = Omit<CreateTarget, 'personal' | 'projectIds' | 'jobShell'>;
+
 export function datasetCacheGiB(target: Pick<ComputeTarget, 'datasetCacheMaxBytes'>): string {
   return String(Math.max(1, Math.round(target.datasetCacheMaxBytes / BYTES_PER_GIB)));
 }
@@ -56,16 +79,11 @@ function parseSiteRuntimeKinds(values: string[]): ExecutionRuntimeKind[] {
   return [...new Set(values)] as ExecutionRuntimeKind[];
 }
 
-function parseChoice<T extends string>(value: string, choices: readonly T[]): T {
-  if (!choices.includes(value as T)) throw new Error(text.required);
-  return value as T;
-}
-
 /**
  * The target as the API takes it. `previous` is the target being edited: a cache bound set
  * through the API in bytes is kept unless the GiB field was changed.
  */
-export function buildTargetInput(values: FormValues, previous?: ComputeTarget): CreateTarget {
+export function buildTargetInput(values: FormValues, previous?: ComputeTarget): TargetInput {
   const executor = parseChoice(getFieldValue(values, 'executor'), ['ssh', 'local', 'site'] as const);
   const cacheGiB = getFieldValue(values, 'datasetCacheMaxGiB');
   const common = {
@@ -91,6 +109,7 @@ export function buildTargetInput(values: FormValues, previous?: ComputeTarget): 
       ),
       supportsArray: getFieldValue(values, 'supportsArray') === 'true',
       queueTimeoutSeconds: parseQueueTimeout(getFieldValue(values, 'queueTimeout')),
+      site: buildSiteSettingsInput(values),
     };
   return {
     ...common,
@@ -109,14 +128,104 @@ export function buildTargetInput(values: FormValues, previous?: ComputeTarget): 
 }
 
 /**
+ * POST /targets. A new site also takes its first job shell and whose it is: a researcher's own
+ * site is shared with the Projects chosen here, a global one serves every Project.
+ */
+export function buildTargetCreate(values: FormValues): CreateTarget {
+  const target = buildTargetInput(values);
+  if (target.executor !== 'site') return target;
+  const personal =
+    parseChoice<TargetOwnership>(getFieldValue(values, 'ownership'), TARGET_OWNERSHIPS) ===
+    'personal';
+  return {
+    ...target,
+    personal,
+    ...(personal && { projectIds: getSelectedValues(values, 'projectIds') }),
+    jobShell: parseJobShellContent(getFieldValue(values, 'jobShell')),
+  };
+}
+
+/**
+ * The Projects to share an owned computer with when an edit changed them (PUT
+ * /targets/:id/projects), or null when there is nothing to send.
+ */
+export function changedTargetSharing(
+  values: FormValues,
+  target: Pick<ComputeTargetDetails, 'ownerUserId' | 'projectIds'>,
+): string[] | null {
+  if (target.ownerUserId === null) return null;
+  const projectIds = [...new Set(getSelectedValues(values, 'projectIds'))];
+  const isUnchanged =
+    projectIds.length === target.projectIds.length &&
+    projectIds.every((projectId) => target.projectIds.includes(projectId));
+  return isUnchanged ? null : projectIds;
+}
+
+/** The form with a template's job shell and the settings that go with it. */
+export function applyJobShellTemplate(values: FormValues, template: JobShellTemplate): FormValues {
+  return {
+    ...values,
+    jobShell: template.content,
+    cancelCommand: template.cancelCommand ?? '',
+    supportsArray: String(template.supportsArray),
+    gpuAssignment: template.gpuAssignment,
+    siteRuntimeKinds: [...template.runtimeKinds],
+  };
+}
+
+/** Choosing a job shell template fills in its content and defaults; other changes stay as typed. */
+export function updateTargetValues(previous: FormValues, next: FormValues): FormValues {
+  const templateKey = getFieldValue(next, 'jobShellTemplate');
+  if (templateKey === getFieldValue(previous, 'jobShellTemplate')) return next;
+  const template = findJobShellTemplate(templateKey);
+  return template ? applyJobShellTemplate(next, template) : next;
+}
+
+/**
+ * The form values of a new target. A researcher adds only a site of their own; a global
+ * administrator starts from a global ssh target and may choose a site of either kind.
+ */
+export function newTargetFormValues(ownership: TargetOwnership): FormValues {
+  return {
+    name: '',
+    executor: ownership === 'personal' ? 'site' : 'ssh',
+    ownership,
+    projectIds: [],
+    host: '',
+    port: String(SSH_DEFAULT_PORT),
+    username: '',
+    sshKeyPath: '',
+    knownHostsPath: '',
+    workDirectory: '',
+    pythonExecutable: DEFAULT_PYTHON_EXECUTABLE,
+    runtimeKinds: ['python'],
+    siteRuntimeKinds: DEFAULT_SITE_RUNTIME_KINDS,
+    gpuIds: '',
+    maxConcurrentJobs: String(DEFAULT_MAX_CONCURRENT_JOBS),
+    datasetTransfer: 'relay',
+    datasetCacheMaxGiB: String(DEFAULT_DATASET_CACHE_MAX_BYTES / BYTES_PER_GIB),
+    enabled: 'true',
+    submissionMode: 'automatic',
+    cpuArch: 'amd64',
+    supportsArray: 'false',
+    queueTimeout: '',
+    ...siteSettingsFormValues(null),
+    jobShellTemplate: '',
+    jobShell: '',
+  };
+}
+
+/**
  * The form values of a saved target. The runtime selections of both kinds are filled, so switching
  * the executor keeps the container runtimes the target already has.
  */
-export function targetFormValues(target: ComputeTarget): FormValues {
+export function targetFormValues(target: ComputeTargetDetails): FormValues {
   const containerKinds = target.runtimeKinds.filter((kind) => SITE_RUNTIME_KINDS.includes(kind));
   return {
     name: target.name,
     executor: target.executor,
+    ownership: target.ownerUserId === null ? 'global' : 'personal',
+    projectIds: target.projectIds,
     host: target.host,
     port: String(target.port),
     username: target.username,
@@ -135,5 +244,8 @@ export function targetFormValues(target: ComputeTarget): FormValues {
     cpuArch: target.cpuArch,
     supportsArray: String(target.supportsArray),
     queueTimeout: formatClockDuration(target.queueTimeoutSeconds),
+    ...siteSettingsFormValues(target.site),
+    jobShellTemplate: '',
+    jobShell: '',
   };
 }

@@ -58,11 +58,8 @@ export const automationText = {
   ownerHuman: (name: string) => `${name}（人）`,
   ownerServiceAccount: (name: string) => `${name}（Service Account）`,
   ownerHint: '自動実行はこの所有者の権限で起動し、作るRunの作成者になります。',
-  transferOwner: 'Service Accountへ移す',
-  transferTarget: '移管先のService Account',
   transferConfirmMessage: (ruleName: string, accountName: string) =>
     `「${ruleName}」の所有者を ${accountName} に移します。以後の自動実行はこのService Accountの権限で起動します。`,
   transferNoAccounts:
     'ほかに移管できるService Accountがありません。移管先はプロジェクト設定でrole adminの有効なService Accountとして作成します。',
-  transferred: '所有者を移しました。',
 };

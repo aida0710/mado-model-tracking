@@ -1,11 +1,11 @@
 #!/bin/sh
 # Job shell for Fujitsu Technical Computing Suite (pjsub). The option values follow Fugaku and
-# are examples only: adapt the site settings below (README.md).
+# are examples only: adapt the site settings below (deploy/sites/examples/fujitsu-tcs/README.md).
 #
 # The launcher, or `mado-tracking submit`, runs this file on a login node with the request in
-# MMT_* environment variables (../../README.md). Request values never become script text: they
-# reach pjsub only as separate, validated arguments, and the batch script written below is a
-# constant that reads them from its own environment on the compute node.
+# MMT_* environment variables (deploy/sites/README.md). Request values never become script
+# text: they reach pjsub only as separate, validated arguments, and the batch script written
+# below is a constant that reads them from its own environment on the compute node.
 # Standard output carries only the scheduler job ID, on the last line; messages go to stderr.
 set -eu
 umask 077

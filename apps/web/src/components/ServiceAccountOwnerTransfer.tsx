@@ -1,51 +1,56 @@
 import { useState } from 'react';
-import type { ModelAutomationRule } from '@mmt/contracts';
+import type { ServiceAccount } from '@mmt/contracts';
 import { accessApi } from '../api/access';
-import { automationApi } from '../api/automation';
 import { useQuery } from '../hooks/useQuery';
+import type { SelectOption } from '../types/form';
 import { FormFields } from './FormFields';
 import { ConfirmDialog } from './ConfirmDialog';
 import { ErrorNotice } from './Feedback';
 import { withEmptyOption } from '../lib/catalogOptions';
 import { getFieldValue } from '../lib/formValues';
-import { automationOwnerOptions } from '../lib/automationOwner';
-import { automationText } from '../i18n/automation';
+import { text } from '../i18n/catalog';
 
 /**
- * Lets a Project admin move the rule to a Service Account, so automatic runs continue after the
- * creator leaves the Project.
+ * Lets a Project admin move an automation rule or a hook to a Service Account, so it keeps
+ * starting Jobs after its creator leaves the Project. The caller names who may own it and how.
  */
-export function AutomationOwnerTransfer({
-  rule,
+export function ServiceAccountOwnerTransfer({
   projectId,
+  candidates,
+  confirmMessage,
+  noAccountsMessage,
+  transfer,
   onTransferred,
 }: {
-  rule: ModelAutomationRule;
   projectId: string;
+  candidates: (accounts: readonly ServiceAccount[]) => SelectOption[];
+  confirmMessage: (accountName: string) => string;
+  noAccountsMessage: string;
+  transfer: (serviceAccountId: string) => Promise<unknown>;
   onTransferred: () => void;
 }) {
-  const accounts = useQuery(`${projectId}:service-accounts:automation-owner`, (signal) =>
+  const accounts = useQuery(`${projectId}:service-accounts:owner-transfer`, (signal) =>
     accessApi.serviceAccounts(projectId, signal),
   );
   const [values, setValues] = useState<Record<string, string>>({ serviceAccount: '' });
   const [isConfirming, setIsConfirming] = useState(false);
   const [isTransferred, setIsTransferred] = useState(false);
-  const options = automationOwnerOptions(accounts.value ?? [], rule);
+  const options = candidates(accounts.value ?? []);
   const selectedId = getFieldValue(values, 'serviceAccount');
   const selectedLabel = options.find((option) => option.value === selectedId)?.label ?? selectedId;
   return (
     <section className="automation-owner-transfer">
-      <h4>{automationText.transferOwner}</h4>
+      <h4>{text.ownerTransfer}</h4>
       <ErrorNotice message={accounts.error} retry={accounts.reload} />
       {accounts.value && !options.length ? (
-        <p className="muted">{automationText.transferNoAccounts}</p>
+        <p className="muted">{noAccountsMessage}</p>
       ) : (
         <>
           <FormFields
             fields={[
               {
                 name: 'serviceAccount',
-                label: automationText.transferTarget,
+                label: text.ownerTransferTarget,
                 type: 'select',
                 options: withEmptyOption(options),
               },
@@ -61,19 +66,17 @@ export function AutomationOwnerTransfer({
             disabled={!selectedId}
             onClick={() => setIsConfirming(true)}
           >
-            {automationText.transferOwner}
+            {text.ownerTransfer}
           </button>
         </>
       )}
-      {isTransferred && <p className="notice">{automationText.transferred}</p>}
+      {isTransferred && <p className="notice">{text.ownerTransferred}</p>}
       {isConfirming && (
         <ConfirmDialog
-          title={automationText.transferOwner}
-          message={automationText.transferConfirmMessage(rule.name, selectedLabel)}
-          confirmLabel={automationText.transferOwner}
-          onConfirm={() =>
-            automationApi.transferOwner(projectId, rule.id, { serviceAccountId: selectedId })
-          }
+          title={text.ownerTransfer}
+          message={confirmMessage(selectedLabel)}
+          confirmLabel={text.ownerTransfer}
+          onConfirm={() => transfer(selectedId)}
           onConfirmed={() => {
             setIsConfirming(false);
             setIsTransferred(true);

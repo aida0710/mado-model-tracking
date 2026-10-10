@@ -43,7 +43,8 @@ const TAGS: { name: string; description: string }[] = [
     name: 'worker',
     description: 'worker専用のprotocol（Projectに限定された worker:execute token）',
   },
-  { name: 'sites', description: 'site（外部の計算機）のarray・手動投入・runnerの報告' },
+  { name: 'sites', description: 'site（外部の計算機）の設定・job shell・個人設定・鍵・array・手動投入・runnerの報告' },
+  { name: 'launcher', description: 'launcher専用のprotocol（Webで登録したlauncherのtoken）' },
   { name: 'hooks', description: 'フック（任意のタイミングの自動実行）・webhook・ドライバーの子Job' },
   { name: 'plugins', description: 'Mado plugin接続' },
   { name: 'evaluation', description: '評価結果の集約と比較' },
@@ -104,6 +105,10 @@ const PATH_PARAMETERS: Record<string, { description: string; schema: JsonSchema 
   userId: { description: 'User ID', schema: { type: 'string', format: 'uuid' } },
   channelId: { description: '通知先ID', schema: { type: 'string', format: 'uuid' } },
   ruleId: { description: '通知rule ID', schema: { type: 'string', format: 'uuid' } },
+  targetId: { description: 'ComputeTarget ID', schema: { type: 'string', format: 'uuid' } },
+  shellId: { description: 'job shellの版のID', schema: { type: 'string', format: 'uuid' } },
+  keyId: { description: '鍵（SiteKey）のID', schema: { type: 'string', format: 'uuid' } },
+  checkId: { description: '接続確認のID', schema: { type: 'string', format: 'uuid' } },
   alias: { description: 'alias名', schema: { type: 'string', minLength: 1, maxLength: 200 } },
   group: { description: 'SSO group名', schema: { type: 'string', minLength: 1, maxLength: 256 } },
   name: {
@@ -231,6 +236,7 @@ function security(route: NativeRoute): Record<string, string[]>[] {
   // A Job token carries fixed scopes (read, runs:write, artifacts:write, registry:write).
   if (access.kind === 'jobToken') return [{ bearerToken: [] }];
   if (access.kind === 'apiToken') return [{ bearerToken: [access.scope] }];
+  if (access.kind === 'launcher') return [{ bearerToken: ['launcher:execute'] }];
   const scope =
     access.kind === 'worker'
       ? 'worker:execute'

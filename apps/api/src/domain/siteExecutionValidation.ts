@@ -16,7 +16,7 @@ import {
 } from './validation.js';
 import { outputDeclarationsSchema } from './workerOutputValidation.js';
 
-// Chosen by the launcher or `mado-tracking submit`, like a worker's workerId.
+// Chosen by `mado-tracking submit`, like a worker's workerId; a launcher is known by its token.
 const holderIdSchema = z.string().min(1).max(200);
 const claimLimitSchema = z
   .number()
@@ -46,26 +46,23 @@ const submissionResultSchema = z.strictObject({
 const submissionResultsSchema = z.array(submissionResultSchema).min(1).max(SITE_CLAIM_MAX_SUBMISSIONS);
 
 export const siteSubmissionClaimSchema = z.strictObject({
-  launcherId: holderIdSchema,
   targetIds: uniqueIdsSchema.optional(),
   limit: claimLimitSchema,
 });
 export const siteSubmissionReportSchema = z.strictObject({
-  launcherId: holderIdSchema,
   results: submissionResultsSchema,
 });
 export const siteCancellationQuerySchema = z.strictObject({
-  launcherId: holderIdSchema,
   targetIds: uniqueIdsSchema.optional(),
 });
 export const siteCancellationReportSchema = z.strictObject({
-  launcherId: holderIdSchema,
   jobIds: uniqueIdsSchema.min(1),
 });
 export const manualSubmissionClaimSchema = z.strictObject({
   targetId: uuidSchema,
   submitterId: holderIdSchema,
   limit: claimLimitSchema,
+  all: z.boolean().default(false),
 });
 export const manualSubmissionReportSchema = z.strictObject({
   submitterId: holderIdSchema,

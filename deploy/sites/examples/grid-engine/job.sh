@@ -1,11 +1,11 @@
 #!/bin/sh
 # Job shell for (Altair/Univa/Son of) Grid Engine. The option values follow TSUBAME4.0 and are
-# examples only: adapt the site settings below (README.md).
+# examples only: adapt the site settings below (deploy/sites/examples/grid-engine/README.md).
 #
 # The launcher, or `mado-tracking submit`, runs this file on a login node with the request in
-# MMT_* environment variables (../../README.md). Request values never become script text: they
-# reach qsub only as separate, validated arguments, and the batch script written below is a
-# constant that reads them from its own environment on the compute node.
+# MMT_* environment variables (deploy/sites/README.md). Request values never become script
+# text: they reach qsub only as separate, validated arguments, and the batch script written
+# below is a constant that reads them from its own environment on the compute node.
 # Standard output carries only the scheduler job ID, on the last line; messages go to stderr.
 set -eu
 umask 077

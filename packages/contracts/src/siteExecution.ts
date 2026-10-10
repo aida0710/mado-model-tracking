@@ -1,11 +1,12 @@
 import type { ComputeTarget, Job, JsonObject, LogEntry, MetricPoint, RunKind, WorkerJob } from './index.js';
+import type { SiteJobShell, SiteSettings, SiteSubmissionAccount } from './siteComputers.js';
 import type { WorkerOutputDeclaration } from './workerOutputs.js';
 
 /**
- * Sites (ComputeTarget.executor='site') are computers tracking only describes. A launcher, or the
- * requester with `mado-tracking submit` where logins need a one-time password, runs the site's
- * job shell; the runner on the compute node then reports back with the Job token. Tracking never
- * holds a site's connection settings, scheduler options or keys (docs/sites.md).
+ * Sites (ComputeTarget.executor='site') are computers a launcher submits to, or the requester with
+ * `mado-tracking submit` where logins need a one-time password. Their settings and job shells are
+ * edited on the Web (siteComputers.ts); the runner on the compute node reports back with the Job
+ * token (docs/sites.md).
  */
 export type SiteSubmissionMode = 'automatic' | 'manual';
 export const SITE_SUBMISSION_MODES: readonly SiteSubmissionMode[] = ['automatic', 'manual'];
@@ -112,20 +113,28 @@ export interface SiteSubmission {
   arrayGroupId: string | null;
   requester: SiteSubmissionRequester;
   jobs: WorkerJob[];
+  /** The site's settings at claim time. */
+  settings: SiteSettings;
+  /** The job shell version the Jobs recorded (Job.siteJobShellId). */
+  jobShell: SiteJobShell;
+  account: SiteSubmissionAccount;
 }
 
-/** POST /worker/site-submissions/claim with a project worker token. */
+/** POST /launcher/site-submissions/claim with the launcher's token: its sites only. */
 export interface SiteSubmissionClaim {
-  launcherId: string;
   targetIds?: string[];
   limit?: number;
 }
 
-/** POST /manual-submissions/claim with the requester's own API token. */
+/**
+ * POST /manual-submissions/claim with one's own API token. `all` takes every waiting Job of a
+ * computer one owns (a PC that waits with `mado-tracking submit --watch`), not only one's own.
+ */
 export interface ManualSubmissionClaim {
   targetId: string;
   submitterId: string;
   limit?: number;
+  all?: boolean;
 }
 
 export interface SiteSubmissionResult {
@@ -137,7 +146,6 @@ export interface SiteSubmissionResult {
 }
 
 export interface SiteSubmissionReport {
-  launcherId: string;
   results: SiteSubmissionResult[];
 }
 
@@ -151,6 +159,8 @@ export interface ManualSubmissionWaiting {
   targetId: string;
   targetName: string;
   waitingJobs: number;
+  /** Every waiting Job of a computer one owns (what `--all` claims); null on other sites. */
+  allWaitingJobs: number | null;
 }
 
 /** A Job canceled while it waited in the scheduler queue; the launcher runs the cancel command. */
@@ -158,10 +168,11 @@ export interface SiteSchedulerCancellation {
   jobId: string;
   targetId: string;
   schedulerJobId: string;
+  /** The account that queued it, which the cancel command must run as. */
+  account: SiteSubmissionAccount;
 }
 
 export interface SiteSchedulerCancellationReport {
-  launcherId: string;
   jobIds: string[];
 }
 

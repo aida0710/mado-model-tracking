@@ -23,7 +23,7 @@ export const userSchema = namedContractSchema(
     username: z.string().nullable(),
     status: z.enum(['active', 'disabled']),
     authSources: z.array(z.enum(['local', 'oidc'])),
-    kind: z.enum(['human', 'service']),
+    kind: z.enum(['human', 'service', 'launcher']),
   }),
 );
 export const projectSchema = namedContractSchema(
