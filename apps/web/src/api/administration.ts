@@ -1,13 +1,14 @@
 import type {
-  ArtifactBackend,
   DatasetVersion,
   PluginConnection,
   PluginDataset,
   PluginManifest,
   Project,
+  ProjectCreate,
+  ProjectPatch,
   TokenSummary,
 } from '@mmt/contracts';
-import type { CreateProject, CreateToken } from './inputs';
+import type { CreateToken } from './inputs';
 import {
   encodeId,
   invalidResponseError,
@@ -21,9 +22,12 @@ const pluginPath = (projectId: string, id?: string) =>
   `${projectPath(projectId)}/plugins${id ? `/${encodeId(id)}` : ''}`;
 export const administrationApi = {
   projects: (signal?: AbortSignal) => requestItems<Project>('/projects', signal),
-  createProject: (body: CreateProject) => request<Project>('/projects', jsonRequest('POST', body)),
-  updateProject: (id: string, body: { description?: string; artifactBackend?: ArtifactBackend }) =>
+  createProject: (body: ProjectCreate) => request<Project>('/projects', jsonRequest('POST', body)),
+  updateProject: (id: string, body: ProjectPatch) =>
     request<Project>(projectPath(id), jsonRequest('PATCH', body)),
+  /** Hides the Project and keeps its data; a global administrator can restore it. */
+  archiveProject: (id: string) =>
+    request<void>(`${projectPath(id)}/archive`, { method: 'POST' }),
   tokens: (signal?: AbortSignal) => requestItems<TokenSummary>('/tokens', signal),
   createToken: (body: CreateToken) =>
     request<{ token: string; item: TokenSummary }>('/tokens', jsonRequest('POST', body)),

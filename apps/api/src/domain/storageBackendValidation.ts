@@ -40,3 +40,12 @@ export const storageSettingsSchema = z.strictObject({ defaultBackend: z.string()
 
 export type StorageBackendCreateInput = z.infer<typeof storageBackendCreateSchema>;
 export type StorageBackendPatchInput = z.infer<typeof storageBackendPatchSchema>;
+
+// GET /admin/storage-directories?path=: what is typed into a filesystem backend's rootPath, with
+// the same length bound. Control characters (NUL above all) could not name a directory.
+export const storageDirectoryQuerySchema = z.object({
+  path: backendSettingsShape.rootPath.refine(
+    (typed) => !/[\u0000-\u001f\u007f]/.test(typed),
+    'Control characters are not allowed',
+  ),
+});

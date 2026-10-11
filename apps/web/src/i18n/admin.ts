@@ -1,13 +1,13 @@
-// Global administration (/admin), its users tab, the user menu and the /account page.
+// Global administration (/admin/<section>), its users section, the user menu and the /account page.
 export const adminText = {
   administration: '全体管理',
-  adminTabStorage: 'ストレージ',
-  adminTabUsers: 'ユーザー',
-  adminTabAudit: '監査ログ',
-  adminTabLaunchers: 'launcher',
+  adminSectionProjects: 'プロジェクト',
+  adminSectionUsers: 'ユーザー',
+  adminSectionStorage: 'ストレージ',
+  adminSectionLaunchers: 'ランチャー',
+  adminSectionAudit: '監査ログ',
   adminAuditDescription:
     'すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など）を新しい順に表示します。',
-  adminUsers: 'ユーザー',
   newLocalUser: 'ローカルユーザーを作成',
   userSearch: 'ユーザーを検索',
   adminUserSearchPlaceholder: '名前・ユーザー名・メールアドレス',

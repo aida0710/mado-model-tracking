@@ -5,18 +5,23 @@ import { useProjectMembers } from '../hooks/useProjectMembers';
 import { useServiceAccounts } from '../hooks/useServiceAccounts';
 import { PageHeader } from '../components/PageHeader';
 import { ProjectSettings } from '../components/ProjectSettings';
+import { ArtifactUsageSummary } from '../components/ArtifactUsageSummary';
 import { MlflowConnectionCard } from '../components/MlflowConnectionCard';
 import { ProjectMembers } from '../components/ProjectMembers';
 import { ProjectGroupBindings } from '../components/ProjectGroupBindings';
 import { ProjectTokens } from '../components/ProjectTokens';
 import { ProjectServiceAccounts } from '../components/ProjectServiceAccounts';
 import { NotificationSettings } from '../components/NotificationSettings';
-import { ProjectList } from '../components/ProjectList';
+import { ProjectArchiveSection } from '../components/ProjectArchiveSection';
 import { AuditEventLog } from '../components/AuditEventLog';
 import { text } from '../i18n/catalog';
 
+/**
+ * The open Project's own settings. Creating and listing Projects belong to the Project switcher
+ * and the global administration.
+ */
 export function SettingsPage() {
-  const { project, projects, reloadProjects, isProjectAdmin } = useProject();
+  const { project, isProjectAdmin } = useProject();
   // The API refuses non-administrators, so they never request the log.
   const audit = useAuditEvents(isProjectAdmin ? { projectId: project.id } : null);
   // Shared so a group binding change also refreshes the effective roles in the member list.
@@ -34,8 +39,8 @@ export function SettingsPage() {
     <section className="page management-page">
       <PageHeader title={text.settings} eyebrow={project.name} />
       <div className="settings-grid">
-        <ProjectList projects={projects} onCreated={reloadProjects} />
         <ProjectSettings />
+        <ArtifactUsageSummary projectId={project.id} />
       </div>
       <div className="settings-stack">
         <MlflowConnectionCard onTokenCreated={reloadTokenLists} />
@@ -52,6 +57,7 @@ export function SettingsPage() {
             <AuditEventLog audit={audit} />
           </section>
         )}
+        {isProjectAdmin && <ProjectArchiveSection />}
       </div>
     </section>
   );

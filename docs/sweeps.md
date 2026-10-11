@@ -29,7 +29,7 @@ Sweep の試行は、既存の Task の起動（Run と Job）として ComputeT
 
 ### W&B の sweep config との対応
 
-| W&B | Mado Model Tracking | 備考 |
+| W&B | mado ML Tracking | 備考 |
 |---|---|---|
 | `method: grid / random / bayes` | `method` | 同じ |
 | `metric.name` / `metric.goal` | `objective.metric` / `objective.goal` | goal は `minimize` / `maximize` |

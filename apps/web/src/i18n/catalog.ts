@@ -31,6 +31,7 @@ import { hooksText } from './hooks';
 import { siteComputersText } from './siteComputers';
 import { launchersText } from './launchers';
 import { shellText } from './shell';
+import { projectsText, projectsTextTemplates } from './projects';
 
 export const lineageNodeKindLabels = {
   datasetVersion: 'データセット版',
@@ -72,6 +73,7 @@ export const textTemplates = {
   ...reportsTextTemplates,
   ...savedViewsTextTemplates,
   ...artifactPreviewsTextTemplates,
+  ...projectsTextTemplates,
   runCount: (count: number) => `${count} runs`,
   revokeTokenConfirm: (tokenName: string) =>
     `「${tokenName}」を失効させます。このAPI tokenを使うクライアントは、以後APIへ接続できなくなります。`,
@@ -111,7 +113,10 @@ export const text = {
   ...siteComputersText,
   ...launchersText,
   ...shellText,
-  appName: 'Mado Model Tracking',
+  ...projectsText,
+  // 製品名。mado の各製品と同じく、前の mado を通常の太さ、製品の部分を太字で組む（ProductLogo）。
+  appNamePrefix: 'mado',
+  appNameProduct: 'ML Tracking',
   experiments: 'Experiments',
   runs: 'Runs',
   models: 'Models',
@@ -122,8 +127,7 @@ export const text = {
   jobs: 'Jobs',
   compute: 'Compute',
   plugins: 'Plugins',
-  settings: 'Settings',
-  projects: 'Projects',
+  settings: 'プロジェクト設定',
   allExperiments: 'すべての実験',
   newProject: 'プロジェクトを作成',
   project: 'プロジェクト',
@@ -160,7 +164,7 @@ export const text = {
   skipContent: 'コンテンツへ移動',
   noProjects: '参加しているプロジェクトがありません',
   noProjectsCreateHint:
-    '「プロジェクトを作成」から始めてください。作成後も、設定の「Projects」で一覧と作成ができます。',
+    '「プロジェクトを作成」から始めてください。2つ目からは、プロジェクトの切り替えメニューの一番下から作成できます。',
   noProjectsAskAdmin: 'プロジェクトの管理者に、メンバーへの追加を依頼してください。',
   projectNotAccessible: 'このプロジェクトは存在しないか、参加していないため開けません。',
   newExperiment: '実験を作成',

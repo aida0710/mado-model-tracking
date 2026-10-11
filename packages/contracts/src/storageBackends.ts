@@ -63,3 +63,26 @@ export interface StorageBackendChoices {
   items: string[];
   defaultBackend: string;
 }
+
+/**
+ * GET /admin/storage-directories?path=: directories on the API server that complete a
+ * filesystem backend's rootPath as it is typed. A relative path is resolved the way the
+ * filesystem backend resolves rootPath (from the API's working directory).
+ */
+export interface DirectorySuggestions {
+  /** The typed path made absolute. */
+  resolvedPath: string;
+  /**
+   * What resolvedPath is now; a missing directory is not an error here. 'unavailable': the API
+   * server could not read it in time (a mount that stopped answering), so nothing is known.
+   */
+  status: 'directory' | 'missing' | 'not_directory' | 'unavailable';
+  /**
+   * Absolute paths of the directories that complete the typed path, sorted by name: the children
+   * of the typed directory when it ends with "/", otherwise its siblings whose names start with
+   * the last segment. Names starting with "." appear only when the last segment starts with ".".
+   */
+  items: string[];
+  /** More directories matched than items holds. */
+  truncated: boolean;
+}

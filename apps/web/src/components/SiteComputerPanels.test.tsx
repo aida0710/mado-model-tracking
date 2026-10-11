@@ -120,7 +120,7 @@ describe('launcherが作った鍵', () => {
         onRequested={() => undefined}
       />,
     );
-    expect(requested).toContain('launcherが鍵を作るのを待っています');
+    expect(requested).toContain('ランチャーが鍵を作るのを待っています');
     // The managers' table shows the same state, so one's own key does too while it waits.
     expect(requested).toContain('作成待ち');
     expect(requested).toContain('依頼日時');

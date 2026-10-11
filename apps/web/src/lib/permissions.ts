@@ -12,7 +12,10 @@ export function canEditProject(role: ProjectRole): boolean {
   return role !== 'viewer';
 }
 
-/** Project settings, members and service tokens need the Project admin role. */
+/**
+ * Project settings (description, visibility, storage), members, service tokens and archiving the
+ * Project need the Project admin role. A global administrator's session resolves to admin.
+ */
 export function canManageProject(role: ProjectRole): boolean {
   return role === 'admin';
 }

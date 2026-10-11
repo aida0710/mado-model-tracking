@@ -115,8 +115,10 @@ export async function findWebhookSecret(
     webhookSecretPayload: Buffer | null;
   }>(
     connection,
-    `SELECT project_id,enabled,webhook_signature,webhook_secret_key_id,webhook_secret_payload
-    FROM hooks WHERE id=$1 AND trigger='webhook'`,
+    // A hook of an archived Project is not found, so a delivery cannot start a Job there.
+    `SELECT h.project_id,h.enabled,h.webhook_signature,h.webhook_secret_key_id,h.webhook_secret_payload
+    FROM hooks h JOIN projects p ON p.id=h.project_id AND p.archived_at IS NULL
+    WHERE h.id=$1 AND h.trigger='webhook'`,
     [hookId],
   );
   if (!found?.webhookSecretKeyId || !found.webhookSecretPayload) return undefined;

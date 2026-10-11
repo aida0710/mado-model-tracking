@@ -1,7 +1,7 @@
 """Check that official MLflow 3 system metrics logging produces readable `system/` metric histories.
 
 Standalone: by default it logs to a temporary local MLflow store, which shows what the official
-client records. With `--mado-api-url` it logs to Mado Model Tracking's MLflow API instead (dev
+client records. With `--mado-api-url` it logs to mado ML Tracking's MLflow API instead (dev
 login, temporary project token revoked at the end) and reads the history back through it.
 """
 
@@ -43,7 +43,7 @@ DEFAULT_WEB_ORIGIN = "http://127.0.0.1:5182"
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mado-api-url", help="Mado Model Tracking API origin, e.g. http://127.0.0.1:47160")
+    parser.add_argument("--mado-api-url", help="mado ML Tracking API origin, e.g. http://127.0.0.1:47160")
     parser.add_argument(
         "--web-origin",
         default=DEFAULT_WEB_ORIGIN,

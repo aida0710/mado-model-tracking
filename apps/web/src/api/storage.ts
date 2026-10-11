@@ -1,4 +1,5 @@
 import type {
+  DirectorySuggestions,
   StorageBackend,
   StorageBackendChoices,
   StorageBackendCreate,
@@ -35,4 +36,14 @@ export const storageApi = {
     request<StorageSettings>('/admin/storage-settings', { signal }),
   updateSettings: (body: StorageSettings) =>
     request<StorageSettings>('/admin/storage-settings', jsonRequest('PUT', body)),
+  /** Directories on the API server that complete a filesystem backend's root path as typed. */
+  directorySuggestions: async (path: string, signal?: AbortSignal) => {
+    const payload = await request<DirectorySuggestions>(
+      `/admin/storage-directories?${new URLSearchParams({ path })}`,
+      { signal },
+    );
+    if (!Array.isArray(payload.items) || typeof payload.resolvedPath !== 'string')
+      throw invalidResponseError();
+    return payload;
+  },
 };

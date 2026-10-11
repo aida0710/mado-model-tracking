@@ -1,6 +1,6 @@
-// Browser check for /admin users and /account: create a local user and see its initial password
+// Browser check for /admin/users and /account: create a local user and see its initial password
 // once, disable a user after the confirmation, reset a password, keep SSO roles read-only, and
-// send non-administrators away from /admin. The users API is mocked here until it is integrated.
+// send non-administrators away from /admin/users. The users API is mocked here until it is integrated.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -111,13 +111,17 @@ try {
   const page = await context.newPage();
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  // The users tab is the default tab of /admin.
+  // The user menu opens the global administration (its Project list); the sidebar switches to Users.
   await page.goto(`${webUrl}/projects/${api.state.project.id}/experiments`);
-  await page.getByRole('link', { name: '全体管理' }).click();
-  await page.waitForURL(/\/admin$/);
+  await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
+  await page.getByRole('menuitem', { name: '全体管理', exact: true }).click();
+  await page.waitForURL(/\/admin\/projects$/);
+  await page.getByRole('link', { name: 'ユーザー', exact: true }).click();
+  await page.waitForURL(/\/admin\/users$/);
+  await page.getByRole('heading', { name: 'ユーザー', exact: true }).waitFor();
   assert.equal(
-    await page.getByRole('tab', { name: 'ユーザー' }).getAttribute('aria-selected'),
-    'true',
+    await page.getByRole('link', { name: 'ユーザー', exact: true }).getAttribute('aria-current'),
+    'page',
   );
   await page.getByRole('cell', { name: '退職予定者' }).waitFor();
 
@@ -210,11 +214,11 @@ try {
   assert.equal(await page.getByLabel('現在のパスワード').count(), 0);
   await page.screenshot({ path: `${outputDirectory}/07-account-sso.png`, fullPage: true });
 
-  // Someone who is not a global administrator gets no link, and /admin sends them back.
+  // Someone who is not a global administrator gets no links, and /admin sends them back.
   signedInUser.isAdmin = false;
-  await page.goto(`${webUrl}/admin`);
+  await page.goto(`${webUrl}/admin/users`);
   await page.waitForURL(/\/projects\/[^/]+\/experiments$/);
-  assert.equal(await page.getByRole('link', { name: '全体管理' }).count(), 0);
+  assert.equal(await page.getByRole('link', { name: 'ユーザー', exact: true }).count(), 0);
   await page.screenshot({ path: `${outputDirectory}/08-non-admin-redirected.png` });
 
   assert.deepEqual(pageErrors, []);

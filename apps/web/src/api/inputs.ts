@@ -1,5 +1,4 @@
 import type {
-  ArtifactBackend,
   CodeSource,
   ComputeTarget,
   ComputeTargetSiteFields,
@@ -14,11 +13,6 @@ import type {
   RunStatus,
 } from '@mmt/contracts';
 
-export interface CreateProject {
-  name: string;
-  description?: string;
-  artifactBackend?: ArtifactBackend;
-}
 export interface CreateRun {
   experimentId: string;
   name: string;

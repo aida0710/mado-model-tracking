@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import type { FormField, FormValues } from '../types/form';
 import { getFieldValue, getSelectedValues } from '../lib/formValues';
+import { SuggestionInput } from './SuggestionInput';
 
 export function FormFields({
   fields,
@@ -74,6 +75,17 @@ export function FormFields({
                     </option>
                   ))}
                 </select>
+              ) : field.suggest ? (
+                <SuggestionInput
+                  id={id}
+                  value={value}
+                  onChange={change}
+                  suggest={field.suggest}
+                  required={field.required}
+                  readOnly={field.readOnly}
+                  placeholder={field.placeholder}
+                  maxLength={field.maxLength}
+                />
               ) : (
                 <input
                   id={id}

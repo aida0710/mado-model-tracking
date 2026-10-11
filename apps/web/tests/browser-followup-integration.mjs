@@ -47,7 +47,7 @@ try {
   console.log('Real API: compact default Runs columns');
   assert.equal((await getJson(adminPage, '/auth/me')).user.isAdmin, true);
   const demo = (await getJson(adminPage, '/projects')).items.find(
-    (project) => project.name === 'Mado Model Tracking Demo',
+    (project) => project.name === 'mado ML Tracking Demo',
   );
   assert.ok(demo, 'The parent-provided demo project is required');
   await adminPage.goto(`${base}/projects/${demo.id}/experiments`);

@@ -1,6 +1,7 @@
 // Isolated browser-test API. This module is never imported by production code.
 import { createHash } from 'node:crypto';
 import { listProjectArtifacts, listRunArtifacts, runArtifactTree } from './artifactListingMock.mjs';
+import { createProjectAdministration } from './projectAdministrationMock.mjs';
 // The API default of MMT_ARTIFACT_DELETE_GRACE_DAYS (apps/api/src/config.ts).
 const DEFAULT_ARTIFACT_DELETE_GRACE_DAYS = 7;
 // TokenSummary.tokenPrefix: the first characters of the token value.
@@ -32,9 +33,12 @@ export function createBrowserApi() {
     name: 'UI検証用プロジェクト',
     description: 'ブラウザテストのAPIデータ',
     artifactBackend: 'filesystem',
+    // Projects that existed before visibility stay private (migration 054).
+    visibility: 'private',
     role: 'admin',
     createdAt: now,
   };
+  const projectAdministration = createProjectAdministration({ id, now, user, mainProject: project });
   const experiment = {
     id: id(),
     projectId: project.id,
@@ -240,6 +244,8 @@ export function createBrowserApi() {
   const state = {
     user,
     project,
+    // Every Project with its archive state, and the bodies POST /projects received.
+    projectAdministration: projectAdministration.state,
     loggedIn: false,
     authMode: 'development',
     experiments: [experiment],
@@ -325,11 +331,16 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (!state.loggedIn) return reply({ error: 'Unauthorized' }, 401);
     if (path === '/storage/backends')
       return reply({ items: ['filesystem', 's3'], defaultBackend: 'filesystem' });
-    if (path === '/projects' && method === 'GET') return list([project]);
-    if (path === `/projects/${project.id}` && method === 'PATCH') {
-      Object.assign(project, body);
-      return reply(project);
-    }
+    const projectAnswer = projectAdministration.handle({
+      path,
+      method,
+      url,
+      body,
+      reply,
+      list,
+      fulfillEmpty: () => route.fulfill({ status: 204, body: '' }),
+    });
+    if (projectAnswer) return projectAnswer;
     if (path === '/targets') {
       if (method === 'GET') return list(state.targets);
       // The create-only fields (owner, sharing, first job shell) are not part of the target.

@@ -171,7 +171,7 @@ async function assertNoSidewaysScroll(page, where) {
 /** The launcher dialog after a token was issued: the token once, and launcher.toml without it. */
 async function readIssuedToken(page) {
   const dialog = openDialog(page);
-  const field = dialog.getByLabel('launcherのtoken', { exact: true });
+  const field = dialog.getByLabel('ランチャーのtoken', { exact: true });
   await field.waitFor();
   const token = await field.inputValue();
   assert.match(token, /^mmt_/);
@@ -196,7 +196,7 @@ async function addGlobalSite(page, site) {
   await dialog.getByLabel('job shellの雛形').selectOption(site.template);
   assert.equal(await jobShellEditor(dialog).inputValue(), exampleJobShell(site.template));
   await dialog.getByLabel('名前').fill(site.name);
-  await dialog.getByLabel('launcher').selectOption(site.launcherId);
+  await dialog.getByLabel('ランチャー').selectOption(site.launcherId);
   await dialog.getByLabel('接続先のhost').fill(site.host);
   await dialog
     .getByLabel('known_hosts（接続先と経由するホストの行）')
@@ -270,10 +270,9 @@ try {
 
   console.log('Launcher: a global administrator registers one; the token is shown once');
   const adminPage = admin.page;
-  await adminPage.goto(`${WEB_URL}/admin`);
-  await adminPage.getByRole('tab', { name: 'launcher', exact: true }).click();
-  await adminPage.getByText('launcherはまだ登録されていません。').waitFor();
-  await adminPage.getByRole('button', { name: 'launcherを登録', exact: true }).click();
+  await adminPage.goto(`${WEB_URL}/admin/launchers`);
+  await adminPage.getByText('ランチャーはまだ登録されていません。').waitFor();
+  await adminPage.getByRole('button', { name: 'ランチャーを登録', exact: true }).click();
   await openDialog(adminPage).getByLabel('名前').fill('main');
   await openDialog(adminPage).getByRole('button', { name: '作成', exact: true }).click();
   const firstToken = await readIssuedToken(adminPage);
@@ -343,7 +342,7 @@ try {
   await waitForNoDialog(adminPage);
   await adminDetails.getByRole('heading', { name: 'GPU server' }).waitFor();
   const sharedKeys = adminDetails.getByRole('region', { name: '鍵と接続確認' });
-  await sharedKeys.getByText('launcherが鍵を作るのを待っています', { exact: false }).waitFor();
+  await sharedKeys.getByText('ランチャーが鍵を作るのを待っています', { exact: false }).waitFor();
   await sharedKeys.getByText('作成待ち', { exact: true }).waitFor();
   // The API refuses a login check until the launcher has made the key (site_check_unavailable).
   assert.equal(await sharedKeys.getByRole('button', { name: '接続を確認', exact: true }).isDisabled(), true);
@@ -372,7 +371,7 @@ try {
   const ownKey = aliceDetails.locator('.site-personal-key');
   await ownKey.getByText('あなた用の鍵').waitFor();
   await ownKey.getByText('作成待ち', { exact: true }).waitFor();
-  await ownKey.getByText('launcherが鍵を作るのを待っています', { exact: false }).waitFor();
+  await ownKey.getByText('ランチャーが鍵を作るのを待っています', { exact: false }).waitFor();
   assert.equal(await ownKey.getByRole('button', { name: '接続を確認', exact: true }).isDisabled(), true);
   const saved = (await alice.api.get(`/targets/${abci.id}/personal-settings/me`)).item;
   assert.equal(saved.accountName, 'acb12345');
@@ -455,7 +454,7 @@ try {
   assert.equal(await pcDialog.getByLabel('使える範囲').count(), 0);
   await pcDialog.getByLabel('job shellの雛形').selectOption('direct-docker');
   await pcDialog.getByLabel('投入方式').selectOption('manual');
-  assert.equal(await pcDialog.getByLabel('launcher').count(), 0);
+  assert.equal(await pcDialog.getByLabel('ランチャー').count(), 0);
   await pcDialog.getByLabel('名前').fill('Alice PC');
   const projectChoices = pcDialog.getByLabel('共有するProject');
   const shareable = await projectChoices.locator('option').allTextContents();
@@ -686,8 +685,7 @@ try {
   await alicePage.goto(`${WEB_URL}/projects/${sharedProject.project.id}/jobs?job=${job.id}`);
   await alicePage.locator('.job-detail').getByText('job shellの版').waitFor();
   await assertNoSidewaysScroll(alicePage, 'Job details');
-  await adminPage.goto(`${WEB_URL}/admin`);
-  await adminPage.getByRole('tab', { name: 'launcher', exact: true }).click();
+  await adminPage.goto(`${WEB_URL}/admin/launchers`);
   await adminPage.getByText('main', { exact: true }).first().waitFor();
   await assertNoSidewaysScroll(adminPage, 'launchers');
   await screenshot(adminPage, 'phone-launchers');

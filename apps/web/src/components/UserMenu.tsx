@@ -2,7 +2,8 @@ import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { usePopover } from '../hooks/usePopover';
-import { canChangeOwnPassword } from '../lib/permissions';
+import { canChangeOwnPassword, isGlobalAdmin } from '../lib/permissions';
+import { ADMIN_PATH } from '../layout/adminSections';
 import { text } from '../i18n/catalog';
 
 export const ACCOUNT_PATH = '/account';
@@ -11,7 +12,10 @@ export const ACCOUNT_PASSWORD_PATH = '/account/password';
 // Two letters fit the 27px avatar circle.
 const AVATAR_INITIALS_LENGTH = 2;
 
-/** The avatar in the top bar; it opens a menu with the signed-in user and their account pages. */
+/**
+ * The avatar in the top bar; it opens a menu with the signed-in user, their account pages and, for
+ * global administrators, the global administration.
+ */
 export function UserMenu() {
   const auth = useAuth();
   const menuId = useId();
@@ -44,6 +48,11 @@ export function UserMenu() {
           {canChangeOwnPassword(auth.user) && (
             <Link role="menuitem" to={ACCOUNT_PASSWORD_PATH}>
               {text.changePasswordTitle}
+            </Link>
+          )}
+          {isGlobalAdmin(auth.user) && (
+            <Link role="menuitem" to={ADMIN_PATH} className="user-menu-administration">
+              {text.administration}
             </Link>
           )}
         </div>

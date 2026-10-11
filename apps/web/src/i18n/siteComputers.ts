@@ -25,16 +25,16 @@ export const siteComputersText = {
   siteExecutionSection: 'siteでの実行',
   siteAdvancedSettings: '詳細',
   jobShellSection: 'job shell',
-  launcherId: 'launcher',
+  launcherId: 'ランチャー',
   launcherUnset: '（選んでください）',
   noLaunchersNotice:
-    'launcherはまだ登録されていません。全体管理者が「全体管理」の「launcher」で登録します。',
+    'ランチャーはまだ登録されていません。全体管理者が「全体管理」の「ランチャー」で登録します。',
   siteHost: '接続先のhost',
   sitePort: '接続先のport',
   siteJumpHosts: '経由するホスト（1行に1つ、[user@]host[:port]）',
   siteKnownHosts: 'known_hosts（接続先と経由するホストの行）',
   siteKnownHostsHint:
-    'known_hostsは、ssh-keyscanの出力をホスト鍵の指紋で確かめてから貼ります。launcherはここに無いホスト鍵を受け入れません。',
+    'known_hostsは、ssh-keyscanの出力をホスト鍵の指紋で確かめてから貼ります。ランチャーはここに無いホスト鍵を受け入れません。',
   accountMode: 'ログインするアカウント',
   sharedAccount: '共用アカウント名',
   siteWorkDirectory: '作業ディレクトリ（計算ノードからも同じパスで見える絶対パス）',
@@ -49,17 +49,17 @@ export const siteComputersText = {
   cancelGraceSeconds: '取消の猶予（秒）',
   maxOutputFiles: '出力の上限（1つのJobのファイル数）',
   siteExecutionHint:
-    'runnerから見たAPIのURLが空なら、launcher（手動投入ではmado-tracking submit）が使うURLを渡します。本人のアカウントで投入する計算機と手動投入の計算機では、作業ディレクトリと変数を各自の「自分の設定」で置き換えられます（共用アカウントの計算機では置き換えません）。',
+    'runnerから見たAPIのURLが空なら、ランチャー（手動投入ではmado-tracking submit）が使うURLを渡します。本人のアカウントで投入する計算機と手動投入の計算機では、作業ディレクトリと変数を各自の「自分の設定」で置き換えられます（共用アカウントの計算機では置き換えません）。',
   jobShellTemplate: 'job shellの雛形',
   jobShellTemplateNone: '雛形を使わない',
   jobShellTemplateHint:
     '雛形を選ぶと、job shellの内容と、取消コマンド・array・GPUの渡し方・対応Runtimeが雛形の値になります。雛形は例なので、キュー名・資源・グループなどをsiteの資料に合わせて書き換えてください。',
   jobShell: 'job shell',
-  siteLauncherRequired: '自動投入の計算機には、投入するlauncherを選んでください。',
+  siteLauncherRequired: '自動投入の計算機には、投入するランチャーを選んでください。',
   siteHostError:
     '接続先のhostは、英数字と「.」「:」「_」「-」だけで入力してください（先頭に「-」は使えません）。',
   siteKnownHostsRequired:
-    'known_hostsを入力してください。launcherは知らないホスト鍵を受け入れません。',
+    'known_hostsを入力してください。ランチャーは知らないホスト鍵を受け入れません。',
   siteKnownHostsLineError:
     'known_hostsの各行は「ホスト 鍵の種類 鍵」の形にしてください（#で始まる行は注釈です）。',
   siteSharedAccountRequired: '共用アカウント名を入力してください。',
@@ -97,9 +97,9 @@ export const siteComputersText = {
   jobShellShowCurrent: '今の版を表示',
   siteKeysTitle: '鍵と接続確認',
   siteKeysNoLauncher:
-    'launcherを選んでいないため、鍵はまだ作られません。計算機の編集でlauncherを選んでください。',
+    'ランチャーを選んでいないため、鍵はまだ作られません。計算機の編集でランチャーを選んでください。',
   siteKeyRequested:
-    'launcherが鍵を作るのを待っています。launcherが次に設定を読むと公開鍵が出ます。',
+    'ランチャーが鍵を作るのを待っています。ランチャーが次に設定を読むと公開鍵が出ます。',
   siteKeyNone: '鍵はまだありません。',
   siteKeyFingerprint: '指紋',
   siteKeyStatus: '鍵の状態',
@@ -108,12 +108,12 @@ export const siteComputersText = {
   siteKeyRotate: '鍵を作り直す',
   siteKeyRequest: '鍵を依頼する',
   siteKeyRotateConfirm:
-    '今の鍵を失効させ、launcherに新しい鍵を作らせます。新しい公開鍵をauthorized_keysに登録し直すまで、このアカウントへの投入は失敗します。',
+    '今の鍵を失効させ、ランチャーに新しい鍵を作らせます。新しい公開鍵をauthorized_keysに登録し直すまで、このアカウントへの投入は失敗します。',
   siteConnectionCheckHint:
-    'launcherがこの鍵とアカウントでsiteへ1回ログインし、trueだけを実行します。Jobは投入しません。',
+    'ランチャーがこの鍵とアカウントでsiteへ1回ログインし、trueだけを実行します。Jobは投入しません。',
   siteConnectionChecks: '確認の結果',
   siteConnectionCheckNone: 'まだ確認していません。',
-  siteConnectionCheckMessage: 'launcherの報告',
+  siteConnectionCheckMessage: 'ランチャーの報告',
   sitePersonalTitle: '自分の設定',
   sitePersonalHint:
     'この計算機であなたのJobを投入するときに使う設定です。空の項目は計算機の設定を使います。',
@@ -121,7 +121,7 @@ export const siteComputersText = {
     'この計算機は共用アカウントで動くので、自分の設定はありません。全員のJobを同じアカウント・作業ディレクトリ・変数で投入します。',
   siteAccountName: 'あなたのアカウント名',
   siteAccountRequiredNotice:
-    'この計算機は本人のアカウントで投入します。アカウント名を保存するまで、この計算機でJobを作れません。保存すると、launcherがあなた用の鍵を作ります。',
+    'この計算機は本人のアカウントで投入します。アカウント名を保存するまで、この計算機でJobを作れません。保存すると、ランチャーがあなた用の鍵を作ります。',
   sitePersonalWorkDirectory: '作業ディレクトリ（任意。計算機の設定を置き換えます）',
   sitePersonalVariables: '変数（任意。NAME=VALUEを1行に1つ。計算機の変数より優先します）',
   sitePersonalSave: '自分の設定を保存',
@@ -175,9 +175,9 @@ export const siteComputersTextTemplates = {
   jobShellShowing: (version: number) => `版${version}を表示しています`,
   jobShellSaved: (version: number) => `版${version}を保存しました。これからの投入に使います。`,
   siteSharedKeyHint: (account: string) =>
-    `launcherが作った公開鍵です。共用アカウント（${account}）の~/.ssh/authorized_keysに1行で追加してください。秘密鍵はlauncherのホストから出ません。`,
+    `ランチャーが作った公開鍵です。共用アカウント（${account}）の~/.ssh/authorized_keysに1行で追加してください。秘密鍵はランチャーのホストから出ません。`,
   sitePersonalKeyHint: (account: string) =>
-    `launcherがあなた用に作った公開鍵です。あなたのアカウント（${account}）の~/.ssh/authorized_keysに1行で追加してください。秘密鍵はlauncherのホストから出ません。`,
+    `ランチャーがあなた用に作った公開鍵です。あなたのアカウント（${account}）の~/.ssh/authorized_keysに1行で追加してください。秘密鍵はランチャーのホストから出ません。`,
 };
 
 export const targetOwnershipLabels = {

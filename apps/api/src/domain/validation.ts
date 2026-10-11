@@ -69,14 +69,6 @@ export function isRelativeFilePath(path: string): boolean {
     path.split('/').every((part) => !!part && part !== '.' && part !== '..')
   );
 }
-export const projectCreateSchema = z.strictObject({
-  name: nameSchema,
-  description: z.string().max(20000).default(''),
-  artifactBackend: artifactBackendSchema.default('filesystem'),
-});
-export const projectPatchSchema = projectCreateSchema
-  .pick({ description: true, artifactBackend: true })
-  .partial();
 export const namedEntitySchema = z.strictObject({
   name: nameSchema,
   description: z.string().max(20000).default(''),

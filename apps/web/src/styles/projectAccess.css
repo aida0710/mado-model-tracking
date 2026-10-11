@@ -1,4 +1,5 @@
-/* Project members, group bindings and the user picker on the settings page. */
+/* Project members, group bindings, the user picker on the settings page, and the members chosen
+   while creating a Project. */
 .user-picker-results {
   list-style: none;
   margin: 0;
@@ -43,4 +44,47 @@
 .access-actions {
   display: flex;
   gap: 6px;
+}
+/* The members chosen while creating a Private Project: one row each with their role. */
+.member-grants {
+  border: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  min-width: 0;
+}
+.member-grants legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.member-grants > p {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.member-grants .field {
+  margin-bottom: 10px;
+}
+.member-grants-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+}
+.member-grants-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+.member-grants-list li + li {
+  border-top: 1px solid var(--border);
+}
+@media (width < 640px) {
+  .member-grants-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .member-grants-list .user-summary {
+    grid-column: 1 / -1;
+  }
 }

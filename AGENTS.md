@@ -1,4 +1,4 @@
-# Mado Model Tracking
+# mado ML Tracking
 
 利用者は別アプリ、S3/ファイルシステムのArtifacts、Mado連携を初plugin、plugin別リポジトリ、全機能、学習/fine-tuningの実行管理まで承認した。実装・ローカル検証を完了する。公開・本番デプロイは今回の依頼に含まれない。
 

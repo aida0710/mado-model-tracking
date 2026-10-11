@@ -14,6 +14,7 @@ const projects: Project[] = [
     name: 'Speech',
     description: '',
     artifactBackend: 'filesystem',
+    visibility: 'private',
     role: 'editor',
     createdAt: '2026-10-10T00:00:00Z',
   },
@@ -22,6 +23,7 @@ const projects: Project[] = [
     name: 'Vision',
     description: '',
     artifactBackend: 'filesystem',
+    visibility: 'public',
     role: 'viewer',
     createdAt: '2026-10-10T00:00:00Z',
   },
@@ -93,10 +95,10 @@ describe('計算機の追加・編集の項目', () => {
     expect(html).toContain('>main</option>');
     expect(html).toContain('known_hosts（接続先と経由するホストの行）');
     expect(html).toContain('ログインするアカウント');
-    expect(html).not.toContain('launcherはまだ登録されていません');
+    expect(html).not.toContain('ランチャーはまだ登録されていません');
     expect(
       renderFields({ values, target: globalSiteDetails, canAddGlobal: true, launchers: [] }),
-    ).toContain('launcherはまだ登録されていません');
+    ).toContain('ランチャーはまだ登録されていません');
   });
 
   it('手動投入では、launcher・接続先・アカウントを出さない', () => {

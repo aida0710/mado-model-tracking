@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type {
+  DirectorySuggestions,
   StorageBackend,
   StorageBackendChoices,
   StorageSettings,
@@ -52,6 +53,15 @@ export const storageBackendChoicesSchema = namedContractSchema(
   'StorageBackendChoices',
   z.strictObject({ items: z.array(z.string()), defaultBackend: z.string() }),
 );
+export const directorySuggestionsSchema = namedContractSchema(
+  'DirectorySuggestions',
+  z.strictObject({
+    resolvedPath: z.string(),
+    status: z.enum(['directory', 'missing', 'not_directory', 'unavailable']),
+    items: z.array(z.string()),
+    truncated: z.boolean(),
+  }),
+);
 
 type _StorageBackend = Expect<
   MutuallyAssignable<z.infer<typeof storageBackendSchema>, StorageBackend>
@@ -67,4 +77,7 @@ type _StorageTestResult = Expect<
 >;
 type _StorageBackendChoices = Expect<
   MutuallyAssignable<z.infer<typeof storageBackendChoicesSchema>, StorageBackendChoices>
+>;
+type _DirectorySuggestions = Expect<
+  MutuallyAssignable<z.infer<typeof directorySuggestionsSchema>, DirectorySuggestions>
 >;

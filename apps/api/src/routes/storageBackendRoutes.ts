@@ -3,12 +3,20 @@ import { isValidStorageBackendName } from '@mmt/platform';
 import {
   storageBackendCreateSchema,
   storageBackendPatchSchema,
+  storageDirectoryQuerySchema,
   storageSettingsSchema,
 } from '../domain/storageBackendValidation.js';
 import { DomainError } from '../domain/errors.js';
-import { jsonBody, principal, type ApiContext, type ApiEnvironment } from '../http/request.js';
+import {
+  jsonBody,
+  parse,
+  principal,
+  type ApiContext,
+  type ApiEnvironment,
+} from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
 import type { StorageBackendService } from '../services/storageBackendService.js';
+import type { StorageDirectoryService } from '../services/storageDirectoryService.js';
 
 function backendName(context: ApiContext): string {
   const name = context.req.param('name');
@@ -19,7 +27,10 @@ function backendName(context: ApiContext): string {
 }
 
 // Mounted at /api/admin; every operation requires a global administrator.
-export function storageBackendRoutes(storage: StorageBackendService): Hono<ApiEnvironment> {
+export function storageBackendRoutes(
+  storage: StorageBackendService,
+  directories: StorageDirectoryService,
+): Hono<ApiEnvironment> {
   const routes = new Hono<ApiEnvironment>();
   routes.get('/storage-backends', async (context) =>
     context.json({ items: await storage.list(principal(context)) }),
@@ -58,6 +69,14 @@ export function storageBackendRoutes(storage: StorageBackendService): Hono<ApiEn
         principal(context),
         await jsonBody(context, storageSettingsSchema),
         requestMetadata(context),
+      ),
+    ),
+  );
+  routes.get('/storage-directories', async (context) =>
+    context.json(
+      await directories.suggest(
+        principal(context),
+        parse(storageDirectoryQuerySchema, context.req.query()).path,
       ),
     ),
   );

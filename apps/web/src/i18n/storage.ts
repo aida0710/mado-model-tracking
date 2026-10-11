@@ -1,6 +1,5 @@
 // Artifact storage backends: the admin table, the backend dialog and the connection test.
 export const storageText = {
-  storageBackends: '保存先',
   newStorageBackend: '保存先を追加',
   editStorageBackend: '保存先を変更',
   storageBackendKind: '種類',
@@ -54,9 +53,16 @@ export const storageText = {
     'Bucket名は3〜63文字の小文字英数字・ハイフン・ドットで、先頭と末尾を英数字にしてください',
   storageCaBundleError: 'CA証明書はPEM形式（-----BEGIN CERTIFICATE-----）で貼り付けてください',
   storageSecretRequired: 'Access key IDを指定するときはSecret access keyも入力してください',
+  storageDirectoryTruncated: '候補が多いため一部だけを表示しています。続けて入力すると絞り込めます。',
 } as const;
 
 export const storageTextTemplates = {
+  storageDirectoryMissing: (path: string) =>
+    `${path} はサーバにまだありません。接続テストか最初の保存のときに作成します。`,
+  storageDirectoryNotDirectory: (path: string) =>
+    `${path} はディレクトリではありません。別のパスを指定してください。`,
+  storageDirectoryUnavailable: (path: string) =>
+    `${path} をサーバがすぐに読めませんでした。ネットワークのディスクが応答していない可能性があります。`,
   storagePartSizeError: (minimumMib: number, maximumMib: number) =>
     `partサイズは${minimumMib}〜${maximumMib} MiBの整数で指定してください`,
   storageMakeDefaultConfirm: (name: string) =>

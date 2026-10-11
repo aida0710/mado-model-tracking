@@ -198,7 +198,7 @@ def doctor_command(arguments: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mado-tracking-worker", description="Mado Model Tracking compute worker"
+        prog="mado-tracking-worker", description="mado ML Tracking compute worker"
     )
     commands = parser.add_subparsers(dest="command", required=True)
 

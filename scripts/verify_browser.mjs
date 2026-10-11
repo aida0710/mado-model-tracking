@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { switchProject } from '../apps/web/tests/projectSwitcher.mjs';
 const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
 if (!modulePath) throw new Error('MMT_PLAYWRIGHT_MODULE is required');
 const { chromium } = await import(pathToFileURL(modulePath).href);
@@ -27,9 +28,7 @@ try {
   await page.getByLabel('表示名').fill('開発管理者');
   await page.getByRole('button', { name: '開発モードでログイン', exact: true }).click();
   await page.getByRole('heading', { name: 'Runs', exact: true }).waitFor();
-  await page
-    .getByLabel('プロジェクト', { exact: true })
-    .selectOption({ label: 'Mado Model Tracking Demo' });
+  await switchProject(page, 'mado ML Tracking Demo');
   await page.getByRole('link', { name: 'CPU linear regression', exact: true }).waitFor();
   const demoBase = new URL(page.url()).pathname.replace(/\/experiments.*/, '');
   for (const [route, heading] of [
@@ -40,7 +39,7 @@ try {
     ['jobs', 'Jobs'],
     ['compute', 'Compute'],
     ['plugins', 'Plugins'],
-    ['settings', 'Settings'],
+    ['settings', 'プロジェクト設定'],
   ]) {
     await page.goto(`${base}${demoBase}/${route}`);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
@@ -80,11 +79,15 @@ try {
   const worker = JSON.parse(
     await readFile(`${artifactsDirectory}/worker-integration.json`, 'utf8'),
   );
-  const projectLabel = await page
-    .getByLabel('プロジェクト', { exact: true })
-    .locator(`option[value="${worker.projectId}"]`)
-    .innerText();
-  await page.getByLabel('プロジェクト', { exact: true }).selectOption({ label: projectLabel });
+  // The switcher lists Projects by name, and the worker check records only the Project's ID.
+  const projectsResponse = await page.request.get(`${base}/api/projects`);
+  assert.equal(projectsResponse.ok(), true, `/projects: ${projectsResponse.status()}`);
+  const workerProject = (await projectsResponse.json()).items.find(
+    (project) => project.id === worker.projectId,
+  );
+  assert(workerProject, `the worker Project ${worker.projectId} is not listed`);
+  await switchProject(page, workerProject.name);
+  await page.waitForURL((url) => url.pathname.startsWith(`/projects/${worker.projectId}/`));
   const workerBase = `/projects/${worker.projectId}`;
   await page.goto(`${base}${workerBase}/runs/${worker.trainingRunId}`);
   await page.getByRole('heading', { name: 'Real CPU training', exact: true }).waitFor();

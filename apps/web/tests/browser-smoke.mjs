@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createBrowserApi } from './browserApi.mjs';
+import { openProjectSwitcher } from './projectSwitcher.mjs';
 
 // Reuse an installed Playwright without changing the shared workspace dependencies.
 const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
@@ -137,7 +138,7 @@ try {
     ['lineage', 'Lineage'],
     ['compute', 'Compute'],
     ['plugins', 'Plugins'],
-    ['settings', 'Settings'],
+    ['settings', 'プロジェクト設定'],
   ]) {
     await page.goto(`${projectBase}/${route}`);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
@@ -302,13 +303,14 @@ try {
 
   console.log('Browser check: tokens');
   await page.goto(`${projectBase}/settings`);
-  // Project creation lives in the settings "Projects" section, not in the project bar.
-  await page.getByRole('heading', { name: 'Projects', exact: true }).waitFor();
-  await page.getByRole('link', { name: api.state.project.name, exact: true }).waitFor();
-  assert.equal(
-    await page.locator('.projectbar').getByRole('button', { name: 'プロジェクトを作成' }).count(),
-    0,
-  );
+  // The settings page holds this Project's own settings only; Projects are created from the
+  // switcher's last entry.
+  await page.getByRole('heading', { name: 'プロジェクト設定', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'プロジェクトを作成' }).count(), 0);
+  const switcher = await openProjectSwitcher(page);
+  await switcher.getByRole('option', { name: 'プロジェクトを作成', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await switcher.waitFor({ state: 'detached' });
   await page.getByRole('heading', { name: '監査ログ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'API tokenを発行', exact: true }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('browser-test-token');

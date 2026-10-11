@@ -1,5 +1,6 @@
 import type { ModelAutomationExecution, ModelAutomationRule } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
+import { liveProjectSql } from './projectRepository.js';
 
 export type AutomationEventState = 'pending' | 'processed' | 'source_unsuccessful' | 'source_timeout';
 
@@ -297,6 +298,7 @@ export async function insertAutomationExecution(
 /**
  * Whether the user a rule runs as may still run it: an active global administrator or an active
  * user whose Project role is admin (the higher of the direct membership and SSO group bindings).
+ * Nobody can while the Project is archived.
  */
 export async function hasAutomationOwnerAccess(
   connection: Connection,
@@ -304,7 +306,8 @@ export async function hasAutomationOwnerAccess(
 ): Promise<boolean> {
   const owner = await first<{ hasAccess: boolean }>(
     connection,
-    `SELECT u.status='active' AND (u.is_admin OR COALESCE(m.role='admin',false)) AS has_access FROM users u
+    `SELECT u.status='active' AND ${liveProjectSql('$2')}
+      AND (u.is_admin OR COALESCE(m.role='admin',false)) AS has_access FROM users u
     LEFT JOIN effective_project_roles m ON m.user_id=u.id AND m.project_id=$2 WHERE u.id=$1`,
     [rule.runAsUserId, rule.projectId],
   );

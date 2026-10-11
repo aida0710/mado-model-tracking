@@ -1,5 +1,93 @@
-/* Dialogs of this app only. Dialogs, fields, wizard steps and details lists themselves come from
-   @mado/design-system/components.css. */
+/* Dialogs of this app only, and the form controls they share: the radio list with a line per
+   choice and the text field with candidates. Dialogs, fields, wizard steps and details lists
+   themselves come from @mado/design-system/components.css. */
 .dialog.workspace-dialog {
   width: min(1280px, calc(100vw - 32px));
+}
+
+/* A radio list with one bordered line per choice (storage backend, Project visibility). */
+.choice-picker {
+  border: 0;
+  margin: 0 0 16px;
+  padding: 0;
+  min-width: 0;
+}
+.choice-picker legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.choice-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-bottom-width: 0;
+}
+.choice-picker-option:last-of-type {
+  border-bottom-width: 1px;
+}
+.choice-picker-option:has(input:checked) {
+  background: var(--surface);
+}
+/* A choice with a line of explanation under its name. */
+.choice-picker-option:has(.choice-picker-text) {
+  align-items: flex-start;
+}
+.choice-picker-option:has(.choice-picker-text) input {
+  margin-top: 2px;
+}
+.choice-picker-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12px;
+}
+.choice-picker-text .project-visibility {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A text field with candidates under it (SuggestionInput). The list stays in the flow of the form,
+   so a dialog's scrolling never clips it. */
+.suggestion-input {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.suggestion-list {
+  margin: 0;
+  padding: 2px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  background: var(--background);
+}
+.suggestion-list[hidden] {
+  display: none;
+}
+.suggestion-list li {
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.suggestion-list li:hover,
+.suggestion-list li[aria-selected='true'] {
+  background: var(--surface-hover);
+}
+.suggestion-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+@media (width < 900px) {
+  .suggestion-list li {
+    min-height: var(--tap-target);
+    display: flex;
+    align-items: center;
+  }
 }

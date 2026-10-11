@@ -166,6 +166,9 @@ import { UserDirectoryService } from './services/userDirectoryService.js';
 import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
+import { StorageDirectoryService } from './services/storageDirectoryService.js';
+import { ProjectAdministrationService } from './services/projectAdministrationService.js';
+import { adminProjectRoutes } from './routes/adminProjectRoutes.js';
 import { sweepRoutes } from './routes/sweepRoutes.js';
 import { UserAdministrationService } from './services/userAdministrationService.js';
 import { AccountService } from './services/accountService.js';
@@ -551,7 +554,8 @@ export function createApplication(options: ApplicationOptions) {
       deletions: artifactDeletions,
     }),
   );
-  app.route('/api/admin', storageBackendRoutes(storageBackends));
+  app.route('/api/admin', storageBackendRoutes(storageBackends, new StorageDirectoryService()));
+  app.route('/api/admin', adminProjectRoutes(new ProjectAdministrationService(database)));
   app.route(
     '/api/admin',
     adminUserRoutes(

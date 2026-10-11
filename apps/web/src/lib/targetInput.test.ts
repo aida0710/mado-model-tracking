@@ -134,7 +134,7 @@ describe('siteの全体設定', () => {
 
   it('自動投入はlauncherを選ばなければ送らない（APIはsite_settings_invalidで拒む）', () => {
     const values = { ...targetFormValues(globalSiteDetails), launcherId: '' };
-    expect(() => buildTargetInput(values)).toThrow('launcher');
+    expect(() => buildTargetInput(values)).toThrow('ランチャー');
   });
 });
 

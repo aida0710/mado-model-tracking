@@ -125,7 +125,7 @@ def runner_wrapper(python_executable: str) -> bytes:
         raise ConfigurationError("runner_python must be one command without newlines")
     return (
         "#!/bin/sh\n"
-        "# Installed by Mado Model Tracking; starts the site runner (mado-tracking site-run).\n"
+        "# Installed by mado ML Tracking; starts the site runner (mado-tracking site-run).\n"
         'python="${MMT_RUNNER_PYTHON:-}"\n'
         f'if [ -z "$python" ]; then python={shlex.quote(python_executable)}; fi\n'
         f'exec "$python" "$(dirname "$0")/{RUNNER_BUNDLE_NAME}" site-run "$@"\n'

@@ -1,6 +1,6 @@
 # MLflow 3から記録する
 
-公式の`mlflow` Python SDKから、Mado Model TrackingのProjectへ実験を記録します。接続先はProjectごとに分かれ、認証には既存のAPI tokenを使います。Run・メトリクス・Artifact・登録モデルは通常の画面と同じデータとして保存します。
+公式の`mlflow` Python SDKから、mado ML TrackingのProjectへ実験を記録します。接続先はProjectごとに分かれ、認証には既存のAPI tokenを使います。Run・メトリクス・Artifact・登録モデルは通常の画面と同じデータとして保存します。
 
 対応対象はMLflow 3です。公式SDKのMLflow 3.0.0＋scikit-learn 1.6.1、MLflow 3.17.0＋scikit-learn 1.9.1で実HTTPの結合検証を行いました。MLflowの全機能を提供するサーバーではなく、対応機能はこの文書で示します。
 

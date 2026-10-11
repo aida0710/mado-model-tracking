@@ -9,7 +9,7 @@ import type {
   TokenSummary,
   User,
 } from '../index.js';
-import { idSchema, projectRoleSchema, timestampSchema } from './primitives.js';
+import { idSchema, projectRoleSchema, projectVisibilitySchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
 import type { Expect, MutuallyAssignable } from './typeAssertions.js';
 
@@ -33,6 +33,7 @@ export const projectSchema = namedContractSchema(
     name: z.string(),
     description: z.string(),
     artifactBackend: z.string(),
+    visibility: projectVisibilitySchema,
     role: projectRoleSchema,
     createdAt: timestampSchema,
   }),

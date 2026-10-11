@@ -24,6 +24,7 @@ export * from './operations.js';
 export * from './plugins.js';
 export * from './primitives.js';
 export * from './projectAccess.js';
+export * from './projectAdministration.js';
 export * from './promotion.js';
 export * from './registry.js';
 export * from './reports.js';

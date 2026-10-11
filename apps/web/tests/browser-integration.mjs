@@ -47,7 +47,7 @@ try {
   await page.getByRole('button', { name: '開発モードでログイン' }).click();
   await page.getByRole('navigation').waitFor();
   const projects = await json('/projects');
-  const demo = projects.items.find((project) => project.name === 'Mado Model Tracking Demo');
+  const demo = projects.items.find((project) => project.name === 'mado ML Tracking Demo');
   if (demo) {
     await page.goto(`${base}/projects/${demo.id}/experiments`);
     await page.getByRole('link', { name: 'CPU linear regression', exact: true }).waitFor();
@@ -191,7 +191,7 @@ try {
     ['lineage', 'Lineage'],
     ['compute', 'Compute'],
     ['plugins', 'Plugins'],
-    ['settings', 'Settings'],
+    ['settings', 'プロジェクト設定'],
   ]) {
     await page.goto(`${projectBase}/${route}`);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();

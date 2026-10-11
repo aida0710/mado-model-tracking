@@ -306,8 +306,7 @@ try {
   });
 
   await stage('storage_connection_test', '全体管理画面で保存先（filesystem）の接続テストが全段階成功する', async () => {
-    await page.goto(`${BASE}/admin`);
-    await page.getByRole('tab', { name: 'ストレージ' }).click();
+    await page.goto(`${BASE}/admin/storage`);
     const row = page.getByRole('row').filter({ hasText: 'Filesystem' }).first();
     await row.getByRole('button', { name: '接続テスト' }).click();
     await waitOnScreen(page.getByText('すべての段階が成功しました'), { timeout: 30_000 });
@@ -315,7 +314,7 @@ try {
     return { backend: (await row.innerText()).split('\n')[0] };
   });
 
-  await stage('project_creation', '設定画面からProjectを作成する', async () => {
+  await stage('project_creation', 'Projectが無い画面の「プロジェクトを作成」からProjectを作成する', async () => {
     await openProjectCreation(page, { base: BASE, projects: [] });
     await dialog().getByLabel('名前', { exact: false }).fill('Browser pipeline');
     await dialog().getByRole('button', { name: '作成', exact: true }).click();

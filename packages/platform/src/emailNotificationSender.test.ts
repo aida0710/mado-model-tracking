@@ -47,7 +47,7 @@ const mailChannel: NotificationDestination = {
 
 const smtp: SmtpSettings = {
   url: 'smtp://127.0.0.1:1',
-  from: 'Mado Model Tracking <mmt@example.com>',
+  from: 'mado ML Tracking <mmt@example.com>',
 };
 
 interface JsonMail {
@@ -87,7 +87,7 @@ describe('emailNotificationSender', () => {
     const { deliveryId } = await sender.send(mailChannel, failedRunEvent);
     expect(messages).toHaveLength(1);
     const [mail] = messages;
-    expect(mail!.from).toEqual({ address: 'mmt@example.com', name: 'Mado Model Tracking' });
+    expect(mail!.from).toEqual({ address: 'mmt@example.com', name: 'mado ML Tracking' });
     expect(mail!.to.map((recipient) => recipient.address)).toEqual(mailChannel.recipients);
     expect(mail!.subject).toBe('[Speech] Runが失敗しました: train-large');
     expect(mail!.text).toContain('Run: train-large');

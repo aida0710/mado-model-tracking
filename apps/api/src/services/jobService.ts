@@ -32,6 +32,7 @@ import {
   findRun,
 } from '../repositories/registryRepository.js';
 import { findJob, jobColumns } from '../repositories/jobRepository.js';
+import { shareLiveProject } from '../repositories/projectRepository.js';
 import { findExecutionForRun } from '../repositories/automationExecutionLookup.js';
 import { requireProject } from './accessService.js';
 import { JobTokenService } from './jobTokenService.js';
@@ -144,6 +145,9 @@ export class JobService {
   ): Promise<Job> {
     const { run, input, attempt } = registration;
     const placement = registration.placement ?? {};
+    // Every Job, whether a person, a hook, automation or a sweep starts it, passes here; an
+    // archived Project gets none, and an archive waiting on this lock then sees the new Job.
+    if (!(await shareLiveProject(connection, run.projectId))) notFound('Project');
     const activeRun = await first(
       connection,
       "SELECT id FROM runs WHERE id=$1 AND project_id=$2 AND lifecycle_stage='active'",
