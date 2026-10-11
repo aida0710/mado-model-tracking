@@ -1,11 +1,11 @@
 ---
 title: 独自API
-description: Mado Model Trackingの独自API（native API）の認証、共通の形、エラー、機能ごとの分類と、OpenAPI（openapi.json）の取得方法。
+description: mado ML Trackingの独自API（native API）の認証、共通の形、エラー、機能ごとの分類と、OpenAPI（openapi.json）の取得方法。
 ---
 
 # 独自API
 
-Mado Model TrackingのAPIは2つあります。
+mado ML TrackingのAPIは2つあります。
 
 | API | 接続先 | こんなときに向いています |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" "$MMT_API_URL/api/projects"
 
 - API tokenの発行と失効
 - Service Accountの作成・変更・token発行
-- 全体の監査ログ、ユーザーの管理（［全体管理］）
+- 全体の監査ログ、ユーザーの管理（「全体管理」）
 
 ## 共通の形
 
@@ -64,7 +64,7 @@ curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" "$MMT_API_URL/api/projects"
 | 403 | `job_token_forbidden` | Job限定tokenで許されていない操作 |
 | 403 | `password_change_required` | 初回ログインのパスワード変更が済んでいない |
 | 404 | — | 対象が無い、または別のProjectのもの |
-| 409 | `conflict`ほか | 状態の競合（最後のAdminを外す、終わったJobへの操作など） |
+| 409 | `conflict`ほか | 状態の競合（最後のAdminを外す、終わったJobへの操作、Jobが動いているProjectのアーカイブ（`project_has_active_jobs`）、アーカイブしていないProjectの削除（`project_not_archived`）など） |
 | 413 | `artifact_too_large` | Artifactが上限（既定200GiB）を超えた |
 | 422 | `invalid_request`ほか | 入力の形式や値が正しくない |
 | 429 | `rate_limited` | ログインの試行回数の上限。`Retry-After`秒待つ |
@@ -100,14 +100,14 @@ OpenAPIでは、APIを次の分類（tag）に分けています。
 | `plugins` | Pluginの接続 |
 | `notifications`、`operations` | 通知、運用アラート |
 | `audit` | 監査ログ |
-| `admin` | 全体管理（保存先、ユーザー） |
+| `admin` | 全体管理（プロジェクト、保存先とディレクトリ候補、ユーザー） |
 
 ## OpenAPI（openapi.json）
 
 すべてのrouteの認可、入力、出力、エラーコードを、OpenAPI 3.1の形式で公開しています。MLflow互換APIは含みません（MLflow公式のREST APIに従います）。
 
 - 動いているサーバーから: ログインしたブラウザか、`read` scopeのtokenで`GET /api/openapi.json`を取得します。
-- リポジトリから: [docs/openapi.json](https://github.com/aida0710/mado-model-tracking/blob/main/docs/openapi.json)
+- リポジトリから: [docs/openapi.json](https://github.com/aida0710/mado-ml-tracking/blob/main/docs/openapi.json)
 
 ```sh
 curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" "$MMT_API_URL/api/openapi.json" -o openapi.json

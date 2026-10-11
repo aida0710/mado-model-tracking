@@ -26,7 +26,7 @@ Linux and macOS:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install \
-  'mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python'
+  'mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python'
 ```
 
 Windows (PowerShell):
@@ -34,7 +34,7 @@ Windows (PowerShell):
 ```powershell
 py -3 -m venv .venv
 .venv\Scripts\python -m pip install `
-  "mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python"
+  "mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python"
 ```
 
 `[telemetry]` installs `psutil` and `nvidia-ml-py` for system metrics. To log numpy arrays or PIL images as audio and images, use `[telemetry,media]`.
@@ -47,7 +47,7 @@ Check the installation; a help message starting with `usage: mado-tracking` mean
 
 ## Set the server and token
 
-The SDK reads the server and API token from environment variables. Create a token with このProject用のAPI tokenを発行 (Issue an API token for this Project) under **Settings** > MLflow 3から接続 (Connect from MLflow 3). Recording needs the `read` and `runs:write` scopes, plus `artifacts:write` to upload Artifacts; that button opens the token form with these scopes selected ([API tokens](/en/admin/tokens)).
+The SDK reads the server and API token from environment variables. Create a token with このProject用のAPI tokenを発行 (Issue an API token for this Project) under **プロジェクト設定** (Project settings) > MLflow 3から接続 (Connect from MLflow 3). Recording needs the `read` and `runs:write` scopes, plus `artifacts:write` to upload Artifacts; that button opens the token form with these scopes selected ([API tokens](/en/admin/tokens)).
 
 | Variable | Value | Example |
 | --- | --- | --- |

@@ -7,7 +7,7 @@ description: 大きなArtifactを分割して送り、途中で止まっても�
 
 ![Artifactをアップロードするダイアログ](/images/data-uploads-dialog.png)
 
-数GBを超える重みや音声データは、1回のリクエストで送ると、途中で通信が切れたときに最初から送り直しになります。Mado Model Trackingでは、大きなファイルを決まった大きさのpartに分けて送り、途中で止まっても受信済みのpartを飛ばして続きから送れます。
+数GBを超える重みや音声データは、1回のリクエストで送ると、途中で通信が切れたときに最初から送り直しになります。mado ML Trackingでは、大きなファイルを決まった大きさのpartに分けて送り、途中で止まっても受信済みのpartを飛ばして続きから送れます。
 
 ブラウザ、Python SDK、workerは、ファイルの大きさに応じて自動でこの方法を使います。MLflow SDKからは、MLflowのmultipart uploadで同じように分割して送れます。
 

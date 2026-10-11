@@ -90,7 +90,7 @@ See [Notifications and operations alerts](/en/admin/notifications).
 | --- | --- | --- |
 | `MMT_NOTIFICATION_*` | None | Webhook URLs and signing keys. Choose any name and register it in the channel |
 | `MMT_SMTP_URL` | None | SMTP server URL: `smtp://` (STARTTLS) or `smtps://` |
-| `MMT_SMTP_FROM` | None | Sender address. Example: `Mado Model Tracking <mmt@example.com>` |
+| `MMT_SMTP_FROM` | None | Sender address. Example: `mado ML Tracking <mmt@example.com>` |
 | `NODE_EXTRA_CA_CERTS` | None | Path of an internal CA certificate (PEM), used to verify SMTP servers and webhook destinations |
 
 ## Other API server settings

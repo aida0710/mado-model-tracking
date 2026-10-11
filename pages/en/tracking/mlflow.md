@@ -5,9 +5,9 @@ description: Connect the official MLflow 3 SDK with MLFLOW_TRACKING_URI and an A
 
 # Record from MLflow 3
 
-![The "Connect from MLflow 3" section of the Settings page](/images/tracking-mlflow-connection.png)
+![The "Connect from MLflow 3" section of the Project settings](/images/tracking-mlflow-connection.png)
 
-The official `mlflow` Python SDK (MLflow 3) can record into a Mado Model Tracking Project. Set the server and token in environment variables and keep your MLflow code as it is. Runs, metrics, Artifacts, and registered models recorded this way are the same data as those recorded from the Web UI.
+The official `mlflow` Python SDK (MLflow 3) can record into a mado ML Tracking Project. Set the server and token in environment variables and keep your MLflow code as it is. Runs, metrics, Artifacts, and registered models recorded this way are the same data as those recorded from the Web UI.
 
 This is not a server with every MLflow feature. Check the [supported features](#supported-features) table.
 
@@ -19,7 +19,7 @@ This is not a server with every MLflow feature. Check the [supported features](#
 
 ## Connect
 
-1. Open the Project's **Settings** and find MLflow 3から接続 (Connect from MLflow 3). `MLFLOW_TRACKING_URI` and `MLFLOW_REGISTRY_URI` show the same URL, `https://<server>/api/mlflow/projects/<Project ID>`
+1. Open **プロジェクト設定** (Project settings) and find MLflow 3から接続 (Connect from MLflow 3). `MLFLOW_TRACKING_URI` and `MLFLOW_REGISTRY_URI` show the same URL, `https://<server>/api/mlflow/projects/<Project ID>`
 2. Choose このProject用のAPI tokenを発行 (Issue an API token for this Project). The token form opens with `read`, `runs:write`, `registry:write`, and `artifacts:write` selected; enter a name and expiry and issue it. The token is shown only once, so keep it (the button is shown to editors and above)
 3. In a terminal on the training machine, install MLflow and set the environment variables
 

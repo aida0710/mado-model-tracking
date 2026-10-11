@@ -9,8 +9,8 @@ SDK、MLflow、worker、CIからAPIを使うときは、API tokenで認証しま
 
 | 種類 | 所有者 | 発行する場所 | こんなときに向いています |
 | --- | --- | --- | --- |
-| 個人のAPI token | ログインしたユーザー | ［Settings］の「自分のAPI token」、MLflow 3の接続カード | 自分のPCやノートブックからRunを記録する |
-| Service Accountのtoken | Service Account（人に紐付かない） | ［Settings］の「Service Accounts」 | worker、自動実行、CIなど長く動くもの |
+| 個人のAPI token | ログインしたユーザー | ［プロジェクト設定］の「自分のAPI token」、「MLflow 3から接続」 | 自分のPCやノートブックからRunを記録する |
+| Service Accountのtoken | Service Account（人に紐付かない） | ［プロジェクト設定］の「Service Accounts」 | worker、自動実行、CIなど長く動くもの |
 | Job限定token | Runの作成者 | workerがJobごとに自動で受け取る | 実行コードの中からRunへ記録する。人が発行することはありません |
 
 tokenの値は発行したときに1回だけ表示されます。DBにはハッシュと先頭12文字だけを保存し、どの一覧にも値は表示しません。
@@ -39,7 +39,7 @@ tokenで操作するときは、scopeに加えて、所有者の現在の実効R
 
 ## 個人のAPI tokenを発行する
 
-1. Projectの［Settings］を開き、「自分のAPI token」の［API tokenを発行］を押します。
+1. ［プロジェクト設定］を開き、「自分のAPI token」の［API tokenを発行］を押します。
 2. 名前、scope、有効期限を選んで［保存］を押します。
 
 | 項目 | 入力値の例 |
@@ -50,7 +50,7 @@ tokenで操作するときは、scopeに加えて、所有者の現在の実効R
 
 3. 表示されたtokenを［コピー］して、安全な場所に保存します。閉じると二度と表示されません。
 
-画面から発行したtokenは、そのProjectに限定されます。MLflow 3から使う場合は、［Settings］の「MLflow 3から接続」の［このProject用のAPI tokenを発行］からも発行できます。発行後に、環境変数の設定例が表示されます。
+画面から発行したtokenは、そのProjectに限定されます。MLflow 3から使う場合は、［プロジェクト設定］の「MLflow 3から接続」の［このProject用のAPI tokenを発行］からも発行できます。発行後に、環境変数の設定例が表示されます。
 
 ターミナルでは、tokenをコマンドの引数やファイルに書かず、入力して環境変数に入れます。
 
@@ -80,7 +80,7 @@ Service Accountは、人に紐付かない、1つのProjectに属するアカウ
 
 ProjectのAdminがブラウザで操作します（API tokenからは作れません）。
 
-1. ［Settings］の「Service Accounts」で［Service Accountを作成］を押します。
+1. ［プロジェクト設定］の「Service Accounts」で［Service Accountを作成］を押します。
 2. 次の値を入力して保存します。
 
 | 項目 | 入力値の例 |
@@ -111,14 +111,16 @@ workerの導入手順は[worker](/compute/worker)、自動実行ルールの所�
 - Roleを変える: ［変更］でRoleを選び直します。Roleを下げると、新しいRoleを超えるscopeの操作は403になります。
 - 1本だけ止める: 下の「Projectのtoken一覧」で失効させます。
 
-Service Accountは全体の［ユーザー］タブにも「Service Account」として表示されますが、ログインはできず、全体管理者にもできません。
+Service Accountは「全体管理」→［ユーザー］にも「Service Account」として表示されますが、ログインはできず、全体管理者にもできません。
 
 ## tokenを失効させる
 
-- 自分のtoken: ［Settings］の「自分のAPI token」、または［アカウント］の「自分のAPI token」で［失効］を押します。
+- 自分のtoken: ［プロジェクト設定］の「自分のAPI token」、または［アカウント］の「自分のAPI token」で［失効］を押します。
 - Projectのtoken: ProjectのAdminは「Projectのtoken一覧」で、そのProjectに限定された全員とService Accountのtokenを確認し、［失効］で止められます。一覧には所有者、先頭12文字、scope、有効期限、最終使用（5分ごとに更新）が表示されます。
 
 失効させたtokenは次の要求から401になり、元に戻せません。発行と失効は監査ログに「API tokenの発行」（`token.create`）、「API tokenの失効」（`token.revoke`）として残ります。
+
+Projectをアーカイブすると、そのProjectに限定したtoken（Service Accountのものを含む）は、元に戻すまで401になります。Projectを完全に削除すると、そのtokenは失効し、Service Accountは無効になります（[Projectの作成と管理](/admin/projects)）。
 
 ### 旧形式のtoken
 

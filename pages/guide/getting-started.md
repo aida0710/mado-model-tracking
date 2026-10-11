@@ -1,11 +1,11 @@
 ---
-title: Mado Model Trackingとは
+title: mado ML Trackingとは
 description: MLflowの内製版として、学習の記録、モデルの登録、推論・評価の自動実行、昇格を1つのアプリで扱う。Madoとの関係も説明する。
 ---
 
-# Mado Model Trackingとは
+# mado ML Trackingとは
 
-Mado Model Trackingは、機械学習の実験とモデルを管理するWebアプリです。MLflowを社内で運用しやすい形に作り直したもので、学習の記録、モデルの登録、推論と評価の自動実行、評価結果による昇格までを同じ記録の上で扱います。
+mado ML Trackingは、機械学習の実験とモデルを管理するWebアプリです。MLflowを社内で運用しやすい形に作り直したもので、学習の記録、モデルの登録、推論と評価の自動実行、評価結果による昇格までを同じ記録の上で扱います。
 
 公式のMLflow 3 SDKからそのまま記録でき、独自のPython SDKとAPIも用意しています。音声や重みのような大きなファイルは、ファイルシステムかS3互換ストレージに保存します。
 
@@ -55,7 +55,7 @@ Mado Model Trackingは、機械学習の実験とモデルを管理するWebア�
 
 ## Madoとの関係
 
-Mado Model TrackingはMadoとは別のアプリとして動き、データベースも分かれています。Madoとはpluginを通して連携します。
+mado ML TrackingはMadoとは別のアプリとして動き、データベースも分かれています。Madoとはpluginを通して連携します。
 
 - Madoで管理しているデータセットの版を検索し、データセット版として取り込む
 - Runの開始と終了を、入出力のデータセット版と一緒にMadoのlineageへ送る

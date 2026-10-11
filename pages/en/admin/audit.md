@@ -5,7 +5,7 @@ description: Records of logins, permissions, tokens, users, storage, notificatio
 
 # Audit log
 
-The audit log records who did what and when: logins, permission changes, issuing and revoking API tokens, user management, changes to storage backends and notification channels, Artifact deletion, and more.
+The audit log records who did what and when: logins, permission changes, creating, archiving, and deleting Projects, issuing and revoking API tokens, user management, changes to storage backends and notification channels, Artifact deletion, and more.
 
 The audit log is kept indefinitely and cannot be deleted or changed. Neither the screen nor the API can delete it, and the database refuses updates.
 
@@ -13,8 +13,8 @@ The audit log is kept indefinitely and cannot be deleted or changed. Neither the
 
 | Place | Who | Scope |
 | --- | --- | --- |
-| **監査ログ** (Audit log) in the Project's **Settings** | Project Admins | Records of that Project |
-| **全体管理** → **監査ログ** | Global administrators | All Projects and records outside Projects (logins, user management, storage, notification channels, and so on) |
+| **監査ログ** (Audit log) in **プロジェクト設定** (Project settings) | Project Admins | Records of that Project |
+| **全体管理** (Global administration) → **監査ログ** | Global administrators | All Projects and records outside Projects (logins, user management, storage, notification channels, and so on), including the records of permanently deleted Projects |
 
 ![A Project's audit log](/images/admin-audit.png)
 
@@ -50,7 +50,8 @@ Records are listed newest first. Load older ones with **さらに読む** (Load 
 | `auth.oidc.recheck` | `reason`, `scope` (`session` or `identity`), `revokedSessions` |
 | `auth.oidc.backchannel_logout` | `subject`, `sid`, `revokedSessions` |
 | `admin.user.create`, `admin.user.update`, `admin.user.password_reset` | Status, administrator flag, and display name before and after |
-| `project.member.set`, `project.member.delete` | Role before and after |
+| `project.create`, `project.update`, `project.archive`, `project.restore`, `project.purge` | Name, visibility, storage, number of members added at creation, changed fields |
+| `project.member.set`, `project.member.delete` | Role before and after. Members added when a Project is created are also recorded as `project.member.set` |
 | `project.group_binding.set`, `project.group_binding.delete` | `group`, role before and after |
 | `token.create`, `token.revoke` | Name, kind, scopes, expiry, owner type |
 | `service_account.create`, `service_account.update` | Role and status before and after |

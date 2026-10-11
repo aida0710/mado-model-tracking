@@ -7,7 +7,7 @@ description: Projects, Experiments, and Runs; params, metrics, and tags; the Run
 
 ![The Run list of a selected Experiment](/images/tracking-runs.png)
 
-Mado Model Tracking records each training or evaluation execution as a Run. A Run carries params (the conditions), metrics (numbers per step), tags (labels), logs, and Artifacts (files). Open **Experiments** at the top of the screen to list, search, and compare Runs.
+mado ML Tracking records each training or evaluation execution as a Run. A Run carries params (the conditions), metrics (numbers per step), tags (labels), logs, and Artifacts (files). Open **Experiments** at the top of the screen to list, search, and compare Runs.
 
 The screenshots show the Japanese UI; the labels quoted on this page are the Japanese ones followed by their meaning.
 
@@ -22,7 +22,7 @@ The screenshots show the Japanese UI; the labels quoted on this page are the Jap
 
 | Unit | What it is | Where to create it |
 | --- | --- | --- |
-| Project | The unit of permissions and storage. Members and their roles (viewer, editor, admin) are set per Project | **Settings** > **Projects** > プロジェクトを作成 (Create project) |
+| Project | The unit of permissions and storage. Members and their roles (viewer, editor, admin) are set per Project | **＋ プロジェクトを作成** (Create project) in the Project switcher ([Create and manage Projects](/en/admin/projects)) |
 | Experiment | A group of Runs with one purpose, such as "speech synthesis training" | The **+** button on the left of **Experiments** |
 | Run | The record of one execution | Python SDK, MLflow 3 SDK, Tasks, Sweeps, automation rules, or Runを作成 (Create Run) |
 

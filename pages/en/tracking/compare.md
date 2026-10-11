@@ -54,7 +54,7 @@ with Client() as client:
 
 ![The Analysis tab with parallel coordinates over lr, batch_size, epochs, and val_loss](/images/tracking-compare-analysis.png)
 
-The analysis appears on the comparison page, to the right of the Run list when charts are shown, and on [Sweep details](/en/tracking/sweeps#trials). It covers the search results in the Run list and the trial Runs in a Sweep, up to 5,000 Runs.
+The analysis appears on the comparison page, beside the charts in the Run list when charts are shown (below them on narrower screens), and on [Sweep details](/en/tracking/sweeps#trials). It covers the search results in the Run list and the trial Runs in a Sweep, up to 5,000 Runs.
 
 First choose the metric that defines good and bad in 目的metric (Target metric). Sweeps also offer the trials' objective value.
 

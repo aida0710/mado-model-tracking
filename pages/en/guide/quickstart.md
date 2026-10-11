@@ -15,17 +15,18 @@ The screens are in Japanese. The steps give the Japanese label followed by an En
 
 Open `MMT_PUBLIC_URL` in a browser and sign in. The first sign-in of the initial administrator asks for a new password.
 
-When you are not a member of any Project yet, the Project list appears. Press ［プロジェクトを作成］ (Create project), enter the following values, and press ［作成］ (Create).
+When there is no Project you can see yet, the "プロジェクト" (Projects) page appears. Press ［プロジェクトを作成］ (Create project), enter the following values, and press ［作成］ (Create). If other Projects already exist, press the Project name at the top of the sidebar to open the switcher, and press ［＋ プロジェクトを作成］ at the bottom.
 
 | Field | Example value |
 | --- | --- |
 | 名前 (Name) | `speech-recognition` |
-| 説明 (Description) | May be left empty |
+| 説明（任意） (Description, optional) | May be left empty |
+| 公開範囲 (Visibility) | Keep the default "Public" (everyone who can sign in can use it). Choose "Private" to limit it to members |
 | Artifact保存先 (Artifact storage) | Keep the default (the storage a global administrator set) |
 
-The Project is ready when its Experiments page opens. The creator becomes an Admin of the Project. Later Projects and the list are under "Projects" on ［Settings］.
+The Project is ready when its Experiments page opens. The creator becomes an Admin of the Project. For switching Projects and visibility, see [Create and manage Projects](/en/admin/projects).
 
-![The Settings page with the Project list and the Artifact storage](/images/guide-projects.png)
+![The create project dialog with name, description, visibility, and Artifact storage](/images/guide-projects.png)
 
 ## 2. Create an experiment
 
@@ -37,7 +38,7 @@ Select the experiment in the list on the left, and its `ID` appears below the na
 
 The SDKs record with an API token instead of your sign-in password.
 
-1. Open ［Settings］ and press ［API tokenを発行］ (Issue API token) under "自分のAPI token" (My API tokens).
+1. Open ［プロジェクト設定］ (Project settings) in the sidebar and press ［このProject用のAPI tokenを発行］ (Issue an API token for this Project) under "MLflow 3から接続" (Connect from MLflow 3).
 2. Enter a name that tells its purpose, such as `laptop-sdk`.
 3. The scopes `read`, `runs:write`, `registry:write`, and `artifacts:write` are already selected. Keep them.
 4. Choose the expiry and press ［保存］ (Save).
@@ -53,7 +54,7 @@ In a terminal on the machine that records, create a virtual environment with Pyt
 ```sh
 sudo apt install -y python3-venv git
 python3 -m venv ~/.venvs/mmt
-~/.venvs/mmt/bin/pip install 'mado-tracking @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python'
+~/.venvs/mmt/bin/pip install 'mado-tracking @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python'
 ```
 
 Set the endpoint and the token as environment variables. Enter the token without echoing it, and keep it out of source code and shell history.
@@ -92,7 +93,7 @@ For more on the SDK (system metrics, resuming a Run, recording offline and sendi
 
 ## 5. Record with the MLflow 3 SDK
 
-If your training code already records with MLflow, changing the endpoint is enough to record to the same Project. "MLflow 3から接続" (Connect from MLflow 3) on ［Settings］ shows the Project's `MLFLOW_TRACKING_URI` and an example configuration.
+If your training code already records with MLflow, changing the endpoint is enough to record to the same Project. "MLflow 3から接続" (Connect from MLflow 3) on ［プロジェクト設定］ (Project settings) shows the Project's `MLFLOW_TRACKING_URI` and an example configuration.
 
 ![The MLFLOW_TRACKING_URI and the example environment variables](/images/guide-mlflow-connection.png)
 
@@ -132,7 +133,7 @@ Select the experiment in ［Experiments］ to list the recorded Runs with the la
 
 ![The whisper-small-finetune list with two Runs](/images/guide-quickstart-runs.png)
 
-Press ［図を表示］ (Show charts) to chart the metrics of the listed Runs. The `train.loss` of the two Runs is overlaid, and the parallel coordinates on the right show how params relate to results.
+Press ［図を表示］ (Show charts) to chart the metrics of the listed Runs. The `train.loss` of the two Runs is overlaid, and the parallel coordinates beside the charts (below them on narrower screens) show how params relate to results.
 
 ![The train.loss of two Runs overlaid, and parallel coordinates](/images/guide-quickstart-chart.png)
 

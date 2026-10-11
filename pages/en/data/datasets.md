@@ -9,7 +9,7 @@ description: Create dataset versions and link them to Run inputs and outputs. Bu
 
 A dataset is a collection of data used for training or evaluation. Each time the contents change you create a new version, and each Run records which version it used. Versions cannot be changed after they are created, so you can repeat training or evaluation with exactly the same version later.
 
-The contents of a version are either files saved in Mado Model Tracking as Artifacts, or a URI that points to an external location. When a version is a Run input, the worker prepares its contents on the GPU machine before the code starts.
+The contents of a version are either files saved in mado ML Tracking as Artifacts, or a URI that points to an external location. When a version is a Run input, the worker prepares its contents on the GPU machine before the code starts.
 
 The web UI is in Japanese. This page shows UI labels in Japanese followed by an English translation.
 
@@ -34,7 +34,7 @@ One version can contain up to 100,000 files.
 
 ## Register a dataset
 
-1. Open **Datasets** in the top bar.
+1. Open **Datasets** in the sidebar.
 2. Click **データセットを登録** (Register dataset).
 3. Enter **名前** (Name, required), **Namespace**, and **説明** (Description), and save.
 

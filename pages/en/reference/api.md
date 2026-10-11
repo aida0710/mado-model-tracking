@@ -1,11 +1,11 @@
 ---
 title: Native API
-description: Authentication, common shapes, errors, and feature groups of the Mado Model Tracking native API, and how to get the OpenAPI document (openapi.json).
+description: Authentication, common shapes, errors, and feature groups of the mado ML Tracking native API, and how to get the OpenAPI document (openapi.json).
 ---
 
 # Native API
 
-Mado Model Tracking has two APIs.
+mado ML Tracking has two APIs.
 
 | API | Base | Good for |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ Some operations work only with a browser session; with an API token they return 
 
 - Issuing and revoking API tokens
 - Creating and changing Service Accounts and issuing their tokens
-- The global audit log and user management (Administration)
+- The global audit log and user management (全体管理, Global administration)
 
 ## Common shapes
 
@@ -64,7 +64,7 @@ Errors have this shape. `error` is a human-readable message; `code` is for progr
 | 403 | `job_token_forbidden` | Not allowed for Job tokens |
 | 403 | `password_change_required` | The first-login password change is not done |
 | 404 | — | The target does not exist or belongs to another Project |
-| 409 | `conflict` and others | State conflict (removing the last Admin, acting on a finished Job, and so on) |
+| 409 | `conflict` and others | State conflict (removing the last Admin, acting on a finished Job, archiving a Project with active Jobs (`project_has_active_jobs`), deleting a Project that is not archived (`project_not_archived`), and so on) |
 | 413 | `artifact_too_large` | The Artifact exceeds the limit (200 GiB by default) |
 | 422 | `invalid_request` and others | Invalid input |
 | 429 | `rate_limited` | Login attempt limit. Wait `Retry-After` seconds |
@@ -100,14 +100,14 @@ The OpenAPI document groups the API by tag.
 | `plugins` | Plugin connections |
 | `notifications`, `operations` | Notifications, operations alerts |
 | `audit` | Audit log |
-| `admin` | Global administration (storage, users) |
+| `admin` | Global administration (Projects, storage and directory suggestions, users) |
 
 ## OpenAPI (openapi.json)
 
 The authorization, input, output, and error codes of every route are published in OpenAPI 3.1. The MLflow-compatible API is not included (it follows the official MLflow REST API).
 
 - From a running server: get `GET /api/openapi.json` from a signed-in browser or with a token that has the `read` scope.
-- From the repository: [docs/openapi.json](https://github.com/aida0710/mado-model-tracking/blob/main/docs/openapi.json)
+- From the repository: [docs/openapi.json](https://github.com/aida0710/mado-ml-tracking/blob/main/docs/openapi.json)
 
 ```sh
 curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" "$MMT_API_URL/api/openapi.json" -o openapi.json

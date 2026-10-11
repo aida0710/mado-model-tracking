@@ -26,7 +26,7 @@ Linux・macOS:
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install \
-  'mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python'
+  'mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python'
 ```
 
 Windows（PowerShell）:
@@ -34,7 +34,7 @@ Windows（PowerShell）:
 ```powershell
 py -3 -m venv .venv
 .venv\Scripts\python -m pip install `
-  "mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python"
+  "mado-tracking[telemetry] @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python"
 ```
 
 `[telemetry]`はシステムメトリクス用の`psutil`と`nvidia-ml-py`を入れます。numpyの配列やPILの画像を音声・画像として記録する場合は`[telemetry,media]`にします。
@@ -47,7 +47,7 @@ py -3 -m venv .venv
 
 ## 接続先とtokenを設定する
 
-SDKは環境変数から接続先とAPI tokenを読みます。tokenはProjectの［Settings］の［MLflow 3から接続］にある［このProject用のAPI tokenを発行］から作れます。記録には`read`と`runs:write`、Artifactを送るなら`artifacts:write`のscopeが必要です。このボタンはこれらを選んだ状態で発行画面を開きます（[API token](/admin/tokens)）。
+SDKは環境変数から接続先とAPI tokenを読みます。tokenは［プロジェクト設定］の「MLflow 3から接続」にある［このProject用のAPI tokenを発行］から作れます。記録には`read`と`runs:write`、Artifactを送るなら`artifacts:write`のscopeが必要です。このボタンはこれらを選んだ状態で発行画面を開きます（[API token](/admin/tokens)）。
 
 | 環境変数 | 入力する値 | 例 |
 | --- | --- | --- |

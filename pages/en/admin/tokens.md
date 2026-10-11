@@ -9,8 +9,8 @@ The SDK, MLflow, workers, and CI authenticate to the API with API tokens. There 
 
 | Kind | Owner | Where it is issued | Good for |
 | --- | --- | --- | --- |
-| Personal API token | The signed-in user | **自分のAPI token** (My API tokens) in **Settings**, or the MLflow 3 connection card | Recording Runs from your own PC or notebook |
-| Service Account token | A Service Account (not tied to a person) | **Service Accounts** in **Settings** | Long-running workers, automation, CI |
+| Personal API token | The signed-in user | **自分のAPI token** (My API tokens) in **プロジェクト設定** (Project settings), or **MLflow 3から接続** (Connect from MLflow 3) | Recording Runs from your own PC or notebook |
+| Service Account token | A Service Account (not tied to a person) | **Service Accounts** in **プロジェクト設定** | Long-running workers, automation, CI |
 | Job token | The creator of the Run | Workers receive one automatically for each Job | Recording to the Run from the running code. Nobody issues these by hand |
 
 The token value is shown only once, when it is issued. The database keeps only a hash and the first 12 characters, and no list shows the value.
@@ -39,7 +39,7 @@ An expired token returns 401. Issue a new token and replace the old one before i
 
 ## Issue a personal API token
 
-1. Open the Project's **Settings** and click **API tokenを発行** (Issue API token) under **自分のAPI token**.
+1. Open **プロジェクト設定** (Project settings) and click **API tokenを発行** (Issue API token) under **自分のAPI token**.
 2. Enter a name, scopes, and expiry, and click **保存** (Save).
 
 | Field | Example |
@@ -80,7 +80,7 @@ A Service Account is an account that belongs to one Project and to no person. It
 
 A Project Admin does this in the browser (API tokens cannot create Service Accounts).
 
-1. Click **Service Accountを作成** (Create Service Account) under **Service Accounts** in **Settings**.
+1. Click **Service Accountを作成** (Create Service Account) under **Service Accounts** in **プロジェクト設定**.
 2. Enter the following and save.
 
 | Field | Example |
@@ -111,14 +111,16 @@ See [Worker](/en/compute/worker) for installing a worker, and [Automation](/en/m
 - Change the role: choose a new role with **変更** (Change). After lowering the role, operations above the new role return 403.
 - Stop one token: revoke it in the **Projectのtoken一覧** (Project token list) below.
 
-Service Accounts also appear in the global Users tab as "Service Account", but they cannot sign in and cannot be made global administrators.
+Service Accounts also appear in **全体管理** (Global administration) → **ユーザー** (Users) as "Service Account", but they cannot sign in and cannot be made global administrators.
 
 ## Revoke a token
 
-- Your own tokens: click **失効** (Revoke) under **自分のAPI token** in **Settings**, or under the same heading on the **アカウント** (Account) page.
+- Your own tokens: click **失効** (Revoke) under **自分のAPI token** in **プロジェクト設定**, or under the same heading on the **アカウント** (Account) page.
 - Project tokens: in **Projectのtoken一覧**, a Project Admin sees the tokens of every user and Service Account limited to the Project, and can revoke them with **失効**. The list shows the owner, the first 12 characters, scopes, expiry, and last use (updated every 5 minutes).
 
 A revoked token returns 401 from the next request and cannot be restored. Issuing and revoking are recorded in the audit log as `token.create` and `token.revoke`.
+
+While a Project is archived, tokens limited to it (including those of Service Accounts) return 401 until it is restored. When a Project is deleted permanently, its tokens are revoked and its Service Accounts are disabled ([Create and manage Projects](/en/admin/projects)).
 
 ### Legacy tokens
 
