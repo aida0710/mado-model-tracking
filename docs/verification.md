@@ -353,11 +353,11 @@ node apps/web/tests/browser-projects-admin.mjs
 
 | 場面 | 確かめること |
 |---|---|
-| 全体管理者でない利用者 | プロジェクトの画面のサイドバーの最後の組が「全体設定」（アカウント、コンピュータ）で、「全体管理」の組は無い。ユーザーメニューは「アカウント」「パスワードの変更」「全体設定」の3つ。「全体設定」で`/settings/account`が開き、見出しの上に「全体設定」、サイドバーは「全体設定」の組だけ。「パスワードの変更」（`/settings/account/password`）の間もサイドバーは「アカウント」に印が付く |
+| 全体管理者でない利用者 | プロジェクトの画面のサイドバーはプロジェクトの組だけで、「全体設定」と「全体管理」の組は無い。ユーザーメニューは「アカウント」「パスワードの変更」「全体設定」の3つ。「全体設定」で`/settings/account`が開き、見出しの上に「全体設定」、サイドバーは「全体設定」の組（アカウント、コンピュータ）だけ。「パスワードの変更」（`/settings/account/password`）の間もサイドバーは「アカウント」に印が付く |
 | 旧URLと全体管理の拒否 | `/settings`・`/account`は`/settings/account`へ、`/account/password`は`/settings/account/password`へ移る。`/admin`・`/admin/users`・`/settings/users`・知らない項目は`/settings/account`へ移る。移ったあとの「戻る」で旧URLへ戻らない |
 | SSOの利用者 | ユーザーメニューに「パスワードの変更」が無く、`/settings/account/password`は`/settings/account`へ移る |
-| 全体管理者 | サイドバーの「全体設定」の下に「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く。`/admin`は`/settings/projects`へ、`/admin/launchers?…`は問い合わせ文字列ごと`/settings/launchers?…`へ、知らない`/admin/<項目>`は`/settings/projects`へ移る。全体管理の見出しの上は「全体管理」 |
-| アイコンだけの列・ドロワー | 1100px幅のアイコンだけの列に全体設定と全体管理の7項目が名前のツールチップつきで並ぶ。390px幅のドロワーでも同じ組が出て、「コンピュータ」で全体設定へ移れる |
+| 全体管理者 | プロジェクトの画面のサイドバーにも全体設定・全体管理の組は出ない。全体設定の画面では「全体設定」の下に「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く。`/admin`は`/settings/projects`へ、`/admin/launchers?…`は問い合わせ文字列ごと`/settings/launchers?…`へ、知らない`/admin/<項目>`は`/settings/projects`へ移る。全体管理の見出しの上は「全体管理」 |
+| アイコンだけの列・ドロワー | 1100px幅のアイコンだけの列に全体設定と全体管理の7項目が名前のツールチップつきで並ぶ。390px幅のドロワーでは、プロジェクトの画面に全体設定の組が出ず、全体設定の画面では「全体設定」の組が出る |
 
 ```bash
 (cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:9 npx vite --port 47310 --strictPort --host 127.0.0.1) &

@@ -19,7 +19,7 @@ const ADMIN_PATHS = [
 ];
 
 describe('navigationLinks', () => {
-  it('Project を開いた viewer には Plugins と全体管理を出さず、全体設定は出す', () => {
+  it('Project を開いた viewer には Plugins を出さず、全体設定と全体管理も出さない', () => {
     const links = paths(
       navigationLinks({ projectId: 'p1', projectRole: 'viewer', isGlobalAdmin: false }),
     );
@@ -28,7 +28,8 @@ describe('navigationLinks', () => {
     // Every member may read the hooks; creating and switching them is checked on the page.
     expect(links).toContain('/projects/p1/hooks');
     expect(links).not.toContain('/projects/p1/plugins');
-    expect(links.filter((link) => link.startsWith('/settings/'))).toEqual(GENERAL_SETTINGS_PATHS);
+    // 全体設定 is opened from the user menu, not from a Project's sidebar.
+    expect(links.filter((link) => link.startsWith('/settings/'))).toEqual([]);
   });
 
   it('Project admin には Plugins を出す', () => {
@@ -54,7 +55,7 @@ describe('navigationLinks', () => {
     expect(paths(groups[1]!.links)).toEqual(ADMIN_PATHS);
   });
 
-  it('組は 記録・モデル・データ・実行・プロジェクト管理 の順で、最後に全体設定、全体管理者には全体管理が付く', () => {
+  it('Project の組は 記録・モデル・データ・実行・プロジェクト管理 の順で、全体管理者にも全体設定と全体管理は付かない', () => {
     const groups = navigationGroups({ projectId: 'p1', projectRole: 'admin', isGlobalAdmin: true });
     expect(groups.map((group) => group.label)).toEqual([
       text.navigationGroupTracking,
@@ -62,8 +63,6 @@ describe('navigationLinks', () => {
       text.navigationGroupData,
       text.navigationGroupExecution,
       text.navigationGroupProjectManagement,
-      text.globalSettings,
-      text.administration,
     ]);
     expect(paths(groups[0]!.links)).toEqual([
       '/projects/p1/experiments',
@@ -74,20 +73,8 @@ describe('navigationLinks', () => {
       { screen: 'plugins', to: '/projects/p1/plugins', label: text.plugins },
       { screen: 'settings', to: '/projects/p1/settings', label: text.settings },
     ]);
-    expect(paths(groups[5]!.links)).toEqual(GENERAL_SETTINGS_PATHS);
-    expect(paths(groups[6]!.links)).toEqual(ADMIN_PATHS);
-    // Every screen appears exactly once across the groups.
-    expect(new Set(paths(groups.flatMap((group) => group.links))).size).toBe(14 + 2 + 5);
-  });
-
-  it('Project を開いた一般利用者の最後の組は全体設定で、全体管理の組は無い', () => {
-    const groups = navigationGroups({
-      projectId: 'p1',
-      projectRole: 'editor',
-      isGlobalAdmin: false,
-    });
-    expect(groups.at(-1)!.label).toBe(text.globalSettings);
-    expect(groups.map((group) => group.label)).not.toContain(text.administration);
+    // Every Project screen appears exactly once across the groups.
+    expect(new Set(paths(groups.flatMap((group) => group.links))).size).toBe(14);
   });
 
   it('全体管理の項目名は ユーザー・ストレージ・ランチャー・監査ログ など各画面の見出しと同じ', () => {

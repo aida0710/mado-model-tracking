@@ -95,8 +95,8 @@ A user in several groups gets the stronger role (`admin`). Include the groups in
 ### Check
 
 1. Open this application in a browser and check that the login screen shows the **Authentik** button (the value of `OIDC_LABEL`).
-2. Have someone in `mmt-admins` sign in with SSO and check that the 全体管理 (Global administration) group (Projects, Users, and so on) appears in the sidebar.
-3. Have someone only in `mmt-users` sign in and check that the sidebar shows the 全体設定 (Global settings) group (Account, Computers) but not the 全体管理 group.
+2. Have someone in `mmt-admins` sign in with SSO, open **全体設定** (Global settings) from the user menu, and check that the 全体管理 (Global administration) group (Projects, Users, and so on) appears in the sidebar.
+3. Have someone only in `mmt-users` sign in, open **全体設定** from the user menu, and check that the sidebar shows the 全体設定 group (Account, Computers) but not the 全体管理 group.
 4. Check that someone in neither group is refused. The reason is recorded in the audit log as `auth.oidc.denied` ("Cannot sign in with SSO" in [Troubleshooting](/en/reference/troubleshooting)).
 
 ## What is synchronized at each login

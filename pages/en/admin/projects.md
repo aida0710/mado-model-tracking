@@ -95,7 +95,7 @@ A global administrator restores a Project.
 
 ![Projects under global administration, including archived ones](/images/admin-projects.png)
 
-1. Open **プロジェクト** (Projects) under 全体管理 (Global administration) in the sidebar.
+1. Open **全体設定** (Global settings) from the user menu, then **プロジェクト** (Projects) under 全体管理 (Global administration) in the sidebar.
 2. Select アーカイブ済みも表示 (Show archived). Archived Projects appear as アーカイブ済み (Archived).
 3. Click **元に戻す** (Restore) on the row, then **元に戻す** in the confirmation dialog.
 

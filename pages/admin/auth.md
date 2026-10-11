@@ -58,7 +58,7 @@ docker compose run --rm api npm run bootstrap-admin -w @mmt/api
 
 ![「全体管理」の「ユーザー」の画面](/images/admin-users.png)
 
-1. サイドバーの「全体管理」で［ユーザー］を開きます（`/settings/users`）。この組は、Projectの画面のサイドバーにも、右上のユーザーメニューの［全体設定］から開いた画面にも出ます。
+1. 右上のユーザーメニューの［全体設定］を開き、サイドバーの「全体管理」で［ユーザー］を開きます（`/settings/users`）。
 2. ［ローカルユーザーを作成］を押します。
 3. 次の値を入力して保存します。
 

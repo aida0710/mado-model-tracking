@@ -58,7 +58,7 @@ A global administrator creates local accounts on the screen. You can create them
 
 ![The Users page under global administration](/images/admin-users.png)
 
-1. Open **ユーザー** (Users) under 全体管理 (Global administration) in the sidebar (`/settings/users`). This group appears both in the sidebar of Project pages and on the pages opened from **全体設定** (Global settings) in the user menu at the top right.
+1. Open **全体設定** (Global settings) from the user menu, then **ユーザー** (Users) under 全体管理 (Global administration) in the sidebar (`/settings/users`).
 2. Click **ローカルユーザーを作成** (Create local user).
 3. Enter the following and save.
 

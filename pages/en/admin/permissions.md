@@ -16,7 +16,7 @@ The global settings are the pages that do not belong to a Project (`/settings/<s
 | 全体設定 (Global settings) | アカウント (Account), コンピュータ (Computers) | Everyone |
 | 全体管理 (Global administration) | プロジェクト (Projects), ユーザー (Users), ストレージ (Storage), ランチャー (Launchers), 監査ログ (Audit log) | Global administrators only |
 
-The sidebar on Project pages shows the same groups below the Project items. People who are not global administrators do not see 全体管理, and opening one of its URLs directly takes them to **アカウント**. Old URLs starting with `/admin` or `/account` move to the new ones (`/settings/projects`, `/settings/account`, and so on).
+These groups appear only in the sidebar of the global settings pages, not on Project pages. People who are not global administrators do not see 全体管理, and opening one of its URLs directly takes them to **アカウント**. Old URLs starting with `/admin` or `/account` move to the new ones (`/settings/projects`, `/settings/account`, and so on).
 
 ![A regular user's user menu: Account, Change password, and Global settings](/images/admin-user-menu.png)
 
@@ -24,7 +24,7 @@ The user menu at the top right has **アカウント** (Account), **パスワー
 
 ## Global administrators
 
-Global administrators manage application-wide settings. Most of their pages open from the 全体管理 (Global administration) group in the sidebar.
+Global administrators manage application-wide settings. Most of their pages open from the 全体管理 (Global administration) group in the sidebar of the pages opened from **全体設定** (Global settings) in the user menu.
 
 - Listing every Project, and restoring or permanently deleting archived Projects (**全体管理** → **プロジェクト** (Projects); see [Create and manage Projects](/en/admin/projects))
 - Creating, disabling, and resetting passwords of users (**全体管理** → **ユーザー** (Users))

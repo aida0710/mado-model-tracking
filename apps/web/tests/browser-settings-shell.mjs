@@ -1,6 +1,6 @@
 // Browser check of 全体設定 (/settings/<section>) against the isolated mock API (tests/browserApi.mjs):
 // the 全体設定 group (アカウント, コンピュータ) for everyone and 全体管理 only for global
-// administrators, in the Project's sidebar, in 全体設定's own, in the rail and in the drawer; the
+// administrators in 全体設定's own sidebar, rail and drawer, and neither in a Project's; the
 // user menu (アカウント, パスワードの変更 for local accounts, 全体設定); each page's heading under its
 // group; and the URLs from before 全体設定 (/account, /admin/<section>) moving to the new ones.
 // Start Vite on MMT_WEB_URL first; MMT_SCREENSHOT_DIR, when set, receives the screenshots.
@@ -73,16 +73,17 @@ try {
   await page.goto(`${base}${projectPath}`);
   const sidebar = page.locator('.navigation-sidebar');
   await sidebar.getByRole('link', { name: 'Experiments', exact: true }).waitFor();
+  // A Project's sidebar has only its own screens; 全体設定 opens from the user menu.
   const projectGroups = await groupLabels(sidebar);
-  assert.equal(projectGroups.at(-1), '全体設定');
-  assert.ok(!projectGroups.includes('全体管理'));
-  assert.deepEqual(await groupLinks(sidebar, '全体設定'), ['アカウント', 'コンピュータ']);
+  assert.equal(projectGroups.at(-1), 'プロジェクト管理');
+  assert.ok(!projectGroups.includes('全体設定') && !projectGroups.includes('全体管理'));
   assert.deepEqual(await openUserMenu(page), ['アカウント', 'パスワードの変更', '全体設定']);
   await screenshot(page, '01-user-project-sidebar-menu');
   await page.getByRole('menuitem', { name: '全体設定', exact: true }).click();
   await page.waitForURL(`${base}/settings/account`);
   await waitForHeading(page, { eyebrow: '全体設定', title: 'アカウント' });
   assert.deepEqual(await groupLabels(sidebar), ['全体設定']);
+  assert.deepEqual(await groupLinks(sidebar, '全体設定'), ['アカウント', 'コンピュータ']);
   await screenshot(page, '02-user-settings-account');
 
   await sidebar.getByRole('link', { name: 'コンピュータ', exact: true }).click();
@@ -129,7 +130,14 @@ try {
   await page.goto(`${base}${projectPath}`);
   const adminSidebar = page.locator('.navigation-sidebar');
   await adminSidebar.getByRole('link', { name: 'Experiments', exact: true }).waitFor();
-  assert.deepEqual((await groupLabels(adminSidebar)).slice(-2), ['全体設定', '全体管理']);
+  const adminProjectGroups = await groupLabels(adminSidebar);
+  assert.ok(!adminProjectGroups.includes('全体設定') && !adminProjectGroups.includes('全体管理'));
+  assert.deepEqual(await openUserMenu(page), ['アカウント', 'パスワードの変更', '全体設定']);
+  await screenshot(page, '04-admin-project-sidebar-menu');
+  await page.keyboard.press('Escape');
+  await settle(page, '/admin', '/settings/projects');
+  await waitForHeading(page, { eyebrow: '全体管理', title: 'プロジェクト' });
+  assert.deepEqual(await groupLabels(adminSidebar), ['全体設定', '全体管理']);
   assert.deepEqual(await groupLinks(adminSidebar, '全体管理'), [
     'プロジェクト',
     'ユーザー',
@@ -137,12 +145,6 @@ try {
     'ランチャー',
     '監査ログ',
   ]);
-  assert.deepEqual(await openUserMenu(page), ['アカウント', 'パスワードの変更', '全体設定']);
-  await screenshot(page, '04-admin-project-sidebar-menu');
-  await page.keyboard.press('Escape');
-  await settle(page, '/admin', '/settings/projects');
-  await waitForHeading(page, { eyebrow: '全体管理', title: 'プロジェクト' });
-  assert.deepEqual(await groupLabels(adminSidebar), ['全体設定', '全体管理']);
   await screenshot(page, '05-admin-settings-projects');
   await settle(page, '/admin/launchers?from=bookmark', '/settings/launchers?from=bookmark');
   await waitForHeading(page, { eyebrow: '全体管理', title: 'ランチャー' });
@@ -176,10 +178,11 @@ try {
   const drawer = page.locator('dialog.navigation-drawer[open]');
   await drawer.getByRole('link', { name: 'Experiments', exact: true }).waitFor();
   const drawerGroups = await groupLabels(drawer);
-  assert.equal(drawerGroups.at(-1), '全体設定');
-  assert.ok(!drawerGroups.includes('全体管理'));
-  await drawer.getByRole('link', { name: 'コンピュータ', exact: true }).click();
-  await page.waitForURL(`${base}/settings/computers`);
+  assert.equal(drawerGroups.at(-1), 'プロジェクト管理');
+  assert.ok(!drawerGroups.includes('全体設定') && !drawerGroups.includes('全体管理'));
+  await page.keyboard.press('Escape');
+  await page.goto(`${base}/settings/computers`);
+  await waitForHeading(page, { eyebrow: '全体設定', title: 'コンピュータ' });
   await page.getByRole('button', { name: 'メニューを開く', exact: true }).click();
   assert.deepEqual(await groupLabels(page.locator('dialog.navigation-drawer[open]')), ['全体設定']);
   await page.waitForFunction(() =>

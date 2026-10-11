@@ -35,7 +35,7 @@ Storage defined by environment variables appears as `filesystem` (always present
 
 To add S3-compatible storage:
 
-1. Open **ストレージ** (Storage) under 全体管理 (Global administration) in the sidebar.
+1. Open **全体設定** (Global settings) from the user menu, then **ストレージ** (Storage) under 全体管理 (Global administration) in the sidebar.
 2. Click **保存先を追加** (Add storage).
 3. Set **種類** (Kind) to S3 and fill in the fields below.
 4. Click **作成** (Create).

@@ -26,7 +26,7 @@ type ProjectScreen =
   | 'settings';
 
 // The fourteen Project screens in the groups the sidebar and the drawer show, in display order.
-// The 全体設定 screens follow in groups of their own.
+// The 全体設定 screens have groups of their own, shown only away from a Project.
 const SCREEN_GROUPS: { label: string; screens: ProjectScreen[] }[] = [
   { label: text.navigationGroupTracking, screens: ['experiments', 'sweeps', 'reports'] },
   { label: text.navigationGroupModels, screens: ['models', 'tasks', 'codes'] },
@@ -69,27 +69,32 @@ function settingsLinks(sections: readonly SettingsSection[]): NavigationLink[] {
 }
 
 /**
- * The screens the main navigation offers, grouped: the open Project's screens (Plugins only for
- * those who may manage them), then 全体設定 for everyone and, for global admins, 全体管理. Groups
- * without a link are left out.
+ * The screens the main navigation offers, grouped. With a Project open: its screens (Plugins only
+ * for those who may manage them); 全体設定 is reached from the user menu instead. Without one (the
+ * 全体設定 screens, or no Project to open): 全体設定 for everyone and, for global admins, 全体管理.
+ * Groups without a link are left out.
  */
 export function navigationGroups({
   projectId,
   projectRole,
   isGlobalAdmin,
 }: NavigationAccess): NavigationGroup[] {
-  const groups: NavigationGroup[] = SCREEN_GROUPS.map(({ label, screens }) => ({
+  if (!projectId) return settingsGroups(isGlobalAdmin);
+  return SCREEN_GROUPS.map(({ label, screens }) => ({
     label,
-    links: projectId
-      ? screens
-          .filter((screen) => screen !== 'plugins' || canManagePlugins(projectRole, isGlobalAdmin))
-          .map((screen) => ({ screen, to: `/projects/${projectId}/${screen}`, label: text[screen] }))
-      : [],
-  }));
-  groups.push({ label: text.globalSettings, links: settingsLinks(GENERAL_SETTINGS_SECTIONS) });
+    links: screens
+      .filter((screen) => screen !== 'plugins' || canManagePlugins(projectRole, isGlobalAdmin))
+      .map((screen) => ({ screen, to: `/projects/${projectId}/${screen}`, label: text[screen] })),
+  })).filter((group) => group.links.length > 0);
+}
+
+function settingsGroups(isGlobalAdmin: boolean): NavigationGroup[] {
+  const groups: NavigationGroup[] = [
+    { label: text.globalSettings, links: settingsLinks(GENERAL_SETTINGS_SECTIONS) },
+  ];
   if (isGlobalAdmin)
     groups.push({ label: text.administration, links: settingsLinks(ADMIN_SECTIONS) });
-  return groups.filter((group) => group.links.length > 0);
+  return groups;
 }
 
 /** The same screens as navigationGroups, in one list. */
