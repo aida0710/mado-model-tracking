@@ -1,6 +1,7 @@
 /* The Project switcher (in the sidebar or as the bar under the header) and the workspace height.
    The header, sidebar, drawer, page header, tabs and login card come from
-   @mado/design-system/shell.css and components.css. */
+   @mado/design-system/shell.css and components.css. The sidebar takes the header's dark colours in
+   both themes, so the switcher inside it uses the --header colours too. */
 .sidebar-project {
   display: grid;
   gap: 6px;
