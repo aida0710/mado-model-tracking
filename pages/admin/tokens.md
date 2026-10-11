@@ -131,7 +131,7 @@ Projectをアーカイブすると、そのProjectに限定したtoken（Service
 workerはJobを実行するたびに、そのJobだけで使えるtoken（`mmtj_`で始まる）をAPIから受け取り、実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`に渡します。worker自身のtokenは実行コードに渡しません。人がJob限定tokenを発行・管理することはありません。
 
 - 権限はRunの作成者の現在の実効Roleで決まります。scopeは`read`、`runs:write`、`artifacts:write`、`registry:write`です。
-- 書き込めるのは、対象のRun（metrics、params、tags、ログ、入力Dataset、Artifact）、そのRunを生成元とするモデル・データセットの版、そのRunのLogged Model、出力先のModelの作成だけです。同じProjectの別のRun、token発行、Projectの設定、自動実行ルールへの書き込みは403 `job_token_forbidden`になります。
+- 書き込めるのは、対象のRun（metrics、params、tags、ログ、入力Dataset、Artifact）、そのRunを生成元とするモデル・データセットのバージョン、そのRunのLogged Model、出力先のModelの作成だけです。同じProjectの別のRun、token発行、Projectの設定、自動実行ルールへの書き込みは403 `job_token_forbidden`になります。
 - 読み取りは同じProjectの中ならできます。上流RunのArtifactを取得するときに使います。
 - Jobが終わる（完了・失敗・中止）と、tokenは401になります。
 

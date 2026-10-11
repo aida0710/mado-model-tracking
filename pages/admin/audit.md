@@ -55,6 +55,7 @@ description: ログイン、権限、token、ユーザー、保存先、通知�
 | groupへの権限付与・付与の削除 | `project.group_binding.set`、`project.group_binding.delete` | `group`、変更前後のRole |
 | API tokenの発行・失効 | `token.create`、`token.revoke` | 名前、種類、scope、期限、所有者の種類 |
 | Service Accountの作成・変更 | `service_account.create`、`service_account.update` | 変更前後のRole・状態 |
+| コンピュータの追加・変更（設定、公開範囲、有効と無効） | `compute_target.create`、`compute_target.update` | 名前、種類、公開範囲、変えた項目。公開範囲を変えたときは変更前後（`visibility`の`from`・`to`） |
 | 保存先の追加・変更・接続テスト、既定の保存先の変更 | `storage.backend.create`、`storage.backend.update`、`storage.backend.test`、`storage.settings.update` | |
 | 通知先の作成・変更・テスト送信 | `notification.channel.create`、`update`、`test` | 名前、種類、環境変数名、宛先の件数 |
 | 通知ルールの作成・変更 | `notification.rule.create`、`update` | |

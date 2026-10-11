@@ -52,7 +52,7 @@ Logins, permissions, tokens, users, storage, notification channels, and other op
 
 ## What is not protected
 
-- Registered code runs on Compute targets with the permissions of the target account. Editors can run Jobs, so making someone an Editor of a Project that shares a Compute target lets them run code on that host.
+- Registered code runs on Compute targets with the permissions of the target account. On a Public computer, Editors of any Project can run Jobs, so making a computer Public lets everyone who can sign in run code on that host. Keep computers for a limited group Private ([Computers and visibility](/en/compute/computers)).
 - GPU reservations are exclusive only among this application's Jobs. Other SSH shells or schedulers using the same GPUs are not prevented.
 - A Project Viewer can read every Run, model, dataset, and Artifact in the Project. There are no read restrictions finer than a Project.
 

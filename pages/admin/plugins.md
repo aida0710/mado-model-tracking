@@ -9,8 +9,8 @@ Pluginは、このアプリとは別に動くHTTPのサービスです。この�
 
 Mado pluginでは、次のことができます。
 
-- Madoのデータセットを検索し、固定した版をこのアプリのDatasetVersionとして取り込む
-- Runの開始・完了・失敗・中止と、その入力・出力のデータセットの版を、OpenLineageとしてMadoへ送る
+- Madoのデータセットを検索し、固定したバージョンをこのアプリのDatasetVersionとして取り込む
+- Runの開始・完了・失敗・中止と、その入力・出力のデータセットのバージョンを、OpenLineageとしてMadoへ送る
 - Madoのストレージの容量メトリクスを見る
 
 PluginのUI部品や任意のJavaScriptは、ブラウザで実行しません。画面はどのPluginでも共通です。
@@ -48,7 +48,7 @@ MadoのSettings → Access → Service Accountsで、用途ごとにkeyを分け
 
 | keyのscope | 使う場面 | Pluginの`.env` |
 | --- | --- | --- |
-| `lineage:read` | データセットと版の検索 | `MADO_READ_TOKEN` |
+| `lineage:read` | データセットとバージョンの検索 | `MADO_READ_TOKEN` |
 | `lineage:write` | lineageの送信 | `MADO_LINEAGE_TOKEN` |
 | `metrics:read`（任意） | 容量メトリクス | `MADO_METRICS_TOKEN` |
 
@@ -105,9 +105,9 @@ Pluginとの通信は、Bearer tokenで認証し、応答は1MiBまで、5秒で
 ## Madoのデータセットを取り込む（ProjectのAdmin）
 
 1. ［Plugins］で［データセットを検索］に検索語を入れます。
-2. 結果から版を選び、［インポート］を押します。
+2. 結果からバージョンを選び、［インポート］を押します。
 
-取り込んだ版は［Datasets］に、Madoの外部IDを保ったDatasetVersionとして表示されます。同じ版をもう一度取り込んでも、同じDatasetVersionを返します。Runの入力にすると、どのMadoの版を使ったかが記録されます。データセットの扱いは[データセット](/data/datasets)を参照してください。
+取り込んだバージョンは［Datasets］に、Madoの外部IDを保ったDatasetVersionとして表示されます。同じバージョンをもう一度取り込んでも、同じDatasetVersionを返します。Runの入力にすると、どのMadoのバージョンを使ったかが記録されます。データセットの扱いは[データセット](/data/datasets)を参照してください。
 
 ## lineageの送信と再送
 
@@ -134,4 +134,4 @@ Pluginは次のHTTP APIを持つサービスです（plugin protocol 1.0）。�
 | `POST /events` | Runのイベントを受け取り、`{accepted: true}`を返す |
 | `GET /metrics` | `storage:metrics`に対応する場合だけ。Prometheusのテキスト形式 |
 
-`PluginDataset`は`externalId`、`namespace`、`name`、`version`、`uri`、`digest`、`schema`、`metadata`を返します。版の無いデータセットは返しません。イベントはIDで重複を除き、処理できていないイベントに`accepted`を返さないでください。
+`PluginDataset`は`externalId`、`namespace`、`name`、`version`、`uri`、`digest`、`schema`、`metadata`を返します。バージョンの無いデータセットは返しません。イベントはIDで重複を除き、処理できていないイベントに`accepted`を返さないでください。

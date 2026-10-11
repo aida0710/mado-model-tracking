@@ -58,7 +58,7 @@ A global administrator creates local accounts on the screen. You can create them
 
 ![The Users page under global administration](/images/admin-users.png)
 
-1. Open **ユーザー** (Users) under 全体管理 (Global administration) in the sidebar. You can also open it from **全体管理** in the user menu at the top right.
+1. Open **ユーザー** (Users) under 全体管理 (Global administration) in the sidebar (`/settings/users`). This group appears both in the sidebar of Project pages and on the pages opened from **全体設定** (Global settings) in the user menu at the top right.
 2. Click **ローカルユーザーを作成** (Create local user).
 3. Enter the following and save.
 
@@ -78,7 +78,7 @@ A new user can use Public Projects right away. To use a Private Project, add the
 
 Local account passwords are stored as Argon2id hashes. A new password must be 12 to 1024 bytes and differ from the current one.
 
-- Change your own: open **パスワードを変更** (Change password) from the user menu (your avatar) at the top right (`/account/password`). Changing it ends your logins in other browsers and machines.
+- Change your own: open **パスワードの変更** (Change password) from the user menu (your avatar) at the top right (`/settings/account/password`). You can also change it under パスワード (Password) on **アカウント** (Account) in the global settings. Changing it ends your logins in other browsers and machines.
 - Forgotten password: a global administrator clicks **パスワード再設定** (Reset password) on the user's row in **全体管理** → **ユーザー**. A temporary password is shown once; give it to the user through a safe channel. The user's sessions end and the next login asks for a new password.
 - SSO-only users have no password in this application. Their passwords are managed in Authentik.
 
@@ -115,8 +115,8 @@ To move an environment that used local accounts to SSO, go through `hybrid`.
 
 If Authentik stops and nobody can sign in, change back to `AUTH_MODE=hybrid` and restart; the local administrator can sign in again.
 
-## Check your account
+## Check your account {#check-your-account}
 
-Open **アカウント** (Account) from the user menu (your avatar) at the top right to see your display name, email, login method, whether you are a global administrator, your groups (SSO users only, with the last sync time), and your API tokens.
+Open **アカウント** (Account) from the user menu (your avatar) at the top right (`/settings/account`) to see your display name, email, login method, whether you are a global administrator, your groups (SSO users only, with the last sync time), and your API tokens. Local accounts can also change their password here. You can also open it from **アカウント** in the global settings sidebar.
 
 ![The account screen](/images/admin-account.png)

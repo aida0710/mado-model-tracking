@@ -39,7 +39,7 @@ export MLFLOW_TRACKING_TOKEN
 | Experiment・Run・params・metrics・tagsの記録 | `runs:write` |
 | 入力Datasetの新規登録 | `runs:write`と`registry:write` |
 | Artifactのアップロード | `artifacts:write` |
-| Logged Model・モデル版・aliasの登録や変更 | `registry:write` |
+| Logged Model・モデルバージョン・aliasの登録や変更 | `registry:write` |
 
 記録するユーザーには、そのProjectのeditor以上の役割が必要です。Workerや自動処理のように長く動かすものには、人ではなくService Accountのtokenを使ってください。SSOでログインするユーザーのtokenは、グループの確認から7日を過ぎると止まります（[API token](/admin/tokens)）。
 
@@ -134,10 +134,10 @@ mlflow.MlflowClient().set_registered_model_alias("regression", "candidate", vers
 loaded = mlflow.pyfunc.load_model("models:/regression@candidate")
 ```
 
-- 版の番号は1、2、3…と自動で付きます。画面から登録した版と同じ系列で数え、削除した版の番号は再利用しません
-- 登録した版は、モデル一式のファイルを版ごとに固定します。元のRunのファイルを上書きしても、版の内容は変わりません
-- 読み込みには`models:/名前/版`か`models:/名前@alias`を使います
-- 入力Dataset、生成元のRun、登録した版の関係は［Lineage］に表示します
+- バージョンの番号は1、2、3…と自動で付きます。画面から登録したバージョンと同じ系列で数え、削除したバージョンの番号は再利用しません
+- 登録したバージョンは、モデル一式のファイルをバージョンごとに固定します。元のRunのファイルを上書きしても、バージョンの内容は変わりません
+- 読み込みには`models:/名前/バージョン`か`models:/名前@alias`を使います
+- 入力Dataset、生成元のRun、登録したバージョンの関係は［Lineage］に表示します
 
 登録をきっかけに推論・評価を自動で動かすには、登録モデルのtag `mmt.model_family`に系列名を指定し、その系列の自動実行ルールをProjectに用意します。
 

@@ -115,7 +115,7 @@ API tokenで操作するときは、全体管理者でも、そのProjectのRole
 - Artifactの保存先のファイルは、猶予（`MMT_ARTIFACT_DELETE_GRACE_DAYS`、既定7日）が過ぎてから、ガベージコレクタが消します。猶予の間は保存先にファイルが残ります。
 - そのProjectに限定したAPI tokenは失効し、Service Accountは無効になります。
 - 監査ログは残ります。「全体管理」→［監査ログ］で読めます。
-- 外部の計算機に置いたデータセットのキャッシュなど、mado ML Trackingの外にあるものは消えません。
+- 外部のコンピュータに置いたデータセットのキャッシュなど、mado ML Trackingの外にあるものは消えません。
 
 アーカイブしていないProjectは削除できません（409 `project_not_archived`）。
 

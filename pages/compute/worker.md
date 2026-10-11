@@ -119,7 +119,7 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 | `status` | unitの状態、workerのlock、保持しているJob。止まっていれば終了コード3 |
 | `journalctl` | workerのログ |
 
-最後に、WebのComputeの［Workers］に、workerの版とホスト名が「オンライン」で表示されることを確かめます。
+最後に、WebのComputeの［Workers］に、workerのバージョンとホスト名が「オンライン」で表示されることを確かめます。
 
 ## 4. 更新する
 
@@ -129,7 +129,7 @@ git -C ~/mado-ml-tracking pull
   --worker-id gpu-host-1 --package-spec "$HOME/mado-ml-tracking/python[telemetry]"
 ```
 
-社内の配布先から版を指定して入れる場合は、`--package-spec`の代わりに`--version 0.2.0`のように指定します。
+社内の配布先からバージョンを指定して入れる場合は、`--package-spec`の代わりに`--version 0.2.0`のように指定します。
 
 `upgrade`は、unitが使っているvenvへパッケージを入れてから、unitを再起動します。
 
@@ -186,7 +186,7 @@ docker compose --profile worker run --rm worker doctor
 workerは、自分のtokenを実行コードに渡しません。代わりにAPI serverがJobごとに発行するJob限定token（`mmtj_`で始まる）を、実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`に入れます。実行コードは、Python SDKもMLflow 3 SDKも、そのままこのtokenで記録できます。
 
 - 権限は、Runを作った人の現在の権限です。その人をProjectから外すと、実行中のコードからの記録も拒否されます。
-- 書き込めるのは、そのJobのRun（メトリクス、パラメータ、タグ、ログ、入力データセット、Artifact）と、そのRunを生成元とするモデル・データセットの版だけです。
+- 書き込めるのは、そのJobのRun（メトリクス、パラメータ、タグ、ログ、入力データセット、Artifact）と、そのRunを生成元とするモデル・データセットのバージョンだけです。
 - 同じProjectのほかのRunへの書き込み、tokenの発行、Projectの設定、自動実行ルールの変更はできません。読み取りは同じProjectの中ならできます（上流RunのArtifactの取得など）。
 - Jobが終わる（完了、失敗、中止）と、そのtokenは使えなくなります。
 
@@ -203,8 +203,8 @@ workerは、実行コードに次の環境変数を渡します。コンテナ�
 | `MMT_RUN_ID` | このJobのRun。Python SDKの`start_run()`を引数なしで呼ぶと、このRunへ記録します |
 | `/mmt/inputs`、`MMT_MODEL_FILE` | 取得済みのモデルの重み（読み取り専用） |
 | `MMT_PARAMETERS_FILE` | パラメータのJSON |
-| `MMT_INPUT_DATASET_DIRS` | 入力データセット版ごとの、取得済みの本体のディレクトリ（JSON） |
-| `MMT_DATASET_VERSIONS_FILE` | 入力データセット版の情報 |
+| `MMT_INPUT_DATASET_DIRS` | 入力データセットバージョンごとの、取得済みの本体のディレクトリ（JSON） |
+| `MMT_DATASET_VERSIONS_FILE` | 入力データセットバージョンの情報 |
 | `MMT_UPSTREAM_RUN_ID`、`MMT_UPSTREAM_RUN_FILE` | 上流Run（[ルールの連鎖](/models/automation#chain-evaluation-after-inference)のとき） |
 | `MMT_RESUME_CHECKPOINT_DIR`など | 再開元のcheckpoint（[学習の途中再開](/models/checkpoints)のとき） |
 | `/mmt/source` | 追加のソース（コンテナで、ソースを指定したとき。読み取り専用） |
@@ -226,8 +226,8 @@ SDKを入れていないコンテナでは、出力を`/mmt/outputs`に書き、
 ```
 
 - `sha256`と`size`は実際のファイルと一致させます。すべての出力を書き終えてから`result.json`を書きます。
-- `models`で宣言した重みは、モデルの版として登録します。宣言できるのは学習とファインチューニングのRunだけで、workerのtokenに`registry:write`が必要です。
-- `datasets`には`{datasetId, path, digest}`を書くと、出力をデータセット版として登録します。推論の出力を評価へ渡すときに使います。
+- `models`で宣言した重みは、モデルのバージョンとして登録します。宣言できるのは学習とファインチューニングのRunだけで、workerのtokenに`registry:write`が必要です。
+- `datasets`には`{datasetId, path, digest}`を書くと、出力をデータセットバージョンとして登録します。推論の出力を評価へ渡すときに使います。
 - 出力ファイルが数千件あるときは、`result.json`に並べず、1行に1件`{"path","sha256","size"}`を書いたJSON Linesのファイルを`"artifactsManifest": "artifacts.jsonl"`で指します。
 
 | 上限 | 値 |

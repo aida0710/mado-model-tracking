@@ -7,7 +7,7 @@ description: Models, versions, model families and aliases, how to register versi
 
 ![The model and version list](/images/models-registry.png)
 
-The **モデルと版** (Models and versions) tab of Models registers trained weights as model versions and uses aliases to point at the version currently in use. A version cannot be changed after registration, so you can always tell which weights a Run used for inference or evaluation.
+The **モデルとバージョン** (Models and versions) tab of Models registers trained weights as model versions and uses aliases to point at the version currently in use. A version cannot be changed after registration, so you can always tell which weights a Run used for inference or evaluation.
 
 The web UI is in Japanese. This page shows each label as it appears on screen, followed by an English translation.
 
@@ -48,7 +48,7 @@ There are five ways to register a version. To go from training to registration w
 
 | Method | Version name | Suitable for |
 | --- | --- | --- |
-| **版を作成** (Create version) in the web UI | Required | Registering weights created elsewhere |
+| **バージョンを作成** (Create version) in the web UI | Required | Registering weights created elsewhere |
 | [Task output model setting](/en/models/tasks#register-a-model-when-training-succeeds) | Numbered automatically (a version name template is also available) | Registering the weights of successful training without changing the training code |
 | Python SDK `register_output_model()` | Numbered automatically when omitted | Registering from inside the training code |
 | MLflow `register_model()` or `log_model(registered_model_name=…)` | Numbered automatically | Training already logged with the MLflow 3 SDK |
@@ -56,11 +56,11 @@ There are five ways to register a version. To go from training to registration w
 
 ### Register from the web UI
 
-1. Select the model in the list and press **版を作成** (Create version).
-2. Enter a name in **版** (Version), for example `3`. The web UI does not number versions for you.
+1. Select the model in the list and press **バージョンを作成** (Create version).
+2. Enter a name in **バージョン** (Version), for example `3`. The web UI does not number versions for you.
 3. Select the training Run in **生成元Run** (Source Run), then enter the weights' Artifact ID in **Artifact ID** or a URI in **重みのURI** (Weights URI). The Artifact ID is shown when you open the weights file in the Artifacts tab of the training Run.
-4. Optionally select **親の版** (Parent versions) and **既定のコード版** (Default code version), then press **保存** (Save).
-5. Check that a new row appears in the version list and that **最新の版** (Latest version) has changed.
+4. Optionally select **親のバージョン** (Parent versions) and **既定のコードバージョン** (Default code version), then press **保存** (Save).
+5. Check that a new row appears in the version list and that **最新のバージョン** (Latest version) has changed.
 
 ### Register from training code
 
@@ -106,7 +106,7 @@ When the version name is omitted, versions are numbered `1`, `2`, `3`, and so on
 ![The alias (promotion) dialog](/images/models-promotion-dialog.png)
 
 1. Select the model and press **Aliasを設定** (Set alias).
-2. Enter the alias in **Alias** and choose the version in **版** (Version), for example `production` and `3`.
+2. Enter the alias in **Alias** and choose the version in **バージョン** (Version), for example `production` and `3`.
 3. Enter the reason in **理由** (Reason) and press **保存** (Save). The reason is optional, but a protected alias may require it.
 4. Check that the alias points at the version in the alias list.
 
@@ -122,9 +122,9 @@ You can restrict who may change important aliases such as `production`. See [Pro
 
 ![The version page](/images/models-version.png)
 
-Select a version and press **版の詳細画面を開く** (Open version page).
+Select a version and press **バージョンの詳細画面を開く** (Open version page).
 
-- **学習Run → 版 → 推論・評価Run** (Training Run → version → inference and evaluation Runs): the training Run that produced the version and up to 20 of the newest Runs that used it.
+- **学習Run → バージョン → 推論・評価Run** (Training Run → version → inference and evaluation Runs): the training Run that produced the version and up to 20 of the newest Runs that used it.
 - **自動実行** (Automation): automation runs triggered by this version.
 - **評価結果** (Evaluation results): the latest metrics of successful evaluation Runs and the comparison with the baseline version ([Evaluation and promotion](/en/models/promotion)).
 - **昇格の判定** (Promotion check): whether the version passed each promotion policy.

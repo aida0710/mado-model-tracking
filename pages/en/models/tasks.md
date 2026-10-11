@@ -18,7 +18,7 @@ A Task stores what to run: which code, with which model and data, and where. Tas
 
 ## Overview
 
-1. Prepare a Compute target in Compute. See [Compute targets](/en/compute/targets).
+1. Prepare a computer (Compute target) to run on: add one under コンピュータ (Computers) in the global settings, or pick one you can use. See [Computers and visibility](/en/compute/computers) and [Compute targets](/en/compute/targets).
 2. Register code in Code and create a version.
 3. Create a Task in Tasks, select the Experiment, code version, and Compute target, and save.
 4. Check with **テスト実行** (Test run), then launch with **通常実行** (Run).
@@ -30,11 +30,11 @@ Jobs are executed by a worker. Without a worker for the target, the Job stays qu
 
 ![The code version editor](/images/models-code-editor.png)
 
-In Code, press **コードを登録** (Register code) to create the code entry, then **版を作成** (Create version). A version cannot be changed after saving. Saving an edit creates a new version.
+In Code, press **コードを登録** (Register code) to create the code entry, then **バージョンを作成** (Create version). A version cannot be changed after saving. Saving an edit creates a new version.
 
 | Field | Meaning |
 | --- | --- |
-| **版** (Version) | The version name, for example `v1` |
+| **バージョン** (Version) | The version name, for example `v1` |
 | **Runtime** | Python, Docker, Singularity, or Apptainer |
 | **ソース形式** (Source format) | Git, Inline (files stored in the app), Artifact (a stored ZIP or TAR), or code inside the container |
 | **実行コマンド** (Command, JSON array of arguments) | The command of a normal run, for example `["python", "train.py"]` |
@@ -91,7 +91,7 @@ The Compute target must list the runtime ([Compute targets](/en/compute/targets)
 | Model version | The input model version (the base of a fine-tuning, the version to run inference with). Optional |
 | Code version | Only code versions that support the run kind and model family can be selected |
 | Input dataset versions | Dataset versions the worker fetches before running. Optional |
-| Compute target | Only targets that support the code version's runtime can be selected |
+| Compute target | Only targets you can use and that support the code version's runtime can be selected. A Private target can be used only by its owner and the Service Accounts the owner created |
 | GPU ID | GPUs registered on the target. Without a GPU the Job runs on CPU only |
 | Parameters, tags | JSON, for example `{"epochs": 8}` |
 
@@ -122,12 +122,12 @@ To run a failed Job again, use **新しいRunで再実行** (Retry in a new Run)
 
 Training and fine-tuning Tasks can register the weights of a successful Run as a model version, without registration code in the training script.
 
-1. Open **Taskを編集** (Edit Task) and check **成功時にモデル版を登録** (Register a model version on success) under **出力モデル** (Output model).
+1. Open **Taskを編集** (Edit Task) and check **成功時にモデルバージョンを登録** (Register a model version on success) under **出力モデル** (Output model).
 2. In **登録先** (Destination), choose **既存のモデル** (Existing model) or **新しいモデルを作成** (Create a new model).
    - Existing model: select it in **登録先のモデル** (Destination model).
    - New model: enter **モデル名** (Model name) and **モデル系列** (Model family). The family must be one the Task's code version supports. An existing model with the same name is reused.
 3. Enter the path of the weights file the training code saved in **Artifactのパス** (Artifact path), for example `model/weights.json`. It must match the file path exactly.
-4. Optionally select **登録する版の既定コード版** (Default code version of registered versions) and press **保存** (Save).
+4. Optionally select **登録するバージョンの既定コードバージョン** (Default code version of registered versions) and press **保存** (Save).
 5. Press **通常実行** (Run); the confirmation shows the destination model.
 
 If the training code writes files to `MMT_OUTPUTS_DIR` instead of using the SDK, their Artifact paths start with `container/`. For example `MMT_OUTPUTS_DIR/model/weights.bin` becomes `container/model/weights.bin`.
@@ -145,7 +145,7 @@ The output model setting is copied to the Run at launch; editing the Task afterw
 
 ## Change Compute targets and plugins
 
-Only global administrators add Compute targets and plugins, change their settings, and enable or disable them. See [Compute targets](/en/compute/targets) and [Plugins and Mado integration](/en/admin/plugins).
+Compute targets are added under コンピュータ in the global settings, and their owner and global administrators change their settings. Only global administrators add SSH and Local targets; anyone can add a site ([Computers and visibility](/en/compute/computers)). Only global administrators add plugins, change their settings, and enable or disable them ([Plugins and Mado integration](/en/admin/plugins)).
 
 ## Next steps
 

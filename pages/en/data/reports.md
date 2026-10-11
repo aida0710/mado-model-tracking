@@ -69,17 +69,17 @@ Fixed media comparisons point to Artifacts. Artifacts never change, so the audio
 
 ## Version history
 
-The top of a report shows the current version number, who updated it, and when (for example 版 4・admin@localhostが2026/10/08 23:25に更新).
+The top of a report shows the current version number, who updated it, and when (for example バージョン 4・admin@localhostが2026/10/08 23:25に更新).
 
-1. Click **版の履歴** (Version history). Each version shows who saved it, when, and the change description.
-2. Click **表示** (View) on an earlier version to open it read-only. **最新の版を表示** (Show latest version) returns.
-3. To go back to an earlier version, click **この版に戻す** (Restore this version) and confirm in the 版を戻す (Restore version) dialog.
+1. Click **バージョンの履歴** (Version history). Each version shows who saved it, when, and the change description.
+2. Click **表示** (View) on an earlier version to open it read-only. **最新のバージョンを表示** (Show latest version) returns.
+3. To go back to an earlier version, click **このバージョンに戻す** (Restore this version) and confirm in the バージョンを戻す (Restore version) dialog.
 
 Restoring creates a new version with that version's content. No version is removed from the history, and the fixed data of the restored version is reused as is.
 
 ### Concurrent edits
 
-If someone saved a newer version first, your changes are not saved and a message explains why. Click **最新の版を読み込む** (Load the latest version), then edit again. Loading the latest version discards unsaved changes on screen.
+If someone saved a newer version first, your changes are not saved and a message explains why. Click **最新のバージョンを読み込む** (Load the latest version), then edit again. Loading the latest version discards unsaved changes on screen.
 
 ## Sharing and permissions
 

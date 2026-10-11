@@ -27,7 +27,7 @@ MMT_SESSION_ENCRYPTION_KEY is required when AUTH_MODE=hybrid
 
 `OIDC_ALLOWED_GROUPS`が空のとき、`OIDC_ROLE_MAPPING_JSON`に`admin`・`user`以外のroleを書いたとき、`OIDC_ADMIN_GROUP`と対応表のadminのgroupが食い違うときも起動しません。SMTPの設定は、`MMT_SMTP_URL`と`MMT_SMTP_FROM`の片方だけでは起動しません。
 
-更新したあとに起動しない場合は、新しく必須になった設定が無いかを確かめてください。SSOの再確認を含む版からは`MMT_SESSION_ENCRYPTION_KEY`が、groupで許可を決める版からは`OIDC_ALLOWED_GROUPS`が必須です。
+更新したあとに起動しない場合は、新しく必須になった設定が無いかを確かめてください。SSOの再確認を含むバージョンからは`MMT_SESSION_ENCRYPTION_KEY`が、groupで許可を決めるバージョンからは`OIDC_ALLOWED_GROUPS`が必須です。
 
 ## SSOでログインできない
 
@@ -132,6 +132,16 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 - Compute targetの「接続を確認」は、`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけが行います。
 
 詳しくは[worker](/compute/worker)を参照してください。
+
+## コンピュータが実行先に出ない・Jobを作れない（`target_not_available`）
+
+- 実行先には、自分が使えるコンピュータだけが出ます。全体設定の「コンピュータ」の［自分が使えるか］で確かめます。
+- ほかの人のPrivateのコンピュータは使えません。全体管理者も同じです。所有者にPublicにしてもらうか、自分のコンピュータを足します。
+- 自動実行ルール・フック・Sweepは、それぞれの所有者で判定します。ルールをService Accountへ移したときは、そのService Accountをコンピュータの所有者が作ったかを確かめます。
+- 待機中のJobが`submit_failed`で失敗したときは、Jobを作ったあとでコンピュータがPrivateに変わった可能性があります。
+- siteのjob shell・鍵・自分の設定を開いて403 `target_not_available`になるのも、そのコンピュータを使えないためです。
+
+詳しくは[コンピュータと公開範囲](/compute/computers)を参照してください。
 
 ## Runの終了後の処理が欠けている
 

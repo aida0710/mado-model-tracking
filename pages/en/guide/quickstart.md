@@ -145,7 +145,7 @@ When a model version is registered, the automation rules that match its model fa
 
 ### Prepare a worker and the code to run
 
-1. Install a worker on a host with GPUs (a CPU-only host also works) and register it as a compute target. See [Install a worker](/en/compute/worker) and [Compute targets](/en/compute/targets).
+1. Install a worker on a host with GPUs (a CPU-only host also works) and register it as a compute target under コンピュータ (Computers) in the global settings. See [Install a worker](/en/compute/worker) and [Compute targets](/en/compute/targets). Only global administrators can add SSH and Local targets. With the default, Private, only the Jobs of the person who added it run, so make it Public if someone else creates the automation rules ([Computers and visibility](/en/compute/computers)).
 2. Register the inference and evaluation code as code versions in ［Code］, with the run kind (inference, evaluation) and the supported model family (for example `whisper`). See [Tasks and code versions](/en/models/tasks). CPU-only inference and evaluation examples (`inference.py`, `evaluation.py`) are in `share/mado-tracking/examples/` of the virtual environment where you installed the SDK (`~/.venvs/mmt/share/mado-tracking/examples/` in step 4).
 3. Register the reference data for the evaluation as a dataset version ([Datasets](/en/data/datasets)).
 
@@ -160,9 +160,9 @@ Under "自動実行ルール" (Automation rules) in ［Models］, press ［自�
 | 対象モデル系列 (Model families) | `whisper` | `whisper` |
 | 実行種別 (Run kind) | 推論 (Inference) | 評価 (Evaluation) |
 | Experiments | `whisper-small-finetune` | `whisper-small-finetune` |
-| コード版 (Code version) | The inference code version | The evaluation code version |
+| コードバージョン (Code version) | The inference code version | The evaluation code version |
 | Compute target | The one registered in preparation step 1 | The same one |
-| 入力データセット版 (Input dataset versions) | None | The reference data from preparation step 3 |
+| 入力データセットバージョン (Input dataset versions) | None | The reference data from preparation step 3 |
 
 The evaluation rule receives the outputs of the inference Run as upstream outputs. After creation, a rule can only be enabled or disabled. To change its settings, create a new rule.
 
@@ -193,7 +193,7 @@ The version is registered when `version 1` appears. Version numbers are assigned
 
 ### Check the results
 
-Select the version in ［Models］ and press ［版の詳細画面を開く］ (Open version details). "自動実行" (Automation) lists the inference as the first stage and the evaluation as the second. When the Jobs finish, "評価結果" (Evaluation results) shows the metrics of the evaluation Run.
+Select the version in ［Models］ and press ［バージョンの詳細画面を開く］ (Open version details). "自動実行" (Automation) lists the inference as the first stage and the evaluation as the second. When the Jobs finish, "評価結果" (Evaluation results) shows the metrics of the evaluation Run.
 
 ![The chain of training Run, model version, inference Run, and evaluation Run, with the automation history](/images/guide-model-version-automation.png)
 

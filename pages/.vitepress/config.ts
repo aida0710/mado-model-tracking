@@ -26,15 +26,16 @@ const jaSidebar = [
     { text: "メモとコメント", link: "/tracking/notes" },
   ] },
   { text: "モデルと自動実行", items: [
-    { text: "モデルと版", link: "/models/registry" },
-    { text: "Taskとコード版", link: "/models/tasks" },
+    { text: "モデルとバージョン", link: "/models/registry" },
+    { text: "Taskとコードバージョン", link: "/models/tasks" },
     { text: "推論・評価の自動実行", link: "/models/automation" },
     { text: "評価と昇格", link: "/models/promotion" },
     { text: "学習の途中再開", link: "/models/checkpoints" },
   ] },
   { text: "実行環境", items: [
+    { text: "コンピュータと公開範囲", link: "/compute/computers" },
     { text: "Compute target", link: "/compute/targets" },
-    { text: "外部の計算機（site）", link: "/compute/sites" },
+    { text: "外部のコンピュータ（site）", link: "/compute/sites" },
     { text: "workerの導入", link: "/compute/worker" },
   ] },
   { text: "データと保存先", items: [
@@ -88,6 +89,7 @@ const enSidebar = [
     { text: "Resume training", link: "/en/models/checkpoints" },
   ] },
   { text: "Compute", items: [
+    { text: "Computers and visibility", link: "/en/compute/computers" },
     { text: "Compute targets", link: "/en/compute/targets" },
     { text: "External computers (sites)", link: "/en/compute/sites" },
     { text: "Install a worker", link: "/en/compute/worker" },

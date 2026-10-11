@@ -52,7 +52,7 @@ API serverはworkerのホストへSSHで接続しません。workerの導入と�
 
 ## 保護されないもの
 
-- 登録したコードは、Compute targetの上で、そのホストのアカウントの権限で動きます。EditorはJobを実行できるので、Compute targetを共有するProjectのEditorには、そのホストでコードを動かす権限を与えることになります。
+- 登録したコードは、Compute targetの上で、そのホストのアカウントの権限で動きます。Publicのコンピュータでは、どのProjectのEditorもJobを実行できるので、Publicにすることは、ログインできる全員にそのホストでコードを動かす権限を与えることになります。限られた人だけで使うコンピュータはPrivateにします（[コンピュータと公開範囲](/compute/computers)）。
 - GPUの予約は、このアプリのJobの間だけ排他です。ほかのSSHのシェルや別のスケジューラが同じGPUを使うことは防げません。
 - ProjectのViewerは、そのProjectのRun、モデル、データセット、Artifactをすべて読めます。Projectより細かい読み取りの制限はありません。
 

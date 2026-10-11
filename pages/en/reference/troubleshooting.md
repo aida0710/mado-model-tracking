@@ -133,6 +133,16 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 
 See [Worker](/en/compute/worker) for details.
 
+## A computer is missing from the targets, or Jobs cannot be created (`target_not_available`)
+
+- The target list shows only the computers you can use. Check 自分が使えるか (Can you use it) under コンピュータ (Computers) in the global settings.
+- You cannot use other people's Private computers, and neither can global administrators. Ask the owner to make it Public, or add your own computer.
+- Automation rules, hooks, and Sweeps are checked with their owners. If you moved a rule to a Service Account, check that the computer's owner created that Service Account.
+- If a queued Job failed with `submit_failed`, the computer may have become Private after the Job was created.
+- Opening a site's job shell, keys, or own settings returns 403 `target_not_available` for the same reason: you cannot use that computer.
+
+See [Computers and visibility](/en/compute/computers).
+
 ## Post-processing of a finished Run is missing
 
 If post-processing after a Run ends (such as registering output models) fails, this line appears on the API's standard error. The Run's end and the GPU release are final. It is not retried automatically, so check whether the Run's registration or automation records are missing.

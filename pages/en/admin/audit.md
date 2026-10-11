@@ -55,6 +55,7 @@ Records are listed newest first. Load older ones with **さらに読む** (Load 
 | `project.group_binding.set`, `project.group_binding.delete` | `group`, role before and after |
 | `token.create`, `token.revoke` | Name, kind, scopes, expiry, owner type |
 | `service_account.create`, `service_account.update` | Role and status before and after |
+| `compute_target.create`, `compute_target.update` | Name, kind, visibility, changed fields. A visibility change also records `visibility` with `from` and `to`. |
 | `storage.backend.create`, `storage.backend.update`, `storage.backend.test`, `storage.settings.update` | |
 | `notification.channel.create`, `update`, `test` | Name, kind, variable names, number of recipients |
 | `notification.rule.create`, `update` | |

@@ -26,7 +26,7 @@ The web UI is in Japanese. This page shows UI labels in Japanese followed by an 
 | Kind | Contents | Created by |
 | --- | --- | --- |
 | Artifact-backed version | A list of saved Artifacts. The version list shows Artifact N件 · size | Folder upload, Python SDK, Run outputs |
-| Reference version | A URI (`s3://`, `https://`, `file://`, and so on) and a digest. The version list shows 参照 (reference) | **版を作成** (Create version), MLflow `log_input`, import from Mado |
+| Reference version | A URI (`s3://`, `https://`, `file://`, and so on) and a digest. The version list shows 参照 (reference) | **バージョンを作成** (Create version), MLflow `log_input`, import from Mado |
 
 An Artifact-backed version has a digest (`sha256:<hex>`) computed from the path, SHA-256, and size of each file. Uploading the same contents again gives the same digest. Its URI is `mmt-dataset://<version ID>`.
 
@@ -47,12 +47,12 @@ The browser uploads the contents of a folder as Artifacts and creates the versio
 1. Select a dataset and click **フォルダから作る** (Create from folder).
 2. Click **フォルダを選択** (Choose folder) or drop a folder.
 3. Optionally fill in:
-   - **版（空なら自動採番）** (Version; numbered automatically when empty): integers such as `1` and `2` are used when empty
-   - **親の版** (Parent version): the version this one was derived from
+   - **バージョン（空なら自動採番）** (Version; numbered automatically when empty): integers such as `1` and `2` are used when empty
+   - **親のバージョン** (Parent version): the version this one was derived from
    - **Metadata（JSON）**: for example `{"language": "ja", "sampleRate": 16000}`
-4. Click **uploadして版を作成** (Upload and create version).
+4. Click **uploadしてバージョンを作成** (Upload and create version).
 
-Files are sent the same way as in [Large file uploads](/en/data/uploads). If some files fail, the version is not created. Click **残りのファイルを再送** (Resend remaining files) or **残りのファイルを除いて版を作成** (Create version without the remaining files). If only creating the version fails, click **版の作成を再試行** (Retry creating the version); files are not uploaded again.
+Files are sent the same way as in [Large file uploads](/en/data/uploads). If some files fail, the version is not created. Click **残りのファイルを再送** (Resend remaining files) or **残りのファイルを除いてバージョンを作成** (Create version without the remaining files). If only creating the version fails, click **バージョンの作成を再試行** (Retry creating the version); files are not uploaded again.
 
 Selecting a version shows ファイル数 (file count), 合計サイズ (total size), and the file list. Select a file to preview it, just like an Artifact.
 
@@ -94,14 +94,14 @@ When you use `files`, do not pass `uri`, `digest`, `source_run_id`, `parent_data
 
 ## Create a version that references a URI
 
-To create a version that points to an external location without saving files, select the dataset, click **版を作成** (Create version), and fill in:
+To create a version that points to an external location without saving files, select the dataset, click **バージョンを作成** (Create version), and fill in:
 
 | Field | Value | Example |
 | --- | --- | --- |
-| 版 (Version) | Version name (required) | `2026-10` |
+| バージョン (Version) | Version name (required) | `2026-10` |
 | URI | Location of the data (required) | `s3://corpus/speech/2026-10/` |
 | Digest | Hash of the contents (required) | `sha256:<64 hex digits>` |
-| 親の版 (Parent version) | The version this one was derived from | |
+| 親のバージョン (Parent version) | The version this one was derived from | |
 | 生成元Run (Source Run) | The Run that produced this version | |
 | Schema（JSON）, Metadata（JSON） | Any JSON | `{"columns": ["audio", "text"]}` |
 

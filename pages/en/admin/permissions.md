@@ -7,16 +7,31 @@ description: Global administrators, the Project roles Viewer, Editor, and Admin,
 
 Permissions have two levels: whether a user is a global administrator, and the role in each Project.
 
+## Global settings and global administration
+
+The global settings are the pages that do not belong to a Project (`/settings/<section>`). Anyone can open them from **全体設定** (Global settings) in the user menu at the top right. The sidebar items fall into two groups.
+
+| Group | Items | Who sees it |
+| --- | --- | --- |
+| 全体設定 (Global settings) | アカウント (Account), コンピュータ (Computers) | Everyone |
+| 全体管理 (Global administration) | プロジェクト (Projects), ユーザー (Users), ストレージ (Storage), ランチャー (Launchers), 監査ログ (Audit log) | Global administrators only |
+
+The sidebar on Project pages shows the same groups below the Project items. People who are not global administrators do not see 全体管理, and opening one of its URLs directly takes them to **アカウント**. Old URLs starting with `/admin` or `/account` move to the new ones (`/settings/projects`, `/settings/account`, and so on).
+
+![A regular user's user menu: Account, Change password, and Global settings](/images/admin-user-menu.png)
+
+The user menu at the top right has **アカウント** (Account), **パスワードの変更** (Change password, local accounts only), and **全体設定** (Global settings) ([Authentication modes and local accounts](/en/admin/auth#check-your-account)).
+
 ## Global administrators
 
-Global administrators manage application-wide settings. Their sidebar shows the items of 全体管理 (Global administration), which they can also open from **全体管理** in the user menu at the top right.
+Global administrators manage application-wide settings. Most of their pages open from the 全体管理 (Global administration) group in the sidebar.
 
 - Listing every Project, and restoring or permanently deleting archived Projects (**全体管理** → **プロジェクト** (Projects); see [Create and manage Projects](/en/admin/projects))
 - Creating, disabling, and resetting passwords of users (**全体管理** → **ユーザー** (Users))
 - Adding storage backends and choosing the default backend (**全体管理** → **ストレージ** (Storage); see [Storage](/en/data/storage))
 - Registering launchers (**全体管理** → **ランチャー** (Launchers))
 - The global audit log (**全体管理** → **監査ログ** (Audit log))
-- Creating and changing Compute targets (SSH and Local) and global computers. Researchers can also add their own external computers ([External computers (sites)](/en/compute/sites))
+- Adding SSH and Local computers, and changing the settings and visibility of every computer (コンピュータ in the global settings; see [Computers and visibility](/en/compute/computers)). They still cannot run Jobs on other people's Private computers. Researchers can add sites too
 - Creating, changing, and testing notification channels ([Notifications and operations alerts](/en/admin/notifications))
 - Registering and changing plugins ([Plugins and Mado integration](/en/admin/plugins))
 
@@ -48,6 +63,10 @@ A Project is Public or Private. New Projects are Public by default.
 - A Project Admin changes the visibility in the プロジェクト (Project) section of **プロジェクト設定** (Project settings). Projects that existed before visibility was introduced become Private on upgrade.
 
 See [Create and manage Projects](/en/admin/projects#visibility) for details.
+
+## Computer visibility
+
+Computers that run Jobs also have Public and Private, separately from Projects. Jobs from any Project can run on a Public computer. On a Private computer, only Jobs of the owner (the person who added it) and of the Service Accounts the owner created run, whatever their Project role. Global administrators are no exception. See [Computers and visibility](/en/compute/computers#visibility).
 
 ## Direct grants and group grants
 

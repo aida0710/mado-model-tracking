@@ -34,7 +34,7 @@ export interface HomeContent {
 const ja: HomeContent = {
   eyebrow: 'MLflow 3互換の実験管理',
   title: '学習の記録から、モデルの評価と昇格まで',
-  lead: '公式のMLflow 3 SDKからそのまま記録でき、モデル版の登録をきっかけに推論と評価を自動で実行します。音声などの大きなArtifactは、ファイルシステムかS3互換ストレージに保存します。',
+  lead: '公式のMLflow 3 SDKからそのまま記録でき、モデルバージョンの登録をきっかけに推論と評価を自動で実行します。音声などの大きなArtifactは、ファイルシステムかS3互換ストレージに保存します。',
   primaryAction: { text: '使い方を見る', link: '/guide/getting-started' },
   secondaryAction: { text: 'インストール', link: '/guide/install' },
   hero: { image: 'guide-runs', alt: '実験ごとにRunを並べたRunsの一覧', caption: '実験ごとにRunを並べ、メトリクスとパラメータで絞り込む。画面は見本データです。' },
@@ -47,9 +47,9 @@ const ja: HomeContent = {
   featuresHeading: '画面で見る、mado ML Trackingの使い方',
   features: [
     { label: 'Tracking', title: 'Runを記録して比べる', description: 'params、メトリクス、ログ、GPU使用率を記録し、図を並べて比べます。全履歴から検索してCSVにも出せます。', image: 'tracking-charts', alt: '複数のRunのメトリクスを並べた図', link: '/tracking/charts', action: '図とRunの比較' },
-    { label: 'Automation', title: '登録をきっかけに推論と評価', description: '学習の出力をモデル版として登録すると、モデル系列に合うルールが推論と評価のJobを順に実行します。使った版・コード・データは固定して残ります。', image: 'guide-model-version-automation', alt: 'モデル版と自動実行の履歴', link: '/models/automation', action: '推論・評価の自動実行' },
+    { label: 'Automation', title: '登録をきっかけに推論と評価', description: '学習の出力をモデルバージョンとして登録すると、モデル系列に合うルールが推論と評価のJobを順に実行します。使ったバージョン・コード・データは固定して残ります。', image: 'guide-model-version-automation', alt: 'モデルバージョンと自動実行の履歴', link: '/models/automation', action: '推論・評価の自動実行' },
     { label: 'Audio', title: '音声のArtifactを聴き比べる', description: '波形とスペクトログラムで音声を確認し、stepごとの出力を並べて聴き比べられます。', image: 'data-audio-viewer', alt: '波形とスペクトログラムを表示した音声ビューア', link: '/data/audio', action: '音声の確認' },
-    { label: 'Lineage', title: 'データとモデルの来歴を辿る', description: 'どのデータセットの版から、どのRunを経て、どのモデル版ができたか。入力と出力のつながりをグラフで確認します。', image: 'models-lineage', alt: 'データセットからRunとモデル版へつながるLineageのグラフ', link: '/models/registry', action: 'モデルの登録と版' },
+    { label: 'Lineage', title: 'データとモデルの来歴を辿る', description: 'どのデータセットのバージョンから、どのRunを経て、どのモデルバージョンができたか。入力と出力のつながりをグラフで確認します。', image: 'models-lineage', alt: 'データセットからRunとモデルバージョンへつながるLineageのグラフ', link: '/models/registry', action: 'モデルの登録とバージョン' },
     { label: 'Projects', title: 'プロジェクトと権限を分ける', description: 'Publicはログインできる全員がEditorとして使え、Privateはメンバーだけが使えます。Authentikのgroupにも権限を付けられます。', image: 'admin-projects', alt: '全体管理のプロジェクトの一覧', link: '/admin/projects', action: 'プロジェクトの管理' },
   ],
 }

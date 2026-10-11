@@ -139,13 +139,13 @@ Run名を押すとRunの詳細が開き、メトリクス、Artifact、ログ、
 
 ## 7. モデルの登録から自動評価までを試す
 
-モデル版を登録すると、そのモデル系列に合う自動実行ルールが推論と評価のJobを登録し、workerが実行します。最短で試す流れは次のとおりです。
+モデルバージョンを登録すると、そのモデル系列に合う自動実行ルールが推論と評価のJobを登録し、workerが実行します。最短で試す流れは次のとおりです。
 
 ### 準備: workerと実行するコード
 
-1. GPUのあるホスト（CPUだけでもかまいません）へworkerを導入し、Compute targetとして登録します。手順は[workerの導入](/compute/worker)と[Compute target](/compute/targets)にあります。
-2. 推論と評価のコードを、［Code］でコード版として登録します。実行種別（推論、評価）と、対応するモデル系列（例: `whisper`）を指定します。手順は[Taskとコード版](/models/tasks)にあります。CPUだけで動く推論と評価の例（`inference.py`、`evaluation.py`）が、SDKを入れた仮想環境の`share/mado-tracking/examples/`（手順4の例では`~/.venvs/mmt/share/mado-tracking/examples/`）にあります。
-3. 評価に使う正解データを、データセット版として登録します（[データセット](/data/datasets)）。
+1. GPUのあるホスト（CPUだけでもかまいません）へworkerを導入し、全体設定の「コンピュータ」でCompute targetとして登録します。手順は[workerの導入](/compute/worker)と[Compute target](/compute/targets)にあります。SSH・Localを足せるのは全体管理者です。既定のPrivateでは足した人のJobだけが動くので、ほかの人が自動実行ルールを作るならPublicにします（[コンピュータと公開範囲](/compute/computers)）。
+2. 推論と評価のコードを、［Code］でコードバージョンとして登録します。実行種別（推論、評価）と、対応するモデル系列（例: `whisper`）を指定します。手順は[Taskとコードバージョン](/models/tasks)にあります。CPUだけで動く推論と評価の例（`inference.py`、`evaluation.py`）が、SDKを入れた仮想環境の`share/mado-tracking/examples/`（手順4の例では`~/.venvs/mmt/share/mado-tracking/examples/`）にあります。
+3. 評価に使う正解データを、データセットバージョンとして登録します（[データセット](/data/datasets)）。
 
 ### 自動実行ルールを作る
 
@@ -158,13 +158,13 @@ Run名を押すとRunの詳細が開き、メトリクス、Artifact、ログ、
 | 対象モデル系列 | `whisper` | `whisper` |
 | 実行種別 | 推論 | 評価 |
 | Experiments | `whisper-small-finetune` | `whisper-small-finetune` |
-| コード版 | 推論のコード版 | 評価のコード版 |
+| コードバージョン | 推論のコードバージョン | 評価のコードバージョン |
 | Compute target | 準備の1で登録したもの | 同じもの |
-| 入力データセット版 | なし | 準備の3の正解データ |
+| 入力データセットバージョン | なし | 準備の3の正解データ |
 
 評価のルールは、推論Runの出力を上流の出力として受け取ります。ルールは作成後に有効・無効だけを変えられます。設定を変えるときは新しいルールを作ります。
 
-### モデル版を登録する
+### モデルバージョンを登録する
 
 MLflow 3 SDKで登録する場合は、登録モデルの`mmt.model_family` tagでモデル系列を指定します。
 
@@ -187,12 +187,12 @@ version = mlflow.register_model(recorded.model_uri, "whisper-small-ja")
 print("version", version.version)
 ```
 
-`version 1`と表示されれば登録できています。版の番号は1から順に自動で採番されます。［Models］の一覧にも`whisper-small-ja`がモデル系列`whisper`で表示されます。
+`version 1`と表示されれば登録できています。バージョンの番号は1から順に自動で採番されます。［Models］の一覧にも`whisper-small-ja`がモデル系列`whisper`で表示されます。
 
 ### 結果を確かめる
 
-［Models］で版を選び、［版の詳細画面を開く］を押します。「自動実行」に、1段目の推論と2段目の評価が並びます。Jobが終わると、「評価結果」に評価Runの指標が表示されます。
+［Models］でバージョンを選び、［バージョンの詳細画面を開く］を押します。「自動実行」に、1段目の推論と2段目の評価が並びます。Jobが終わると、「評価結果」に評価Runの指標が表示されます。
 
-![学習Run、モデル版、推論Run、評価Runのつながりと自動実行の一覧](/images/guide-model-version-automation.png)
+![学習Run、モデルバージョン、推論Run、評価Runのつながりと自動実行の一覧](/images/guide-model-version-automation.png)
 
 起動に失敗した場合は、「起動結果」と「ジョブエラー」に理由が表示されます。評価の結果で`production`などのaliasを移す設定は[評価と昇格](/models/promotion)、自動実行の詳しい設定は[推論・評価の自動実行](/models/automation)を参照してください。
