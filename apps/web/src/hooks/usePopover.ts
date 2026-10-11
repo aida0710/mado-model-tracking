@@ -31,6 +31,7 @@ export function usePopover<Container extends HTMLElement = HTMLDivElement>() {
     container,
     isOpen,
     toggle: () => setIsOpen((open) => !open),
+    open: () => setIsOpen(true),
     close: () => setIsOpen(false),
   };
 }

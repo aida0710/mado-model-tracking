@@ -1,6 +1,6 @@
 ---
 title: Security
-description: What Mado Model Tracking protects, where credentials and secrets live, and what operators need to do.
+description: What mado ML Tracking protects, where credentials and secrets live, and what operators need to do.
 ---
 
 # Security

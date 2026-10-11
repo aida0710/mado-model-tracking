@@ -1,11 +1,10 @@
-import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Model, ModelAliasEvent, ModelAliasEventPage, ModelVersion } from '@mmt/contracts';
 import { transaction } from '../src/db/database.js';
 import { migrate } from '../src/db/migrate.js';
 import { assignModelAlias } from '../src/repositories/modelAliasRepository.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
+import { applyMigrationsBefore } from './migrationFixtures.js';
 import { projectFixture } from './fixtures.js';
 
 type ProjectFixture = Awaited<ReturnType<typeof projectFixture>>;
@@ -538,21 +537,7 @@ describe.skipIf(!testDatabaseUrl)('alias履歴の移行（独立PostgreSQL）', 
   });
 
   it('移行時点の既存aliasをmigration snapshotの初期eventとして残す', async () => {
-    const directory = new URL('../src/db/migrations/', import.meta.url);
-    await harness.database.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    const earlier = (await readdir(directory))
-      .filter((name) => name.endsWith('.sql') && name < '016_model_alias_events.sql')
-      .sort();
-    for (const name of earlier) {
-      const sql = await readFile(new URL(name, directory), 'utf8');
-      await harness.database.query(sql);
-      await harness.database.query('INSERT INTO schema_migrations(name,sha256) VALUES($1,$2)', [
-        name,
-        createHash('sha256').update(sql).digest('hex'),
-      ]);
-    }
+    await applyMigrationsBefore(harness.database, '016_model_alias_events.sql');
     const legacy = await harness.database.query(`
       WITH project AS (INSERT INTO projects(name) VALUES('Legacy') RETURNING id),
       model AS (INSERT INTO models(project_id,name,family) SELECT id,'Legacy model','qwen2' FROM project RETURNING id,project_id),

@@ -17,7 +17,7 @@ export const OPENAPI_VERSION = '3.1.0';
 const API_CONTRACT_VERSION = '0.1';
 
 const DESCRIPTION = [
-  'Mado Model Tracking の独自API（native API）。',
+  'mado ML Tracking の独自API（native API）。',
   '振る舞いの正本は docs/api-contract.md（文章）で、この文書はその形式（route・認可・入出力・エラーコード）を機械可読にしたもの。両者の食い違いは apps/api/test/openapi-coverage.test.ts が検出する。',
   'MLflow 互換API（/api/mlflow/projects/{p}/...）は MLflow 公式の REST API・proto に従うので、この文書には含めない。',
   'JSONはcamelCase、IDはUUID、日時はISO 8601（UTC）。一覧は {items: T[]}。エラーは ApiError {error, code}。',
@@ -171,7 +171,7 @@ export function buildOpenApiDocument(
   return {
     openapi: OPENAPI_VERSION,
     info: {
-      title: 'Mado Model Tracking native API',
+      title: 'mado ML Tracking native API',
       version: API_CONTRACT_VERSION,
       description: DESCRIPTION,
     },

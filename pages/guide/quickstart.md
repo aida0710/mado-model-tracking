@@ -13,17 +13,18 @@ description: 最初のProjectを作り、Python SDKと公式MLflow 3 SDKでRun�
 
 ブラウザで`MMT_PUBLIC_URL`を開いてログインします。初期管理者で初めてログインしたときは、パスワードの変更を求められます。
 
-参加しているProjectがまだ無いと、Projectの一覧が表示されます。［プロジェクトを作成］を押し、次の値を入力して［作成］を押します。
+見られるProjectがまだ無いと、「プロジェクト」の画面が表示されます。［プロジェクトを作成］を押し、次の値を入力して［作成］を押します。ほかのProjectが既にあるときは、サイドバーの上にあるProjectの名前を押して切り替えを開き、一番下の［＋ プロジェクトを作成］を押します。
 
 | 項目 | 入力する値の例 |
 | --- | --- |
 | 名前 | `音声認識の実験` |
-| 説明 | 空欄でかまいません |
+| 説明（任意） | 空欄でかまいません |
+| 公開範囲 | 既定の「Public」（ログインできる全員が使えます）。メンバーだけで使うなら「Private」 |
 | Artifact保存先 | 既定のまま（全体管理者が設定した保存先） |
 
-作成したProjectのExperimentsの画面に移れば完了です。作成者はそのProjectのAdminになります。あとから作るProjectや一覧は、［Settings］の「Projects」にあります。
+作成したProjectのExperimentsの画面に移れば完了です。作成者はそのProjectのAdminになります。Projectの切り替えや公開範囲は、[Projectの作成と管理](/admin/projects)を参照してください。
 
-![Projectの一覧とArtifact保存先を表示したSettings画面](/images/guide-projects.png)
+![名前、説明、公開範囲、Artifact保存先を入力するプロジェクトの作成画面](/images/guide-projects.png)
 
 ## 2. 実験を作る
 
@@ -35,7 +36,7 @@ description: 最初のProjectを作り、Python SDKと公式MLflow 3 SDKでRun�
 
 SDKからの記録には、ログインのパスワードではなくAPI tokenを使います。
 
-1. ［Settings］を開き、「自分のAPI token」の［API tokenを発行］を押します。
+1. サイドバーの［プロジェクト設定］を開き、「MLflow 3から接続」の［このProject用のAPI tokenを発行］を押します。
 2. 名前に`laptop-sdk`のように用途が分かる名前を入力します。
 3. Scopeは`read`、`runs:write`、`registry:write`、`artifacts:write`が選ばれた状態になっています。そのままにします。
 4. 有効期限を選んで［保存］を押します。
@@ -51,7 +52,7 @@ tokenの値は一度だけ表示されます。閉じる前にコピーし、パ
 ```sh
 sudo apt install -y python3-venv git
 python3 -m venv ~/.venvs/mmt
-~/.venvs/mmt/bin/pip install 'mado-tracking @ git+https://github.com/aida0710/mado-model-tracking.git#subdirectory=python'
+~/.venvs/mmt/bin/pip install 'mado-tracking @ git+https://github.com/aida0710/mado-ml-tracking.git#subdirectory=python'
 ```
 
 接続先とtokenを環境変数に設定します。tokenは画面に表示されない入力で渡し、ソースコードやシェルの履歴に残さないでください。
@@ -90,7 +91,7 @@ SDKの詳しい使い方（system metrics、途中からの再開、オフライ
 
 ## 5. MLflow 3 SDKで記録する
 
-既存の学習コードがMLflowで記録している場合は、接続先を変えるだけで同じProjectへ記録できます。［Settings］の「MLflow 3から接続」に、このProjectの`MLFLOW_TRACKING_URI`と設定例が表示されます。
+既存の学習コードがMLflowで記録している場合は、接続先を変えるだけで同じProjectへ記録できます。［プロジェクト設定］の「MLflow 3から接続」に、このProjectの`MLFLOW_TRACKING_URI`と設定例が表示されます。
 
 ![MLFLOW_TRACKING_URIと環境変数の設定例を表示した「MLflow 3から接続」](/images/guide-mlflow-connection.png)
 
@@ -130,7 +131,7 @@ with mlflow.start_run(run_name="lr-5e-5"):
 
 ![2つのRunが並んだwhisper-small-finetuneの一覧](/images/guide-quickstart-runs.png)
 
-［図を表示］を押すと、一覧のRunのメトリクスが図になります。2つのRunの`train.loss`を重ねて比べられ、右側では平行座標でparamsと結果の関係を確認できます。
+［図を表示］を押すと、一覧のRunのメトリクスが図になります。2つのRunの`train.loss`を重ねて比べられ、図の横（画面の幅が足りないときは下）の平行座標でparamsと結果の関係を確認できます。
 
 ![2つのRunのtrain.lossを重ねた図と平行座標](/images/guide-quickstart-chart.png)
 

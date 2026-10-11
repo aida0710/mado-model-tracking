@@ -6,6 +6,7 @@ import { useAdminUsers } from '../../hooks/useAdminUsers';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Dialog } from '../Dialog';
 import { Resource } from '../Feedback';
+import { AdminSectionHeader } from './AdminSectionHeader';
 import { LocalUserDialog } from './LocalUserDialog';
 import { TemporaryPasswordNotice } from './TemporaryPasswordNotice';
 import { UsersTable, type UserAction } from './UsersTable';
@@ -63,7 +64,7 @@ function confirmation({ user, action }: PendingAction) {
   }
 }
 
-/** The admin "users" tab: search, local account creation, disabling and password resets. */
+/** The admin "users" section: search, local account creation, disabling and password resets. */
 export function UsersPanel() {
   const { users, filter, setFilter } = useAdminUsers();
   const [searchText, setSearchText] = useState('');
@@ -73,18 +74,20 @@ export function UsersPanel() {
   const pending = pendingAction && confirmation(pendingAction);
   return (
     <section className="admin-users">
-      <div className="section-heading">
-        <h2>{text.adminUsers}</h2>
-        <div>
-          <button className="button primary" onClick={() => setIsCreating(true)}>
-            <Plus size={15} />
-            {text.newLocalUser}
-          </button>
-          <button className="icon-button" aria-label={text.refresh} onClick={users.reload}>
-            <RefreshCw size={17} />
-          </button>
-        </div>
-      </div>
+      <AdminSectionHeader
+        section="users"
+        actions={
+          <>
+            <button className="button primary" onClick={() => setIsCreating(true)}>
+              <Plus size={15} />
+              {text.newLocalUser}
+            </button>
+            <button className="icon-button" aria-label={text.refresh} onClick={users.reload}>
+              <RefreshCw size={17} />
+            </button>
+          </>
+        }
+      />
       <form
         className="admin-users-filter"
         role="search"

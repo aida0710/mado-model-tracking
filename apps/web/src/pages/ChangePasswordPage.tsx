@@ -2,6 +2,7 @@ import { authApi } from '../api/auth';
 import { useMutation } from '../hooks/useMutation';
 import { PasswordChangeForm } from '../components/PasswordChangeForm';
 import { ErrorNotice } from '../components/Feedback';
+import { ProductLogo } from '../components/ProductLogo';
 import { text } from '../i18n/catalog';
 
 // isRequired: shown by AuthGate before any other screen until the initial password is replaced.
@@ -26,7 +27,9 @@ export function ChangePasswordPage({
   return (
     <div className="login-page">
       <main className="login-card">
-        <div className="login-mark">{text.appName}</div>
+        <div className="login-mark">
+          <ProductLogo />
+        </div>
         <h1>{text.changePasswordTitle}</h1>
         {form}
         <ErrorNotice message={logout.error} />

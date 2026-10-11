@@ -20,16 +20,19 @@ export async function requireProject(
   requireScope(principal, permission.scope);
   if (principal.token?.projectId && principal.token.projectId !== projectId)
     throw new DomainError(403, 'API tokenのprojectが一致しません', 'project_forbidden');
-  // The effective role is the strongest of the direct grant and the user's group bindings.
+  // The effective role is the strongest of the direct grant, the user's group bindings and, on a
+  // public Project, editor. An archived Project is gone for everyone, global administrators too.
   const membership = await first<{ role: ProjectRole | null }>(
     connection,
-    `SELECT e.role FROM projects p LEFT JOIN effective_project_roles e ON e.project_id=p.id AND e.user_id=$2 WHERE p.id=$1`,
+    `SELECT e.role FROM projects p LEFT JOIN effective_project_roles e ON e.project_id=p.id AND e.user_id=$2
+    WHERE p.id=$1 AND p.archived_at IS NULL`,
     [projectId, principal.user.id],
   );
   if (!membership) notFound('Project');
-  // Token access always requires current membership, including a global administrator's tokens.
-  const role =
-    membership.role ?? (principal.method === 'session' && principal.user.isAdmin ? 'admin' : null);
+  // A global administrator's session is admin in every live Project, also where public access or
+  // a weaker grant gives a role. Token access always requires current membership, including a
+  // global administrator's tokens.
+  const role = principal.method === 'session' && principal.user.isAdmin ? 'admin' : membership.role;
   if (!role || !satisfiesProjectRole(role, permission.role))
     throw new DomainError(403, 'Projectの権限が不足しています', 'project_forbidden');
   return role;

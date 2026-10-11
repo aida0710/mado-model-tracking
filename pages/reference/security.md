@@ -1,6 +1,6 @@
 ---
 title: セキュリティ
-description: Mado Model Trackingが守るもの、認証情報とシークレットの置き場所、運用する人が行う対策。
+description: mado ML Trackingが守るもの、認証情報とシークレットの置き場所、運用する人が行う対策。
 ---
 
 # セキュリティ

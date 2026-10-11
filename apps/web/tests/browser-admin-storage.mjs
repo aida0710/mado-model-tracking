@@ -1,9 +1,10 @@
-// Browser check for /admin storage: create a backend, run its connection test, change the default,
+// Browser check for /admin/storage: create a backend, run its connection test, change the default,
 // and pick backends in the Project forms. The storage API is mocked here until it is integrated.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createBrowserApi } from './browserApi.mjs';
+import { openProjectSwitcher } from './projectSwitcher.mjs';
 
 const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
 if (!modulePath) throw new Error('Set MMT_PLAYWRIGHT_MODULE to an installed Playwright index.mjs');
@@ -100,9 +101,10 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
   await page.goto(`${webUrl}/projects/${api.state.project.id}/experiments`);
-  await page.getByRole('link', { name: '全体管理' }).click();
-  await page.waitForURL(/\/admin$/);
-  await page.getByRole('tab', { name: 'ストレージ' }).click();
+  // The sidebar lists each global administration screen under 「全体管理」.
+  await page.getByRole('link', { name: 'ストレージ', exact: true }).click();
+  await page.waitForURL(/\/admin\/storage$/);
+  await page.getByRole('heading', { name: 'ストレージ', exact: true }).waitFor();
   await page.getByRole('cell', { name: '/var/lib/mmt/artifacts' }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/01-admin-storage.png`, fullPage: true });
 
@@ -156,17 +158,22 @@ try {
   await page.goto(`${webUrl}/projects/${api.state.project.id}/settings`);
   await page.getByRole('radio', { name: /filesystem/ }).first().waitFor();
   assert.ok(await page.getByRole('radio', { name: /^filesystem/ }).isChecked());
-  await page.getByRole('button', { name: 'プロジェクトを作成' }).first().click();
+  // Projects are created from the switcher; the settings page no longer lists or creates them.
+  assert.equal(await page.getByRole('button', { name: 'プロジェクトを作成' }).count(), 0);
+  const switcher = await openProjectSwitcher(page);
+  await switcher.getByRole('option', { name: 'プロジェクトを作成', exact: true }).click();
   const projectDialog = page.getByRole('dialog', { name: 'プロジェクトを作成' });
   assert.ok(await projectDialog.getByRole('radio', { name: /minio-main/ }).isChecked());
   await page.screenshot({ path: `${outputDirectory}/07-new-project-default.png` });
   await projectDialog.getByRole('button', { name: 'キャンセル' }).click();
 
-  // Someone who is not a global administrator gets no link, and /admin sends them back.
+  // Someone who is not a global administrator gets no links, and /admin sends them back.
   api.state.user.isAdmin = false;
-  await page.goto(`${webUrl}/admin`);
+  await page.goto(`${webUrl}/admin/storage`);
   await page.waitForURL(/\/projects\/[^/]+\/experiments$/);
-  assert.equal(await page.getByRole('link', { name: '全体管理' }).count(), 0);
+  assert.equal(await page.getByRole('link', { name: 'ストレージ', exact: true }).count(), 0);
+  await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
+  assert.equal(await page.getByRole('menuitem', { name: '全体管理', exact: true }).count(), 0);
   await page.screenshot({ path: `${outputDirectory}/08-non-admin.png` });
 
   assert.deepEqual(pageErrors, []);

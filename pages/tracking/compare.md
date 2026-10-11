@@ -54,7 +54,7 @@ with Client() as client:
 
 ![比較画面の分析タブ。平行座標でlr、batch_size、epochs、val_lossを結んでいる](/images/tracking-compare-analysis.png)
 
-［分析］タブは、比較画面のほか、［Experiments］の一覧で［図を表示］を選んだときの右側と、[Sweepの詳細](/tracking/sweeps#trials)にもあります。一覧では検索結果のRun、Sweepでは試行のRunが対象です。対象は5,000件までです。
+［分析］タブは、比較画面のほか、［Experiments］の一覧で［図を表示］を選んだときの図の横（画面の幅が足りないときは下）と、[Sweepの詳細](/tracking/sweeps#trials)にもあります。一覧では検索結果のRun、Sweepでは試行のRunが対象です。対象は5,000件までです。
 
 最初に［目的metric］で、良し悪しを決めるmetricを選びます。Sweepでは試行の目的値も選べます。
 

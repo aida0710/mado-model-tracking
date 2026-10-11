@@ -3,7 +3,8 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './hooks/useAuth';
 import { AppShell } from './layout/AppShell';
 import { AccountShell } from './layout/AccountShell';
-import { ACCOUNT_PASSWORD_PATH, ACCOUNT_PATH, ADMIN_PATH } from './layout/TopBar';
+import { ACCOUNT_PASSWORD_PATH, ACCOUNT_PATH } from './layout/TopBar';
+import { ADMIN_PATH, adminSectionPath, DEFAULT_ADMIN_SECTION } from './layout/adminSections';
 import { Loading } from './components/Feedback';
 // Already in the main bundle because AuthGate shows it for a required change.
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
@@ -83,7 +84,11 @@ export function App() {
               element={<ChangePasswordPage isRequired={false} />}
             />
             <Route path={ACCOUNT_PATH} element={<AccountPage />} />
-            <Route path={ADMIN_PATH} element={<AdminPage />} />
+            <Route
+              path={ADMIN_PATH}
+              element={<Navigate replace to={adminSectionPath(DEFAULT_ADMIN_SECTION)} />}
+            />
+            <Route path={`${ADMIN_PATH}/:section`} element={<AdminPage />} />
           </Route>
           <Route path="/projects/:projectId" element={<AppShell />}>
             <Route index element={<Navigate replace to="experiments" />} />

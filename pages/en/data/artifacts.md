@@ -48,7 +48,7 @@ Users who can edit see **Artifactをアップロード** (Upload Artifact). See 
 
 ![Artifacts page of a Project](/images/data-artifacts-browser.png)
 
-Open **Artifacts** in the top bar to search every Artifact in the Project.
+Open **Artifacts** in the sidebar to search every Artifact in the Project.
 
 | Filter | Values |
 | --- | --- |
@@ -105,7 +105,7 @@ MLflow SDK `delete_artifacts` follows the same rules. Through the API, call `DEL
 
 ## Check usage
 
-Artifactの使用量 (Artifact usage) at the bottom of the Project **Settings** shows usage per storage.
+Artifactの使用量 (Artifact usage) at the top of **プロジェクト設定** (Project settings) shows usage per storage.
 
 | Column | Meaning |
 | --- | --- |

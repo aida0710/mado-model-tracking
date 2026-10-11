@@ -11,10 +11,10 @@ There are two roles.
 
 | Setting | Who | Where |
 | --- | --- | --- |
-| Notification channels (where to send) | Global administrators | **通知** (Notifications) → **通知先** (Channels) in the Project's **Settings** |
-| Notification rules (which events go to which channel) | Project Admins | **通知** → **通知ルール** (Rules) in the Project's **Settings** |
+| Notification channels (where to send) | Global administrators | **通知** (Notifications) → **通知先** (Channels) in **プロジェクト設定** (Project settings) |
+| Notification rules (which events go to which channel) | Project Admins | **通知** → **通知ルール** (Rules) in **プロジェクト設定** (Project settings) |
 
-![The Notifications section of a Project's Settings](/images/admin-notifications.png)
+![The Notifications section of the Project settings](/images/admin-notifications.png)
 
 ## Events
 
@@ -55,7 +55,7 @@ Email is sent only when the API server has both of these:
 ```sh
 # smtp://...:587 for STARTTLS, smtps://...:465 for TLS from the start
 MMT_SMTP_URL=smtps://<user>:<password>@smtp.example.com:465
-MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
+MMT_SMTP_FROM=mado ML Tracking <mmt@example.com>
 ```
 
 - URL-encode symbols in the user and password. A query (`?...`) is not accepted.
@@ -64,7 +64,7 @@ MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
 
 ## 2. Add a channel (global administrators)
 
-1. Open the Project's **Settings** and click **通知先を追加** (Add channel) under **通知先**.
+1. Open **プロジェクト設定** (Project settings) and click **通知先を追加** (Add channel) under **通知先**.
 2. Enter the values for the kind and save.
 
 | Kind | Fields | Example |

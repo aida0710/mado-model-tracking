@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Mado Model Tracking native API",
+    "title": "mado ML Tracking native API",
     "version": "0.1",
-    "description": "Mado Model Tracking の独自API（native API）。\n\n振る舞いの正本は docs/api-contract.md（文章）で、この文書はその形式（route・認可・入出力・エラーコード）を機械可読にしたもの。両者の食い違いは apps/api/test/openapi-coverage.test.ts が検出する。\n\nMLflow 互換API（/api/mlflow/projects/{p}/...）は MLflow 公式の REST API・proto に従うので、この文書には含めない。\n\nJSONはcamelCase、IDはUUID、日時はISO 8601（UTC）。一覧は {items: T[]}。エラーは ApiError {error, code}。\n\nJSON本文の上限は既定で4194304バイト。例外は requestBody の x-mmt-max-body-bytes に書く。\n\n各 operation の x-mmt-access は認可（Project role と API token の scope）、x-mmt-job-token は Job 限定 token（mmtj_）で呼べるか（write は token の Run に対する書き込みだけ）を示す。"
+    "description": "mado ML Tracking の独自API（native API）。\n\n振る舞いの正本は docs/api-contract.md（文章）で、この文書はその形式（route・認可・入出力・エラーコード）を機械可読にしたもの。両者の食い違いは apps/api/test/openapi-coverage.test.ts が検出する。\n\nMLflow 互換API（/api/mlflow/projects/{p}/...）は MLflow 公式の REST API・proto に従うので、この文書には含めない。\n\nJSONはcamelCase、IDはUUID、日時はISO 8601（UTC）。一覧は {items: T[]}。エラーは ApiError {error, code}。\n\nJSON本文の上限は既定で4194304バイト。例外は requestBody の x-mmt-max-body-bytes に書く。\n\n各 operation の x-mmt-access は認可（Project role と API token の scope）、x-mmt-job-token は Job 限定 token（mmtj_）で呼べるか（write は token の Run に対する書き込みだけ）を示す。"
   },
   "servers": [
     {
@@ -1914,7 +1914,7 @@
         "tags": [
           "projects"
         ],
-        "summary": "参加しているProject",
+        "summary": "使えるProject（メンバーのProjectとpublicのProject）",
         "security": [
           {
             "sessionCookie": []
@@ -2006,7 +2006,7 @@
         "tags": [
           "projects"
         ],
-        "summary": "Projectを作成",
+        "summary": "Projectを作成（公開範囲とメンバーも指定できる）",
         "security": [
           {
             "sessionCookie": []
@@ -2043,6 +2043,41 @@
                   "artifactBackend": {
                     "default": "filesystem",
                     "type": "string"
+                  },
+                  "visibility": {
+                    "default": "public",
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "private"
+                    ]
+                  },
+                  "members": {
+                    "default": [],
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "userId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "viewer",
+                            "editor",
+                            "admin"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "userId",
+                        "role"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -2067,6 +2102,8 @@
           "400": {
             "description": "要求を読めない",
             "x-mmt-error-codes": [
+              "duplicate_project_member",
+              "invalid_project_member",
               "invalid_json"
             ],
             "content": {
@@ -2096,10 +2133,24 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "project_forbidden",
               "password_change_required",
               "invalid_origin",
               "insufficient_scope",
               "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
             ],
             "content": {
               "application/json": {
@@ -2173,7 +2224,7 @@
         "tags": [
           "projects"
         ],
-        "summary": "Projectを変更",
+        "summary": "Projectを変更（説明・保存先・公開範囲）",
         "security": [
           {
             "sessionCookie": []
@@ -2210,13 +2261,18 @@
                 "type": "object",
                 "properties": {
                   "description": {
-                    "default": "",
                     "type": "string",
                     "maxLength": 20000
                   },
                   "artifactBackend": {
-                    "default": "filesystem",
                     "type": "string"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "private"
+                    ]
                   }
                 },
                 "additionalProperties": false
@@ -2324,6 +2380,136 @@
             "description": "入力が不正",
             "x-mmt-error-codes": [
               "backend_unavailable",
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/projects/{p}/archive": {
+      "post": {
+        "operationId": "postProjectsByPArchive",
+        "tags": [
+          "projects"
+        ],
+        "summary": "Projectをアーカイブ（データは残り、全体管理者が元に戻せる）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "project",
+          "role": "admin",
+          "scope": "admin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "project_forbidden",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "project_has_active_jobs",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
               "invalid_request",
               "invalid_reference"
             ],
@@ -45288,6 +45474,494 @@
         }
       }
     },
+    "/api/admin/storage-directories": {
+      "get": {
+        "operationId": "getAdminStorageDirectories",
+        "tags": [
+          "admin"
+        ],
+        "summary": "filesystemのrootPathの入力に合うサーバー上のディレクトリ",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorySuggestions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/projects": {
+      "get": {
+        "operationId": "getAdminProjects",
+        "tags": [
+          "admin"
+        ],
+        "summary": "全Project（アーカイブ済みも含められる）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminProject"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/projects/{p}/restore": {
+      "post": {
+        "operationId": "postAdminProjectsByPRestore",
+        "tags": [
+          "admin"
+        ],
+        "summary": "アーカイブしたProjectを元に戻す",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/projects/{p}": {
+      "delete": {
+        "operationId": "deleteAdminProjectsByP",
+        "tags": [
+          "admin"
+        ],
+        "summary": "アーカイブしたProjectをデータごと完全に削除",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "admin"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "globalAdmin"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [
+          {
+            "name": "p",
+            "in": "path",
+            "required": true,
+            "description": "Project ID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "本文なし"
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "invalid_origin",
+              "insufficient_scope",
+              "admin_required",
+              "job_token_forbidden"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "見つからない（他Projectのものを含む）",
+            "x-mmt-error-codes": [
+              "not_found"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "現在の状態と衝突する",
+            "x-mmt-error-codes": [
+              "project_not_archived",
+              "already_exists"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "入力が不正",
+            "x-mmt-error-codes": [
+              "invalid_request",
+              "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "operationId": "getAdminUsers",
@@ -47560,6 +48234,68 @@
         ],
         "additionalProperties": false
       },
+      "AdminProject": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "artifactBackend": {
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
+          "memberCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "runCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "archivedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "artifactBackend",
+          "visibility",
+          "memberCount",
+          "runCount",
+          "createdAt",
+          "archivedAt"
+        ],
+        "additionalProperties": false
+      },
       "AdminUser": {
         "type": "object",
         "properties": {
@@ -49828,6 +50564,39 @@
         },
         "required": [
           "items"
+        ],
+        "additionalProperties": false
+      },
+      "DirectorySuggestions": {
+        "type": "object",
+        "properties": {
+          "resolvedPath": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "missing",
+              "not_directory",
+              "unavailable"
+            ]
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "resolvedPath",
+          "status",
+          "items",
+          "truncated"
         ],
         "additionalProperties": false
       },
@@ -54146,6 +54915,13 @@
           "artifactBackend": {
             "type": "string"
           },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -54164,6 +54940,7 @@
           "name",
           "description",
           "artifactBackend",
+          "visibility",
           "role",
           "createdAt"
         ],

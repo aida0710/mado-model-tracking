@@ -7,12 +7,12 @@ import { useMutation } from '../hooks/useMutation';
 import type { Navigation } from '../hooks/useNavigation';
 import { ErrorNotice } from '../components/Feedback';
 import { UserMenu } from '../components/UserMenu';
+import { ProductLogo } from '../components/ProductLogo';
 import { OperationsAlertBadge } from '../components/OperationsAlertBadge';
 import { text } from '../i18n/catalog';
 import { NavigationDrawer } from './NavigationDrawer';
 
 export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
-export { ADMIN_PATH } from './navigationLinks';
 
 /**
  * The header: the app name, theme, the signed-in user and logout. The screen navigation sits in
@@ -32,7 +32,7 @@ export function TopBar({ projectId, navigation }: { projectId?: string; navigati
           <NavigationDrawer groups={navigation.groups} />
         )}
         <Link to="/" className="brand">
-          {text.appName}
+          <ProductLogo />
         </Link>
         <div className="topbar-actions">
           {projectId && <OperationsAlertBadge projectId={projectId} />}

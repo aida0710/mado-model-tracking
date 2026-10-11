@@ -79,7 +79,7 @@ describe('siteの全体設定の入力', () => {
   });
 
   it('自動投入には投入するlauncherが要る', () => {
-    expect(() => buildSiteSettingsInput({ ...automatic, launcherId: '' })).toThrow('launcher');
+    expect(() => buildSiteSettingsInput({ ...automatic, launcherId: '' })).toThrow('ランチャー');
     expect(buildSiteSettingsInput({ ...manual, launcherId: 'launcher' }).launcherId).toBeNull();
   });
 

@@ -5,9 +5,9 @@ description: Add Artifact storage (file system or S3-compatible storage) in the 
 
 # Storage settings
 
-![Storage tab of the global admin page](/images/data-storage.png)
+![The Storage page under global administration](/images/data-storage.png)
 
-Global administrators manage Artifact storage under **全体管理** (Global admin) → **ストレージ** (Storage). There are two kinds: a file system (Filesystem) and S3-compatible storage (S3). S3 works with AWS, S3-compatible services such as MinIO, and older services that do not accept Signature Version 4 (signature v2).
+Global administrators manage Artifact storage under **全体管理** (Global administration) → **ストレージ** (Storage). There are two kinds: a file system (Filesystem) and S3-compatible storage (S3). S3 works with AWS, S3-compatible services such as MinIO, and older services that do not accept Signature Version 4 (signature v2).
 
 Each Project chooses which storage to use. Changing the storage does not move existing Artifacts; they are still read from the storage they were saved to.
 
@@ -35,7 +35,7 @@ Storage defined by environment variables appears as `filesystem` (always present
 
 To add S3-compatible storage:
 
-1. Open **全体管理** (Global admin) in the top bar and select the **ストレージ** (Storage) tab.
+1. Open **ストレージ** (Storage) under 全体管理 (Global administration) in the sidebar.
 2. Click **保存先を追加** (Add storage).
 3. Set **種類** (Kind) to S3 and fill in the fields below.
 4. Click **作成** (Create).
@@ -60,6 +60,20 @@ To add S3-compatible storage:
 
 To add a file system, set **種類** (Kind) to Filesystem and enter an absolute path on the API server in **ルートディレクトリ** (Root directory), for example `/srv/mmt/artifacts`. Paths containing `..` are rejected. When you run several API servers, use a persistent volume that every server can see at the same path.
 
+### Root directory suggestions
+
+As you type in **ルートディレクトリ** (Root directory), directories on the API server are suggested.
+
+- Ending with `/` lists the directories inside it (for example `/srv/mmt/`)
+- A partial name lists the directories that start with it (for example `/srv/mmt/art`)
+- Directories starting with `.` appear only after you type `.`
+- Choose with ↑ and ↓, and enter with Enter or Tab. Esc closes only the suggestions
+- Up to 50 directories are suggested. When there are more, 候補が多いため一部だけを表示しています。 (Only some suggestions are shown) appears; keep typing to narrow them
+
+When the path does not exist yet, the field says 「(path) はサーバにまだありません。接続テストか最初の保存のときに作成します。」 (not on the server yet; it is created by the connection test or the first save). When the path is a file, it says 「(path) はディレクトリではありません。別のパスを指定してください。」 (not a directory; choose another path).
+
+The suggestions are the directories the API process can see. When the API runs in a container, they are paths inside the container. Directories that cannot be read are not suggested.
+
 Storage you add appears with 画面 (UI) in the **定義元** column. The kind cannot be changed after saving.
 
 ### Credentials
@@ -80,7 +94,7 @@ Changing `MMT_STORAGE_SECRET_KEY` makes saved secrets impossible to decrypt. Art
 
 ### Signature v2
 
-The AWS SDK only supports Signature Version 4, so Mado Model Tracking implements Signature Version 2 itself. Choose Signature Version 2 only for storage that does not accept v4.
+The AWS SDK only supports Signature Version 4, so mado ML Tracking implements Signature Version 2 itself. Choose Signature Version 2 only for storage that does not accept v4.
 
 - **Checksumの扱い** (Checksum mode) is hidden and requests use WHEN_REQUIRED.
 - The region is not used for signing.
@@ -127,7 +141,7 @@ The default storage is labeled 既定の保存先 (default storage). Changing th
 
 ## Choose storage for a Project
 
-Choose a Project's storage in **Artifact保存先** (Artifact storage) when creating the Project. To change it later, select another storage in the プロジェクト (Project) section of the Project **Settings** and save. Only Project admins can change it.
+Choose a Project's storage in **Artifact保存先** (Artifact storage) when creating the Project. To change it later, select another storage in the プロジェクト (Project) section of **プロジェクト設定** (Project settings) and save. Only Project admins can change it.
 
 After the change, only new Artifacts go to the new storage. Existing Artifacts stay where they are and are read from there.
 

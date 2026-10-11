@@ -5,6 +5,15 @@ import { text } from '../i18n/catalog';
 // Weakest first, the order people read the roles in.
 const PROJECT_ROLES: readonly ProjectRole[] = ['viewer', 'editor', 'admin'];
 
+/** The <option>s of a Project role select, weakest first. */
+export function ProjectRoleOptions() {
+  return PROJECT_ROLES.map((role) => (
+    <option key={role} value={role}>
+      {text[role]}
+    </option>
+  ));
+}
+
 export function ProjectRoleSelect({
   label,
   value,
@@ -23,11 +32,7 @@ export function ProjectRoleSelect({
         value={value}
         onChange={(event) => onChange(event.target.value as ProjectRole)}
       >
-        {PROJECT_ROLES.map((role) => (
-          <option key={role} value={role}>
-            {text[role]}
-          </option>
-        ))}
+        <ProjectRoleOptions />
       </select>
     </div>
   );

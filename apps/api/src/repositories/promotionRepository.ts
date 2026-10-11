@@ -8,6 +8,7 @@ import type {
 } from '@mmt/contracts';
 import { first, rows, type Connection } from '../db/database.js';
 import type { PromotionPolicyInput } from '../domain/promotionPolicyValidation.js';
+import { liveProjectSql } from './projectRepository.js';
 
 const evaluationColumns = `e.id,e.project_id,e.policy_id,p.model_id,e.candidate_version_id,
   e.candidate_run_id,e.baseline_version_id,e.baseline_run_id,e.decision,e.criteria_results,e.reason,
@@ -156,7 +157,8 @@ export async function lockEnabledPoliciesForRule(
 
 /**
  * Whether the policy's run-as user may still have it act for them: an active user who is a global
- * administrator or a Project admin through a direct grant or a group binding.
+ * administrator or a Project admin through a direct grant or a group binding, while the Project
+ * is not archived.
  */
 export async function hasPromotionRunAsAccess(
   connection: Connection,
@@ -164,7 +166,7 @@ export async function hasPromotionRunAsAccess(
 ): Promise<boolean> {
   const runAsUser = await first<{ hasAccess: boolean }>(
     connection,
-    `SELECT u.status='active' AND (u.is_admin OR EXISTS (
+    `SELECT u.status='active' AND ${liveProjectSql('$2')} AND (u.is_admin OR EXISTS (
       SELECT 1 FROM effective_project_roles r WHERE r.project_id=$2 AND r.user_id=u.id AND r.role='admin'
     )) AS has_access FROM users u WHERE u.id=$1`,
     [policy.runAsUserId, policy.projectId],

@@ -156,7 +156,7 @@ describe.skipIf(!testDatabaseUrl)('Webで足す計算機（独立PostgreSQL）',
       await request(harness.app, '/api/projects', {
         method: 'POST',
         cookie: fixture.administrator.cookie,
-        body: { name: 'Other Project' },
+        body: { name: 'Other Project', visibility: 'private' },
       }),
     );
     const share = (projectIds: string[], cookie = fixture.editor.cookie) =>
@@ -201,7 +201,14 @@ describe.skipIf(!testDatabaseUrl)('Webで足す計算機（独立PostgreSQL）',
     const candidates = (cookie: string, targetId = own.id) =>
       request(harness.app, `/api/targets/${targetId}/shareable-projects`, { cookie });
     const newProject = async (name: string, cookie = fixture.administrator.cookie) =>
-      entity<Project>(await request(harness.app, '/api/projects', { method: 'POST', cookie, body: { name } }));
+      entity<Project>(
+        await request(harness.app, '/api/projects', {
+          method: 'POST',
+          cookie,
+          // Private: the candidates follow membership, which public access would blur.
+          body: { name, visibility: 'private' },
+        }),
+      );
     const makeOwnerViewer = async (project: Project) =>
       entity(
         await request(harness.app, `/api/projects/${project.id}/members/${fixture.editor.userId}`, {
@@ -271,7 +278,14 @@ describe.skipIf(!testDatabaseUrl)('Webで足す計算機（独立PostgreSQL）',
 
   it('自分の計算機を足すときの候補は本人がeditor以上のProjectで、全体管理者もメンバーでないProjectは出ない', async () => {
     const newProject = async (name: string, cookie: string) =>
-      entity<Project>(await request(harness.app, '/api/projects', { method: 'POST', cookie, body: { name } }));
+      entity<Project>(
+        await request(harness.app, '/api/projects', {
+          method: 'POST',
+          cookie,
+          // Private: the candidates follow membership, which public access would blur.
+          body: { name, visibility: 'private' },
+        }),
+      );
     const researchers = await newProject('Own Project', fixture.editor.cookie);
     const administrators = await newProject('Administrator Project', fixture.administrator.cookie);
     const candidates = (options: { cookie?: string; token?: string }) =>

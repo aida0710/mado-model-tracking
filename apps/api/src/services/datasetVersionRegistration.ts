@@ -241,15 +241,16 @@ async function nextDatasetVersion(connection: Connection, datasetId: string): Pr
   return next.version;
 }
 
-// Same rule as modelVersionRegistration.ts: the system actor needs a direct editor or admin
-// membership and does not inherit a global administrator's session-only access.
+// Same rule as modelVersionRegistration.ts: the system actor needs the editor or admin role by
+// its effective grants (direct, group binding or public visibility) and does not inherit a global
+// administrator's session-only access.
 async function requireRunCreatorRegistryAccess(
   connection: Connection,
   member: { projectId: string; userId: string },
 ): Promise<void> {
   const membership = await first(
     connection,
-    "SELECT 1 FROM project_members WHERE project_id=$1 AND user_id=$2 AND role IN ('editor','admin')",
+    "SELECT 1 FROM effective_project_roles WHERE project_id=$1 AND user_id=$2 AND role IN ('editor','admin')",
     [member.projectId, member.userId],
   );
   if (!membership)

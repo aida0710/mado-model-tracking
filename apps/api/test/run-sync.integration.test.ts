@@ -462,7 +462,7 @@ describe.skipIf(!testDatabaseUrl)('オフライン記録の後送り（独立Pos
       await request(harness.app, '/api/projects', {
         method: 'POST',
         cookie: fixture.outsider.cookie,
-        body: { name: 'Other Project' },
+        body: { name: 'Other Project', visibility: 'private' },
       }),
     );
     const otherBase = `/api/projects/${other.id}`;

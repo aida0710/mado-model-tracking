@@ -7,7 +7,7 @@ description: Project・Experiment・Runの関係、params・metrics・tags、Run
 
 ![Experimentを選んでRunの一覧を表示した画面](/images/tracking-runs.png)
 
-Mado Model Trackingでは、学習や評価の1回の実行を「Run」として記録します。Runにはparams（実行条件）、metrics（stepごとの数値）、tags（目印）、ログ、Artifact（ファイル）が付きます。画面上部の［Experiments］で、Runを一覧・検索・比較できます。
+mado ML Trackingでは、学習や評価の1回の実行を「Run」として記録します。Runにはparams（実行条件）、metrics（stepごとの数値）、tags（目印）、ログ、Artifact（ファイル）が付きます。画面上部の［Experiments］で、Runを一覧・検索・比較できます。
 
 ## こんなときに向いています
 
@@ -20,7 +20,7 @@ Mado Model Trackingでは、学習や評価の1回の実行を「Run」として
 
 | 単位 | 内容 | 作る場所 |
 | --- | --- | --- |
-| Project | 権限と保存先の単位。メンバーと役割（viewer・editor・admin）はProjectごとに決まります | ［Settings］の［Projects］で［プロジェクトを作成］ |
+| Project | 権限と保存先の単位。メンバーと役割（viewer・editor・admin）はProjectごとに決まります | Projectの切り替えの［＋ プロジェクトを作成］（[Projectの作成と管理](/admin/projects)） |
 | Experiment | 同じ目的のRunをまとめる単位（「音声合成の学習」など） | ［Experiments］の左側の［+］（実験を作成） |
 | Run | 1回の実行の記録 | Python SDK、MLflow 3 SDK、Task・Sweep・自動実行、画面の［Runを作成］ |
 

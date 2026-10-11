@@ -7,7 +7,7 @@ description: Send large Artifacts in parts and resume after an interruption, fro
 
 ![Upload Artifact dialog](/images/data-uploads-dialog.png)
 
-Sending a multi-gigabyte checkpoint or audio file in a single request means starting over whenever the connection drops. Mado Model Tracking splits large files into fixed-size parts, and after an interruption it skips the parts the server already has and continues.
+Sending a multi-gigabyte checkpoint or audio file in a single request means starting over whenever the connection drops. mado ML Tracking splits large files into fixed-size parts, and after an interruption it skips the parts the server already has and continues.
 
 The browser, the Python SDK, and the worker do this automatically based on file size. The MLflow SDK can do the same with MLflow multipart upload.
 

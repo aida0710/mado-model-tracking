@@ -1,10 +1,10 @@
-// The launchers tab of the global administration: registering launchers and their tokens.
+// The launchers section of the global administration: registering launchers and their tokens.
 export const launchersText = {
-  launchers: 'launcher',
+  launchers: 'ランチャー',
   launchersDescription:
-    'launcherは、自動投入の計算機へSSHで入ってJobを投入します。launcherごとにtokenを1本発行し、launcherのホストのtoken_fileに置きます。計算機・鍵・job shellの設定は、launcherがWebから読みます。',
-  newLauncher: 'launcherを登録',
-  noLaunchers: 'launcherはまだ登録されていません。',
+    'ランチャーは、自動投入の計算機へSSHで入ってJobを投入します。ランチャーごとにtokenを1本発行し、ランチャーのホストのtoken_fileに置きます。計算機・鍵・job shellの設定は、ランチャーがWebから読みます。',
+  newLauncher: 'ランチャーを登録',
+  noLaunchers: 'ランチャーはまだ登録されていません。',
   launcherStatus: '状態',
   launcherActive: '有効',
   launcherRevoked: '失効',
@@ -13,20 +13,20 @@ export const launchersText = {
   launcherTokenPrefix: 'tokenの先頭',
   launcherCreatedAt: '登録日時',
   launcherRotateToken: 'tokenを作り直す',
-  launcherRotateTitle: 'launcherのtokenを作り直す',
+  launcherRotateTitle: 'ランチャーのtokenを作り直す',
   launcherRevoke: '失効させる',
-  launcherRevokeTitle: 'launcherを失効させる',
+  launcherRevokeTitle: 'ランチャーを失効させる',
   launcherTokenOnce:
-    'tokenは一度だけ表示されます。閉じる前に、launcherのホストのtoken_file（mode 600、launcherのユーザーの所有）に保存してください。',
-  launcherTokenValue: 'launcherのtoken',
+    'tokenは一度だけ表示されます。閉じる前に、ランチャーのホストのtoken_file（mode 600、ランチャーのユーザーの所有）に保存してください。',
+  launcherTokenValue: 'ランチャーのtoken',
   launcherConfigExample: 'launcher.tomlの例',
   launcherConfigExampleHint:
-    'launcher.tomlには起動に要るものだけを書きます。担当する計算機・鍵・job shellは、launcherがWebから読みます。',
+    'launcher.tomlには起動に要るものだけを書きます。担当する計算機・鍵・job shellは、ランチャーがWebから読みます。',
   launcherConfigApiUrlComment:
-    'launcherから届くtrackingのURL。同じcomposeの中で動かすときはAPIのURL（例: http://api:4182）',
-  launcherConfigTokenFileComment: '上のtokenだけを書いたファイル（mode 600、launcherのユーザーの所有）',
+    'ランチャーから届くtrackingのURL。同じcomposeの中で動かすときはAPIのURL（例: http://api:4182）',
+  launcherConfigTokenFileComment: '上のtokenだけを書いたファイル（mode 600、ランチャーのユーザーの所有）',
   launcherConfigStateComment:
-    '秘密鍵・known_hosts・投入中の記録を置くディレクトリ。launcherごとに別にし、再起動しても消しません（消すと鍵を登録し直します）',
+    '秘密鍵・known_hosts・投入中の記録を置くディレクトリ。ランチャーごとに別にし、再起動しても消しません（消すと鍵を登録し直します）',
   launcherConfigPollComment: '設定を読み、投入を受け取る間隔（秒）',
   launcherConfigRegistryComment:
     '任意: 全siteで共通の、imageをpullするためのtoken（JSON {"username": ..., "password": ...}、mode 600）',
@@ -34,10 +34,10 @@ export const launchersText = {
 
 // Text that embeds values.
 export const launchersTextTemplates = {
-  launcherTokenTitle: (name: string) => `launcher「${name}」のtoken`,
+  launcherTokenTitle: (name: string) => `ランチャー「${name}」のtoken`,
   launcherRotateConfirm: (name: string) =>
-    `「${name}」の今のtokenを失効させ、新しいtokenを発行します。launcherのtoken_fileを新しいtokenに置き換えるまで、このlauncherは投入できません。`,
+    `「${name}」の今のtokenを失効させ、新しいtokenを発行します。ランチャーのtoken_fileを新しいtokenに置き換えるまで、このランチャーは投入できません。`,
   launcherRevokeConfirm: (name: string) =>
-    `「${name}」とそのtokenを失効させます。このlauncherを選んだ計算機のJobは、別のlauncherを選ぶまで投入されません。`,
+    `「${name}」とそのtokenを失効させます。このランチャーを選んだ計算機のJobは、別のランチャーを選ぶまで投入されません。`,
   launcherConfigHeader: (name: string) => `mado-tracking-launcher「${name}」の設定`,
 };

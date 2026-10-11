@@ -67,4 +67,4 @@ The owner and global administrators decide the job shell and where the runner re
 | Add your own computer (site) | Anyone signed in |
 | Change or share a computer, save its job shell, its shared account key | Owner or global administrator |
 | Save your settings, replace your key, check your own login | Anyone who can use the computer |
-| Register launchers, replace their tokens, revoke them (**全体管理** → **launcher**) | Global administrator |
+| Register launchers, replace their tokens, revoke them (**全体管理** (Global administration) → **ランチャー** (Launchers)) | Global administrator |

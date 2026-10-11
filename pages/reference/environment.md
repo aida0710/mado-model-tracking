@@ -90,7 +90,7 @@ openssl rand -base64 32
 | --- | --- | --- |
 | `MMT_NOTIFICATION_*` | なし | WebhookのURLと署名の鍵。名前は自由に付け、通知先にはその名前を登録する |
 | `MMT_SMTP_URL` | なし | SMTPサーバーのURL。`smtp://`（STARTTLS）か`smtps://` |
-| `MMT_SMTP_FROM` | なし | 送信元のアドレス。例: `Mado Model Tracking <mmt@example.com>` |
+| `MMT_SMTP_FROM` | なし | 送信元のアドレス。例: `mado ML Tracking <mmt@example.com>` |
 | `NODE_EXTRA_CA_CERTS` | なし | 社内CAの証明書（PEM）のパス。SMTPやWebhookの送信先の検証に使う |
 
 ## そのほかのAPI serverの設定

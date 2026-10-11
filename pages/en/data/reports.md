@@ -22,7 +22,7 @@ The web UI is in Japanese. This page shows UI labels in Japanese followed by an 
 
 ## Create a report
 
-1. Open **Reports** in the top bar and click **レポートを作成** (Create report).
+1. Open **Reports** in the sidebar and click **レポートを作成** (Create report).
 2. Enter a title and click **作成** (Create). The editor opens.
 3. Add blocks with **文章を追加** (Add text) or **図や表を埋め込む** (Embed a chart or table).
 4. Optionally describe the change in **変更の説明** (Change description).

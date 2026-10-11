@@ -1,11 +1,11 @@
 ---
 title: インストール
-description: Docker ComposeでMado Model Trackingを起動する。PostgreSQL、.envの主要な変数、migration、初期管理者、WebとAPIのURL、workerの導入までの流れ。
+description: Docker Composeでmado ML Trackingを起動する。PostgreSQL、.envの主要な変数、migration、初期管理者、WebとAPIのURL、workerの導入までの流れ。
 ---
 
 # インストール
 
-Mado Model Trackingは、Docker ComposeでWeb、API、PostgreSQL、音声・動画のプレビューを作るpreview workerを起動します。学習や推論のJobを実行するworkerは、GPUのあるworkerホストへ別に導入します。
+mado ML Trackingは、Docker ComposeでWeb、API、PostgreSQL、音声・動画のプレビューを作るpreview workerを起動します。学習や推論のJobを実行するworkerは、GPUのあるworkerホストへ別に導入します。
 
 | コンテナ | 役割 |
 | --- | --- |
@@ -39,8 +39,8 @@ docker compose version
 ## 1. リポジトリを取得する
 
 ```sh
-git clone https://github.com/aida0710/mado-model-tracking.git
-cd mado-model-tracking
+git clone https://github.com/aida0710/mado-ml-tracking.git
+cd mado-ml-tracking
 ```
 
 ## 2. .envを作る
@@ -75,7 +75,7 @@ SSO（Authentik）を使う場合は、次も設定します。Authentik側の�
 
 | 変数 | 入力する値の例 |
 | --- | --- |
-| `OIDC_ISSUER_URL` | `https://sso.example.com/application/o/model-tracking/` |
+| `OIDC_ISSUER_URL` | `https://sso.example.com/application/o/ml-tracking/` |
 | `OIDC_CLIENT_ID`、`OIDC_CLIENT_SECRET` | AuthentikのProviderに表示される値 |
 | `OIDC_ALLOWED_GROUPS` | `mmt-users,mmt-admins`（ログインを許すgroup） |
 | `OIDC_ROLE_MAPPING_JSON` | `{"mmt-admins":"admin","mmt-users":"user"}`（全体管理者にするgroup） |
@@ -177,7 +177,7 @@ tracking.example.com {
 | MLflowの`MLFLOW_TRACKING_URI` | `https://tracking.example.com/api/mlflow/projects/<ProjectのID>` |
 | APIの稼働確認 | `https://tracking.example.com/api/health` |
 
-MLflowの接続先はProjectごとに分かれます。Projectの「Settings」の「MLflow 3から接続」に、そのProjectのURLが表示されます。
+MLflowの接続先はProjectごとに分かれます。［プロジェクト設定］の「MLflow 3から接続」に、そのProjectのURLが表示されます。
 
 ## workerを導入する
 

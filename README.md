@@ -1,8 +1,8 @@
-# Mado Model Tracking
+# mado ML Tracking
 
 実験、モデル、実行コード、データセットを同じRunに結び付ける実験管理アプリです。Madoとは別に動作し、最初の外部連携を[Mado plugin](../mado-model-tracking-plugin-mado/README.md)で提供します。
 
-利用者向けのドキュメント（インストール、使い方、管理）は[https://aida0710.github.io/mado-model-tracking/](https://aida0710.github.io/mado-model-tracking/)にあります。ソースは`pages/`です。
+利用者向けのドキュメント（インストール、使い方、管理）は[https://aida0710.github.io/mado-ml-tracking/](https://aida0710.github.io/mado-ml-tracking/)にあります。ソースは`pages/`です。
 
 React/Viteの画面、TypeScript/HonoのAPI、PostgreSQL、Python SDKとSSH workerで構成します。学習・fine-tuning・推論・評価・データ加工を扱います。ArtifactsはファイルシステムまたはS3互換ストレージをProjectごとに選びます。[公式MLflow 3 SDK](docs/mlflow.md)からも記録できます。
 

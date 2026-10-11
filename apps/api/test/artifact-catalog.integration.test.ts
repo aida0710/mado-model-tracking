@@ -71,7 +71,7 @@ describe.skipIf(!testDatabaseUrl)('ProjectのArtifact一覧とmetadata（独立P
       await request(harness.app, '/api/projects', {
         method: 'POST',
         cookie: fixture.administrator.cookie,
-        body: { name: 'Other Project' },
+        body: { name: 'Other Project', visibility: 'private' },
       }),
     );
     const otherArtifact = await uploadProjectArtifact(harness, {

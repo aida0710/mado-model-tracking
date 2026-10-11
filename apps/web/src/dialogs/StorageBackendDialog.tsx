@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { StorageBackend } from '@mmt/contracts';
-import type { FormField, FormValues } from '../types/form';
+import type { FieldSuggestions, FormField, FormValues } from '../types/form';
 import { storageApi } from '../api/storage';
 import { Dialog } from '../components/Dialog';
 import { FormFields } from '../components/FormFields';
@@ -17,6 +17,7 @@ import {
   isSignatureV2,
   updateStorageBackendValues,
 } from '../lib/storageBackendInput';
+import { toDirectoryFieldSuggestions } from '../lib/storageDirectorySuggestions';
 import { text } from '../i18n/catalog';
 
 const isS3 = (values: FormValues) => getFieldValue(values, 'kind') === 's3';
@@ -72,6 +73,14 @@ function saveBackend(values: FormValues, backend?: StorageBackend) {
     : storageApi.createBackend(buildStorageBackendCreate(values));
 }
 
+/** Directories on the API server that complete the typed root path. */
+async function suggestRootDirectories(
+  path: string,
+  signal: AbortSignal,
+): Promise<FieldSuggestions> {
+  return toDirectoryFieldSuggestions(await storageApi.directorySuggestions(path, signal));
+}
+
 function buildFields(backend?: StorageBackend): FormField[] {
   return [
     { name: 'name', label: text.name, required: true, readOnly: Boolean(backend), maxLength: 63 },
@@ -85,7 +94,13 @@ function buildFields(backend?: StorageBackend): FormField[] {
         label: text[kind],
       })),
     },
-    { name: 'rootPath', label: text.storageRootPath, required: true, visible: isFilesystem },
+    {
+      name: 'rootPath',
+      label: text.storageRootPath,
+      required: true,
+      visible: isFilesystem,
+      suggest: suggestRootDirectories,
+    },
     {
       name: 'endpoint',
       label: text.storageEndpoint,

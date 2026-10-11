@@ -244,13 +244,12 @@ const screenshot = async (name) => {
 const workDirectoryLabel = '作業ディレクトリ（計算ノードからも同じパスで見える絶対パス）';
 
 console.log('Site computers: a launcher shows its token once with launcher.toml, and gets a new one');
-await page.goto(`${base}/admin`);
-await page.getByRole('tab', { name: 'launcher', exact: true }).click();
-await page.getByText('launcherはまだ登録されていません。').waitFor();
-await page.getByRole('button', { name: 'launcherを登録', exact: true }).click();
+await page.goto(`${base}/admin/launchers`);
+await page.getByText('ランチャーはまだ登録されていません。').waitFor();
+await page.getByRole('button', { name: 'ランチャーを登録', exact: true }).click();
 await fill('名前', 'main');
 await dialog().getByRole('button', { name: '作成', exact: true }).click();
-const tokenField = dialog().getByLabel('launcherのtoken', { exact: true });
+const tokenField = dialog().getByLabel('ランチャーのtoken', { exact: true });
 await tokenField.waitFor();
 const token = await tokenField.inputValue();
 assert.match(token, /^mmt_browser_launcher_/);
@@ -264,8 +263,8 @@ await page.getByRole('dialog').waitFor({ state: 'hidden' });
 const mainLauncher = api.state.launchers[0];
 await page.getByRole('button', { name: 'tokenを作り直す', exact: true }).click();
 await dialog().getByRole('button', { name: 'tokenを作り直す', exact: true }).click();
-// The confirmation's title also starts with "launcherのtoken", so the field is matched exactly.
-const rotatedToken = page.getByLabel('launcherのtoken', { exact: true });
+// The confirmation's title also starts with "ランチャーのtoken", so the field is matched exactly.
+const rotatedToken = page.getByLabel('ランチャーのtoken', { exact: true });
 await rotatedToken.waitFor();
 assert.equal(await rotatedToken.inputValue(), 'mmt_browser_rotated');
 assert.equal(lastCall('POST', /\/token$/).path, `/launchers/${mainLauncher.id}/token`);
@@ -284,7 +283,7 @@ assert.equal(
 );
 assert.equal(await dialog().getByLabel('job shellがarrayを1回の投入で扱える').isChecked(), true);
 await fill('名前', 'Slurm cluster');
-await select('launcher', mainLauncher.id);
+await select('ランチャー', mainLauncher.id);
 await fill('接続先のhost', 'slurm-login.example.invalid');
 await fill('経由するホスト（1行に1つ、[user@]host[:port]）', 'gateway.example.invalid');
 await fill('known_hosts（接続先と経由するホストの行）', 'slurm-login.example.invalid ssh-ed25519 AAAAtest');
@@ -353,7 +352,7 @@ assert.equal(await dialog().getByLabel('Executor').count(), 0);
 assert.equal(await dialog().getByLabel('使える範囲').count(), 0);
 await select('job shellの雛形', 'direct-docker');
 await select('投入方式', 'manual');
-assert.equal(await dialog().getByLabel('launcher').count(), 0);
+assert.equal(await dialog().getByLabel('ランチャー').count(), 0);
 await fill('名前', 'Alice PC');
 await select('共有するProject', [api.state.project.id]);
 await fill(workDirectoryLabel, '/home/ui/mmt');
@@ -520,8 +519,7 @@ assert.ok(
 
 console.log('Site computers: a revoked launcher stays on its site, marked, until another is chosen');
 api.state.user.isAdmin = true;
-await page.goto(`${base}/admin`);
-await page.getByRole('tab', { name: 'launcher', exact: true }).click();
+await page.goto(`${base}/admin/launchers`);
 await page.getByRole('button', { name: '失効させる', exact: true }).click();
 await dialog().getByRole('button', { name: '失効させる', exact: true }).click();
 await page.getByRole('dialog').waitFor({ state: 'hidden' });
@@ -529,10 +527,10 @@ await page.getByRole('row').filter({ hasText: 'main' }).getByText('失効', { ex
 assert.equal(await page.getByRole('button', { name: 'tokenを作り直す', exact: true }).count(), 0);
 await page.goto(`${projectBase}/compute`);
 await page.getByTestId(`target-edit-${slurm.id}`).click();
-const launcherSelect = dialog().getByLabel('launcher');
+const launcherSelect = dialog().getByLabel('ランチャー');
 assert.equal(await launcherSelect.inputValue(), mainLauncher.id);
 assert.equal(await launcherSelect.locator('option:checked').textContent(), 'main（失効）');
-await dialog().getByText('launcherはまだ登録されていません', { exact: false }).waitFor();
+await dialog().getByText('ランチャーはまだ登録されていません', { exact: false }).waitFor();
 await dialog().getByRole('button', { name: 'キャンセル', exact: true }).click();
 
 console.log('Site computers: at phone width the details stay within the screen');

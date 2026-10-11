@@ -1,6 +1,6 @@
 """Check that official MLflow 3 log_image(key=, step=) and log_table appear in the native media API.
 
-Standalone: logs to Mado Model Tracking's MLflow API (dev login, temporary project token revoked at
+Standalone: logs to mado ML Tracking's MLflow API (dev login, temporary project token revoked at
 the end), then reads the Run back through GET /runs/:r/media and the table API. Run it once with
 MLflow 3.0.0 ('%' file names) and once with 3.17.0 ('+' file names).
 
@@ -45,7 +45,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--mado-api-url", required=True, help="Mado Model Tracking API origin")
+    parser.add_argument("--mado-api-url", required=True, help="mado ML Tracking API origin")
     parser.add_argument(
         "--web-origin",
         default=DEFAULT_WEB_ORIGIN,

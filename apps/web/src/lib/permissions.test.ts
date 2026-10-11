@@ -54,6 +54,14 @@ describe('Projectの権限判定', () => {
     expect(canManageProject('viewer')).toBe(false);
   });
 
+  it.each([
+    ['viewer', false],
+    ['editor', false],
+    ['admin', true],
+  ] as const)('公開範囲の変更とアーカイブは%sなら%sになる（Publicで入ったEditorは変えられない）', (role, expected) => {
+    expect(canManageProject(role)).toBe(expected);
+  });
+
   it('無効化されたユーザーはProjectを作成できない', () => {
     expect(canCreateProject({ status: 'active' })).toBe(true);
     expect(canCreateProject({ status: 'disabled' })).toBe(false);

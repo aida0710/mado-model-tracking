@@ -25,7 +25,7 @@ API serverの端末で対話的に実行します。ユーザー名とパスワ�
 npm run bootstrap-admin -w @mmt/api
 ```
 
-同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。ローカルアカウントの利用者は、上部バーのユーザー表示から`/account/password`を開いていつでも変更できます。
+同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。ローカルアカウントの利用者は、右上のユーザーメニュー（アバター）の「パスワードを変更」（`/account/password`）からいつでも変更できます。
 
 ### SSOへの移行手順
 
@@ -37,20 +37,20 @@ migration 010はsessionに`auth_method`を必須で追加します。migration�
 
 ### ユーザーを止める・戻す（退職・異動）
 
-1. 全体管理者がブラウザで`/admin`の「ユーザー」タブを開き、対象の行で「無効化」を押します。そのユーザーのsessionは直ちに終了し、API token（MLflow互換APIを含む）も直ちに401になります。SSOユーザーはAuthentik側でもgroupから外します。外さずに再有効化すると、次回loginでgroup由来の全体roleに戻ります。
+1. 全体管理者がブラウザでサイドバーの「全体管理」→「ユーザー」（`/admin/users`）を開き、対象の行で「無効化」を押します。そのユーザーのsessionは直ちに終了し、API token（MLflow互換APIを含む）も直ちに401になります。SSOユーザーはAuthentik側でもgroupから外します。外さずに再有効化すると、次回loginでgroup由来の全体roleに戻ります。
 2. 戻すときは同じ行で「有効化」を押します。API tokenは再び使えますが、終了したsessionは戻りません（再loginが必要）。
 3. 最後の有効な全体管理者は無効化・降格できません（409 `last_global_admin`）。先に別の管理者を用意します。
 4. ユーザーは削除しません。Runやモデル版の作成者の記録を保つためです。
 
 ### ローカルアカウントのパスワードを忘れた
 
-全体管理者が「ユーザー」タブで「パスワード再設定」を押すと、一時パスワードが1回だけ表示されます。本人へ安全な経路で渡してください。本人の既存sessionは終了し、次回loginでパスワードの変更を求められます。全体管理者自身が締め出された場合は、上の`bootstrap-admin`で復旧します。
+全体管理者が「全体管理」→「ユーザー」で「パスワード再設定」を押すと、一時パスワードが1回だけ表示されます。本人へ安全な経路で渡してください。本人の既存sessionは終了し、次回loginでパスワードの変更を求められます。全体管理者自身が締め出された場合は、上の`bootstrap-admin`で復旧します。
 
 ## 監査ログ
 
 認証（上記と、SSOの同期・拒否の`auth.oidc.sync`・`auth.oidc.denied`。下の「Authentik」）、Projectメンバーの権限変更（`project.member.set`、`project.member.delete`）、SSO groupへのProject権限の付与（`project.group_binding.set`、`project.group_binding.delete`）、API tokenの発行・失効（`token.create`、`token.revoke`）、Service Accountの作成・変更（`service_account.create`、`service_account.update`）、全体管理者によるユーザーの作成・変更・パスワード再設定（`admin.user.create`、`admin.user.update`（変更前後のstatus・isAdmin・表示名）、`admin.user.password_reset`）を`audit_events`に記録します。業務の変更と同じtransactionで書くので、変更が戻れば記録も残りません。権限不足（403）と競合（409）で拒否した操作は、transactionの外で`outcome=denied`と`details.code`付きで残します。入力の検証エラーや存在しない対象は記録しません。token原文・hash・パスワードは記録せず、接続元IPとUser-Agentを残します。監査ログは無期限に保存し、削除機能はありません。
 
-Project adminは設定画面の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
+Project adminは「プロジェクト設定」の「監査ログ」で自分のProjectの記録を新しい順に読めます。Projectに属さない記録（ログインなど）を含む全体の一覧は`GET /api/audit-events`で、全体管理者のsessionだけが読めます（API tokenでは読めません）。
 
 ## Authentik
 
@@ -63,7 +63,7 @@ Project adminは設定画面の「監査ログ」で自分のProjectの記録を
 | 項目 | 値 |
 |---|---|
 | Redirect URI | `https://tracking.example.com/api/auth/callback`（完全一致） |
-| Issuer | application単位のURL（例: `https://sso.example.com/application/o/model-tracking/`） |
+| Issuer | application単位のURL（例: `https://sso.example.com/application/o/ml-tracking/`） |
 | Scope | `openid profile email offline_access`（`OIDC_SCOPES`と同じにする。`offline_access`は下の「sessionの再確認」） |
 | Back-channel logout URI | `https://tracking.example.com/api/auth/oidc/backchannel-logout` |
 
@@ -82,7 +82,7 @@ NODE_ENV=production
 AUTH_MODE=hybrid
 MMT_PUBLIC_URL=https://tracking.example.com
 MMT_WEB_ORIGIN=https://tracking.example.com
-OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
+OIDC_ISSUER_URL=https://sso.example.com/application/o/ml-tracking/
 OIDC_CLIENT_ID=<providerのclient ID>
 OIDC_CLIENT_SECRET=<secret>
 OIDC_LABEL=Authentik
@@ -186,7 +186,7 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 
 開発Webはport5182でLANから接続できます。`/api`はloopbackのAPI4182へproxyします。Authentikのcallbackは`MMT_PUBLIC_URL`の固定URLを使うので、SSOで使うURLはProviderにも完全一致で登録します。
 
-初回に管理者がloginしProjectを作成します。メンバー（`OIDC_ALLOWED_GROUPS`のgroupに入っている人）は一度SSOでloginするとユーザーIDが作られ、Projectの設定からviewer/editor/adminを付けられます。人ごとに付ける代わりに、AuthentikのgroupへProjectのroleを付けることもできます（次の節）。API tokenは発行時のscopeに加え、その所有者の現在のProject権限を確認します。
+初回に管理者がloginしProjectを作成します。メンバー（`OIDC_ALLOWED_GROUPS`のgroupに入っている人）は一度SSOでloginするとユーザーIDが作られ、「プロジェクト設定」からviewer/editor/adminを付けられます（Privateの場合。PublicのProjectは、ログインできる全員がメンバーへの追加なしにeditorとして使えます）。人ごとに付ける代わりに、AuthentikのgroupへProjectのroleを付けることもできます（次の節）。API tokenは発行時のscopeに加え、その所有者の現在のProject権限を確認します。
 
 ### 権限の決まり方
 
@@ -195,7 +195,7 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 | 段 | 決め方 | 変える場所 |
 |---|---|---|
 | 全体role（全体管理者か否か） | `OIDC_ROLE_MAPPING_JSON`（と`OIDC_ADMIN_GROUP`）の対応表。loginとsessionの再確認のたびに同期 | API serverの環境変数とAuthentikのgroup |
-| Project role（viewer/editor/admin） | 直接付与とgroup bindingのうち強い方 | Projectの設定画面（Project admin） |
+| Project role（viewer/editor/admin） | 直接付与とgroup bindingのうち強い方 | 「プロジェクト設定」（Project admin） |
 
 - 直接付与はユーザー1人に付けるrole（`project_members`）、group bindingはAuthentikのgroup名に付けるrole（`project_group_bindings`）です。どちらもProject adminが設定し、監査ログに`project.member.set`・`project.member.delete`・`project.group_binding.set`・`project.group_binding.delete`として残ります。
 - 実効roleは、直接付与と、その人が入っているgroupのbindingのうち最も強いroleです。直接viewer＋group editorならeditorです。判定はすべてDBのview `effective_project_roles`で行い、画面・native API・MLflow互換API・API token・Job tokenで同じ結果になります。Job tokenはRunの作成者の実効roleで判定します。
@@ -208,7 +208,7 @@ LAN/VPNから使う場合は`MMT_ALLOW_PRIVATE_ORIGINS=true`を設定します�
 - ProjectごとにAuthentikのgroupを作り（例: `mmt-proj-asr-editors`）、Projectの設定でそのgroupにroleを付けます。group名は大文字小文字・空白も含めて完全一致です。
 - ID tokenの`groups`はすべて`user_groups`へ保存するので、bindingに使うgroupを`OIDC_ALLOWED_GROUPS`に入れる必要はありません。ただし、そのgroupの人も許可groupのどれかに入っていないとloginできません。
 - groupの所属はloginとsessionの再確認（既定60秒ごと）で`user_groups`へ同期します。Authentikでgroupに入れた人は、使用中のsessionでも1分ほどで権限が付きます。外した人は1分ほどで権限が外れ、そのgroupの権限だけで使っていたProject限定API tokenも401になります（tokenは失効させないので、groupに戻せば再び使えます）。ブラウザを使わずAPI tokenだけを使っている人は、次の同期まで元のgroupのままです（同期が7日より古いtokenは止まります。上の「SSOユーザーのAPI tokenの同期期限」）。すぐ止めたい場合はProjectの設定で直接付与・bindingを外すか、tokenを失効させます。
-- Projectの設定画面のgroup候補（`GET /auth/groups`）には、一度でも誰かのloginで同期されたgroup名だけが出ます。まだ誰もloginしていないgroupは名前を直接入力します。
+- 「プロジェクト設定」のgroup候補（`GET /auth/groups`）には、一度でも誰かのloginで同期されたgroup名だけが出ます。まだ誰もloginしていないgroupは名前を直接入力します。
 
 ## Artifacts
 
@@ -242,14 +242,14 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 
 ### Artifact保存先の全体設定
 
-- 保存先は全体管理者が `/admin/storage-backends`（画面は storage-backend-admin-web の /admin）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4／v2）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
+- 保存先は全体管理者が `/admin/storage-backends`（画面は「全体管理」→「ストレージ」、`/admin/storage`）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4／v2）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
 - 環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）由来の `filesystem` と `s3` は従来どおり使え、画面では読み取り専用で表示される。DB へは写さない。
 - secret を持つ S3 保存先を作るには `MMT_STORAGE_SECRET_KEY`（base64 の 32 byte）を API の環境に設定する。生成例: `openssl rand -base64 32`。値は `.env` だけに置き、worklog やチケットへ書かない。
 - **鍵を変えると、保存済みの secret は復号できなくなる。** 起動時に `storage_backend_unavailable`（名前と理由だけ）がログに出て、その保存先の Artifact は 503 になる。鍵を変えたら、各 S3 保存先の secret を PATCH で入れ直す（鍵の自動ローテーションは未実装）。
 - 新しい保存先は、作成後に「接続テスト」（put/get/range/delete を `mmt-connection-test/<uuid>/` で実施）で確かめてから既定にする。v2 の保存先も同じ。
 - 署名 v2 は、v4 を受け付けない古い S3 互換ストレージ向け。AWS SDK は v4 しか持たないので、v2 は自前実装の署名（HMAC-SHA1）で送る。v2 では checksum を「必要なときだけ（WHEN_REQUIRED）」に固定する（WHEN_SUPPORTED との組み合わせは保存できない）。region は署名に使わない。
 - multipart が動かない S3 互換ストレージでは、保存先の `multipartEnabled` を false にする。Artifact は API の一時ディレクトリ（`os.tmpdir()`）へ書いてから 1 回の PUT で送るので、1 件 5GiB まで・一時ディレクトリに同じ容量が要る。再開可能な upload（upload session、MLflow の multipart）はこの保存先では 422 `multipart_unsupported` になる。
-- 既定の保存先（`/admin/storage-settings`）は新規Projectの作成フォームの初期選択だけを変える。既存Projectの保存先は Project 設定で個別に変える。既存Artifactは保存時の保存先から読み続ける。
+- 既定の保存先（`/admin/storage-settings`）は新規Projectの作成フォームの初期選択だけを変える。既存Projectの保存先は「プロジェクト設定」で個別に変える。既存Artifactは保存時の保存先から読み続ける。
 - 保存先をやめるときは `enabled:false` にする（既存Artifactは読めるが、新規保存は拒否）。既定のままでは無効にできないので、先に既定を切り替える。Artifact が参照している保存先の種類・bucket・endpoint・prefix・rootPath は変えられない（409）。
 - DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。署名の版は保存先の設定から使われるので、v2 の保存先もこの手順で確かめる（[検証手順](verification.md) の「実S3の保存・取得を確認する」）。
 - API プロセスが複数ある構成では、設定変更は変更を受けたプロセスで即時に効き、他のプロセスは未知の保存先名を読んだときに読み直す。有効/無効や part size の変更を全プロセスへ確実に反映するには API を再起動する。
@@ -261,7 +261,20 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - 回収は API プロセス内の `ArtifactGarbageCollector` が 10 分ごとに行う。同じ周回で、upload session の期限切れ処理、session の無い 7 日以上前の未完了 multipart upload の abort、24 時間更新の無い filesystem の書きかけ staging（`.upload`・`.tmp`）の削除も行う（以前の `ArtifactUploadSweeper` の周期処理はこの中に入った）。API を複数動かす場合は全プロセスで動くが、同じ blob の二重削除は成功扱いなので害は無い。
 - blob を消せなかったときは `{"event":"artifact_blob_removal_failed","artifactId":…,"name":…}` がログに出て、`artifact_deletions.removal_attempts` と `last_removal_error`（エラー名だけ）が増える。次の周回で再試行する。続く場合は保存先の Delete 権限と疎通、無効化・削除した保存先でないかを確かめる。未回収の一覧: `SELECT artifact_id,removal_attempts,last_removal_error FROM artifact_deletions WHERE blob_removed_at IS NULL`。
 - S3 の必要権限に DeleteObject を含める。multipart を後から無効にした保存先では、未完了 multipart upload を API から abort できないので、bucket の AbortIncompleteMultipartUpload の lifecycle rule に任せる。
-- Project 設定の「Artifactの使用量」（`GET /projects/:p/artifact-usage`）に、保存先ごとの件数・容量、削除待ち、参照されていない古い版の量が出る。古い版は自動では消さない（decisions.md）。消すなら Project admin が個別に削除する。
+- プロジェクト設定の「Artifactの使用量」（`GET /projects/:p/artifact-usage`）に、保存先ごとの件数・容量、削除待ち、参照されていない古い版の量が出る。古い版は自動では消さない（decisions.md）。消すなら Project admin が個別に削除する。
+
+### Projectのアーカイブと完全な削除
+
+- 作成: 画面ではプロジェクト切替（サイドバー上部、狭い画面では上部バーの下）の一番下の「＋ プロジェクトを作成」か、全体管理 → プロジェクトの「プロジェクトを作成」。無効化されていない人なら誰でも作れる。プロジェクト設定からは作れない。
+- 公開範囲: 新しいProjectの既定は public（有効な人のユーザー全員が editor として使える。admin はメンバーだけ）。migration 054 より前からある Project は private のまま。Service Account と launcher には public の権限は付かない。
+- アーカイブ（Project admin。Web はプロジェクト設定の最下部か、全体管理 → プロジェクトの行。API は `POST /projects/:p/archive`）は Project を一覧・API から隠すだけで、データは残る。待機中・実行中の Job があると 409 `project_has_active_jobs` なので、先に Job を止める。アーカイブ中は Project 限定の API token（worker・Service Account を含む）が 401 になり、Sweep の scheduler・webhook のフック・自動実行・自動昇格も止まる（全体管理者が所有者でも）。全体管理 → プロジェクトの「元に戻す」（`POST /admin/projects/:p/restore`）で戻る。
+- 完全な削除（全体管理者。アーカイブ済みだけ。`DELETE /admin/projects/:p`）は元に戻せない。DB の行は 1 つの transaction で消え、Artifact の blob は `purged_project_blobs` に移って、上の garbage collector が `MMT_ARTIFACT_DELETE_GRACE_DAYS` の後に消す。猶予中なら `SELECT backend,storage_key FROM purged_project_blobs WHERE project_id=$1 AND removed_at IS NULL` で場所が分かるので退避できる。消せなかった blob は `{"event":"artifact_blob_removal_failed","purgedProjectBlobId":…,"name":…}` がログに出て、`removal_attempts` と `last_removal_error` が増え、次の周回で再試行する。
+- 完全な削除の後も残るもの: `projects` の行（名前だけの墓標）、監査ログ、失効させた API token、無効化した Service Account。site の計算機に置いた Dataset のキャッシュなど、API の外にあるものは消えない。
+- Run・metrics が多い Project では削除の transaction が長くなる（行数に比例）。利用の少ない時間に行う。
+
+### 保存先のディレクトリ候補
+
+- 全体管理 → ストレージで filesystem の保存先のルートディレクトリを入力すると、API サーバー上のディレクトリが候補に出る（`GET /admin/storage-directories?path=`、全体管理者だけ）。候補は API のプロセスから見えるもの（コンテナで動かすならコンテナ内のパス）。相対パスは API の作業ディレクトリが基準。読めないディレクトリは候補が空になるだけで、エラーにはならない。
 
 ### 音声Artifactのmedia情報
 
@@ -300,7 +313,7 @@ APIサーバーはworkerホストへSSHしない（decisions.md）。導入・�
 
 workerのtokenは、人に紐付かないService Accountで発行する。発行した人がProjectを離れても止まらない。
 
-1. Projectの設定画面「Service Accounts」で「Service Accountを作成」を押す。名前（例: `gpu-host-1-worker`）、説明、Role `Admin` を入力する。`worker:execute` scope は Role が Admin の Service Account にだけ発行できる。
+1. 「プロジェクト設定」の「Service Accounts」で「Service Accountを作成」を押す。名前（例: `gpu-host-1-worker`）、説明、Role `Admin` を入力する。`worker:execute` scope は Role が Admin の Service Account にだけ発行できる。
 2. 作成した行の「tokenを発行」を押し、scope `read`・`worker:execute`・`artifacts:write`（出力の登録をするなら `registry:write` も。`result.json` version 2で出力（モデル・データセット）を宣言するJobは `registry:write` が無いとfailedになる）、有効期限（上限365日、`MMT_TOKEN_MAX_LIFETIME_DAYS`）を選ぶ。
 3. 表示されたtokenを次の手順の入力に使う。tokenは一度だけ表示される。
 
@@ -308,7 +321,7 @@ APIで行う場合（Project adminのbrowser sessionが必要。API tokenから�
 - `POST /api/projects/:p/service-accounts` `{name, description, role:'admin'}`
 - `POST /api/projects/:p/service-accounts/:id/tokens` `{name, scopes:['read','worker:execute','artifacts:write'], expiresAt?}`
 
-確認: `mado-tracking-worker doctor` が `GET /api/auth/token` で scope を表示する。Projectの設定画面「Projectのtoken一覧」に、所有者 Service Account・先頭12文字・最終使用（5分ごとに更新）が出る。
+確認: `mado-tracking-worker doctor` が `GET /api/auth/token` で scope を表示する。「プロジェクト設定」の「Projectのtoken一覧」に、所有者 Service Account・先頭12文字・最終使用（5分ごとに更新）が出る。
 
 止めるとき: Service Accountを「無効化」すると、そのtokenは次の要求から401になる。1本だけ止めるときは「Projectのtoken一覧」で失効する。期限が近づいたら新しいtokenを発行し、`mado-tracking-worker install --token-file` で差し替える。
 
@@ -371,7 +384,7 @@ SSH targetだけを使うworkerは `docker compose --profile worker up -d worker
 
 siteの考え方と手順は[sites.md](sites.md)、フックは[hooks.md](hooks.md)。ここではサーバー側で用意するものをまとめる。
 
-- launcher: Compute画面の「launcher」で登録してtokenを発行し、`docker compose --profile launcher up -d launcher`で動かす。起動設定（`launcher.toml`。APIのURL・tokenファイル・状態の置き場）は`MMT_LAUNCHER_CONFIG_DIR`、tokenファイル（mode 600）は`MMT_LAUNCHER_SECRETS_DIR`にread-onlyでmountする。担当の計算機の設定・job shell・鍵の依頼は巡回のたびにAPIから読む。launcherが作った鍵（秘密鍵）、known_hosts、投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せず、鍵も作り直しになり公開鍵を登録し直す）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。tokenが漏れたらCompute画面の「tokenの作り直し」で古いtokenを止める。
+- launcher: 「全体管理」→「ランチャー」（`/admin/launchers`）で登録してtokenを発行し、`docker compose --profile launcher up -d launcher`で動かす。起動設定（`launcher.toml`。APIのURL・tokenファイル・状態の置き場）は`MMT_LAUNCHER_CONFIG_DIR`、tokenファイル（mode 600）は`MMT_LAUNCHER_SECRETS_DIR`にread-onlyでmountする。担当の計算機の設定・job shell・鍵の依頼は巡回のたびにAPIから読む。launcherが作った鍵（秘密鍵）、known_hosts、投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せず、鍵も作り直しになり公開鍵を登録し直す）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。tokenが漏れたら「全体管理」→「ランチャー」の「tokenを作り直す」で古いtokenを止める。
 - runner用の公開hostname: LANの外の計算ノードが報告するhostnameは、画面やSSOと分けて、Job tokenの要求と署名付きwebhookだけを通す（[deploy/edge](../deploy/edge/README.md)）。
 - Forgejo（ジョブのgit repoとcontainer registry）: `docker compose --profile forge up -d forgejo`。`SECRET_KEY`は先に作ったファイル（`MMT_FORGEJO_SECRET_KEY_FILE`）から読む。鍵が無いとForgejoは公開されている既定値を使うので、必ず作り、backupにも含める（[deploy/forgejo](../deploy/forgejo/README.md)）。公式のbase imageは[images/base](../images/base/README.md)。
 - `MMT_HOOK_SECRET_KEY`（base64の32 byte、`openssl rand -base64 32`）: webhookのフックのsecretを暗号化する。無いとwebhookのフックを作れない。鍵を替えると、それまでのwebhookのフックは503 `hook_secret_key_missing`になるので、作り直して送り手のsecretも替える。
@@ -396,7 +409,7 @@ plugin outboxへのイベント投入はhandlerではありません。状態が
 
 ## 通知（Slack・Webhook・メール）
 
-Runの失敗などを外部へ知らせます。通知先（channel）は全体管理者が登録し、どのイベントをどの通知先へ送るか（rule）は各ProjectのProject adminが設定画面の「通知」で決めます。
+Runの失敗などを外部へ知らせます。通知先（channel）は全体管理者が登録し、どのイベントをどの通知先へ送るか（rule）は各ProjectのProject adminが「プロジェクト設定」の「通知」で決めます。
 
 ### 通知先の環境変数を置く
 
@@ -409,7 +422,7 @@ MMT_NOTIFICATION_OPS_URL=https://ops.example.com/hooks/mmt
 MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
 ```
 
-環境変数を変えたらAPIを再起動します。設定画面の通知先一覧の「送信設定」が「未設定」なら、APIのプロセスにその変数が見えていません（メールは「未設定（SMTPの送信設定が無い）」）。全体管理者は「テスト送信」で、outboxを通さずにその場で1件送って結果のcodeを確かめられます。
+環境変数を変えたらAPIを再起動します。「プロジェクト設定」の通知先一覧の「送信設定」が「未設定」なら、APIのプロセスにその変数が見えていません（メールは「未設定（SMTPの送信設定が無い）」）。全体管理者は「テスト送信」で、outboxを通さずにその場で1件送って結果のcodeを確かめられます。
 
 | 種類 | 必要な設定 | 送る内容 |
 |---|---|---|
@@ -428,7 +441,7 @@ MMT_NOTIFICATION_OPS_SECRET=<openssl rand -hex 32 などで作った鍵>
 ```sh
 # API serverの.env（URLにパスワードを含むので、値はリポジトリやチャットに貼らない）
 MMT_SMTP_URL=smtps://<user>:<password>@smtp.example.com:465   # STARTTLSなら smtp://…:587
-MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
+MMT_SMTP_FROM=mado ML Tracking <mmt@example.com>
 ```
 
 - `smtp://`はサーバーがSTARTTLSを提示すれば使い、`smtps://`は最初からTLSで接続します。userとpasswordに記号を含むならURLエンコードします。URLのquery（`?…`）は受け付けません（TLSの検証を外す指定を入れられないようにするため）。
@@ -436,7 +449,7 @@ MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
 - TLSの証明書は常に検証します。社内CAの証明書を使うSMTPサーバーなら、API serverの`NODE_EXTRA_CA_CERTS`にCAのPEMを指定します。
 - 接続・応答待ちと1通の送信全体は10秒で打ち切ります（HTTPの通知より長いのは、SMTPは挨拶・EHLO・STARTTLS・AUTH・宛先・本文と往復が多く、中継サーバーが挨拶をわざと遅らせることがあるため）。
 - 失敗のcodeは`notification_timeout`、`notification_smtp_auth_failed`（認証失敗）、`notification_smtp_tls_failed`（STARTTLSの失敗）、`notification_smtp_recipients_rejected`（全宛先を拒否された）、`notification_smtp_<応答code>`、`notification_destination_unavailable`（接続できない、証明書の検証に失敗した）です。SMTPの応答文は残しません。
-- 設定を入れたら、設定画面の通知先で「テスト送信」して届くことを確かめます。
+- 設定を入れたら、「プロジェクト設定」の通知先で「テスト送信」して届くことを確かめます。
 
 ### 送信の流れと失敗の扱い
 
@@ -444,7 +457,7 @@ MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
 - 積むのは、有効なruleで、通知先も有効で、filter（実行種別・実験・自動実行のRunだけ）に合うものだけです。
 - API内のdispatcherが1秒ごとに取り出して送ります。失敗すると5秒から倍々（上限1時間）で待って再送し、8回（`NOTIFICATION_MAX_ATTEMPTS`。約10分）失敗すると`failed`にします。古い通知を送り続けても意味が薄いためです。送信中のまま60秒を過ぎた行（APIが送信中に止まった場合）は、次のdispatcherが引き取ります。
 - 積んだ後で通知先やruleを無効にした行は、送らずに`failed`（`notification_channel_disabled`／`notification_rule_disabled`）にします。有効に戻しても古い通知はまとめて届きません。
-- Project adminは設定画面の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。メールのcodeは上の「メール（SMTP）を有効にする」を参照。
+- Project adminは「プロジェクト設定」の「直近の送信履歴」（`GET /api/projects/:p/notification-deliveries`）で状態・試行回数・失敗のcodeを確認できます。codeは`notification_http_<status>`、`notification_timeout`、`notification_destination_unavailable`、`notification_channel_unconfigured`（環境変数が無い）、`notification_url_invalid`などで、送信先のURLや応答本文は残しません。メールのcodeは上の「メール（SMTP）を有効にする」を参照。
 - 通知先の作成・変更・テスト送信、ruleの作成・有効切替は監査ログ（`notification.channel.create`／`update`／`test`、`notification.rule.create`／`update`）に残ります。環境変数の値と宛先のメールアドレスは記録しません（宛先は件数だけ）。
 
 ## 運用監視（heartbeat途絶・worker停止・plugin送信滞留）

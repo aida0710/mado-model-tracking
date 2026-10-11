@@ -4,6 +4,7 @@ import type {
   JsonObject,
   JsonValue,
   ProjectRole,
+  ProjectVisibility,
   RunKind,
   RunStatus,
 } from '../index.js';
@@ -21,6 +22,7 @@ export const jsonObjectSchema = namedContractSchema(
 );
 export const stringMapSchema = z.record(z.string(), z.string());
 export const projectRoleSchema = z.enum(['viewer', 'editor', 'admin']);
+export const projectVisibilitySchema = z.enum(['public', 'private']);
 export const runKindSchema = z.enum([
   'inference',
   'evaluation',
@@ -44,6 +46,9 @@ export function cursorPageOf<T extends z.ZodType>(item: T) {
 type _JsonValue = Expect<MutuallyAssignable<z.infer<typeof jsonValueSchema>, JsonValue>>;
 type _JsonObject = Expect<MutuallyAssignable<z.infer<typeof jsonObjectSchema>, JsonObject>>;
 type _ProjectRole = Expect<MutuallyAssignable<z.infer<typeof projectRoleSchema>, ProjectRole>>;
+type _ProjectVisibility = Expect<
+  MutuallyAssignable<z.infer<typeof projectVisibilitySchema>, ProjectVisibility>
+>;
 type _RunKind = Expect<MutuallyAssignable<z.infer<typeof runKindSchema>, RunKind>>;
 type _RunStatus = Expect<MutuallyAssignable<z.infer<typeof runStatusSchema>, RunStatus>>;
 type _JobStatus = Expect<MutuallyAssignable<z.infer<typeof jobStatusSchema>, JobStatus>>;

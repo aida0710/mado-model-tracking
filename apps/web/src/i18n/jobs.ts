@@ -13,7 +13,7 @@ export const jobsText = {
   jobActions: '操作',
   logLevelAll: 'すべてのレベル',
   jobPhase: '段階',
-  jobLauncherWaiting: '待機中（launcherの投入待ち）',
+  jobLauncherWaiting: '待機中（ランチャーの投入待ち）',
   jobEndReason: '終了の理由',
   jobWhere: '実行場所',
   jobOrigin: '起動元',

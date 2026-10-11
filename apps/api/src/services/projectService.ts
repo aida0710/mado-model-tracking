@@ -3,12 +3,15 @@ import type {
   Experiment,
   Project,
   ProjectMember,
+  ProjectMemberGrant,
   ProjectRole,
 } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
-import { first, rows, transaction, type Database } from '../db/database.js';
+import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
 import { conflict, DomainError, notFound } from '../domain/errors.js';
 import { removesLastProjectAdmin } from '../domain/projectAdminInvariant.js';
+import { assertGrantableUsers, initialMemberGrants } from '../domain/projectMemberGrants.js';
+import type { ProjectCreateInput, ProjectPatchInput } from '../domain/projectValidation.js';
 import type { ExperimentPatch } from '../domain/registryLifecycleValidation.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
@@ -17,8 +20,17 @@ import {
   findMember,
   findUser,
   listMembers,
+  listUserStates,
   lockProjectAdminGrants,
 } from '../repositories/identityRepository.js';
+import {
+  archiveProject,
+  hasActiveJobs,
+  insertProject,
+  lockProjectLifecycle,
+  PROJECT_COLUMNS,
+  updateProject,
+} from '../repositories/projectRepository.js';
 import { requireProject, requireScope } from './accessService.js';
 import {
   auditActor,
@@ -38,11 +50,13 @@ export class ProjectService {
 
   async list(principal: Principal): Promise<Project[]> {
     requireScope(principal, 'read');
+    // A global administrator's session sees every live Project as admin (requireProject agrees).
     return rows<Project>(
       this.database,
-      `SELECT p.*,COALESCE(e.role,'admin') AS role FROM projects p
+      `SELECT ${PROJECT_COLUMNS},CASE WHEN $2 THEN 'admin' ELSE e.role END AS role FROM projects p
       LEFT JOIN effective_project_roles e ON e.project_id=p.id AND e.user_id=$1
-      WHERE (e.role IS NOT NULL OR $2) AND ($3::uuid IS NULL OR p.id=$3) ORDER BY p.created_at DESC`,
+      WHERE p.archived_at IS NULL AND (e.role IS NOT NULL OR $2) AND ($3::uuid IS NULL OR p.id=$3)
+      ORDER BY p.created_at DESC`,
       [
         principal.user.id,
         principal.method === 'session' && principal.user.isAdmin,
@@ -51,51 +65,138 @@ export class ProjectService {
     );
   }
 
+  /**
+   * The creator becomes the Project admin. The members named in the request are added in the same
+   * transaction, each audited like PUT /members, so a refused member leaves no Project behind.
+   */
   async create(
     principal: Principal,
-    input: { name: string; description: string; artifactBackend: ArtifactBackend },
+    input: ProjectCreateInput,
+    request: RequestMetadata = NO_REQUEST_METADATA,
   ): Promise<Project> {
-    requireScope(principal, 'admin');
-    if (principal.token?.projectId)
-      throw new DomainError(
-        403,
-        'Project限定tokenではProjectを作成できません',
-        'project_forbidden',
-      );
-    this.validateBackend(input.artifactBackend);
-    return transaction(this.database, async (connection) => {
-      const project = (await first<Omit<Project, 'role'>>(
-        connection,
-        'INSERT INTO projects(name,description,artifact_backend) VALUES($1,$2,$3) RETURNING *',
-        [input.name, input.description, input.artifactBackend],
-      ))!;
-      await connection.query(
-        "INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,'admin')",
-        [project.id, principal.user.id],
-      );
-      return { ...project, role: 'admin' };
-    });
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'project.create',
+      resourceType: 'project',
+      details: { name: input.name, visibility: input.visibility },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        requireScope(principal, 'admin');
+        if (principal.token?.projectId)
+          throw new DomainError(
+            403,
+            'Project限定tokenではProjectを作成できません',
+            'project_forbidden',
+          );
+        this.validateBackend(input.artifactBackend);
+        const grants = initialMemberGrants(input.members, principal.user.id);
+        assertGrantableUsers(
+          grants,
+          await listUserStates(
+            connection,
+            grants.map((grant) => grant.userId),
+          ),
+        );
+        const project = await insertProject(connection, input);
+        const projectDraft = { ...draft, resourceId: project.id, projectId: project.id };
+        await connection.query(
+          "INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,'admin')",
+          [project.id, principal.user.id],
+        );
+        await this.grantInitialMembers(connection, { grants, draft: projectDraft });
+        await writeAuditEvent(connection, {
+          ...projectDraft,
+          outcome: 'success',
+          details: {
+            ...draft.details,
+            artifactBackend: input.artifactBackend,
+            memberCount: grants.length,
+          },
+        });
+        return { ...project, role: 'admin' };
+      }),
+    );
   }
 
   async patch(
     principal: Principal,
-    projectId: string,
-    input: { description?: string; artifactBackend?: ArtifactBackend },
+    change: { projectId: string; input: ProjectPatchInput },
+    request: RequestMetadata = NO_REQUEST_METADATA,
   ): Promise<Project> {
-    return transaction(this.database, async (connection) => {
-      const role = await requireProject(connection, principal, {
-        projectId,
-        role: 'admin',
-        scope: 'admin',
-      });
-      if (input.artifactBackend) this.validateBackend(input.artifactBackend);
-      const project = await first<Omit<Project, 'role'>>(
-        connection,
-        'UPDATE projects SET description=COALESCE($2,description),artifact_backend=COALESCE($3,artifact_backend) WHERE id=$1 RETURNING *',
-        [projectId, input.description, input.artifactBackend],
-      );
-      return { ...project!, role };
-    });
+    const { projectId, input } = change;
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'project.update',
+      resourceType: 'project',
+      resourceId: projectId,
+      projectId,
+      details: { fields: Object.keys(input) },
+    };
+    return recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        const role = await requireProject(connection, principal, {
+          projectId,
+          role: 'admin',
+          scope: 'admin',
+        });
+        if (input.artifactBackend) this.validateBackend(input.artifactBackend);
+        const project = await updateProject(connection, { projectId, ...input });
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: {
+            ...draft.details,
+            ...(input.visibility ? { visibility: input.visibility } : {}),
+            ...(input.artifactBackend ? { artifactBackend: input.artifactBackend } : {}),
+          },
+        });
+        return { ...project, role };
+      }),
+    );
+  }
+
+  /**
+   * Hides the Project from everyone and keeps its data (POST /projects/:p/archive). A global
+   * administrator restores it or purges it (ProjectAdministrationService). Refused while a Job
+   * waits or runs, because nothing would be left to see or stop it.
+   */
+  async archive(
+    principal: Principal,
+    projectId: string,
+    request: RequestMetadata = NO_REQUEST_METADATA,
+  ): Promise<void> {
+    const draft: AuditEventDraft = {
+      ...auditActor(principal),
+      ...request,
+      action: 'project.archive',
+      resourceType: 'project',
+      resourceId: projectId,
+      projectId,
+    };
+    await recordDenial(this.database, draft, () =>
+      transaction(this.database, async (connection) => {
+        await requireProject(connection, principal, { projectId, role: 'admin', scope: 'admin' });
+        // Job creation shares this row lock (shareLiveProject), so no Job appears after the check.
+        const project = await lockProjectLifecycle(connection, projectId);
+        // Another archive may have committed since requireProject read the Project.
+        if (!project || project.archivedAt) notFound('Project');
+        if (await hasActiveJobs(connection, projectId))
+          throw new DomainError(
+            409,
+            '待機中・実行中のJobがあるProjectはアーカイブできません',
+            'project_has_active_jobs',
+          );
+        await archiveProject(connection, { projectId, archivedBy: principal.user.id });
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: { name: project.name },
+        });
+      }),
+    );
   }
 
   async members(principal: Principal, projectId: string): Promise<ProjectMember[]> {
@@ -292,6 +393,28 @@ export class ProjectService {
         [projectId, input.name, input.description],
       ))!;
     });
+  }
+
+  // Each grant is audited as PUT /projects/:p/members/:userId audits it.
+  private async grantInitialMembers(
+    connection: Connection,
+    creation: { grants: readonly ProjectMemberGrant[]; draft: AuditEventDraft },
+  ): Promise<void> {
+    const { draft } = creation;
+    for (const { userId, role } of creation.grants) {
+      await connection.query(
+        'INSERT INTO project_members(project_id,user_id,role) VALUES($1,$2,$3)',
+        [draft.projectId, userId, role],
+      );
+      await writeAuditEvent(connection, {
+        ...draft,
+        action: 'project.member.set',
+        resourceType: 'project_member',
+        resourceId: userId,
+        outcome: 'success',
+        details: { userId, previousRole: null, role },
+      });
+    }
   }
 
   private validateBackend(backend: ArtifactBackend): void {

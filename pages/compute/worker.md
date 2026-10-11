@@ -38,7 +38,7 @@ python3 --version
 
 workerのtokenは、人に紐付かないService Accountで発行します。発行した人がProjectを離れても止まりません。作業はProject adminがWebの画面で行います。
 
-1. Projectの［Settings］を開き、［Service Accounts］の［Service Accountを作成］を押します。
+1. ［プロジェクト設定］を開き、［Service Accounts］の［Service Accountを作成］を押します。
 2. ［名前］に`gpu-host-1-worker`のような名前、［Role］に`Admin`を指定して保存します。`worker:execute` scopeは、RoleがAdminのService Accountにだけ発行できます。
 3. 作成した行の［API tokenを発行］を押し、scopeと有効期限を選びます。
 
@@ -60,9 +60,9 @@ Service AccountとAPI tokenの詳細は[API tokenとService Account](/admin/toke
 workerのマシンでターミナルを開き、worker専用のvenvへPythonパッケージ`mado-tracking`を入れます。ここではGitHubのリポジトリから入れる例を示します。社内の配布先やwheelファイルがある場合は、`pip install`の引数をそれに置き換えてください。
 
 ```bash
-git clone https://github.com/aida0710/mado-model-tracking.git ~/mado-model-tracking
+git clone https://github.com/aida0710/mado-ml-tracking.git ~/mado-ml-tracking
 python3 -m venv ~/.local/share/mado-tracking-worker/venv
-~/.local/share/mado-tracking-worker/venv/bin/pip install "$HOME/mado-model-tracking/python[telemetry]"
+~/.local/share/mado-tracking-worker/venv/bin/pip install "$HOME/mado-ml-tracking/python[telemetry]"
 ~/.local/share/mado-tracking-worker/venv/bin/mado-tracking-worker --help
 ```
 
@@ -124,9 +124,9 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 ## 4. 更新する
 
 ```bash
-git -C ~/mado-model-tracking pull
+git -C ~/mado-ml-tracking pull
 ~/.local/share/mado-tracking-worker/venv/bin/mado-tracking-worker upgrade \
-  --worker-id gpu-host-1 --package-spec "$HOME/mado-model-tracking/python[telemetry]"
+  --worker-id gpu-host-1 --package-spec "$HOME/mado-ml-tracking/python[telemetry]"
 ```
 
 社内の配布先から版を指定して入れる場合は、`--package-spec`の代わりに`--version 0.2.0`のように指定します。

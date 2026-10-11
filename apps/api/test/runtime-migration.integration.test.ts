@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { migrate } from '../src/db/migrate.js';
 import { transaction } from '../src/db/database.js';
 import { createHarness, testDatabaseUrl, type Harness } from './harness.js';
+import { applyMigrationsBefore } from './migrationFixtures.js';
 
 describe.skipIf(!testDatabaseUrl)('既存Registryとtargetのruntime移行（独立PostgreSQL）', () => {
   let harness: Harness;
@@ -15,17 +14,7 @@ describe.skipIf(!testDatabaseUrl)('既存Registryとtargetのruntime移行（独
   });
 
   it('既存コード・target・RunをPythonへ移行し、過去モデルは処理済みにし、SSOユーザーの識別子を引き継ぐ', async () => {
-    await harness.database.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    for (const name of ['001_initial.sql', '002_retry_and_seed.sql']) {
-      const sql = await readFile(new URL(`../src/db/migrations/${name}`, import.meta.url), 'utf8');
-      await harness.database.query(sql);
-      await harness.database.query('INSERT INTO schema_migrations(name,sha256) VALUES($1,$2)', [
-        name,
-        createHash('sha256').update(sql).digest('hex'),
-      ]);
-    }
+    await applyMigrationsBefore(harness.database, '003_execution_runtime.sql');
     const registered = await harness.database.query(`
       WITH legacy_user AS (
         INSERT INTO users(issuer,subject,email,display_name,is_admin) VALUES('fixture','legacy','legacy@localhost','Legacy',true) RETURNING id

@@ -422,12 +422,26 @@ describe.skipIf(!testDatabaseUrl)('SSO groupのProject権限（独立PostgreSQL�
     expect((await deleteBinding(fixture, group)).status).toBe(204);
   });
 
-  it('users検索はProject管理者と全体管理者だけが使え、email・表示名だけを前方一致で返す', async () => {
+  it('users検索はProjectを作成できる人が使え、email・表示名だけを前方一致で返す', async () => {
     const fixture = await projectFixture(harness);
     const search = (query: string, cookie: string) =>
       request(harness.app, `/api/users?${new URLSearchParams({ query })}`, { cookie });
-    expect((await search('ed', fixture.viewer.cookie)).status).toBe(403);
-    expect((await search('ed', fixture.editor.cookie)).status).toBe(403);
+    // Projectを作るときに最初のメンバーを選ぶので、どのProjectのadminでもない人も検索できる。
+    expect((await search('ed', fixture.viewer.cookie)).status).toBe(200);
+    expect((await search('ed', fixture.editor.cookie)).status).toBe(200);
+    // Project限定tokenはProjectを作れないので、admin scopeとそのProjectのadminの権限が要る。
+    const searchWithToken = (token: string) =>
+      request(harness.app, '/api/users?query=ed', { token });
+    const editorToken = await projectToken(fixture.editor, {
+      projectId: fixture.project.id,
+      scopes: ['read'],
+    });
+    expect((await searchWithToken(editorToken)).status).toBe(403);
+    const administratorToken = await projectToken(fixture.administrator, {
+      projectId: fixture.project.id,
+      scopes: ['admin'],
+    });
+    expect((await searchWithToken(administratorToken)).status).toBe(200);
 
     const found = await entity<{ items: UserSearchResult[] }>(
       await search('EDITOR', fixture.administrator.cookie),
@@ -476,6 +490,7 @@ describe.skipIf(!testDatabaseUrl)('SSO groupのProject権限（独立PostgreSQL�
       (event) => !(event.action === 'project.member.set' && event.outcome === 'success'),
     );
     expect(actions).toEqual([
+      { action: 'project.create', outcome: 'success' },
       { action: 'project.group_binding.set', outcome: 'success' },
       { action: 'project.group_binding.set', outcome: 'success' },
       { action: 'project.group_binding.delete', outcome: 'denied' },

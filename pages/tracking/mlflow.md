@@ -5,9 +5,9 @@ description: 公式のMLflow 3 SDKをMLFLOW_TRACKING_URIとAPI tokenで接続す
 
 # MLflow 3から記録する
 
-![Settings画面の「MLflow 3から接続」](/images/tracking-mlflow-connection.png)
+![［プロジェクト設定］の「MLflow 3から接続」](/images/tracking-mlflow-connection.png)
 
-公式の`mlflow` Python SDK（MLflow 3）から、Mado Model TrackingのProjectへ記録できます。接続先とtokenを環境変数で指定するだけで、既存のMLflowのコードを変えずに使えます。記録したRun・metrics・Artifact・登録モデルは、画面から記録したものと同じデータとして扱います。
+公式の`mlflow` Python SDK（MLflow 3）から、mado ML TrackingのProjectへ記録できます。接続先とtokenを環境変数で指定するだけで、既存のMLflowのコードを変えずに使えます。記録したRun・metrics・Artifact・登録モデルは、画面から記録したものと同じデータとして扱います。
 
 MLflowの全機能を提供するサーバーではありません。対応している機能は[対応範囲](#supported-features)の表で確認してください。
 
@@ -19,7 +19,7 @@ MLflowの全機能を提供するサーバーではありません。対応し�
 
 ## 接続する
 
-1. Projectの［Settings］を開き、［MLflow 3から接続］を確認します。`MLFLOW_TRACKING_URI`と`MLFLOW_REGISTRY_URI`には同じURL（`https://<サーバー>/api/mlflow/projects/<ProjectのID>`）が表示されます
+1. ［プロジェクト設定］を開き、「MLflow 3から接続」を確認します。`MLFLOW_TRACKING_URI`と`MLFLOW_REGISTRY_URI`には同じURL（`https://<サーバー>/api/mlflow/projects/<ProjectのID>`）が表示されます
 2. ［このProject用のAPI tokenを発行］を選びます。scopeに`read`・`runs:write`・`registry:write`・`artifacts:write`が選ばれた状態で発行画面が開くので、名前と期限を入力して発行します。tokenはこのときだけ表示されるので控えておきます（ボタンはeditor以上にだけ表示されます）
 3. 学習を実行するマシンのターミナルで、MLflowをインストールして環境変数を設定します
 

@@ -1,6 +1,6 @@
 # mado-tracking
 
-Mado Model TrackingのPython SDKとcompute worker。SDKはRunの作成、parameters/tags/metrics/logs、streaming Artifact、モデル・データセット版、学習出力の登録を扱う。workerはSSH先のjob別workspaceで実行を継続し、切断後も同じleaseとprocessへ接続する。
+mado ML TrackingのPython SDKとcompute worker。SDKはRunの作成、parameters/tags/metrics/logs、streaming Artifact、モデル・データセット版、学習出力の登録を扱う。workerはSSH先のjob別workspaceで実行を継続し、切断後も同じleaseとprocessへ接続する。
 
 Python 3.11以上が必要。workerとcompute targetはLinuxを使う。リポジトリのrootで次を実行する。
 

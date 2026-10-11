@@ -1,4 +1,4 @@
-"""Python SDK for Mado Model Tracking."""
+"""Python SDK for mado ML Tracking."""
 
 import os
 from typing import Any

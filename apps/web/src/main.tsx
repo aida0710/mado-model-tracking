@@ -23,6 +23,7 @@ import '@mado/design-system/code.css';
 import './styles/breakpoints.css';
 import './styles/base.css';
 import './styles/layout.css';
+import './styles/productLogo.css';
 import './styles/tables.css';
 import './styles/registry.css';
 import './styles/artifacts.css';

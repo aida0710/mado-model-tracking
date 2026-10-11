@@ -154,8 +154,8 @@ node apps/web/tests/browser-pipeline.mjs
 | 段階 | 画面で行うこと |
 |---|---|
 | `login_and_password_change` | ローカルアカウントでログインし、初回のパスワード変更を済ませる |
-| `storage_connection_test` | 全体管理 → ストレージで、filesystemの保存先の接続テストが「すべての段階が成功しました」 |
-| `project_creation` | 設定画面の「プロジェクトを作成」 |
+| `storage_connection_test` | 全体管理 → ストレージ（`/admin/storage`）で、filesystemの保存先の接続テストが「すべての段階が成功しました」 |
+| `project_creation` | プロジェクトがまだ無い画面の「プロジェクトを作成」 |
 | `api_setup` | 画面の無い準備をAPIで行う: local executorのtarget（画面ではdevelopment modeでしか選べない）、Experiment、正解セット、出力Dataset、Model |
 | `service_account_worker` | 設定 → Service Accountを作成し、tokenを発行してworkerを起動する |
 | `code_versions` | Code画面で学習・推論・評価のコード版をinlineのファイルで作る（ファイルは貼り付けで入れ、保存内容が元のファイルと一致する） |
@@ -311,7 +311,7 @@ npx tsx apps/web/tests/browser-artifact-upload.mjs
 
 ## 全体管理画面の保存先を確認する
 
-保存先APIはブラウザ内でmockし、`/admin`の「ストレージ」タブで、保存先の作成（署名v2）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→新規プロジェクトの初期選択→全体管理者以外の拒否表示、を確かめます。
+保存先APIはブラウザ内でmockし、サイドバーの「全体管理」→「ストレージ」（`/admin/storage`）で、保存先の作成（署名v2）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→プロジェクト切替の「プロジェクトを作成」で開いたダイアログの初期選択→全体管理者以外の拒否表示（`/admin/storage`から戻され、サイドバーとユーザーメニューに全体管理が出ない）、を確かめます。
 
 ```bash
 MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
@@ -321,11 +321,37 @@ MMT_VERIFY_OUTPUT=artifacts/verification/<日付>/storage-web \
 node apps/web/tests/browser-admin-storage.mjs
 ```
 
+## プロジェクトの切り替え・全体管理のプロジェクト・保存先のディレクトリ候補を確認する
+
+`apps/web/tests/browser-projects-admin.mjs`は、mockのAPI（`tests/browserApi.mjs`と`tests/projectAdministrationMock.mjs`）で次を確かめます。Webの開発サーバーだけを、開発用の5182とは別のportで起動します。
+
+| 場面 | 確かめること |
+|---|---|
+| サイドバー | プロジェクトの最後の組が「プロジェクト管理」（Plugins、プロジェクト設定）で、全体管理者には「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く |
+| プロジェクト切替 | ボタンにフォーカスして↓で開くと、今のProjectが選ばれた状態で一覧へフォーカスが移る。↑↓・Home・Endで移り、Endは最後の「プロジェクトを作成」。Escで閉じてボタンへ戻り、Enterで開いて別のProjectを開ける。PrivateのProjectに鍵が付く。ドロップダウンが画面の内側に収まる。ライト・ダークの両方で撮影する |
+| 絞り込み | Projectが8件以上になると絞り込みの入力が出てフォーカスが入り、入力した語で一覧が絞られ、Enterで開ける |
+| 作成 | 切替の「プロジェクトを作成」から、Privateを選ぶと「メンバー（任意）」が出る。ユーザーを検索して2人足し、Roleを変え、1人を外して作成すると、`POST /projects`に`visibility: private`と残した1人の`members`が送られ、作ったProjectが開く |
+| 全体管理 → プロジェクト | `/admin`が`/admin/projects`へ移る。アーカイブの確認に「データは残り元に戻せる」とあり、待機中・実行中のJobの409は案内の文言になる。「アーカイブ済みも表示」でアーカイブ済みの行が出て、名前はリンクにならない。元に戻す、もう一度アーカイブ、完全に削除（プロジェクト名を正しく入れるまで押せない） |
+| プロジェクト設定 | ViewerはPublic/Privateを変えられず、アーカイブの欄も無い。Project adminがアーカイブすると別のProjectへ移る。メンバー欄にPrivateの注記が出る |
+| ディレクトリ候補 | 保存先の追加でfilesystemを選び、ルートディレクトリに`/srv/mmt/`と打つと子のディレクトリが候補に出る。↓・Enterで選べ、Escは候補だけを閉じてダイアログは残る。無いパスには「まだありません」、ファイルには「ディレクトリではありません」の注記が出る。相対パスの候補をクリックすると絶対パスが入る |
+| 390px幅 | プロジェクトバーの切替が画面の内側に開き、全体管理のプロジェクト一覧も横にスクロールしない |
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:9 npx vite --port 47300 --strictPort --host 127.0.0.1) &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_WEB_URL=http://127.0.0.1:47300 \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/web/projects-admin \
+node apps/web/tests/browser-projects-admin.mjs
+```
+
+2026-10-11に通過しました（mockのAPIです。APIの公開範囲・アーカイブ・ディレクトリ候補の規則はAPIのテストで確かめます）。
+
 ## Webで足す計算機（site）をブラウザで確認する
 
-`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）でCompute画面と全体管理の「launcher」を開きます。確認する項目は次のとおりです。
+`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）でCompute画面と全体管理の「ランチャー」（`/admin/launchers`）を開きます。確認する項目は次のとおりです。
 
-- launcherの登録（tokenを一度だけ表示）、tokenの作り直し、失効
+- ランチャーの登録（tokenを一度だけ表示）、tokenの作り直し、失効
 - 全体管理者が雛形（Slurm）から計算機を足すときの送信内容
 - 共用アカウントの公開鍵、接続確認、鍵の作り直し
 - job shellの版（同じ内容なら新しい版を作らない、新しい版、過去の版の表示）
@@ -345,7 +371,7 @@ node apps/web/tests/browser-site-computers.mjs
 
 ## Webで足す計算機（site）を実APIでブラウザ確認する
 
-`apps/web/tests/browser-site-computers-api.mjs`は、`mmt_test`の一時schemaを使う開発モード（`AUTH_MODE=development`）のAPI（47140）を自分で起動し、実際の記録を作ってCompute画面・Jobs画面・全体管理の「launcher」を確かめます。終わるとschemaを消します。WebはViteを47141で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
+`apps/web/tests/browser-site-computers-api.mjs`は、`mmt_test`の一時schemaを使う開発モード（`AUTH_MODE=development`）のAPI（47140）を自分で起動し、実際の記録を作ってCompute画面・Jobs画面・全体管理の「ランチャー」（`/admin/launchers`）を確かめます。終わるとschemaを消します。WebはViteを47141で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
 
 ```bash
 (cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47140 npx vite --port 47141 --strictPort --host 127.0.0.1) &

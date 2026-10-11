@@ -7,13 +7,14 @@ import { useMutation } from '../../hooks/useMutation';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { ErrorNotice, Resource } from '../Feedback';
 import { StorageBackendDialog } from '../../dialogs/StorageBackendDialog';
+import { AdminSectionHeader } from './AdminSectionHeader';
 import { StorageBackendsTable } from './StorageBackendsTable';
 import { StorageTestResult } from './StorageTestResult';
 import { text, textTemplates } from '../../i18n/catalog';
 
 type BackendDialog = { mode: 'create' } | { mode: 'edit'; backend: StorageBackend };
 
-/** The admin "storage" tab: backends, their connection tests and the default for new Projects. */
+/** The admin "storage" section: backends, their connection tests and the default for new Projects. */
 export function StorageBackendsPanel() {
   const storage = useStorageBackends();
   const [dialog, setDialog] = useState<BackendDialog | null>(null);
@@ -28,18 +29,20 @@ export function StorageBackendsPanel() {
   };
   return (
     <section className="admin-storage">
-      <div className="section-heading">
-        <h2>{text.storageBackends}</h2>
-        <div>
-          <button className="button primary" onClick={() => setDialog({ mode: 'create' })}>
-            <Plus size={15} />
-            {text.newStorageBackend}
-          </button>
-          <button className="icon-button" aria-label={text.refresh} onClick={storage.reload}>
-            <RefreshCw size={17} />
-          </button>
-        </div>
-      </div>
+      <AdminSectionHeader
+        section="storage"
+        actions={
+          <>
+            <button className="button primary" onClick={() => setDialog({ mode: 'create' })}>
+              <Plus size={15} />
+              {text.newStorageBackend}
+            </button>
+            <button className="icon-button" aria-label={text.refresh} onClick={storage.reload}>
+              <RefreshCw size={17} />
+            </button>
+          </>
+        }
+      />
       <Resource query={storage.settings}>
         {(settings) => (
           <Resource query={storage.backends}>

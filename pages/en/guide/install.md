@@ -1,11 +1,11 @@
 ---
 title: Install
-description: Start Mado Model Tracking with Docker Compose. Covers PostgreSQL, the main .env variables, migrations, the first administrator, the Web and API URLs, and installing workers.
+description: Start mado ML Tracking with Docker Compose. Covers PostgreSQL, the main .env variables, migrations, the first administrator, the Web and API URLs, and installing workers.
 ---
 
 # Install
 
-Mado Model Tracking uses Docker Compose to start the Web, the API, PostgreSQL, and the preview worker that renders audio and video previews. Workers that run training and inference Jobs are installed separately on worker hosts with GPUs.
+mado ML Tracking uses Docker Compose to start the Web, the API, PostgreSQL, and the preview worker that renders audio and video previews. Workers that run training and inference Jobs are installed separately on worker hosts with GPUs.
 
 | Container | Role |
 | --- | --- |
@@ -39,8 +39,8 @@ docker compose version
 ## 1. Get the repository
 
 ```sh
-git clone https://github.com/aida0710/mado-model-tracking.git
-cd mado-model-tracking
+git clone https://github.com/aida0710/mado-ml-tracking.git
+cd mado-ml-tracking
 ```
 
 ## 2. Create .env
@@ -75,7 +75,7 @@ With SSO (Authentik), also set the following. For the Authentik side, see [SSO w
 
 | Variable | Example value |
 | --- | --- |
-| `OIDC_ISSUER_URL` | `https://sso.example.com/application/o/model-tracking/` |
+| `OIDC_ISSUER_URL` | `https://sso.example.com/application/o/ml-tracking/` |
 | `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | The values shown on the Authentik provider |
 | `OIDC_ALLOWED_GROUPS` | `mmt-users,mmt-admins` (groups allowed to sign in) |
 | `OIDC_ROLE_MAPPING_JSON` | `{"mmt-admins":"admin","mmt-users":"user"}` (groups that become global administrators) |
@@ -177,7 +177,7 @@ Open `MMT_PUBLIC_URL` in a browser and check that the sign-in screen appears. Wi
 | MLflow `MLFLOW_TRACKING_URI` | `https://tracking.example.com/api/mlflow/projects/<Project ID>` |
 | API health check | `https://tracking.example.com/api/health` |
 
-The MLflow endpoint is separate for each Project. The Project URL is shown under "MLflow 3から接続" (Connect from MLflow 3) on the Project's Settings page.
+The MLflow endpoint is separate for each Project. The Project URL is shown under "MLflow 3から接続" (Connect from MLflow 3) in プロジェクト設定 (Project settings).
 
 ## Install workers
 

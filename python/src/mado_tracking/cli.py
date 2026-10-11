@@ -25,7 +25,7 @@ EXIT_CONFIGURATION_ERROR = 2
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="mado-tracking", description="Mado Model Tracking SDK commands")
+    parser = argparse.ArgumentParser(prog="mado-tracking", description="mado ML Tracking SDK commands")
     commands = parser.add_subparsers(dest="command", required=True)
     add_sync_parser(commands)
     code_cli.add_parser(commands)

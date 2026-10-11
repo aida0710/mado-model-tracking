@@ -46,7 +46,7 @@ Runの詳細画面で［Artifacts］タブを開きます。左にファイル�
 
 ![ProjectのArtifacts画面](/images/data-artifacts-browser.png)
 
-上部バーの［Artifacts］を開くと、ProjectのすべてのArtifactを検索できます。
+サイドバーの［Artifacts］を開くと、ProjectのすべてのArtifactを検索できます。
 
 | 条件 | 指定できる値 |
 | --- | --- |
@@ -103,7 +103,7 @@ MLflow SDKの`delete_artifacts`でも同じ規則で削除します。APIでは`
 
 ## 使用量を確かめる
 
-Projectの［Settings］の最後にある「Artifactの使用量」に、保存先ごとの使用量が表示されます。
+［プロジェクト設定］の上段にある「Artifactの使用量」に、保存先ごとの使用量が表示されます。
 
 | 列 | 内容 |
 | --- | --- |

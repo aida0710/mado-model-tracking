@@ -1,1 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#008682"/><path d="M8 23V9h3.2l4.8 7 4.8-7H24v14h-3.2v-8.6L16 21l-4.8-6.6V23z" fill="#fff"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- ブラウザのタブのアイコン。上部バーの印（components/ProductLogo.tsx の TrackingMark）と同じ形で、
+       16px でも線が消えないよう太くしている。重なった3枚の層で、上の層だけ強調色。
+       下の2枚はタブの地に合わせて明暗を切り替える。 -->
+  <style>
+    .top { stroke: #008682; }
+    .layer { stroke: #161616; }
+    @media (prefers-color-scheme: dark) {
+      .top { stroke: #00b9b1; }
+      .layer { stroke: #f4f4f4; }
+    }
+  </style>
+  <g fill="none" stroke-width="2.5" stroke-linejoin="miter" stroke-linecap="square">
+    <path class="layer" d="M3 12.25L12 16.75L21 12.25" />
+    <path class="layer" d="M3 16.75L12 21.25L21 16.75" />
+    <path class="top" d="M12 2.75L21 7.25L12 11.75L3 7.25Z" />
+  </g>
+</svg>

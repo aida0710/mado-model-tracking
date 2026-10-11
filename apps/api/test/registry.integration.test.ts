@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type {
   Code,
@@ -18,6 +16,7 @@ import { transaction } from '../src/db/database.js';
 import { migrate } from '../src/db/migrate.js';
 import { reserveModelVersion } from '../src/repositories/modelVersionNumbering.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
+import { applyMigrationsBefore } from './migrationFixtures.js';
 import { executionFixture, projectFixture } from './fixtures.js';
 import { modelFixture, type VersionResponse } from './mlflow-models-fixtures.js';
 
@@ -962,21 +961,7 @@ describe.skipIf(!testDatabaseUrl)('版counterの移行（独立PostgreSQL）', (
   });
 
   it('011は整数の版の最大+1とMLflow側counterの大きい方から始め、以後のMLflow登録と重複しない', async () => {
-    const directory = new URL('../src/db/migrations/', import.meta.url);
-    await harness.database.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    const earlier = (await readdir(directory))
-      .filter((name) => name.endsWith('.sql') && name < '011_run_output_models.sql')
-      .sort();
-    for (const name of earlier) {
-      const sql = await readFile(new URL(name, directory), 'utf8');
-      await harness.database.query(sql);
-      await harness.database.query('INSERT INTO schema_migrations(name,sha256) VALUES($1,$2)', [
-        name,
-        createHash('sha256').update(sql).digest('hex'),
-      ]);
-    }
+    await applyMigrationsBefore(harness.database, '011_run_output_models.sql');
     const project = (
       await harness.database.query<{ id: string }>(
         "INSERT INTO projects(name) VALUES('Legacy') RETURNING id",

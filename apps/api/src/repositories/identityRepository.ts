@@ -41,6 +41,18 @@ export async function findUser(connection: Connection, userId: string): Promise<
   return first<User>(connection, `SELECT ${userColumns} FROM users u WHERE u.id=$1`, [userId]);
 }
 
+/** Kind and status of the users that exist among `userIds`; unknown ids are left out. */
+export async function listUserStates(
+  connection: Connection,
+  userIds: readonly string[],
+): Promise<Pick<User, 'id' | 'kind' | 'status'>[]> {
+  return rows<Pick<User, 'id' | 'kind' | 'status'>>(
+    connection,
+    'SELECT id,kind,status FROM users WHERE id=ANY($1::uuid[])',
+    [userIds],
+  );
+}
+
 export interface OidcIdentityLogin {
   issuer: string;
   subject: string;
@@ -350,7 +362,8 @@ export async function tokenIdentity(
   return { user, token: { id: tokenId, projectId, scopes }, isIdentitySyncStale };
 }
 
-// Everyone with an effective role: direct members and users who hold a bound group.
+// Direct members and users who hold a bound group. Users who reach a public Project only through
+// its visibility are not members and are left out.
 export async function listMembers(
   connection: Connection,
   projectId: string,
@@ -381,7 +394,7 @@ const memberSelect = `SELECT ${userColumns},e.role,m.role AS direct_role,
   COALESCE((SELECT json_agg(json_build_object('group',b.group_name,'role',b.role) ORDER BY b.group_name)
     FROM project_group_bindings b JOIN user_groups g ON g.group_name=b.group_name
     WHERE b.project_id=e.project_id AND g.user_id=e.user_id),'[]'::json) AS groups
-  FROM effective_project_roles e JOIN users u ON u.id=e.user_id
+  FROM project_membership_roles e JOIN users u ON u.id=e.user_id
   LEFT JOIN project_members m ON m.project_id=e.project_id AND m.user_id=e.user_id`;
 
 function toProjectMember({ role, directRole, groups, ...user }: MemberRow): ProjectMember {

@@ -1,5 +1,22 @@
-import DefaultTheme from "vitepress/theme";
-import "@fontsource-variable/noto-sans-jp";
-import "./style.css";
+import { h } from 'vue'
+import DefaultTheme from 'vitepress/theme'
+import type { Theme } from 'vitepress'
+import '@fontsource/noto-sans-jp/japanese-400.css'
+import '@fontsource/noto-sans-jp/japanese-500.css'
+import '@fontsource/noto-sans-jp/japanese-700.css'
+import '@mado/design-system/fonts.css'
+import '@mado/design-system/tokens.css'
+import Screenshot from './Screenshot.vue'
+import Home from './Home.vue'
+import ProductLogo from './ProductLogo.vue'
+import './style.css'
 
-export default DefaultTheme;
+export default {
+  extends: DefaultTheme,
+  // 上部バーの名前は、アプリと同じ層の印と「mado ML Tracking」で組む（config の siteTitle は false）。
+  Layout: () => h(DefaultTheme.Layout, null, { 'nav-bar-title-before': () => h(ProductLogo) }),
+  enhanceApp({ app }) {
+    app.component('Screenshot', Screenshot)
+    app.component('TrackingHome', Home)
+  },
+} satisfies Theme
