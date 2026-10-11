@@ -55,7 +55,7 @@ templateは、nginx公式imageのtemplate機能（`/etc/nginx/templates/*.templa
       MMT_RUNNER_API_UPSTREAM: "127.0.0.1:5182"
       NGINX_ENVSUBST_FILTER: "^(MADO|MMT_RUNNER_API)_"
     volumes:
-      - /path/to/mado-model-tracking/deploy/edge/runner-api.conf.template:/etc/nginx/templates/mmt-runner-api.conf.template:ro
+      - /path/to/mado-ml-tracking/deploy/edge/runner-api.conf.template:/etc/nginx/templates/mmt-runner-api.conf.template:ro
 ```
 
 Madoのedgeには、未知のHostを拒む`default_server`（80番と443番）があります。このtemplateは`default_server`を持たないので、そのまま並べられます。

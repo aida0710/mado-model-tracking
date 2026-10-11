@@ -35,9 +35,9 @@ export interface ManualSubmitOptions {
 }
 
 /**
- * How the owner of a shared PC submits the Jobs of everyone they shared it with: waiting on the
- * PC itself and taking all of them (others get 403 site_owner_required for `--all`). It takes the
- * Jobs of its token's Project, so a PC shared with several Projects waits once per Project.
+ * How the owner of a public PC submits everyone's Jobs: waiting on the PC itself and taking all of
+ * them (others get 403 site_owner_required for `--all`). It takes the Jobs of its token's Project,
+ * so the Jobs of several Projects need one wait per Project.
  */
 export const OWNER_SUBMIT_OPTIONS: ManualSubmitOptions = { watch: true, all: true };
 

@@ -12,7 +12,7 @@ import { executionFixture } from './fixtures.js';
 
 const SMTP_USER = 'mailer';
 const SMTP_PASSWORD = 'smtp-integration-password';
-const SMTP_FROM = 'Mado Model Tracking <mmt@example.com>';
+const SMTP_FROM = 'mado ML Tracking <mmt@example.com>';
 const recipients = ['ml-team@example.com', 'oncall@example.com'];
 
 interface ReceivedMail {

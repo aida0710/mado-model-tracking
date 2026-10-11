@@ -1,13 +1,16 @@
-// Global administration (/admin), its users tab, the user menu and the /account page.
+// 全体設定 (/settings/<section>): its two sidebar groups, the 全体管理 sections, the user menu and
+// the account page.
 export const adminText = {
+  globalSettings: '全体設定',
   administration: '全体管理',
-  adminTabStorage: 'ストレージ',
-  adminTabUsers: 'ユーザー',
-  adminTabAudit: '監査ログ',
-  adminTabLaunchers: 'launcher',
+  settingsSectionComputers: 'コンピュータ',
+  adminSectionProjects: 'プロジェクト',
+  adminSectionUsers: 'ユーザー',
+  adminSectionStorage: 'ストレージ',
+  adminSectionLaunchers: 'ランチャー',
+  adminSectionAudit: '監査ログ',
   adminAuditDescription:
     'すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など）を新しい順に表示します。',
-  adminUsers: 'ユーザー',
   newLocalUser: 'ローカルユーザーを作成',
   userSearch: 'ユーザーを検索',
   adminUserSearchPlaceholder: '名前・ユーザー名・メールアドレス',
@@ -54,6 +57,7 @@ export const adminText = {
   accountGroupsSso: 'Authentikのgroupが正本です。',
   accountNoGroups: '所属groupはありません',
   accountPassword: 'パスワード',
+  passwordChange: 'パスワードの変更',
   accountTokens: '自分のAPI token',
   accountTokenProject: 'プロジェクト',
   accountTokenAllProjects: 'すべて',

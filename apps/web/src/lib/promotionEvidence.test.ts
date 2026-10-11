@@ -74,7 +74,7 @@ describe('保護aliasと昇格の根拠', () => {
     expect(meetsProtectionRole('viewer', null)).toBe(true);
   });
 
-  it('同じ候補Runの再判定は最新だけを残し、別aliasのpolicyや別の版の判定は除く', () => {
+  it('同じ候補Runの再判定は最新だけを残し、別aliasのpolicyや別のバージョンの判定は除く', () => {
     const decisions = [
       decision({ id: 'first', decision: 'failed' }),
       decision({ id: 'retried', sequence: 2, createdAt: '2026-10-08T02:00:00Z' }),
@@ -88,7 +88,7 @@ describe('保護aliasと昇格の根拠', () => {
     ).toEqual(['retried']);
   });
 
-  it('合格判定が要る保護では判定を求め、判定が無い保護aliasや不合格の版には理由を求める', () => {
+  it('合格判定が要る保護では判定を求め、判定が無い保護aliasや不合格のバージョンには理由を求める', () => {
     const requireEvaluation = { requiredRole: 'editor', requirePassedEvaluation: true } as const;
     expect(
       promotionEvidenceRequirement({
@@ -120,11 +120,11 @@ describe('保護aliasと昇格の根拠', () => {
 describe('判定のあとに基準が変わったか', () => {
   const policy = { baselineAlias: 'production' };
 
-  it('基準なしの初回合格は、productionが別の版を指した後は今の基準と比べていない', () => {
+  it('基準なしの初回合格は、productionが別のバージョンを指した後は今の基準と比べていない', () => {
     expect(hasBaselineMoved({ baselineVersionId: null }, { policy, aliases: { production: 'v2' } })).toBe(true);
   });
 
-  it('判定時と同じ版が基準のままなら、根拠に使える', () => {
+  it('判定時と同じバージョンが基準のままなら、根拠に使える', () => {
     expect(hasBaselineMoved({ baselineVersionId: 'v1' }, { policy, aliases: { production: 'v1' } })).toBe(false);
     expect(hasBaselineMoved({ baselineVersionId: null }, { policy, aliases: {} })).toBe(false);
   });

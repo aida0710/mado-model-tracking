@@ -15,7 +15,7 @@ import { auditActor, NO_REQUEST_METADATA, recordDenial } from './auditService.js
 export const ARTIFACT_DELETE_PERMISSION = { role: 'admin', scope: 'artifacts:write' } as const;
 
 const referenceLabels: Record<ArtifactReferenceKind, string> = {
-  model_version: '登録モデル版',
+  model_version: '登録モデルバージョン',
   code_version: 'CodeVersion',
   dataset_version: 'DatasetVersion',
   checkpoint: '保持中のcheckpoint',

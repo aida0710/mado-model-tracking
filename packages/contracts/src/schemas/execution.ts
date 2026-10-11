@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ComputeTarget, Job, JobListItem, WorkerPresence } from '../index.js';
 import { CPU_ARCHES, JOB_END_REASONS, JOB_PHASES, SITE_SUBMISSION_MODES } from '../siteExecution.js';
+import { COMPUTE_TARGET_VISIBILITIES } from '../computeTargetAccess.js';
 import { idSchema, jobStatusSchema, runKindSchema, timestampSchema } from './primitives.js';
 import { namedContractSchema } from './schemaRegistry.js';
 import type { Expect, MutuallyAssignable } from './typeAssertions.js';
@@ -11,6 +12,7 @@ export const siteSubmissionModeSchema = z.enum(SITE_SUBMISSION_MODES);
 export const cpuArchSchema = z.enum(CPU_ARCHES);
 export const jobPhaseSchema = z.enum(JOB_PHASES);
 export const jobEndReasonSchema = z.enum(JOB_END_REASONS);
+export const computeTargetVisibilitySchema = z.enum(COMPUTE_TARGET_VISIBILITIES);
 export const computeTargetSchema = namedContractSchema(
   'ComputeTarget',
   z.strictObject({
@@ -35,6 +37,7 @@ export const computeTargetSchema = namedContractSchema(
     supportsArray: z.boolean(),
     queueTimeoutSeconds: z.number().int().nullable(),
     ownerUserId: idSchema.nullable(),
+    visibility: computeTargetVisibilitySchema,
   }),
 );
 export const jobSchema = namedContractSchema(

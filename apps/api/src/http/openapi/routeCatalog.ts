@@ -113,8 +113,14 @@ import {
 import {
   storageBackendCreateSchema,
   storageBackendPatchSchema,
+  storageDirectoryQuerySchema,
   storageSettingsSchema as storageSettingsUpdateSchema,
 } from '../../domain/storageBackendValidation.js';
+import {
+  adminProjectQuerySchema,
+  projectCreateSchema,
+  projectPatchSchema,
+} from '../../domain/projectValidation.js';
 import {
   sweepCancelSchema,
   sweepCreateSchema,
@@ -164,8 +170,6 @@ import {
   namedEntitySchema,
   pluginCreateSchema,
   pluginPatchSchema,
-  projectCreateSchema,
-  projectPatchSchema,
   roleAssignmentSchema,
   runCreateSchema,
   runPatchSchema,
@@ -179,7 +183,6 @@ import {
 } from '../../domain/validation.js';
 import { workerOutputsSchema } from '../../domain/workerOutputValidation.js';
 import {
-  computeTargetSharingSchema,
   launcherConnectionCheckResultSchema,
   launcherCreateSchema,
   launcherKeyPublishSchema,
@@ -287,8 +290,9 @@ const ARTIFACTS_DELETE: RouteAccess = { kind: 'project', role: 'admin', scope: '
 const JOBS_WRITE = projectEditor('jobs:write');
 // What a site Job asks of its target (gpuCount, retries), how it maps to the target's runtime,
 // and (MMT_IMAGE_PLATFORM_CHECK=enforce) whether its image is built for the target's CPU.
-// The Run's creator must be allowed to use the computer in the Project, and a site needs a job
-// shell, a live launcher (automatic) and, on personal-account sites, the creator's account.
+// The Run's creator must be allowed to use the computer (public, or private and theirs), and a
+// site needs a job shell, a live launcher (automatic) and, on personal-account sites, the
+// creator's account.
 const SITE_JOB_ERRORS = [
   ...routeError(
     422,
@@ -313,14 +317,20 @@ const TARGET_SETTING_ERRORS = routeError(
   'site_settings_invalid',
   'site_launcher_invalid',
 );
-// A site's settings are its owner's or a global administrator's (siteAccess.ts). Anyone may
-// read them with read scope; changes need an administrator's admin token or a browser session.
+// A computer's settings are its owner's or a global administrator's (siteAccess.ts). Changes
+// need an administrator's admin token or a browser session.
 const TARGET_MANAGER: RouteAccess = { kind: 'signedIn', scope: 'admin' };
 const TARGET_MANAGER_ERRORS = [
   ...routeError(403, 'target_owner_required', 'session_required'),
   ...routeError(404, 'not_found'),
 ];
+// A site's job shell, keys and one's own settings are for those who may use or manage it; anyone
+// else is refused, though GET /targets/overview shows them the computer.
 const SITE_READER: RouteAccess = { kind: 'signedIn', scope: 'read' };
+const SITE_USER_ERRORS = [
+  ...routeError(403, 'target_not_available'),
+  ...routeError(404, 'not_found'),
+];
 // Runner reports name the instance that started the Job (RunnerService).
 const RUNNER_ERRORS = [
   ...routeError(403, 'runner_token_required'),
@@ -533,7 +543,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects',
     tag: 'projects',
-    summary: '参加しているProject',
+    summary: '使えるProject（メンバーのProjectとpublicのProject）',
     access: { kind: 'signedIn', scope: 'read' },
     responses: { 200: contract.itemsOf(contract.projectSchema) },
   },
@@ -541,21 +551,35 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/projects',
     tag: 'projects',
-    summary: 'Projectを作成',
+    summary: 'Projectを作成（公開範囲とメンバーも指定できる）',
     access: { kind: 'signedIn', scope: 'admin' },
     body: projectCreateSchema,
     responses: { 201: contract.projectSchema },
-    errors: routeError(422, 'backend_unavailable'),
+    errors: [
+      ...routeError(400, 'duplicate_project_member', 'invalid_project_member'),
+      ...routeError(403, 'project_forbidden'),
+      ...routeError(404, 'not_found'),
+      ...routeError(422, 'backend_unavailable'),
+    ],
   },
   {
     method: 'patch',
     path: '/api/projects/:p',
     tag: 'projects',
-    summary: 'Projectを変更',
+    summary: 'Projectを変更（説明・保存先・公開範囲）',
     access: PROJECT_ADMIN,
     body: projectPatchSchema,
     responses: { 200: contract.projectSchema },
     errors: routeError(422, 'backend_unavailable'),
+  },
+  {
+    method: 'post',
+    path: '/api/projects/:p/archive',
+    tag: 'projects',
+    summary: 'Projectをアーカイブ（データは残り、全体管理者が元に戻せる）',
+    access: PROJECT_ADMIN,
+    responses: { 204: null },
+    errors: routeError(409, 'project_has_active_jobs'),
   },
   {
     method: 'get',
@@ -761,7 +785,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects/:p/models/:id/versions/:v',
     tag: 'registry',
-    summary: 'ModelVersionを取得（別Modelの版は404）',
+    summary: 'ModelVersionを取得（別Modelのバージョンは404）',
     access: PROJECT_VIEWER,
     responses: { 200: contract.modelVersionSchema },
   },
@@ -777,7 +801,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/projects/:p/models/:id/versions',
     tag: 'registry',
-    summary: 'ModelVersionを登録（版は不変）',
+    summary: 'ModelVersionを登録（バージョンは不変）',
     access: REGISTRY_WRITE,
     body: modelVersionCreateSchema,
     responses: { 201: contract.modelVersionSchema },
@@ -871,7 +895,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects/:p/models/:id/versions/:v/evaluation-comparison',
     tag: 'evaluation',
-    summary: '基準版との評価比較',
+    summary: '基準バージョンとの評価比較',
     access: PROJECT_VIEWER,
     query: evaluationComparisonQuery,
     responses: { 200: contract.evaluationComparisonSchema },
@@ -1067,7 +1091,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/projects/:p/automation-rules/:id/executions',
     tag: 'automation',
-    summary: 'ruleを既存の版・上流Runへ手動適用',
+    summary: 'ruleを既存のバージョン・上流Runへ手動適用',
     access: PROJECT_ADMIN,
     body: automationExecutionCreateSchema,
     responses: { 201: contract.modelAutomationExecutionSchema },
@@ -1695,90 +1719,73 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/targets',
     tag: 'execution',
-    summary: '計算機（ComputeTarget）一覧。projectIdでそのProjectで使えるものだけ',
+    summary:
+      'コンピュータ（ComputeTarget）の詳細。使えるものと管理するもの。projectIdでそのProjectで使えるものだけ',
     access: { kind: 'signedIn', scope: 'read' },
     query: targetListQuerySchema,
     responses: { 200: contract.itemsOf(contract.computeTargetDetailsSchema) },
     errors: [...routeError(403, 'project_forbidden'), ...routeError(404, 'not_found')],
   },
   {
+    method: 'get',
+    path: '/api/targets/overview',
+    tag: 'execution',
+    summary: 'すべてのコンピュータの名前・種類・所有者・公開範囲・状態（接続先は含まない）',
+    access: { kind: 'signedIn', scope: 'read' },
+    responses: { 200: contract.itemsOf(contract.computeTargetOverviewSchema) },
+  },
+  {
     method: 'post',
     path: '/api/targets',
     tag: 'execution',
-    summary: '計算機を登録（全体管理者、または自分の計算機を足す研究者）',
+    summary: 'コンピュータを登録（足した人が所有者。全体管理者でない人はsiteだけ）',
     access: TARGET_MANAGER,
     body: targetCreateSchema,
     responses: { 201: contract.computeTargetDetailsSchema },
     errors: [
       ...TARGET_SETTING_ERRORS,
       ...routeError(403, 'target_admin_required', 'session_required'),
-      ...routeError(422, 'target_not_owned', 'target_project_forbidden'),
     ],
   },
   {
     method: 'patch',
     path: '/api/targets/:id',
     tag: 'execution',
-    summary: '計算機を変更（全体管理者か所有者）',
+    summary: 'コンピュータを変更（公開範囲を含む。全体管理者か所有者）',
     access: TARGET_MANAGER,
     body: targetUpdateSchema,
     responses: { 200: contract.computeTargetDetailsSchema },
-    errors: [...TARGET_SETTING_ERRORS, ...TARGET_MANAGER_ERRORS, ...routeError(409, 'conflict')],
-  },
-  {
-    method: 'put',
-    path: '/api/targets/:id/projects',
-    tag: 'sites',
-    summary: '自分の計算機を共有するProject',
-    access: TARGET_MANAGER,
-    body: computeTargetSharingSchema,
-    responses: { 200: contract.computeTargetDetailsSchema },
     errors: [
+      ...TARGET_SETTING_ERRORS,
       ...TARGET_MANAGER_ERRORS,
-      ...routeError(422, 'target_not_owned', 'target_project_forbidden'),
+      ...routeError(403, 'target_admin_required'),
+      ...routeError(409, 'conflict'),
+      ...routeError(422, 'target_owner_missing'),
     ],
-  },
-  {
-    method: 'get',
-    path: '/api/targets/shareable-projects',
-    tag: 'sites',
-    summary: '自分の計算機を足すときに共有できるProject（自分がeditor以上のもの）',
-    access: TARGET_MANAGER,
-    responses: { 200: contract.itemsOf(contract.shareableProjectSchema) },
-    errors: routeError(403, 'session_required'),
-  },
-  {
-    method: 'get',
-    path: '/api/targets/:id/shareable-projects',
-    tag: 'sites',
-    summary: '自分の計算機を共有できるProject（所有者がeditor以上のもの）',
-    access: SITE_READER,
-    responses: { 200: contract.itemsOf(contract.shareableProjectSchema) },
-    errors: [...TARGET_MANAGER_ERRORS, ...routeError(422, 'target_not_owned')],
   },
   {
     method: 'get',
     path: '/api/targets/:id/job-shells',
     tag: 'sites',
-    summary: 'siteのjob shellの版（新しい順）',
+    summary: 'siteのjob shellのバージョン（新しい順）',
     access: SITE_READER,
     responses: { 200: contract.itemsOf(contract.siteJobShellSummarySchema) },
-    errors: routeError(404, 'not_found'),
+    errors: SITE_USER_ERRORS,
   },
   {
     method: 'get',
     path: '/api/targets/:id/job-shells/:shellId',
     tag: 'sites',
-    summary: 'job shellの版（内容つき）',
+    summary: 'job shellのバージョン（内容つき）',
     access: SITE_READER,
     responses: { 200: contract.siteJobShellSchema },
-    errors: routeError(404, 'not_found'),
+    errors: SITE_USER_ERRORS,
   },
   {
     method: 'post',
     path: '/api/targets/:id/job-shells',
     tag: 'sites',
-    summary: 'job shellの次の版を保存（同じ内容なら今の版を返す）',
+    summary: 'job shellの次のバージョンを保存（同じ内容なら今のバージョンを返す）',
     access: TARGET_MANAGER,
     body: siteJobShellCreateSchema,
     responses: { 201: contract.siteJobShellSchema, 200: contract.siteJobShellSchema },
@@ -1802,7 +1809,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     responses: {
       200: z.strictObject({ item: contract.sitePersonalSettingsSchema.nullable() }),
     },
-    errors: routeError(404, 'not_found'),
+    errors: SITE_USER_ERRORS,
   },
   {
     method: 'put',
@@ -1812,7 +1819,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: { kind: 'session' },
     body: sitePersonalSettingsInputSchema,
     responses: { 200: contract.sitePersonalSettingsSchema },
-    errors: [...routeError(404, 'not_found'), ...routeError(422, 'site_settings_invalid')],
+    errors: [...SITE_USER_ERRORS, ...routeError(422, 'site_settings_invalid')],
   },
   {
     method: 'delete',
@@ -1821,7 +1828,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     summary: '自分の個人設定と鍵を消す',
     access: { kind: 'session' },
     responses: { 204: null },
-    errors: routeError(404, 'not_found'),
+    errors: SITE_USER_ERRORS,
   },
   {
     method: 'get',
@@ -1830,7 +1837,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     summary: 'launcherが作った鍵（所有者・全体管理者は全部、他は自分の鍵）',
     access: SITE_READER,
     responses: { 200: contract.itemsOf(contract.siteKeySchema) },
-    errors: routeError(404, 'not_found'),
+    errors: SITE_USER_ERRORS,
   },
   {
     method: 'post',
@@ -1840,7 +1847,11 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: TARGET_MANAGER,
     body: siteKeyRotateSchema,
     responses: { 200: contract.siteKeySchema },
-    errors: [...TARGET_MANAGER_ERRORS, ...routeError(422, 'site_key_unavailable')],
+    errors: [
+      ...TARGET_MANAGER_ERRORS,
+      ...routeError(403, 'target_not_available'),
+      ...routeError(422, 'site_key_unavailable'),
+    ],
   },
   {
     method: 'post',
@@ -1852,6 +1863,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     responses: { 201: contract.siteConnectionCheckSchema },
     errors: [
       ...TARGET_MANAGER_ERRORS,
+      ...routeError(403, 'target_not_available'),
       ...routeError(409, 'site_check_in_progress'),
       ...routeError(422, 'site_key_unavailable', 'site_check_unavailable'),
     ],
@@ -1864,7 +1876,11 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     access: SITE_READER,
     query: siteConnectionCheckQuerySchema,
     responses: { 200: contract.itemsOf(contract.siteConnectionCheckSchema) },
-    errors: [...TARGET_MANAGER_ERRORS, ...routeError(422, 'site_key_unavailable')],
+    errors: [
+      ...TARGET_MANAGER_ERRORS,
+      ...routeError(403, 'target_not_available'),
+      ...routeError(422, 'site_key_unavailable'),
+    ],
   },
   {
     method: 'get',
@@ -1906,7 +1922,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/targets/:id/checks',
     tag: 'execution',
-    summary: '計算機の接続確認を依頼',
+    summary: 'コンピュータの接続確認を依頼',
     access: GLOBAL_ADMIN,
     responses: { 201: contract.targetCheckSchema },
     errors: [
@@ -2145,7 +2161,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     summary: 'mado-tracking submitが使う設定・job shell・自分のaccount',
     access: { kind: 'apiToken', scope: 'read' },
     responses: { 200: contract.manualSiteConfigurationSchema },
-    errors: [...routeError(404, 'not_found'), ...routeError(422, 'site_not_manual')],
+    errors: [...SITE_USER_ERRORS, ...routeError(422, 'site_not_manual')],
   },
   {
     method: 'post',
@@ -2618,7 +2634,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/projects/:p/reports',
     tag: 'reports',
-    summary: 'レポートを作成（版1。固定するブロックのデータを取り込む）',
+    summary: 'レポートを作成（バージョン1。固定するブロックのデータを取り込む）',
     access: RUNS_WRITE,
     body: reportCreateSchema,
     responses: { 201: contract.reportDetailSchema },
@@ -2628,7 +2644,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects/:p/reports/:reportId',
     tag: 'reports',
-    summary: 'レポートと版の内容（既定は現在の版）',
+    summary: 'レポートとバージョンの内容（既定は現在のバージョン）',
     access: PROJECT_VIEWER,
     query: reportRevisionQuerySchema,
     responses: { 200: contract.reportDetailSchema },
@@ -2637,7 +2653,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'put',
     path: '/api/projects/:p/reports/:reportId',
     tag: 'reports',
-    summary: 'レポートの新しい版を保存（baseRevisionが現在の版と違えば409）',
+    summary: 'レポートの新しいバージョンを保存（baseRevisionが現在のバージョンと違えば409）',
     access: RUNS_WRITE,
     body: reportUpdateSchema,
     responses: { 200: contract.reportDetailSchema },
@@ -2651,7 +2667,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects/:p/reports/:reportId/revisions',
     tag: 'reports',
-    summary: 'レポートの版の履歴（新しい順）',
+    summary: 'レポートのバージョンの履歴（新しい順）',
     access: PROJECT_VIEWER,
     responses: { 200: contract.reportRevisionListSchema },
   },
@@ -2659,7 +2675,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'get',
     path: '/api/projects/:p/reports/:reportId/snapshots',
     tag: 'reports',
-    summary: '版の固定データ（作成時点で固定したブロック）',
+    summary: 'バージョンの固定データ（作成時点で固定したブロック）',
     access: PROJECT_VIEWER,
     query: reportRevisionQuerySchema,
     responses: { 200: contract.reportSnapshotListSchema },
@@ -2668,7 +2684,7 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     method: 'post',
     path: '/api/projects/:p/reports/:reportId/restore',
     tag: 'reports',
-    summary: '過去の版の内容で新しい版を作る',
+    summary: '過去のバージョンの内容で新しいバージョンを作る',
     access: RUNS_WRITE,
     body: reportRestoreSchema,
     responses: { 201: contract.reportDetailSchema },
@@ -2924,6 +2940,42 @@ export const NATIVE_ROUTES: readonly NativeRoute[] = [
     body: storageSettingsUpdateSchema,
     responses: { 200: contract.storageSettingsSchema },
     errors: routeError(422, 'storage_backend_unavailable'),
+  },
+  {
+    method: 'get',
+    path: '/api/admin/storage-directories',
+    tag: 'admin',
+    summary: 'filesystemのrootPathの入力に合うサーバー上のディレクトリ',
+    access: GLOBAL_ADMIN,
+    query: storageDirectoryQuerySchema,
+    responses: { 200: contract.directorySuggestionsSchema },
+  },
+  {
+    method: 'get',
+    path: '/api/admin/projects',
+    tag: 'admin',
+    summary: '全Project（アーカイブ済みも含められる）',
+    access: GLOBAL_ADMIN,
+    query: adminProjectQuerySchema,
+    responses: { 200: contract.itemsOf(contract.adminProjectSchema) },
+  },
+  {
+    method: 'post',
+    path: '/api/admin/projects/:p/restore',
+    tag: 'admin',
+    summary: 'アーカイブしたProjectを元に戻す',
+    access: GLOBAL_ADMIN,
+    responses: { 200: contract.adminProjectSchema },
+    errors: routeError(404, 'not_found'),
+  },
+  {
+    method: 'delete',
+    path: '/api/admin/projects/:p',
+    tag: 'admin',
+    summary: 'アーカイブしたProjectをデータごと完全に削除',
+    access: GLOBAL_ADMIN,
+    responses: { 204: null },
+    errors: [...routeError(404, 'not_found'), ...routeError(409, 'project_not_archived')],
   },
   {
     method: 'get',

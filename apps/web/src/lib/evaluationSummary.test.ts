@@ -76,7 +76,7 @@ describe('評価結果の集約', () => {
     ]);
   });
 
-  it('基準版との差の符号は同じ評価条件の基準Runと比べ、条件が違う基準Runは使わない', () => {
+  it('基準バージョンとの差の符号は同じ評価条件の基準Runと比べ、条件が違う基準Runは使わない', () => {
     const summary = summarizeEvaluations({
       candidateRuns: [evaluationRun({ id: 'candidate', latestMetrics: { wer: 0.2, cer: 0.1, mos: 4 } })],
       baselineRuns: [

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isValidStorageBackendName } from '@mmt/platform';
 import {
+  COMPUTE_TARGET_VISIBILITIES,
   CPU_ARCHES,
   DATASET_TRANSFER_MODES,
   DEFAULT_DATASET_CACHE_MAX_BYTES,
@@ -69,14 +70,6 @@ export function isRelativeFilePath(path: string): boolean {
     path.split('/').every((part) => !!part && part !== '.' && part !== '..')
   );
 }
-export const projectCreateSchema = z.strictObject({
-  name: nameSchema,
-  description: z.string().max(20000).default(''),
-  artifactBackend: artifactBackendSchema.default('filesystem'),
-});
-export const projectPatchSchema = projectCreateSchema
-  .pick({ description: true, artifactBackend: true })
-  .partial();
 export const namedEntitySchema = z.strictObject({
   name: nameSchema,
   description: z.string().max(20000).default(''),
@@ -249,6 +242,8 @@ export const targetSchema = z.strictObject({
     .max(MAX_QUEUE_TIMEOUT_SECONDS)
     .nullable()
     .default(null),
+  // Private unless chosen: a new computer serves its owner until they open it to everyone.
+  visibility: z.enum(COMPUTE_TARGET_VISIBILITIES).default('private'),
 });
 // gpuCount, retryOnFailure and retryOnTimeout are for site Jobs (validateSiteJobOptions).
 export const jobCreateSchema = z.strictObject({
@@ -269,6 +264,7 @@ export const targetPatchSchema = targetSchema.partial().extend({
   cpuArch: targetSchema.shape.cpuArch.removeDefault().optional(),
   supportsArray: targetSchema.shape.supportsArray.removeDefault().optional(),
   queueTimeoutSeconds: targetSchema.shape.queueTimeoutSeconds.removeDefault().optional(),
+  visibility: targetSchema.shape.visibility.removeDefault().optional(),
 });
 export const tokenCreateSchema = z.strictObject({
   name: nameSchema,

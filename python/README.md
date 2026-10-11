@@ -1,6 +1,6 @@
 # mado-tracking
 
-Mado Model TrackingのPython SDKとcompute worker。SDKはRunの作成、parameters/tags/metrics/logs、streaming Artifact、モデル・データセット版、学習出力の登録を扱う。workerはSSH先のjob別workspaceで実行を継続し、切断後も同じleaseとprocessへ接続する。
+mado ML TrackingのPython SDKとcompute worker。SDKはRunの作成、parameters/tags/metrics/logs、streaming Artifact、モデル・データセットバージョン、学習出力の登録を扱う。workerはSSH先のjob別workspaceで実行を継続し、切断後も同じleaseとprocessへ接続する。
 
 Python 3.11以上が必要。workerとcompute targetはLinuxを使う。リポジトリのrootで次を実行する。
 
@@ -24,7 +24,7 @@ python/.venv/bin/python python/examples/inference.py --offline --weights python/
 
 連鎖で起動した評価Jobのコードは、上流（推論）RunのArtifactsを`download_upstream_artifacts(destination, prefix=None)`でpathを保ったまま取得できる。上流RunのIDは`upstream_run_id()`（環境変数`MMT_UPSTREAM_RUN_ID`。上流が無ければNone）、一覧は`list_upstream_artifacts(prefix=None)`。取得は`download_artifact_to`と同じく切断後にRangeで再開し、SHA-256を照合してから一時ファイルを置き換える。
 
-Gitのコード版は、固定commitのファイルを残して編集・追加・削除を適用する。`register_code`と`create_code_version`は`test_entrypoint`を受け取り、既定値は空の配列。通常実行は`entrypoint`、テスト実行は保存済みの`test_entrypoint`を使う。
+Gitのコードバージョンは、固定commitのファイルを残して編集・追加・削除を適用する。`register_code`と`create_code_version`は`test_entrypoint`を受け取り、既定値は空の配列。通常実行は`entrypoint`、テスト実行は保存済みの`test_entrypoint`を使う。
 
 ```python
 from mado_tracking import Client
@@ -189,7 +189,7 @@ run = mado_tracking.start_run(project_id="project-id", run_id="run-id", resume="
 run.log_metrics({"loss": 0.12})  # stepを省略すると、keyごとに前回の最大step+1で記録する
 run.finish()
 
-# APIに届かない計算機ではローカルに記録し、後で送る。
+# APIに届かないコンピュータではローカルに記録し、後で送る。
 with mado_tracking.start_run(
     project_id="project-id", experiment_id="experiment-id", name="offline", mode="offline",
     system_metrics=True,
@@ -210,7 +210,7 @@ mado-tracking sync --project-id P --prune   # Project Pの分だけ送り、送�
 - **モード**: `start_run(mode=)`、無ければ環境変数`MMT_MODE`（既定`online`）。`offline`はAPIに一度も接続せず、`MMT_API_URL`・`MMT_API_TOKEN`も要らない。Run IDはSDKがUUIDで決める。`auto`はonlineで始め、接続できない（接続失敗、または5xxの再試行切れ）と、そのRunだけofflineに切り替えて記録を続け、終了時に`mado-tracking sync`の案内を出す。切り替え前にAPIへ送れた分はspoolに書かない。切り替えのきっかけになった1件は、APIに届いていた可能性があっても送り直す（失うより重複を選ぶ）。Runの作成そのものが届かなければ、最初からofflineで記録する。workerのJob内（`MMT_JOB_ID`がある）では`offline`を拒否する。
 - **offlineで使えないもの**: Run作成時の`model_version_id`などsyncで送れない属性、再開、モデル・データセットの登録、checkpoint。いずれも`ConfigurationError`。
 - **spool**: `MMT_OFFLINE_DIR/<runId>/`に`run.json`（作成情報）、`batches/<sequence>-<batchId>.jsonl`（1行1レコード）、`artifacts.jsonl`、`media.jsonl`、`status.json`、`sync-state.json`を置く。ファイルは600、ディレクトリは700。tokenは書かない（logの本文も従来どおりsecretを伏せる）。batchの各行は書くたびにflushし、fsyncは50行（`SPOOL_FSYNC_EVERY`）ごとと、Runの終了時に行う。電源断で失うのは最後の数十行まで。batchは5000行か16MiBで次のファイルに分かれる（APIの1 batchの上限より小さい）。
-- **Artifact**: offlineの`log_artifact`は既定でspoolの`artifact-files/<sha256>`へ複製する（spoolのディレクトリごと別の計算機へ移してsyncできる）。`copy=False`は元のファイルのpathとsha256だけを記録し、syncのときに中身が変わっていればそのRunの送信を止める。
+- **Artifact**: offlineの`log_artifact`は既定でspoolの`artifact-files/<sha256>`へ複製する（spoolのディレクトリごと別のコンピュータへ移してsyncできる）。`copy=False`は元のファイルのpathとsha256だけを記録し、syncのときに中身が変わっていればそのRunの送信を止める。
 - **media**: `media.jsonl`の1行は`{id, key, step, kind, artifactPath, caption, metadata}`。`artifactPath`は同じRunで`log_artifact`したpath。syncは`POST /projects/:p/runs/:r/media`へ`id`付きで送る。
 - **sync**: Runごとに`PUT /sync/runs/:id` → batchをsequence順に → `artifacts/check`でpresentと返らなかったArtifactを再開可能なupload sessionで → media → 最後に終了状態。終了状態を最後に送るので、Run終了時の自動処理（出力登録など）はArtifactが揃ってから動く。各段階のあとに`sync-state.json`を更新するので、途中で失敗しても次の`mado-tracking sync`はそこから続く。同じディレクトリを2回syncしてもAPI側は増えない（Run ID・batchId・Artifactのsha256・media idで重複を判定する。`sync-state.json`を失っても送り直すだけで済む）。記録中のRun（書き込み側がlockを持っている）は飛ばす。終了状態の無いRunは送るがrunningのまま残し、完了扱いにしない。tokenには`runs:write`と`artifacts:write`が要る。失敗したRunがあれば終了コードは1。
 - **システムメトリクス**: `start_run(system_metrics=True, system_metrics_interval=None)`で、GPU/CPU/メモリ/ディスク/ネットワークを`system.*`のmetricとして一定間隔（既定15秒、最短1秒）で記録する。送り先はRunと同じ（offlineならspool）。`finish`と`with`の終了で止まり、終了状態のあとに標本は届かない。`MMT_SYSTEM_METRICS=false`で止められる。workerのJob内（`MMT_JOB_ID`がある）ではworkerのtelemetryと重なるので起動しない。`run.start_system_metrics()`で後から始めることもできる。stepは0から数えるので、再開したRunでは`system.*`のstepが前の区間と重なる。
@@ -273,9 +273,9 @@ MLflowの`log_image(key=, step=)`と`log_table`で記録したものも、同じ
 - Sweepの作成・一覧・最良試行・pause/resume/cancel: `SweepsClient(Client())`。configはW&B形式（変換規則は`docs/sweeps.md`の「W&B 形式の config の変換規則」）。
 - 例: `examples/sweep_training.py`（`--offline`でAPIなしに試せる）。
 
-### ディレクトリからデータセット版を作る
+### ディレクトリからデータセットバージョンを作る
 
-`register_dataset(..., files="data/speech")`はディレクトリの中身をArtifactsとして送り、APIがuriとdigestを決める。`files`を使うときは`uri`、`digest`、`source_run_id`、`parent_dataset_version_ids`、`external_ref`を指定しない。既存のDatasetへ版を足すだけなら、同じ処理を`upload_dataset_directory`で直接呼べる。
+`register_dataset(..., files="data/speech")`はディレクトリの中身をArtifactsとして送り、APIがuriとdigestを決める。`files`を使うときは`uri`、`digest`、`source_run_id`、`parent_dataset_version_ids`、`external_ref`を指定しない。既存のDatasetへバージョンを足すだけなら、同じ処理を`upload_dataset_directory`で直接呼べる。
 
 ```python
 from mado_tracking import Client
@@ -290,7 +290,7 @@ with Client() as client:
     )
 ```
 
-- ディレクトリ配下の全ファイルをProjectのArtifact（`datasets/<datasetId>/<相対パス>`）として保存し、1回の`POST /datasets/:d/versions`（`content.files`）で`contentKind='artifacts'`の版を作る。版の`uri`は`mmt-dataset://<版のID>`。
+- ディレクトリ配下の全ファイルをProjectのArtifact（`datasets/<datasetId>/<相対パス>`）として保存し、1回の`POST /datasets/:d/versions`（`content.files`）で`contentKind='artifacts'`のバージョンを作る。バージョンの`uri`は`mmt-dataset://<バージョンのID>`。
 - uploadの前に`GET /artifacts/by-digest?sha256=&size=`を引き、同じ中身の保存済みArtifactがあればuploadせずにそのIDを使う。中断後に再実行すると、未保存のファイルだけを送る。
 - 64MiB以上のファイルは再開可能なupload sessionを使う。
 - ローカルで計算したdigestを送るので、保存されたArtifactが手元のファイルと違えばAPIが422 `dataset_digest_mismatch`で拒否する。同じ`version`の再作成は409。
@@ -298,7 +298,7 @@ with Client() as client:
 
 ### workerの実行前sourceとsnapshot
 
-workerはRunの`executionMode`と`executionSnapshot`をコード版へ照合し、固定されたcommandを実行する。コードを実行する前に、Run Artifactsの`.mmt/source.zip`と`.mmt/source-manifest.json`用のファイルを作成する。ZIPには実行前のsource、manifestにはjob/run/code版ID、版名、mode、検証したcommit、runtime、command、各ファイルのSHA256とsizeを記録する。コードがsourceを書き換えた場合や通常・テスト実行が失敗した場合も、同じsnapshotを回収する。sourceなしのコンテナは、固定されたimage digestまたはSIFのArtifact/hashをmanifestに保存する。environmentの値はmanifestに含めない。
+workerはRunの`executionMode`と`executionSnapshot`をコードバージョンへ照合し、固定されたcommandを実行する。コードを実行する前に、Run Artifactsの`.mmt/source.zip`と`.mmt/source-manifest.json`用のファイルを作成する。ZIPには実行前のsource、manifestにはjob/run/codeバージョンID、バージョン名、mode、検証したcommit、runtime、command、各ファイルのSHA256とsizeを記録する。コードがsourceを書き換えた場合や通常・テスト実行が失敗した場合も、同じsnapshotを回収する。sourceなしのコンテナは、固定されたimage digestまたはSIFのArtifact/hashをmanifestに保存する。environmentの値はmanifestに含めない。
 
 ZIPは空ディレクトリも保持する。manifestには既存の`files`に加えて`directories: [{path, mode}]`を記録し、modeはPOSIX権限の整数値。復元時は権限の特殊bitを除き、所有者の読み取り・検索権限を確保する。read-onlyディレクトリは子ファイルを展開した後で権限を適用する。containerのsource mountはread-onlyのまま。
 
@@ -308,16 +308,16 @@ snapshotの回収は既存のArtifact upload経路を使い、各保存のackを
 
 sourceはパストラバーサル、`.git`への編集・追加・削除、symlink、hardlink、特殊ファイル、重複削除、追加と削除の衝突を拒否する。sourceは一時ディレクトリで完成後に確定する。worker側の上限は、UTF-8のinline/overlayが16MiB、source全体が4GiB、1ファイルが256MiB、ファイルとディレクトリの合計が100,000、manifestが16MiB。archiveとsnapshot ZIPは、source上限にUTF-8名・ZIP64・圧縮増分の予算を加えた同じ上限を使い、上限内のZIPを復元できる。上限の定数は`src/mado_tracking/worker/source_tree.py`に集約する。APIで登録するinline/overlayは、全体3MiB、1ファイル2,000,000 bytes、1,000ファイルまで。snapshot作成・転送・uploadは分割して処理する。
 
-### 外部の計算機（site）: runner・launcher・手動投入
+### 外部のコンピュータ（site）: runner・launcher・手動投入
 
-siteは、スーパーコンピュータやGPUサーバー、研究者のPCのように、siteのjob shellで投入する計算機（`ComputeTarget.executor='site'`）です。接続先・job shell（版つき）・作業ディレクトリ・runner・取消コマンドなどの全体設定と、各人のアカウント名・作業ディレクトリ・変数（個人設定）は、trackingのWebで管理します。自動投入のsiteではlauncherが、手動投入のsite（ログインに一時パスワードが要るsiteや研究者のPC）では本人の`mado-tracking submit`がjob shellを動かし、計算ノードのrunnerがJob tokenでAPIへ直接報告します。説明は`docs/sites.md`、job shellの例は`deploy/sites/`にあります。
+siteは、スーパーコンピュータやGPUサーバー、研究者のPCのように、siteのjob shellで投入するコンピュータ（`ComputeTarget.executor='site'`）です。接続先・job shell（バージョンつき）・作業ディレクトリ・runner・取消コマンドなどの全体設定と、各人のアカウント名・作業ディレクトリ・変数（個人設定）は、trackingのWebで管理します。自動投入のsiteではlauncherが、手動投入のsite（ログインに一時パスワードが要るsiteや研究者のPC）では本人の`mado-tracking submit`がjob shellを動かし、計算ノードのrunnerがJob tokenでAPIへ直接報告します。説明は`docs/sites.md`、job shellの例は`deploy/sites/`にあります。
 
 **runner（`mado-tracking site-run <spec dir>`）**
 
-- launcherと`submit`は、作業ディレクトリに`.mmt-runner/<版>/mmt-runner.pyz`（このpackageとhttpxを含むzipapp）と`mmt-runner`（起動用のshell script）を版ごとに一度だけ置きます。job shellは`"$MMT_RUNNER" "$MMT_SPEC_DIR"`を起動します。計算ノードにはPython 3.11以上だけが要ります（siteの設定のrunnerのPython、または環境変数`MMT_RUNNER_PYTHON`）。
+- launcherと`submit`は、作業ディレクトリに`.mmt-runner/<バージョン>/mmt-runner.pyz`（このpackageとhttpxを含むzipapp）と`mmt-runner`（起動用のshell script）をバージョンごとに一度だけ置きます。job shellは`"$MMT_RUNNER" "$MMT_SPEC_DIR"`を起動します。計算ノードにはPython 3.11以上だけが要ります（siteの設定のrunnerのPython、または環境変数`MMT_RUNNER_PYTHON`）。
 - 仕様の置き場（`.mmt-submissions/<最初のJob ID>/`、700）には`submission.json`（tokenなし。job shellは`id`・`version`・`sha256`だけで、内容は入れません）、`api.json`（`apiUrl`）、`runner.json`（作業ディレクトリ、GPUの割り当て方など）、`jobs/<i>.json`（WorkerJobとJob token、600）、任意の`secrets.json`（`registry`）があります。runnerは`MMT_ARRAY_INDEX`（無ければ0）番目のJobを動かします。
 - 流れは`runner/start`（phase `waiting_resources`）→ 入力の用意 → GPUの割り当て → heartbeatでphase `running` → コンテナ → 出力の検証とupload（`container/<path>`、64MiB以上はupload session）→ metrics・宣言 → `runner/finish`です。heartbeatは5秒ごとで、`cancelRequested`ならコンテナを止めて`canceled`で終えます。heartbeatが拒否された（401・410など）ときは、コンテナを止めてfinishを送らずに終わります。SIGTERMでは、コンテナを止めて`endReason: timed_out`で終えます。
-- 入力はworkerの直接転送（`datasetTransfer='direct'`）と同じ処理で用意します。`datasetPartitionVersionId`の版は、path順で`位置 % arraySize == arrayIndex`のファイルだけを取ります。SIFのArtifactと、Dockerのimageを変換したSIF（`apptainer pull --arch <cpuArch>`、registryの認証は`secrets.json`から`APPTAINER_DOCKER_USERNAME`・`APPTAINER_DOCKER_PASSWORD`で渡します）は、`<作業ディレクトリ>/.mmt-cache/sif/`にdigestとCPUの組ごとに1つ置き、lockで1回だけ取得します。
+- 入力はworkerの直接転送（`datasetTransfer='direct'`）と同じ処理で用意します。`datasetPartitionVersionId`のバージョンは、path順で`位置 % arraySize == arrayIndex`のファイルだけを取ります。SIFのArtifactと、Dockerのimageを変換したSIF（`apptainer pull --arch <cpuArch>`、registryの認証は`secrets.json`から`APPTAINER_DOCKER_USERNAME`・`APPTAINER_DOCKER_PASSWORD`で渡します）は、`<作業ディレクトリ>/.mmt-cache/sif/`にdigestとCPUの組ごとに1つ置き、lockで1回だけ取得します。
 - フックの入力: `inputCheckpoint`は`/mmt/inputs/checkpoint`（read-only、`MMT_INPUT_CHECKPOINT_DIR`・`MMT_INPUT_CHECKPOINT_FILE`）、`triggerPayload`は`/mmt/context/trigger-payload.json`（`MMT_TRIGGER_PAYLOAD_FILE`）に置きます。再開のcheckpointもあるJobでは、入力のcheckpointは`/mmt/inputs/input-checkpoint`になります。SSHのworkerも同じ変数とファイルを渡します。
 - GPU: スケジューラのあるsiteでは、スケジューラが渡した`CUDA_VISIBLE_DEVICES`を使います。直実行のホスト（siteの設定でGPUの渡し方が`lease`）では、`nvidia-smi`で空いたGPU（選んでよいGPUを設定したときはその中）を選びます。他のrunnerがleaseしているGPUと、Madoのlabelが付いた動いているDockerコンテナが持つGPUは使いません。足りない間はphase `waiting_resources`のまま待ちます。
 - 終了コードは、成功で0、失敗・取消・時間切れで1、設定の誤りで2、APIがJobを受け付けなかった（終了済み・別のrunner・tokenの失効）ときに3です。
@@ -339,7 +339,7 @@ poll_seconds = 10                             # 省略で10
 - 1回の巡回は、未送信の報告の再送 → `GET /api/launcher/config`（担当の自動投入のsite・鍵・接続確認）→ 鍵の同期 → 接続確認 → siteごとの投入 → 待ち行列での取消、の順です。APIはtokenでlauncherを知るので、どの要求もlauncherのIDを送りません。
 - 鍵: `state_directory/keys/`（700）に、APIが挙げた鍵ごとに秘密鍵`<keyId>`（600）と公開鍵`<keyId>.pub`を`ssh-keygen -q -t ed25519 -N '' -C 'mmt-launcher:<launcher名>:<keyId>'`で作り、公開鍵だけを`PUT /api/launcher/keys/<keyId>`で送ります。秘密鍵はlauncherのホストから出ません。`requested`のままの鍵や、APIの持つ公開鍵が手元と違う鍵は送り直し、半分しか無い鍵は作り直し、APIが挙げなくなった鍵（失効・作り直し）のファイルは消します。Webに出る公開鍵を、siteのアカウントの`~/.ssh/authorized_keys`に登録します。
 - 接続確認: Webで頼まれた確認ごとに、そのアカウントと鍵で、共有の接続を使わずに1回ログインして`true`だけを実行し、成否を`POST /api/launcher/connection-checks/<id>`で送ります。失敗のときは、sshの標準エラーの末尾（tokenは伏せる、2000文字まで）を添えます。
-- 投入: siteごとに`POST /api/launcher/site-submissions/claim`（`targetIds`とsiteの`maxActiveSubmissions`）で受け取り、各submissionに付いた設定で投入します。SSHのユーザーは`account.accountName`、鍵は`account.keyId`の鍵です。host keyは、siteの設定のknown_hosts（`state_directory/known-hosts/<siteのID>`、600に書きます）に載ったものだけを受け入れます。known_hostsが空のsiteや接続先の無いsiteは、理由を添えて`failed`を報告します。作業ディレクトリと変数は`account`（個人の設定が全体の設定の上に乗ったもの）、job shellは`jobShell`（Jobが記録した版）、runnerのPython・runnerから見たAPIのURL・GPUの渡し方・取消の猶予・出力の上限は`settings`から取ります。作業ディレクトリへrunnerとjob shellを入れ、仕様の置き場を書き、job shellを1回だけ動かして、標準出力の最後の行をスケジューラのジョブIDとして報告します。job shellが0以外で終わったら、tokenとJob tokenを伏せた短いエラーで`failed`を報告します。届かなかった報告は`state_directory/pending-reports/`に残し、次の巡回で送り直します。
+- 投入: siteごとに`POST /api/launcher/site-submissions/claim`（`targetIds`とsiteの`maxActiveSubmissions`）で受け取り、各submissionに付いた設定で投入します。SSHのユーザーは`account.accountName`、鍵は`account.keyId`の鍵です。host keyは、siteの設定のknown_hosts（`state_directory/known-hosts/<siteのID>`、600に書きます）に載ったものだけを受け入れます。known_hostsが空のsiteや接続先の無いsiteは、理由を添えて`failed`を報告します。作業ディレクトリと変数は`account`（個人の設定が全体の設定の上に乗ったもの）、job shellは`jobShell`（Jobが記録したバージョン）、runnerのPython・runnerから見たAPIのURL・GPUの渡し方・取消の猶予・出力の上限は`settings`から取ります。作業ディレクトリへrunnerとjob shellを入れ、仕様の置き場を書き、job shellを1回だけ動かして、標準出力の最後の行をスケジューラのジョブIDとして報告します。job shellが0以外で終わったら、tokenとJob tokenを伏せた短いエラーで`failed`を報告します。届かなかった報告は`state_directory/pending-reports/`に残し、次の巡回で送り直します。
 - 取消: 待ち行列で取り消されたJobは`cancellations`で受け取り、APIが示すアカウント（`account`）でsiteの取消コマンド（`MMT_SCHEDULER_JOB_ID`を渡します）を動かしてから報告します。投入したときと違うアカウントが示されたときはログに残します（スケジューラが取消を断ることがあります）。アカウントが分からないJobは待ち行列に残ります（runnerは起動するとtokenが401になり、すぐ終わります）。
 - ログインの失敗: 投入か取消でSSHのログインに失敗した接続先（site・アカウント・鍵）には、その巡回の残りの投入では入らず、最初の失敗と同じ理由（`Not tried: …`）で`failed`を報告します。次の巡回ではまた試します（Jobは`submit_failed`になるので、同じJobは繰り返しません）。取消は、その接続先へ600秒のあいだ入らず、後の巡回に回します。ログインできたら記録を消します。公開鍵がsiteに登録される前（launcherや鍵を変えた直後など）に、失敗したログインが1巡回に何百回も続いて、siteにアカウントやIPを止められないためです。記録はプロセスの中だけで、再起動で消えます。
 - SSHは`BatchMode=yes`・`StrictHostKeyChecking=yes`で、`state_directory/ssh/`に置く専用のssh_configを使います。経由するホスト（`ssh -J`）にも同じ鍵とknown_hostsが効きます。投入と取消の接続は（site、アカウント、鍵）ごとにControlMasterで1本を共有し、60秒使わなければ閉じます。`ssh-keygen`と`ssh`は引数を分けて起動し、shellを通しません。
@@ -356,11 +356,11 @@ mado-tracking submit --site <siteのID> --watch --all      # PC: 止めるまで
 mado-tracking submit --site <siteのID> --registry-secret-file ~/.config/mado-tracking/pull.json   # SIFへの変換にregistryの認証を使う
 ```
 
-- 各Jobは、受け取ったときのsiteの設定・job shellの版・投入する本人の作業ディレクトリと変数で投入します。`--work-dir`と`--var NAME=VALUE`はその回だけ、その上に重ねます。
-- `--all`は、自分が所有する計算機で、自分以外のJobも含めて待っているJobを投入します（APIの`all`）。所有していない計算機では、受け取る前に止まります。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
+- 各Jobは、受け取ったときのsiteの設定・job shellのバージョン・投入する本人の作業ディレクトリと変数で投入します。`--work-dir`と`--var NAME=VALUE`はその回だけ、その上に重ねます。
+- `--all`は、自分が所有するコンピュータで、自分以外のJobも含めて待っているJobを投入します（APIの`all`）。所有していないコンピュータでは、受け取る前に止まります。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 - `--watch`は、`--interval`（秒、既定10、1以上）ごとに同じことを繰り返します。APIの一時的な失敗（接続できない、5xx、408、429）は表示して続け、tokenの失効などの拒否と設定の誤りで止まります。最初のSIGINT（Ctrl-C）かSIGTERMで、その回の投入と報告を終えてから止まります。2回目のCtrl-Cはすぐに止めます。job shellは別のsessionで動くので、Ctrl-Cで投入の途中に切れません。
 - `--registry-secret-file PATH`は、runnerがimageをSIFへ変換するときのregistryの認証です。中身はlauncherの`registry_secret_file`と同じJSON（`{"username", "password"}`）で、mode 600にします（グループ・他人が読めると、Jobを受け取る前に止まります）。回ごとに読み直し、runnerには仕様の置き場の`secrets.json`（600）で渡ります。passwordは表示とJobのエラーに出しません。
-- `--limit`は1回に受け取る数（1〜50）です。`--job-shell`・`--config`・`submit.toml`はありません（job shellはWebで版として管理します）。
+- `--limit`は1回に受け取る数（1〜50）です。`--job-shell`・`--config`・`submit.toml`はありません（job shellはWebでバージョンとして管理します）。
 - job shellの無いsiteや、作業ディレクトリが決まっていない（Webの設定に無く、`--work-dir`も無い）ときは、Jobを受け取らずに止まります。
 - 届かなかった報告は`~/.local/state/mado-tracking/submit/<siteのID>/pending/`（`XDG_STATE_HOME`）に残り、次の実行（`--watch`では次の回）で送り直します。tokenは表示に出しません。
 
@@ -386,7 +386,7 @@ with Client() as client:  # Jobの中ではJob token（MMT_API_TOKEN）と MMT_P
 **ジョブの雛形から登録（`mado-tracking code register`）**
 
 ```bash
-mado-tracking code register --job-file mmt-job.toml --project <Project ID> [--code <名前>] [--version <版>]
+mado-tracking code register --job-file mmt-job.toml --project <Project ID> [--code <名前>] [--version <バージョン>]
 ```
 
-`mmt-job.toml`（例: `examples/mmt-job.toml`）の`image`のtagを、OCI distribution APIでdigestに解決してから、DockerのCodeVersionとして登録します。registryには匿名で、または`MMT_REGISTRY_USERNAME`・`MMT_REGISTRY_PASSWORD`でBearer tokenを受け取って問い合わせます。同じ名前のCodeがあれば、そこに版を足します。版を省くと、`version`、無ければcommitとdigestの先頭から決めます。
+`mmt-job.toml`（例: `examples/mmt-job.toml`）の`image`のtagを、OCI distribution APIでdigestに解決してから、DockerのCodeVersionとして登録します。registryには匿名で、または`MMT_REGISTRY_USERNAME`・`MMT_REGISTRY_PASSWORD`でBearer tokenを受け取って問い合わせます。同じ名前のCodeがあれば、そこにバージョンを足します。バージョンを省くと、`version`、無ければcommitとdigestの先頭から決めます。

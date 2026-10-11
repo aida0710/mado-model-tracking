@@ -3,6 +3,7 @@ import { Menu, X } from 'lucide-react';
 import { text } from '../i18n/catalog';
 import type { NavigationGroup } from './navigationLinks';
 import { NavigationLinkList } from './NavigationLinkList';
+import { ProductLogo } from '../components/ProductLogo';
 
 /**
  * The main navigation on narrow screens: a menu button that opens the grouped links in a drawer
@@ -51,7 +52,7 @@ export function NavigationDrawer({ groups }: { groups: NavigationGroup[] }) {
       >
         <div className="navigation-drawer-panel">
           <div className="navigation-drawer-header">
-            <span>{text.appName}</span>
+            <ProductLogo />
             <button
               type="button"
               className="icon-button"

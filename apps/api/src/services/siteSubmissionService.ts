@@ -21,8 +21,13 @@ import { requireScope } from './accessService.js';
 import type { JobService } from './jobService.js';
 import { requireLauncher } from './launcherService.js';
 import type { RunCompletionService } from './runCompletionService.js';
-import { findSiteTarget, requireTargetUser } from './siteAccess.js';
-import { failUnstartedSiteJob, submissionCountSql } from './siteJobEnding.js';
+import {
+  canRunQueuedJob,
+  findSiteTarget,
+  requireTargetUser,
+  targetNotAvailable,
+} from './siteAccess.js';
+import { failUnstartedJob, submissionCountSql } from './siteJobEnding.js';
 import { resolveSubmissionAccount } from './siteReadiness.js';
 
 // Who holds claimed submissions: a launcher, or the requester with their own API token. A report
@@ -226,7 +231,7 @@ export class SiteSubmissionService {
       if (request.all && target.ownerUserId !== principal.user.id)
         throw new DomainError(
           403,
-          '全員のJobを投入できるのは、この計算機の所有者だけです',
+          '全員のJobを投入できるのは、このコンピュータの所有者だけです',
           'site_owner_required',
         );
       const holder = { tokenId, holderId: request.submitterId };
@@ -387,8 +392,9 @@ export class SiteSubmissionService {
     return occupancy.count < target.maxConcurrentJobs ? target : undefined;
   }
 
-  // A Job that cannot be described to the site (for example a deleted checkpoint, or a requester
-  // without an account on it) fails instead of blocking the queue on every claim.
+  // A Job that cannot be described to the site (for example a deleted checkpoint, a requester
+  // without an account on it, or one who may no longer use a private site) fails instead of
+  // blocking the queue on every claim.
   private async submit(
     connection: Connection,
     submission: {
@@ -401,10 +407,12 @@ export class SiteSubmissionService {
     const { target, members, holder } = submission;
     await connection.query(`SAVEPOINT ${SUBMISSION_SAVEPOINT}`);
     try {
+      // Every member of an array has the same requester.
+      if (!(await canRunQueuedJob(connection, members[0]!))) targetNotAvailable(422);
       const settings = await findSiteSettings(connection, target.id);
       const jobShell = settings ? await findCurrentJobShell(connection, target.id) : undefined;
       if (!settings || !jobShell)
-        throw new DomainError(422, 'この計算機にはjob shellがありません', 'site_submission_unready');
+        throw new DomainError(422, 'このコンピュータにはjob shellがありません', 'site_submission_unready');
       const requester = (await first<SiteSubmissionRequester>(
         connection,
         'SELECT u.id,u.email,u.username FROM runs r JOIN users u ON u.id=r.created_by WHERE r.id=$1',
@@ -440,7 +448,7 @@ export class SiteSubmissionService {
       await connection.query(`ROLLBACK TO SAVEPOINT ${SUBMISSION_SAVEPOINT}`);
       if (!(error instanceof DomainError)) throw error;
       for (const job of members)
-        await failUnstartedSiteJob(connection, this.runCompletion, {
+        await failUnstartedJob(connection, this.runCompletion, {
           job,
           endReason: 'submit_failed',
           error: error.message,
@@ -508,7 +516,7 @@ export class SiteSubmissionService {
   ): Promise<Job> {
     const { job } = failed;
     if (job.status === 'claimed' && job.phase === 'submitting')
-      return failUnstartedSiteJob(connection, this.runCompletion, {
+      return failUnstartedJob(connection, this.runCompletion, {
         job,
         endReason: 'submit_failed',
         error: failed.error ?? 'siteのjob shellが投入に失敗しました',

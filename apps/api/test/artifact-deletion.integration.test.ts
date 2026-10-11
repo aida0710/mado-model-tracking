@@ -135,7 +135,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
     ]);
   });
 
-  it('最新版を消すと同じpathの前の版が現在の版になる', async () => {
+  it('最新バージョンを消すと同じpathの前のバージョンが現在のバージョンになる', async () => {
     const fixture = await fixtureWithRun();
     const first = await fixture.upload('metrics.csv', 'step,loss\n1,0.9\n');
     const second = await fixture.upload('metrics.csv', 'step,loss\n1,0.5\n');
@@ -146,7 +146,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
     expect(await fixture.listedPaths()).toEqual([`metrics.csv:${first.id}`]);
   });
 
-  it('モデル版・DatasetVersion・保持中checkpointから参照されている間は409で、隠したcheckpointのファイルは消せる', async () => {
+  it('モデルバージョン・DatasetVersion・保持中checkpointから参照されている間は409で、隠したcheckpointのファイルは消せる', async () => {
     const fixture = await fixtureWithRun();
     const weights = await fixture.upload('model/weights.bin', 'weights');
     const sample = await fixture.upload('data/sample.wav', 'RIFF');
@@ -192,7 +192,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
     );
 
     for (const [artifact, label] of [
-      [weights, '登録モデル版'],
+      [weights, '登録モデルバージョン'],
       [sample, 'DatasetVersion'],
       [checkpointFile, '保持中のcheckpoint'],
     ] as const) {
@@ -323,7 +323,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
     ).toMatchObject({ removedBlobs: 1, failedBlobs: 0 });
   });
 
-  it('使用量は保存先ごとに、参照されていない古い版を数える', async () => {
+  it('使用量は保存先ごとに、参照されていない古いバージョンを数える', async () => {
     const fixture = await fixtureWithRun();
     await fixture.upload('a.txt', '1111');
     await fixture.upload('a.txt', '22');
@@ -373,7 +373,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
     ).toBe(403);
   });
 
-  it('MLflowのDELETEは参照されていない版だけを消し、登録モデル版のbytesは変わらない', async () => {
+  it('MLflowのDELETEは参照されていないバージョンだけを消し、登録モデルバージョンのbytesは変わらない', async () => {
     const fixture = await registeredVersionFixture(harness, 'run');
     // A newer upload replaces the registered bytes at the path; only the newer one is unreferenced.
     await entity(
@@ -453,7 +453,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactの削除とgarbage collection（独�
   });
 
   it.skipIf(!existsSync(mlflowSdkPythonPath))(
-    '公式SDKのdelete_artifactsでRunの一覧・取得から消え、登録モデル版はそのまま読める',
+    '公式SDKのdelete_artifactsでRunの一覧・取得から消え、登録モデルバージョンはそのまま読める',
     async () => {
       const fixture = await registeredVersionFixture(harness, 'run');
       await entity(

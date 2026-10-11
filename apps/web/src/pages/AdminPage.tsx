@@ -1,44 +1,37 @@
-import { useState, type ComponentType } from 'react';
-import { Navigate } from 'react-router-dom';
-import { PageHeader } from '../components/PageHeader';
-import { Tabs } from '../components/Tabs';
+import type { ComponentType } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
 import { AuditEventsPanel } from '../components/admin/AuditEventsPanel';
 import { LaunchersPanel } from '../components/admin/LaunchersPanel';
+import { ProjectsPanel } from '../components/admin/ProjectsPanel';
 import { StorageBackendsPanel } from '../components/admin/StorageBackendsPanel';
 import { UsersPanel } from '../components/admin/UsersPanel';
 import { useAuth } from '../hooks/useAuth';
 import { isGlobalAdmin } from '../lib/permissions';
-import { text } from '../i18n/catalog';
+import {
+  DEFAULT_SETTINGS_SECTION,
+  isAdminSection,
+  settingsSectionPath,
+  type AdminSection,
+} from '../layout/settingsSections';
 
-const ADMIN_TAB_PANEL_ID = 'admin-tab-panel';
+// Each section heads itself (SettingsPageHeader) with its own actions; the sidebar switches them.
+const ADMIN_SECTION_PANELS: Record<AdminSection, ComponentType> = {
+  projects: ProjectsPanel,
+  users: UsersPanel,
+  storage: StorageBackendsPanel,
+  launchers: LaunchersPanel,
+  audit: AuditEventsPanel,
+};
 
-// Adding a tab is one entry here. The first entry is the default tab.
-const adminTabs: Array<{ key: string; label: string; component: ComponentType }> = [
-  { key: 'users', label: text.adminTabUsers, component: UsersPanel },
-  { key: 'storage', label: text.adminTabStorage, component: StorageBackendsPanel },
-  { key: 'launchers', label: text.adminTabLaunchers, component: LaunchersPanel },
-  { key: 'audit', label: text.adminTabAudit, component: AuditEventsPanel },
-];
-
-/** Global administration (/admin). The API refuses everyone else; others are sent back home. */
+/**
+ * 全体設定 → 全体管理 (/settings/<section>), for global administrators. Anyone else, whom the API
+ * would refuse, and an unknown section land on the user's own account in 全体設定.
+ */
 export function AdminPage() {
   const auth = useAuth();
-  const [selectedKey, setSelectedKey] = useState(adminTabs[0]!.key);
-  if (!isGlobalAdmin(auth.user)) return <Navigate replace to="/" />;
-  const selected = adminTabs.find((tab) => tab.key === selectedKey) ?? adminTabs[0]!;
-  const Panel = selected.component;
-  return (
-    <>
-      <PageHeader title={text.administration} />
-      <Tabs
-        tabs={adminTabs}
-        selected={selected.key}
-        onSelect={setSelectedKey}
-        panelId={ADMIN_TAB_PANEL_ID}
-      />
-      <div id={ADMIN_TAB_PANEL_ID} role="tabpanel">
-        <Panel />
-      </div>
-    </>
-  );
+  const { section } = useParams();
+  if (!isGlobalAdmin(auth.user) || !isAdminSection(section))
+    return <Navigate replace to={settingsSectionPath(DEFAULT_SETTINGS_SECTION)} />;
+  const Panel = ADMIN_SECTION_PANELS[section];
+  return <Panel />;
 }

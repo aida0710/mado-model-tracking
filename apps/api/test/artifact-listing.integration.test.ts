@@ -126,7 +126,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactブラウザの一覧・tree・catalo
     );
   });
 
-  it('treeはprefixの直下のディレクトリと、その下の最新版の件数・合計サイズを返す', async () => {
+  it('treeはprefixの直下のディレクトリと、その下の最新バージョンの件数・合計サイズを返す', async () => {
     const fixture = await artifactFixture(harness);
     for (const [path, body] of [
       ['audio/a.wav', 'aaaa'],
@@ -258,7 +258,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactブラウザの一覧・tree・catalo
     expect(items.map((item) => item.id)).toEqual(stored.map((row) => row.id));
   });
 
-  it('Project catalogをMIME種別・Run・モデル版・最新版だけで絞り込める', async () => {
+  it('Project catalogをMIME種別・Run・モデルバージョン・最新バージョンだけで絞り込める', async () => {
     const fixture = await artifactFixture(harness);
     const wav = await uploadRunArtifact(harness, fixture, {
       path: 'audio/a.wav',

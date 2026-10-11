@@ -38,7 +38,7 @@ python3 --version
 
 Issue the worker token to a Service Account, which is not tied to a person and keeps working when the issuer leaves the Project. A Project admin does this in the web UI.
 
-1. Open the Project's **Settings** and press **Service Accountを作成** (Create Service Account) under **Service Accounts**.
+1. Open **プロジェクト設定** (Project settings) and press **Service Accountを作成** (Create Service Account) under **Service Accounts**.
 2. Enter a name such as `gpu-host-1-worker`, choose Role `Admin`, and save. The `worker:execute` scope can only be issued to Service Accounts with the Admin role.
 3. Press **API tokenを発行** (Issue API token) on the new row and choose scopes and an expiry.
 
@@ -60,9 +60,9 @@ See [API tokens and Service Accounts](/en/admin/tokens) for details.
 Open a terminal on the worker machine and install the Python package `mado-tracking` into a dedicated venv. The example installs from the GitHub repository; replace the `pip install` argument if you have an internal package index or a wheel.
 
 ```bash
-git clone https://github.com/aida0710/mado-model-tracking.git ~/mado-model-tracking
+git clone https://github.com/aida0710/mado-ml-tracking.git ~/mado-ml-tracking
 python3 -m venv ~/.local/share/mado-tracking-worker/venv
-~/.local/share/mado-tracking-worker/venv/bin/pip install "$HOME/mado-model-tracking/python[telemetry]"
+~/.local/share/mado-tracking-worker/venv/bin/pip install "$HOME/mado-ml-tracking/python[telemetry]"
 ~/.local/share/mado-tracking-worker/venv/bin/mado-tracking-worker --help
 ```
 
@@ -124,9 +124,9 @@ Finally, check that **Workers** in Compute shows the worker as online with its v
 ## 4. Upgrade
 
 ```bash
-git -C ~/mado-model-tracking pull
+git -C ~/mado-ml-tracking pull
 ~/.local/share/mado-tracking-worker/venv/bin/mado-tracking-worker upgrade \
-  --worker-id gpu-host-1 --package-spec "$HOME/mado-model-tracking/python[telemetry]"
+  --worker-id gpu-host-1 --package-spec "$HOME/mado-ml-tracking/python[telemetry]"
 ```
 
 To install a version from an internal package index, use `--version 0.2.0` instead of `--package-spec`.

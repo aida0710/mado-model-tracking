@@ -303,7 +303,7 @@ describe.skipIf(!testDatabaseUrl)('フック・webhook・ドライバー（独�
     expect(await executions(hook.id)).toHaveLength(2);
   });
 
-  it('学習中に登録された版は学習Runの成功を待ってから起動する', async () => {
+  it('学習中に登録されたバージョンは学習Runの成功を待ってから起動する', async () => {
     // A registration has no end status, so this condition could never match.
     const unusable = await request(harness.app, `${fixture.basePath}/hooks`, {
       method: 'POST',

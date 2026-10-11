@@ -11,10 +11,10 @@ Runの失敗、自動実行の失敗、Jobのheartbeatの途絶、workerの停�
 
 | 設定 | 担当 | 場所 |
 | --- | --- | --- |
-| 通知先（どこへ送るか） | 全体管理者 | Projectの［Settings］の「通知」→「通知先」 |
-| 通知ルール（どのイベントをどの通知先へ送るか） | ProjectのAdmin | Projectの［Settings］の「通知」→「通知ルール」 |
+| 通知先（どこへ送るか） | 全体管理者 | ［プロジェクト設定］の「通知」→「通知先」 |
+| 通知ルール（どのイベントをどの通知先へ送るか） | ProjectのAdmin | ［プロジェクト設定］の「通知」→「通知ルール」 |
 
-![Projectの［Settings］の「通知」](/images/admin-notifications.png)
+![［プロジェクト設定］の「通知」](/images/admin-notifications.png)
 
 ## 通知できるイベント
 
@@ -55,7 +55,7 @@ openssl rand -hex 32
 ```sh
 # STARTTLSなら smtp://...:587、最初からTLSなら smtps://...:465
 MMT_SMTP_URL=smtps://<user>:<password>@smtp.example.com:465
-MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
+MMT_SMTP_FROM=mado ML Tracking <mmt@example.com>
 ```
 
 - userとpasswordに記号を含むときは、URLエンコードします。URLの`?`以降は受け付けません。
@@ -64,7 +64,7 @@ MMT_SMTP_FROM=Mado Model Tracking <mmt@example.com>
 
 ## 2. 通知先を追加する（全体管理者）
 
-1. Projectの［Settings］を開き、「通知」の「通知先」で［通知先を追加］を押します。
+1. ［プロジェクト設定］を開き、「通知」の「通知先」で［通知先を追加］を押します。
 2. 種類ごとに次の値を入力して保存します。
 
 | 種類 | 入力する項目 | 入力値の例 |

@@ -25,7 +25,7 @@ docker buildx imagetools inspect forge.example.org/mmt/base:pytorch-25.10-sdk0.1
 ```
 
 - 複数のplatformを1つのtagにまとめるには、containerdのimage storeを使うDocker（Docker Desktopの既定）か、`docker buildx create --name mmt --driver docker-container --use`で作ったbuilderが要ります。
-- tagには、土台の版とSDKの版を入れます。同じtagを上書きしないでください。依頼のときにtagはdigestへ解決して記録されるので、過去のRunは元のimageのままですが、どの中身かを人が追えなくなります。
+- tagには、土台のバージョンとSDKのバージョンを入れます。同じtagを上書きしないでください。依頼のときにtagはdigestへ解決して記録されるので、過去のRunは元のimageのままですが、どの中身かを人が追えなくなります。
 - registryとの認証は[Forgejoの説明](../../deploy/forgejo/README.md)にあります。
 
 ### Apple Silicon（arm64）のMacでは
@@ -48,7 +48,7 @@ docker buildx imagetools inspect forge.example.org/mmt/base:pytorch-25.10-sdk0.1
 
 ## 土台の選び方
 
-`--build-arg BASE_IMAGE=...`で土台を変えます。NGCのtagごとに、必要なGPUドライバーの版が違います。サイトの`nvidia-smi`で版を確かめ、NGCのrelease notesと照らします。
+`--build-arg BASE_IMAGE=...`で土台を変えます。NGCのtagごとに、必要なGPUドライバーのバージョンが違います。サイトの`nvidia-smi`でバージョンを確かめ、NGCのrelease notesと照らします。
 
 | `BASE_IMAGE` | CUDA | NGCが前提とするドライバー |
 |---|---|---|
@@ -57,7 +57,7 @@ docker buildx imagetools inspect forge.example.org/mmt/base:pytorch-25.10-sdk0.1
 
 データセンター向けのGPUでは、古いドライバーでもCUDAの前方互換で動く場合があります（NGCのrelease notesの「Driver Requirements」）。CPUだけのJob向けには、Python 3.11以上の小さいimage（例: `python:3.12-slim-bookworm`）も土台にできます。
 
-SDKの追加の依存は`--build-arg MMT_SDK_EXTRAS=telemetry`（psutilとnvidia-ml-py。コンテナの中からsystem metricsを送るとき）のように入れます。既定では入れず、土台の版のnumpyなどをそのまま使います。
+SDKの追加の依存は`--build-arg MMT_SDK_EXTRAS=telemetry`（psutilとnvidia-ml-py。コンテナの中からsystem metricsを送るとき）のように入れます。既定では入れず、土台のバージョンのnumpyなどをそのまま使います。
 
 ## 研究者のimage（差分の層だけ）
 
@@ -74,8 +74,8 @@ LABEL org.opencontainers.image.source=https://forge.example.org/team/tts-gen
 ```
 
 - コードはimageに入れません。runnerが雛形のrepoのcommitを`/mmt/source`にmountします。imageには依存だけを入れるので、コードを変えるたびにbuildし直す必要がありません。
-- NGCのimageはpipの制約ファイル（`PIP_CONSTRAINT=/etc/pip/constraint.txt`）でtorchなどの版を固定しています。`requirements.txt`がそれと合わないと、pipが失敗します。torchの版を変えたいときは、別の`BASE_IMAGE`を選びます。
-- 実行先のCPU（計算機の`cpuArch`）向けのimageが含まれている必要があります。富岳やMiyabi-GなどArmのサイトで使うimageは、arm64を含めてbuildします。Apptainerのサイトでは、runnerがimageのdigestとCPUの組ごとに一度だけSIFへ変換して使い回します。
+- NGCのimageはpipの制約ファイル（`PIP_CONSTRAINT=/etc/pip/constraint.txt`）でtorchなどのバージョンを固定しています。`requirements.txt`がそれと合わないと、pipが失敗します。torchのバージョンを変えたいときは、別の`BASE_IMAGE`を選びます。
+- 実行先のCPU（コンピュータの`cpuArch`）向けのimageが含まれている必要があります。富岳やMiyabi-GなどArmのサイトで使うimageは、arm64を含めてbuildします。Apptainerのサイトでは、runnerがimageのdigestとCPUの組ごとに一度だけSIFへ変換して使い回します。
 - 手元で確かめます。
 
   ```bash

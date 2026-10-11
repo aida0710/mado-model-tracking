@@ -56,7 +56,7 @@ export class SiteJobShellService {
     return recordDenial(this.database, draft, () =>
       transaction(this.database, async (connection) => {
         const target = await findSiteTarget(connection, targetId, { lock: true });
-        await requireTargetManager(connection, principal, target);
+        requireTargetManager(principal, target);
         await lockSiteSettings(connection, target.id);
         const current = await findCurrentJobShell(connection, target.id);
         if (current?.content === request.content) return { shell: current, created: false };

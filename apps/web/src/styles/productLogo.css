@@ -1,0 +1,36 @@
+/* 製品のロゴ（ProductLogo）。印と名前を並べる。名前の前の mado は通常の太さ、製品の部分は
+   上部バーの .brand strong と同じ 600。ログイン画面の .login-mark は全体が 600 なので、前の部分だけ
+   通常の太さに戻す。 */
+.product-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.product-prefix {
+  font-weight: 400;
+}
+.navigation-drawer-header strong,
+.login-mark strong {
+  font-weight: 600;
+}
+/* 印は名前の文字（14〜16px）より一回り大きく、線は層ごとに同じ太さ。 */
+.product-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: miter;
+  stroke-linecap: square;
+}
+.product-mark-layer {
+  stroke: currentColor;
+}
+.product-mark-top {
+  stroke: var(--accent);
+}
+/* 黒い上部バーとドロワーでは、選択中の印と同じ明るい強調色を使う。 */
+.brand .product-mark-top,
+.navigation-drawer-header .product-mark-top {
+  stroke: var(--header-indicator);
+}

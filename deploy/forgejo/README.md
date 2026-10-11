@@ -89,7 +89,7 @@ command lineで登録するときは`forgejo admin auth add-oauth --name authent
   docker login forge.example.org -u <username>      # passwordにアクセストークンを入れる
   ```
 
-- 計算機がimageを取得するときは、取得用のユーザー（bot）を作り、`read:package`だけのtokenを発行します。launcherの`registry_secret_file`（`{"username": "...", "password": "<token>"}`、mode 600）に置くと、runnerが`apptainer pull`や`docker pull`に使います。
+- コンピュータがimageを取得するときは、取得用のユーザー（bot）を作り、`read:package`だけのtokenを発行します。launcherの`registry_secret_file`（`{"username": "...", "password": "<token>"}`、mode 600）に置くと、runnerが`apptainer pull`や`docker pull`に使います。
 - multi-archのbuildとpushは[base imageの説明](../../images/base/README.md)にあります。
 
 ## mirror

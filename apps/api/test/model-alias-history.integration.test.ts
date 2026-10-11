@@ -1,11 +1,10 @@
-import { createHash } from 'node:crypto';
-import { readdir, readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Model, ModelAliasEvent, ModelAliasEventPage, ModelVersion } from '@mmt/contracts';
 import { transaction } from '../src/db/database.js';
 import { migrate } from '../src/db/migrate.js';
 import { assignModelAlias } from '../src/repositories/modelAliasRepository.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
+import { applyMigrationsBefore } from './migrationFixtures.js';
 import { projectFixture } from './fixtures.js';
 
 type ProjectFixture = Awaited<ReturnType<typeof projectFixture>>;
@@ -82,7 +81,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     await harness?.close();
   });
 
-  it('native PUTで版を切り替えると旧版→新版・操作者・理由のeventが1件増え、同じ版の再設定では増えない', async () => {
+  it('native PUTでバージョンを切り替えると旧バージョン→新バージョン・操作者・理由のeventが1件増え、同じバージョンの再設定では増えない', async () => {
     const fixture = await registryFixture(harness);
     const [first, second] = fixture.versions;
     await entity<Model>(
@@ -187,7 +186,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     expect(response.status).toBe(422);
   });
 
-  it('MLflowのalias設定・解除、版の削除、Registered Modelの削除がそれぞれのsourceでeventを残す', async () => {
+  it('MLflowのalias設定・解除、バージョンの削除、Registered Modelの削除がそれぞれのsourceでeventを残す', async () => {
     const fixture = await registryFixture(harness);
     const mlflow = (path: string, method: string, body: unknown) =>
       request(harness.app, `${fixture.mlflowBase}/${path}`, {
@@ -430,7 +429,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     ).toBe(404);
   });
 
-  it('2つのtransactionで同時に切り替えても、previous_version_idは前のeventの版と連鎖する', async () => {
+  it('2つのtransactionで同時に切り替えても、previous_version_idは前のeventのバージョンと連鎖する', async () => {
     const fixture = await registryFixture(harness);
     const [first, second, third] = fixture.versions;
     const actor = { userId: fixture.editor.userId, tokenId: null };
@@ -538,21 +537,7 @@ describe.skipIf(!testDatabaseUrl)('alias履歴の移行（独立PostgreSQL）', 
   });
 
   it('移行時点の既存aliasをmigration snapshotの初期eventとして残す', async () => {
-    const directory = new URL('../src/db/migrations/', import.meta.url);
-    await harness.database.query(
-      'CREATE TABLE schema_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())',
-    );
-    const earlier = (await readdir(directory))
-      .filter((name) => name.endsWith('.sql') && name < '016_model_alias_events.sql')
-      .sort();
-    for (const name of earlier) {
-      const sql = await readFile(new URL(name, directory), 'utf8');
-      await harness.database.query(sql);
-      await harness.database.query('INSERT INTO schema_migrations(name,sha256) VALUES($1,$2)', [
-        name,
-        createHash('sha256').update(sql).digest('hex'),
-      ]);
-    }
+    await applyMigrationsBefore(harness.database, '016_model_alias_events.sql');
     const legacy = await harness.database.query(`
       WITH project AS (INSERT INTO projects(name) VALUES('Legacy') RETURNING id),
       model AS (INSERT INTO models(project_id,name,family) SELECT id,'Legacy model','qwen2' FROM project RETURNING id,project_id),

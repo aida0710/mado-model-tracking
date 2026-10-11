@@ -51,17 +51,16 @@ export const automaticSiteSettings: SiteSettings = {
   jobShell: currentJobShellSummary,
 };
 
-// A global automatic site as a global administrator sees it.
+// A public automatic site from before owners, as a global administrator sees it.
 export const globalSiteDetails: ComputeTargetDetails = {
   ...siteTarget,
   submissionMode: 'automatic',
   ownerName: null,
-  projectIds: [],
   site: automaticSiteSettings,
   siteAccountMode: 'personal',
 };
 
-// A researcher's PC: manual, shared with one Project, as its owner sees it.
+// A researcher's PC: manual and public, as its owner sees it.
 export const ownedSiteDetails: ComputeTargetDetails = {
   ...siteTarget,
   id: 'pc',
@@ -72,7 +71,6 @@ export const ownedSiteDetails: ComputeTargetDetails = {
   runtimeKinds: ['docker'],
   ownerUserId: 'alice',
   ownerName: 'Alice',
-  projectIds: ['project'],
   // Manual sites always run as whoever submits.
   siteAccountMode: 'personal',
   site: {
@@ -92,10 +90,9 @@ export const ownedSiteDetails: ComputeTargetDetails = {
   },
 };
 
-// The same PC as a member of the shared Project sees it: what it is, not how it is reached.
-export const sharedSiteForMember: ComputeTargetDetails = {
+// The same PC as someone else who may use it sees it: what it is, not how it is reached.
+export const publicSiteForUser: ComputeTargetDetails = {
   ...ownedSiteDetails,
-  projectIds: [],
   site: null,
 };
 

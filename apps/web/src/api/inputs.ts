@@ -1,5 +1,4 @@
 import type {
-  ArtifactBackend,
   CodeSource,
   ComputeTarget,
   ComputeTargetSiteFields,
@@ -14,11 +13,6 @@ import type {
   RunStatus,
 } from '@mmt/contracts';
 
-export interface CreateProject {
-  name: string;
-  description?: string;
-  artifactBackend?: ArtifactBackend;
-}
 export interface CreateRun {
   experimentId: string;
   name: string;
@@ -83,15 +77,15 @@ export interface CreateToken {
   expiresAt?: string;
 }
 /**
- * POST /targets: the target's own fields and, for a site, its global settings, owner, sharing and
- * first job shell (ComputeTargetSiteFields). The API sets the owner from `personal`.
+ * POST /targets: the target's own fields with its visibility and, for a site, its global settings
+ * and first job shell (ComputeTargetSiteFields). Whoever adds it becomes its owner.
  */
 export type CreateTarget = Omit<ComputeTarget, 'id' | 'ownerUserId'> & ComputeTargetSiteFields;
 /**
- * PATCH /targets/:id: some of the target's fields and its site settings. The owner never changes,
- * sharing has its own PUT, and a job shell edit saves a new version (siteComputersApi).
+ * PATCH /targets/:id: some of the target's fields (its visibility too) and its site settings. The
+ * owner never changes, and a job shell edit saves a new version (siteComputersApi).
  */
-export type UpdateTarget = Partial<Omit<CreateTarget, 'personal' | 'projectIds' | 'jobShell'>>;
+export type UpdateTarget = Partial<Omit<CreateTarget, 'jobShell'>>;
 export type CreateTask = Omit<ExperimentTask, 'id' | 'projectId' | 'revision' | 'createdAt' | 'updatedAt'>;
 export type UpdateTask = Partial<Omit<CreateTask, 'experimentId'>> & { expectedRevision: number };
 export interface LaunchTask {

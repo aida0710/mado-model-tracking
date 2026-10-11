@@ -11,11 +11,11 @@ pluginは本体から独立したHTTP serviceです。別リポジトリで管�
 | `POST /events` | PluginEvent → `{accepted:true}` |
 | `GET /metrics` | `storage:metrics`対応時。Prometheus text形式 |
 
-`PluginDataset`は`externalId,namespace,name,version,uri,digest,schema,metadata`を返します。版がないdatasetは返しません。本体へのimportは外部IDを保持し、同じ版を再importしたら同じDatasetVersionを返します。digestがcontent hash以外の場合は値の意味をplugin側で明示します。
+`PluginDataset`は`externalId,namespace,name,version,uri,digest,schema,metadata`を返します。バージョンがないdatasetは返しません。本体へのimportは外部IDを保持し、同じバージョンを再importしたら同じDatasetVersionを返します。digestがcontent hash以外の場合は値の意味をplugin側で明示します。
 
 `PluginEvent`にはUUIDのid、Runの状態、timestamp、Project ID、Run、input/output DatasetVersionが入ります。種類は`run.started`/`run.finished`/`run.failed`/`run.canceled`。本体はRunの状態変更とoutbox保存を同じDB transactionで行います。通信失敗はbackoffして再送します。pluginはevent IDを使って重複を処理し、成功していないイベントをacceptedにしないでください。
 
-終了後のRunへ出力DatasetVersionを登録した場合も、その出力を含む新しい完了eventを同じtransactionで保存します。Runの終了時刻は保持します。Madoから取り込んだ版のidentityは維持し、本体のデータセットはProject IDを含むnameで別Projectの同名・同版と区別します。
+終了後のRunへ出力DatasetVersionを登録した場合も、その出力を含む新しい完了eventを同じtransactionで保存します。Runの終了時刻は保持します。Madoから取り込んだバージョンのidentityは維持し、本体のデータセットはProject IDを含むnameで別Projectの同名・同バージョンと区別します。
 
 PluginのUI部品や任意のJavaScriptはブラウザで実行しません。画面は共通のデータセット検索・import・接続検査・再送・metrics表示を提供します。将来の実行backend拡張はprotocol versionとcapabilityを追加して設計します。
 

@@ -36,15 +36,15 @@ export const automationText = {
   upstreamInvalid: '同じプロジェクトの有効な別のruleを上流に選択してください。',
   reservedTag: (key: string) =>
     `tag「${key}」は使えません。automation. と mmt. で始まるtagはサーバーが付けます。`,
-  applyToVersion: '既存の版に適用',
-  applyVersion: '適用する版',
+  applyToVersion: '既存のバージョンに適用',
+  applyVersion: '適用するバージョン',
   applyUpstreamRun: '上流のRun',
   applyConfirm: '適用する',
   applyConfirmMessage: (ruleName: string, targetLabel: string) =>
     `「${ruleName}」を ${targetLabel} に適用し、Jobを登録します。`,
-  applyNoVersions: '対象モデル系列の版がありません。',
+  applyNoVersions: '対象モデル系列のバージョンがありません。',
   applyNoUpstreamRuns: '上流ruleが作ったRunがありません。',
-  applyRunning: 'このruleと版の実行が進行中です。終わってから適用してください。',
+  applyRunning: 'このruleとバージョンの実行が進行中です。終わってから適用してください。',
   applyInvalidRule: 'このruleは適用できません。',
   applied: 'Jobを登録しました。自動実行履歴で状態を確認できます。',
   automaticRun: '自動',
@@ -52,7 +52,7 @@ export const automationText = {
   retryOf: (attempt: number) => `${attempt}回目の失敗を自動で再試行`,
   rerun: '再実行',
   rerunConfirmMessage: (ruleName: string) =>
-    `「${ruleName}」を同じ版にもう一度適用し、新しいJobを登録します。`,
+    `「${ruleName}」を同じバージョンにもう一度適用し、新しいJobを登録します。`,
   rerunDone: '再実行を登録しました。',
   owner: '所有者',
   ownerHuman: (name: string) => `${name}（人）`,

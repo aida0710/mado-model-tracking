@@ -1,6 +1,7 @@
 // Isolated browser-test API. This module is never imported by production code.
 import { createHash } from 'node:crypto';
 import { listProjectArtifacts, listRunArtifacts, runArtifactTree } from './artifactListingMock.mjs';
+import { createProjectAdministration } from './projectAdministrationMock.mjs';
 // The API default of MMT_ARTIFACT_DELETE_GRACE_DAYS (apps/api/src/config.ts).
 const DEFAULT_ARTIFACT_DELETE_GRACE_DAYS = 7;
 // TokenSummary.tokenPrefix: the first characters of the token value.
@@ -14,6 +15,41 @@ const EMPTY_PROJECT_LISTS = [
   'notification-rules',
   'notification-deliveries',
 ];
+// Whose Jobs a computer takes, as the API decides (targetUsableSql): everyone's on a public one,
+// its owner's on a private one. The mock has no Service Accounts.
+function isTargetUsable(target, user) {
+  return target.visibility === 'public' || target.ownerUserId === user.id;
+}
+
+function isTargetManager(target, user) {
+  return user.isAdmin || target.ownerUserId === user.id;
+}
+
+// GET /targets/overview: a row for every computer, with nothing of how it is reached.
+function targetOverview(target, state) {
+  const launcher =
+    target.executor === 'site' && target.submissionMode === 'automatic' && target.site?.launcherId
+      ? state.launchers.find((item) => item.id === target.site.launcherId)
+      : undefined;
+  return {
+    id: target.id,
+    name: target.name,
+    executor: target.executor,
+    submissionMode: target.submissionMode,
+    cpuArch: target.cpuArch,
+    supportsArray: target.supportsArray,
+    enabled: target.enabled,
+    visibility: target.visibility,
+    ownerUserId: target.ownerUserId,
+    ownerName: target.ownerName,
+    usable: isTargetUsable(target, state.user),
+    canManage: isTargetManager(target, state.user),
+    launcher: launcher
+      ? { name: launcher.name, lastSeenAt: launcher.lastSeenAt, revoked: launcher.revokedAt !== null }
+      : null,
+  };
+}
+
 export function createBrowserApi() {
   let sequence = 100;
   const id = () => `00000000-0000-4000-8000-${String(sequence++).padStart(12, '0')}`;
@@ -32,9 +68,12 @@ export function createBrowserApi() {
     name: 'UI検証用プロジェクト',
     description: 'ブラウザテストのAPIデータ',
     artifactBackend: 'filesystem',
+    // Projects that existed before visibility stay private (migration 054).
+    visibility: 'private',
     role: 'admin',
     createdAt: now,
   };
+  const projectAdministration = createProjectAdministration({ id, now, user, mainProject: project });
   const experiment = {
     id: id(),
     projectId: project.id,
@@ -201,10 +240,10 @@ export function createBrowserApi() {
     cpuArch: 'amd64',
     supportsArray: false,
     queueTimeoutSeconds: null,
-    // Migration 053: a global target, which GET /targets lists without site settings.
+    // Migration 057: a target from before owners is public, and GET /targets lists it to everyone.
     ownerUserId: null,
     ownerName: null,
-    projectIds: [],
+    visibility: 'public',
     site: null,
     siteAccountMode: null,
   };
@@ -240,6 +279,8 @@ export function createBrowserApi() {
   const state = {
     user,
     project,
+    // Every Project with its archive state, and the bodies POST /projects received.
+    projectAdministration: projectAdministration.state,
     loggedIn: false,
     authMode: 'development',
     experiments: [experiment],
@@ -325,21 +366,36 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
     if (!state.loggedIn) return reply({ error: 'Unauthorized' }, 401);
     if (path === '/storage/backends')
       return reply({ items: ['filesystem', 's3'], defaultBackend: 'filesystem' });
-    if (path === '/projects' && method === 'GET') return list([project]);
-    if (path === `/projects/${project.id}` && method === 'PATCH') {
-      Object.assign(project, body);
-      return reply(project);
-    }
+    const projectAnswer = projectAdministration.handle({
+      path,
+      method,
+      url,
+      body,
+      reply,
+      list,
+      fulfillEmpty: () => route.fulfill({ status: 204, body: '' }),
+    });
+    if (projectAnswer) return projectAnswer;
+    if (path === '/targets/overview' && method === 'GET')
+      return list(state.targets.map((target) => targetOverview(target, state)));
     if (path === '/targets') {
-      if (method === 'GET') return list(state.targets);
-      // The create-only fields (owner, sharing, first job shell) are not part of the target.
-      const { personal, projectIds, jobShell: _jobShell, site, ...fields } = body;
+      // With projectId, the screens that create Jobs: only what the user may run on.
+      if (method === 'GET')
+        return list(
+          state.targets.filter(
+            (target) =>
+              isTargetUsable(target, user) ||
+              (!url.searchParams.has('projectId') && isTargetManager(target, user)),
+          ),
+        );
+      // The first job shell is not part of the target; whoever adds it owns it.
+      const { jobShell: _jobShell, site, ...fields } = body;
       const target = {
         id: id(),
         ...fields,
-        ownerUserId: personal ? user.id : null,
-        ownerName: personal ? user.displayName : null,
-        projectIds: personal ? (projectIds ?? []) : [],
+        visibility: fields.visibility ?? 'private',
+        ownerUserId: user.id,
+        ownerName: user.displayName,
         site: site ? { ...site, jobShell: null } : null,
         siteAccountMode: site ? (site.accountMode ?? 'personal') : null,
       };
@@ -347,6 +403,14 @@ mado_storage_capacity_collection_failures{connection_id="ui-c1",bucket="unmeasur
       return reply(target, 201);
     }
     if (path === '/launchers' && method === 'GET') return list(state.launchers);
+    // 全体設定 → アカウント (/settings/account), where the user menu and redirects land.
+    if (path === '/account' && method === 'GET')
+      return reply({
+        user: { ...user, lastLoginAt: now, createdAt: now },
+        groups: [],
+        groupsSyncedAt: null,
+        sessionAuthMethod: 'local',
+      });
     if (path === '/tokens') {
       if (method === 'GET') return list(state.tokens);
       // TokenSummary of a token the signed-in user issues for themselves.

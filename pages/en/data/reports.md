@@ -22,7 +22,7 @@ The web UI is in Japanese. This page shows UI labels in Japanese followed by an 
 
 ## Create a report
 
-1. Open **Reports** in the top bar and click **レポートを作成** (Create report).
+1. Open **Reports** in the sidebar and click **レポートを作成** (Create report).
 2. Enter a title and click **作成** (Create). The editor opens.
 3. Add blocks with **文章を追加** (Add text) or **図や表を埋め込む** (Embed a chart or table).
 4. Optionally describe the change in **変更の説明** (Change description).
@@ -69,17 +69,17 @@ Fixed media comparisons point to Artifacts. Artifacts never change, so the audio
 
 ## Version history
 
-The top of a report shows the current version number, who updated it, and when (for example 版 4・admin@localhostが2026/10/08 23:25に更新).
+The top of a report shows the current version number, who updated it, and when (for example バージョン 4・admin@localhostが2026/10/08 23:25に更新).
 
-1. Click **版の履歴** (Version history). Each version shows who saved it, when, and the change description.
-2. Click **表示** (View) on an earlier version to open it read-only. **最新の版を表示** (Show latest version) returns.
-3. To go back to an earlier version, click **この版に戻す** (Restore this version) and confirm in the 版を戻す (Restore version) dialog.
+1. Click **バージョンの履歴** (Version history). Each version shows who saved it, when, and the change description.
+2. Click **表示** (View) on an earlier version to open it read-only. **最新のバージョンを表示** (Show latest version) returns.
+3. To go back to an earlier version, click **このバージョンに戻す** (Restore this version) and confirm in the バージョンを戻す (Restore version) dialog.
 
 Restoring creates a new version with that version's content. No version is removed from the history, and the fixed data of the restored version is reused as is.
 
 ### Concurrent edits
 
-If someone saved a newer version first, your changes are not saved and a message explains why. Click **最新の版を読み込む** (Load the latest version), then edit again. Loading the latest version discards unsaved changes on screen.
+If someone saved a newer version first, your changes are not saved and a message explains why. Click **最新のバージョンを読み込む** (Load the latest version), then edit again. Loading the latest version discards unsaved changes on screen.
 
 ## Sharing and permissions
 

@@ -16,8 +16,11 @@ const USER_SEARCH_LIMIT = 20;
 export class UserDirectoryService {
   constructor(private readonly database: Database) {}
 
+  // Whoever may create a Project (POST /projects) picks its first members here, so the same check
+  // applies. A Project-scoped token cannot create Projects and still needs the admin role there.
   async searchUsers(principal: Principal, query: string): Promise<UserSearchResult[]> {
-    await this.requireAccessAdministrator(principal);
+    requireScope(principal, 'admin');
+    if (principal.token?.projectId) await this.requireAccessAdministrator(principal);
     return searchActiveUsers(this.database, { query, limit: USER_SEARCH_LIMIT });
   }
 

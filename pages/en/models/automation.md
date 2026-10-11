@@ -143,7 +143,7 @@ Project admins can apply an enabled rule to an existing version, for example to:
 - Re-evaluate the baseline version after changing the evaluation code
 
 1. Select the rule in **自動実行ルール** to open its details.
-2. In **既存の版に適用** (Apply to existing version), choose **適用する版** (Version). For a rule with an upstream, choose **上流のRun** (Upstream Run) instead: a successful Run created by the upstream rule that has output dataset versions.
+2. In **既存のバージョンに適用** (Apply to existing version), choose **適用するバージョン** (Version). For a rule with an upstream, choose **上流のRun** (Upstream Run) instead: a successful Run created by the upstream rule that has output dataset versions.
 3. Press **適用する** (Apply) and confirm.
 4. When **Jobを登録しました** (Job queued) appears, check the state in the automation history.
 
@@ -167,7 +167,7 @@ Setting **最大試行回数** (Maximum attempts) to two or more queues the next
 - A successful retry chains to later rules as usual.
 - People can always retry with **新しいRunで再実行** (Retry in a new Run) in Jobs.
 
-## Move rule ownership to a Service Account
+## Move rule ownership to a Service Account {#move-rule-ownership}
 
 Automation runs with the permissions of the rule owner, who becomes the creator of the Runs. The owner is initially the person who created the rule. If that person stops being a Project admin, the rule fails to start. For long-lived rules, move ownership to a Service Account that is not tied to a person.
 
@@ -177,6 +177,8 @@ Automation runs with the permissions of the rule owner, who becomes the creator 
 4. Check that **所有者** (Owner) in the rule details shows `<name>（Service Account）`.
 
 Only Project admins can move ownership, and only to an enabled admin Service Account of the same Project. The rule's creator is still recorded, and the change is in the audit log.
+
+If the rule runs on a Private computer, move ownership to a Service Account created by that computer's owner. A Service Account created by someone else cannot use the computer, so the rule fails to start ([Computers and visibility](/en/compute/computers#visibility)).
 
 ## When the evaluation code changes
 

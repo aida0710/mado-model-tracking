@@ -41,7 +41,7 @@ https://tracking.example.com/api/audit-events?action=auth.oidc.denied
 | --- | --- | --- |
 | `group_not_allowed` | Not in any group of `OIDC_ALLOWED_GROUPS` | Add the user to a group in Authentik. Also check that the ID token contains `groups` |
 | `email_not_verified` | `email` is missing or `email_verified` is not true | Mark the email as verified in Authentik and emit `email_verified` in the scope mapping |
-| `user_disabled` | The user is disabled in this application | A global administrator enables the user in **全体管理** → **ユーザー** |
+| `user_disabled` | The user is disabled in this application | A global administrator enables the user in **全体管理** (Global administration) → **ユーザー** (Users) |
 | `last_admin` | The sync would leave no active global administrator | Prepare another global administrator first (a local administrator is fine) |
 | `privileged_link_required` | A privileged local account has the same email | Not linked automatically. A global administrator checks the local account's permissions |
 | `service_account` | Tried to sign in as a Service Account | Service Accounts cannot sign in |
@@ -104,7 +104,7 @@ If the screen says the change would leave the Project without an Admin, you are 
 
 ## Notifications do not arrive
 
-1. Check that the channel's **送信設定** (Delivery settings) under **通知** in **Settings** shows configured. If not, the variable is missing from the API server's `.env`, or the API was not restarted.
+1. Check that the channel's **送信設定** (Delivery settings) under **通知** in **プロジェクト設定** (Project settings) shows configured. If not, the variable is missing from the API server's `.env`, or the API was not restarted.
 2. Use **テスト送信** (Send test) to check that sending works right now.
 3. Check the status and failure reason in **直近の送信履歴** (Recent deliveries). What to check for each reason is under "Delivery and failures" in [Notifications and operations alerts](/en/admin/notifications).
 4. Check that the rule is enabled and its events and conditions match. Worker offline and Plugin delivery stalled do not reach rules with Run kind or experiment conditions.
@@ -133,6 +133,16 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 
 See [Worker](/en/compute/worker) for details.
 
+## A computer is missing from the targets, or Jobs cannot be created (`target_not_available`)
+
+- The target list shows only the computers you can use. Check 自分が使えるか (Can you use it) under コンピュータ (Computers) in the global settings.
+- You cannot use other people's Private computers, and neither can global administrators. Ask the owner to make it Public, or add your own computer.
+- Automation rules, hooks, and Sweeps are checked with their owners. If you moved a rule to a Service Account, check that the computer's owner created that Service Account.
+- If a queued Job failed with `submit_failed`, the computer may have become Private after the Job was created.
+- Opening a site's job shell, keys, or own settings returns 403 `target_not_available` for the same reason: you cannot use that computer.
+
+See [Computers and visibility](/en/compute/computers).
+
 ## Post-processing of a finished Run is missing
 
 If post-processing after a Run ends (such as registering output models) fails, this line appears on the API's standard error. The Run's end and the GPU release are final. It is not retried automatically, so check whether the Run's registration or automation records are missing.
@@ -143,4 +153,4 @@ If post-processing after a Run ends (such as registering output models) fails, t
 
 ## Artifacts on a storage backend return 503
 
-Changing `MMT_STORAGE_SECRET_KEY` makes the secrets of S3 backends added on the screen undecryptable, and `storage_backend_unavailable` appears in the log at startup. Enter each S3 backend's secret again in **全体管理** → **ストレージ** ([Storage](/en/data/storage)).
+Changing `MMT_STORAGE_SECRET_KEY` makes the secrets of S3 backends added on the screen undecryptable, and `storage_backend_unavailable` appears in the log at startup. Enter each S3 backend's secret again in **全体管理** (Global administration) → **ストレージ** (Storage) ([Storage](/en/data/storage)).

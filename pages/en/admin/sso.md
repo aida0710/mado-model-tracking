@@ -12,7 +12,7 @@ Permissions are decided in two levels.
 | Level | Decided by | Where to change |
 | --- | --- | --- |
 | Can sign in / is a global administrator | Authentik groups and a mapping in the API server's environment | Group membership in Authentik and `.env` |
-| Project role (Viewer / Editor / Admin) | The stronger of a direct grant and a group grant | The Project's **Settings** |
+| Project role (Viewer / Editor / Admin) | The stronger of a direct grant and a group grant. In a Public Project, everyone who can sign in is an Editor | **プロジェクト設定** (Project settings) |
 
 ## 1. Register in Authentik
 
@@ -28,10 +28,10 @@ Create an application and an OAuth2/OpenID provider in Authentik. Replace `https
 | Scopes | The `openid`, `profile`, `email`, and `offline_access` mappings |
 | Back-channel logout URI | `https://tracking.example.com/api/auth/oidc/backchannel-logout` |
 
-3. Create an application under **Applications** → **Create** and select the provider. Use `model-tracking` as the slug in this example.
+3. Create an application under **Applications** → **Create** and select the provider. Use `ml-tracking` as the slug in this example.
 4. Note the provider's client ID and client secret. Put the client secret only in the API server's `.env`.
 
-The issuer URL is per application. With the slug `model-tracking` it is `https://sso.example.com/application/o/model-tracking/`.
+The issuer URL is per application. With the slug `ml-tracking` it is `https://sso.example.com/application/o/ml-tracking/`.
 
 ### Scopes and groups
 
@@ -54,7 +54,7 @@ NODE_ENV=production
 AUTH_MODE=hybrid
 MMT_PUBLIC_URL=https://tracking.example.com
 MMT_WEB_ORIGIN=https://tracking.example.com
-OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
+OIDC_ISSUER_URL=https://sso.example.com/application/o/ml-tracking/
 OIDC_CLIENT_ID=<provider client ID>
 OIDC_CLIENT_SECRET=<provider client secret>
 OIDC_LABEL=Authentik
@@ -88,15 +88,15 @@ A user in several groups gets the stronger role (`admin`). Include the groups in
 | Authentik groups (example) | In `OIDC_ALLOWED_GROUPS` | Mapped role | Result |
 | --- | --- | --- | --- |
 | `mmt-admins` | Yes | `admin` | Can sign in and is a global administrator |
-| `mmt-users` | Yes | `user` | Can sign in. Project roles are granted separately |
+| `mmt-users` | Yes | `user` | Can sign in and work in Public Projects as an Editor. Other roles are granted separately |
 | Only `mmt-proj-asr-editors` | No | — | Cannot sign in |
 | `mmt-users` and `mmt-proj-asr-editors` | `mmt-users` is | `user` | Can sign in, and grants to `mmt-proj-asr-editors` apply |
 
 ### Check
 
 1. Open this application in a browser and check that the login screen shows the **Authentik** button (the value of `OIDC_LABEL`).
-2. Have someone in `mmt-admins` sign in with SSO and check that **全体管理** (Administration) appears in the top bar.
-3. Have someone only in `mmt-users` sign in and check that it does not appear.
+2. Have someone in `mmt-admins` sign in with SSO, open **全体設定** (Global settings) from the user menu, and check that the 全体管理 (Global administration) group (Projects, Users, and so on) appears in the sidebar.
+3. Have someone only in `mmt-users` sign in, open **全体設定** from the user menu, and check that the sidebar shows the 全体設定 group (Account, Computers) but not the 全体管理 group.
 4. Check that someone in neither group is refused. The reason is recorded in the audit log as `auth.oidc.denied` ("Cannot sign in with SSO" in [Troubleshooting](/en/reference/troubleshooting)).
 
 ## What is synchronized at each login
@@ -145,7 +145,7 @@ Instead of granting a role to each person, you can grant a Project role to an Au
 
 1. Create a group per Project in Authentik (for example `mmt-proj-asr-editors`).
 2. Add the members to the group and have them sign in with SSO once.
-3. Open the Project's **Settings** and click **groupを追加** (Add group) under **Authentik group**.
+3. Open **プロジェクト設定** (Project settings) and click **groupを追加** (Add group) under **Authentik group**.
 4. Enter the group name and role, and save.
 
 | Field | Value |

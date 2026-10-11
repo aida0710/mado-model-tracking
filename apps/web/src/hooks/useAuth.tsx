@@ -5,7 +5,7 @@ import { RequestError } from '../api/http';
 import { useQuery } from './useQuery';
 import { Resource } from '../components/Feedback';
 import { LoginPage } from '../pages/LoginPage';
-import { ChangePasswordPage } from '../pages/ChangePasswordPage';
+import { RequiredPasswordChangePage } from '../pages/RequiredPasswordChangePage';
 import { AuthReturn } from '../components/AuthReturn';
 
 const AuthContext = createContext<{ user: User; reload: () => void } | null>(null);
@@ -26,7 +26,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       {({ config, user, mustChangePassword }) =>
         // The API refuses every other request until the password changes, so no app screen is shown.
         user && mustChangePassword ? (
-          <ChangePasswordPage isRequired onChanged={session.reload} />
+          <RequiredPasswordChangePage onChanged={session.reload} />
         ) : user ? (
           <AuthContext.Provider value={{ user, reload: session.reload }}>
             <AuthReturn>{children}</AuthReturn>

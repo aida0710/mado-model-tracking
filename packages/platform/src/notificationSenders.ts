@@ -6,6 +6,7 @@ import { createEmailNotificationSender, type SmtpSettings } from './emailNotific
 export const NOTIFICATION_DEADLINE_MS = 5000;
 // Slack rejects section text over 3000 characters; long Run errors are cut well below that.
 const MAX_SLACK_ERROR_LENGTH = 500;
+// Kept from before the product was renamed (mado ML Tracking): receivers may allow-list it.
 const USER_AGENT = 'mado-model-tracking-notifications';
 
 /** A channel with its environment variables resolved, as the senders need it. */

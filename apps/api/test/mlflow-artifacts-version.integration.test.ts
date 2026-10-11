@@ -4,7 +4,7 @@ import { proxyListUrl, transferUrl } from './mlflow-artifacts-fixtures.js';
 import { registeredVersionFixture } from './mlflow-artifacts-version-fixtures.js';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 
-describe.skipIf(!testDatabaseUrl)('登録モデル版の固定Artifact参照（隔離PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('登録モデルバージョンの固定Artifact参照（隔離PostgreSQL）', () => {
   let harness: Harness;
   beforeEach(async () => {
     harness = await createHarness();

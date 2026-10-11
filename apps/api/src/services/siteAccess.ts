@@ -1,8 +1,8 @@
-import type { ComputeTarget } from '@mmt/contracts';
+import type { ComputeTarget, Job } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import { first, type Connection } from '../db/database.js';
 import { DomainError, notFound } from '../domain/errors.js';
-import { targetUsableSql } from '../repositories/computeTargetSharingRepository.js';
+import { targetUsableSql } from '../repositories/computeTargetAccessRepository.js';
 import { requireGlobalAdmin } from './accessService.js';
 import { requireSession } from './tokenService.js';
 
@@ -18,46 +18,65 @@ export function isGlobalAdministrator(principal: Principal): boolean {
 }
 
 /**
- * The settings, job shell, sharing and shared key of a computer are its manager's: a global
- * administrator, or the researcher who owns it, in a browser session. Someone who may not even
- * use the computer gets 404, as for any computer they cannot see.
+ * The settings, visibility, job shell and shared key of a computer are its manager's: a global
+ * administrator, or whoever owns it, in a browser session.
  */
-export async function requireTargetManager(
-  connection: Connection,
-  principal: Principal,
-  target: ComputeTarget,
-): Promise<void> {
+export function requireTargetManager(principal: Principal, target: ComputeTarget): void {
   if (isGlobalAdministrator(principal)) return;
-  if (target.ownerUserId !== principal.user.id) {
-    await requireTargetUser(connection, principal, target);
+  if (target.ownerUserId !== principal.user.id)
     throw new DomainError(
       403,
-      'この計算機の設定は所有者か全体管理者だけが変えられます',
+      'このコンピュータの設定は所有者か全体管理者だけが変えられます',
       'target_owner_required',
     );
-  }
-  requireSession(principal, '計算機の設定');
+  requireSession(principal, 'コンピュータの設定');
 }
 
-export function isTargetManager(principal: Principal, target: ComputeTarget): boolean {
+export function isTargetManager(
+  principal: Principal,
+  target: Pick<ComputeTarget, 'ownerUserId'>,
+): boolean {
   return isGlobalAdministrator(principal) || target.ownerUserId === principal.user.id;
 }
 
-/** Whether the user may run Jobs on the computer: in this Project, or in any when omitted. */
+/** Whether Jobs that run as the user may run on the computer (targetUsableSql). */
 export async function canUseTarget(
   connection: Connection,
-  usage: { targetId: string; userId: string; projectId?: string | null },
+  usage: { targetId: string; userId: string },
 ): Promise<boolean> {
   return !!(await first(
     connection,
-    `SELECT 1 FROM compute_targets t WHERE t.id=$1 AND ${targetUsableSql('$2::uuid', '$3::uuid')}`,
-    [usage.targetId, usage.userId, usage.projectId ?? null],
+    `SELECT 1 FROM compute_targets t WHERE t.id=$1 AND ${targetUsableSql('$2::uuid')}`,
+    [usage.targetId, usage.userId],
   ));
 }
 
 /**
- * A computer is visible to whoever may use it or manage it; for anyone else it does not exist,
- * so another person's PC is not revealed by its ID.
+ * Whether a queued Job's requester (its Run's creator) may still use its computer: the computer
+ * may have turned private, or changed owner, since the Job was created.
+ */
+export async function canRunQueuedJob(
+  connection: Connection,
+  job: Pick<Job, 'runId' | 'targetId'>,
+): Promise<boolean> {
+  return !!(await first(
+    connection,
+    `SELECT 1 FROM compute_targets t JOIN runs r ON r.id=$2 WHERE t.id=$1 AND ${targetUsableSql('r.created_by')}`,
+    [job.targetId, job.runId],
+  ));
+}
+
+export const TARGET_NOT_AVAILABLE_MESSAGE =
+  'このコンピュータはPrivateです。所有者と、所有者が作ったService AccountのJobだけが動きます';
+
+/** Refuses Jobs of someone who may not use a private computer (the Job's, rule's or hook's owner). */
+export function targetNotAvailable(status: 403 | 422): never {
+  throw new DomainError(status, TARGET_NOT_AVAILABLE_MESSAGE, 'target_not_available');
+}
+
+/**
+ * Anyone sees that a computer exists (GET /targets/overview), but its job shell, keys and
+ * personal settings are for those who may use or manage it.
  */
 export async function requireTargetUser(
   connection: Connection,
@@ -66,7 +85,7 @@ export async function requireTargetUser(
 ): Promise<void> {
   if (isTargetManager(principal, target)) return;
   if (!(await canUseTarget(connection, { targetId: target.id, userId: principal.user.id })))
-    notFound('ComputeTarget');
+    targetNotAvailable(403);
 }
 
 export async function findSiteTarget(

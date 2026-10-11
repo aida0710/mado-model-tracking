@@ -45,7 +45,7 @@ def render_worker_unit(settings: WorkerUnitSettings) -> str:
         raise ValueError("A system unit needs the user the worker runs as")
     unit_lines = [
         "[Unit]",
-        "Description=Mado Model Tracking worker %i",
+        "Description=mado ML Tracking worker %i",
     ]
     if is_system:
         # A user manager cannot order against system targets, so only the system unit waits for network.

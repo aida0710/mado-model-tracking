@@ -166,6 +166,9 @@ import { UserDirectoryService } from './services/userDirectoryService.js';
 import { ArtifactStoreRegistry } from './services/artifactStoreRegistry.js';
 import { StorageBackendService } from './services/storageBackendService.js';
 import { storageBackendRoutes } from './routes/storageBackendRoutes.js';
+import { StorageDirectoryService } from './services/storageDirectoryService.js';
+import { ProjectAdministrationService } from './services/projectAdministrationService.js';
+import { adminProjectRoutes } from './routes/adminProjectRoutes.js';
 import { sweepRoutes } from './routes/sweepRoutes.js';
 import { UserAdministrationService } from './services/userAdministrationService.js';
 import { AccountService } from './services/accountService.js';
@@ -393,12 +396,12 @@ export function createApplication(options: ApplicationOptions) {
     const databaseCode = (error as { code?: string }).code;
     if (databaseCode === '23505')
       return context.json(
-        { error: '同じ名前または版が既に登録されています', code: 'already_exists' },
+        { error: '同じ名前またはバージョンが既に登録されています', code: 'already_exists' },
         409,
       );
     if (databaseCode === '23503' || databaseCode === '23514')
       return context.json(
-        { error: '参照または不変な版の制約に違反しています', code: 'invalid_reference' },
+        { error: '参照または不変なバージョンの制約に違反しています', code: 'invalid_reference' },
         422,
       );
     // SQL and provider exception details can include sensitive values.
@@ -524,7 +527,6 @@ export function createApplication(options: ApplicationOptions) {
   app.route(
     '/api/targets',
     siteComputerRoutes({
-      targets,
       jobShells: new SiteJobShellService(database),
       personalSettings: new SitePersonalSettingsService(database),
       keys: new SiteKeyService(database),
@@ -551,7 +553,8 @@ export function createApplication(options: ApplicationOptions) {
       deletions: artifactDeletions,
     }),
   );
-  app.route('/api/admin', storageBackendRoutes(storageBackends));
+  app.route('/api/admin', storageBackendRoutes(storageBackends, new StorageDirectoryService()));
+  app.route('/api/admin', adminProjectRoutes(new ProjectAdministrationService(database)));
   app.route(
     '/api/admin',
     adminUserRoutes(

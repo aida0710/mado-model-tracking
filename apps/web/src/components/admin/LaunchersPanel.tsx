@@ -7,6 +7,7 @@ import { getFieldValue } from '../../lib/formValues';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { FormDialog } from '../FormDialog';
 import { Resource } from '../Feedback';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { LaunchersTable } from './LaunchersTable';
 import { LauncherTokenDialog } from '../../dialogs/LauncherTokenDialog';
 import { text } from '../../i18n/catalog';
@@ -18,8 +19,8 @@ const MAX_LAUNCHER_NAME_LENGTH = 200;
 type LauncherAction = { kind: 'rotate' | 'revoke'; launcher: Launcher };
 
 /**
- * The admin "launcher" tab: registering launchers, replacing their tokens and revoking them. A new
- * token is shown once, with an example launcher.toml.
+ * The admin "launchers" section: registering launchers, replacing their tokens and revoking
+ * them. A new token is shown once, with an example launcher.toml.
  */
 export function LaunchersPanel() {
   const launchers = useQuery('launchers', launchersApi.list);
@@ -32,18 +33,20 @@ export function LaunchersPanel() {
   };
   return (
     <section className="admin-launchers">
-      <div className="section-heading">
-        <h2>{text.launchers}</h2>
-        <div>
-          <button className="button primary" onClick={() => setCreating(true)}>
-            <Plus size={15} />
-            {text.newLauncher}
-          </button>
-          <button className="icon-button" aria-label={text.refresh} onClick={launchers.reload}>
-            <RefreshCw size={17} />
-          </button>
-        </div>
-      </div>
+      <SettingsPageHeader
+        section="launchers"
+        actions={
+          <>
+            <button className="button primary" onClick={() => setCreating(true)}>
+              <Plus size={15} />
+              {text.newLauncher}
+            </button>
+            <button className="icon-button" aria-label={text.refresh} onClick={launchers.reload}>
+              <RefreshCw size={17} />
+            </button>
+          </>
+        }
+      />
       <p className="muted">{text.launchersDescription}</p>
       <Resource query={launchers}>
         {(items) => (

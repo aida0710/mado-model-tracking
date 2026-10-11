@@ -22,7 +22,7 @@ const MAX_SUBJECT_LENGTH = 200;
 const MAX_ADDRESS_LENGTH = 320;
 // One address without a display name: no whitespace, list separators or header syntax.
 const EMAIL_ADDRESS_PATTERN = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+$/;
-// MMT_SMTP_FROM may carry a display name: "Mado Model Tracking <mmt@example.com>".
+// MMT_SMTP_FROM may carry a display name: "mado ML Tracking <mmt@example.com>".
 const NAMED_ADDRESS_PATTERN = /^([^<>\r\n]*)<([^<>]+)>$/;
 
 /** The SMTP server and sender address from MMT_SMTP_URL and MMT_SMTP_FROM. */

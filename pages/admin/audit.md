@@ -5,7 +5,7 @@ description: ログイン、権限、token、ユーザー、保存先、通知�
 
 # 監査ログ
 
-誰が、いつ、何をしたかを記録します。ログイン、権限の変更、API tokenの発行と失効、ユーザーの管理、保存先と通知先の変更、Artifactの削除などが対象です。
+誰が、いつ、何をしたかを記録します。ログイン、権限の変更、Projectの作成・アーカイブ・削除、API tokenの発行と失効、ユーザーの管理、保存先と通知先の変更、Artifactの削除などが対象です。
 
 監査ログは無期限に保存し、削除や変更はできません。画面にもAPIにも削除の機能は無く、DBでも書き換えを拒否します。
 
@@ -13,8 +13,8 @@ description: ログイン、権限、token、ユーザー、保存先、通知�
 
 | 場所 | 見られる人 | 範囲 |
 | --- | --- | --- |
-| Projectの［Settings］の「監査ログ」 | ProjectのAdmin | そのProjectの記録 |
-| ［全体管理］→［監査ログ］ | 全体管理者 | すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など） |
+| ［プロジェクト設定］の「監査ログ」 | ProjectのAdmin | そのProjectの記録 |
+| 「全体管理」→［監査ログ］ | 全体管理者 | すべてのProjectと、Projectに属さない記録（ログイン、ユーザーの管理、保存先、通知先など）。完全に削除したProjectの記録もここで読めます |
 
 ![Projectの監査ログ](/images/admin-audit.png)
 
@@ -50,10 +50,12 @@ description: ログイン、権限、token、ユーザー、保存先、通知�
 | SSO sessionの再確認による失効 | `auth.oidc.recheck` | `reason`、`scope`（`session`か`identity`）、`revokedSessions` |
 | SSOからのログアウト | `auth.oidc.backchannel_logout` | `subject`、`sid`、`revokedSessions` |
 | ユーザーの作成・変更・パスワードの再設定 | `admin.user.create`、`admin.user.update`、`admin.user.password_reset` | 変更前後の状態・全体管理者・表示名 |
-| メンバーの権限変更・直接付与の削除 | `project.member.set`、`project.member.delete` | 変更前後のRole |
+| Projectの作成・変更（説明、公開範囲、保存先）・アーカイブ・元に戻す・完全に削除 | `project.create`、`project.update`、`project.archive`、`project.restore`、`project.purge` | 名前、公開範囲、保存先、作成時のメンバーの人数、変えた項目 |
+| メンバーの権限変更・直接付与の削除 | `project.member.set`、`project.member.delete` | 変更前後のRole。Projectの作成時に追加したメンバーも`project.member.set`で残ります |
 | groupへの権限付与・付与の削除 | `project.group_binding.set`、`project.group_binding.delete` | `group`、変更前後のRole |
 | API tokenの発行・失効 | `token.create`、`token.revoke` | 名前、種類、scope、期限、所有者の種類 |
 | Service Accountの作成・変更 | `service_account.create`、`service_account.update` | 変更前後のRole・状態 |
+| コンピュータの追加・変更（設定、公開範囲、有効と無効） | `compute_target.create`、`compute_target.update` | 名前、種類、公開範囲、変えた項目。公開範囲を変えたときは変更前後（`visibility`の`from`・`to`） |
 | 保存先の追加・変更・接続テスト、既定の保存先の変更 | `storage.backend.create`、`storage.backend.update`、`storage.backend.test`、`storage.settings.update` | |
 | 通知先の作成・変更・テスト送信 | `notification.channel.create`、`update`、`test` | 名前、種類、環境変数名、宛先の件数 |
 | 通知ルールの作成・変更 | `notification.rule.create`、`update` | |
@@ -85,4 +87,4 @@ curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" \
 https://tracking.example.com/api/audit-events?action=auth.oidc.denied
 ```
 
-画面の［全体管理］→［監査ログ］には、今は絞り込みがありません。操作や結果で絞り込むときは、このAPIを使います。
+画面の「全体管理」→［監査ログ］には、今は絞り込みがありません。操作や結果で絞り込むときは、このAPIを使います。

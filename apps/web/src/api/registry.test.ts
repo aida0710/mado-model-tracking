@@ -3,7 +3,7 @@ import { registryApi } from './registry';
 
 afterEach(() => vi.unstubAllGlobals());
 describe('Model aliasの設定・解除・履歴', () => {
-  it('理由が空なら送らず、入力があれば版と一緒に送る', async () => {
+  it('理由が空なら送らず、入力があればバージョンと一緒に送る', async () => {
     const fetch = vi.fn().mockImplementation(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     await registryApi.assignAlias('project', 'model', {

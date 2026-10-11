@@ -161,7 +161,7 @@ describe.skipIf(!testDatabaseUrl)('Taskの成功時の出力モデル登録（�
     return jobs.items.filter((job) => inferenceRunIds.has(job.runId));
   }
 
-  it('成功したRunで版を1件登録し、sourceRun・親版・自動採番が入り、推論Jobがqueuedになる', async () => {
+  it('成功したRunでバージョンを1件登録し、sourceRun・親バージョン・自動採番が入り、推論Jobがqueuedになる', async () => {
     const fixture = await workbenchFixture(harness);
     await registerInferenceRule(fixture);
     const task = await saveOutputModel(fixture, {
@@ -200,7 +200,7 @@ describe.skipIf(!testDatabaseUrl)('Taskの成功時の出力モデル登録（�
     expect(jobs[0]!.status).toBe('queued');
   });
 
-  it('createModelは初回にModelを作り、2回目は同じModelへ次の版を足す', async () => {
+  it('createModelは初回にModelを作り、2回目は同じModelへ次のバージョンを足す', async () => {
     const fixture = await workbenchFixture(harness);
     await saveOutputModel(fixture, {
       createModel: { name: 'Fine-tuned output', family: 'qwen2' },
@@ -229,7 +229,7 @@ describe.skipIf(!testDatabaseUrl)('Taskの成功時の出力モデル登録（�
     ]);
   });
 
-  it('versionTemplateはRunごとに描画した版名で登録する', async () => {
+  it('versionTemplateはRunごとに描画したバージョン名で登録する', async () => {
     const fixture = await workbenchFixture(harness);
     await saveOutputModel(fixture, {
       modelId: fixture.model.id,
@@ -246,7 +246,7 @@ describe.skipIf(!testDatabaseUrl)('Taskの成功時の出力モデル登録（�
     expect(version?.version).toBe(`task-r2-${run.id}`);
   });
 
-  it('学習コードが同じModelへ登録済みならskippedで版は1件、下流Jobも1件', async () => {
+  it('学習コードが同じModelへ登録済みならskippedでバージョンは1件、下流Jobも1件', async () => {
     const fixture = await workbenchFixture(harness);
     await registerInferenceRule(fixture);
     await saveOutputModel(fixture, { modelId: fixture.model.id });
@@ -324,7 +324,7 @@ describe.skipIf(!testDatabaseUrl)('Taskの成功時の出力モデル登録（�
     expect(run.outputModelVersionIds).toEqual([]);
   });
 
-  it('Artifactが無ければfailedを記録し、Runはfinishedのまま、版もJobも作らない', async () => {
+  it('Artifactが無ければfailedを記録し、Runはfinishedのまま、バージョンもJobも作らない', async () => {
     const fixture = await workbenchFixture(harness);
     await registerInferenceRule(fixture);
     await saveOutputModel(fixture, { createModel: { name: 'Never created', family: 'qwen2' } });

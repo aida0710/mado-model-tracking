@@ -22,44 +22,8 @@ const call = (fetch: ReturnType<typeof stubJsonResponse>, index = 0) => ({
     : undefined,
 });
 
-describe('計算機の共有とjob shellのAPI呼び出し', () => {
-  it('共有するProjectはPUTで丸ごと置き換え、自分の計算機でない拒否をcodeつきで返す', async () => {
-    const fetch = stubJsonResponse({ id: 'pc', projectIds: ['p1'] });
-    await siteComputersApi.setProjects('pc/1', { projectIds: ['p1'] });
-    expect(call(fetch)).toEqual({
-      path: '/api/targets/pc%2F1/projects',
-      method: 'PUT',
-      body: { projectIds: ['p1'] },
-    });
-    stubJsonResponse({ error: '全体の計算機は共有先を持ちません', code: 'target_not_owned' }, 422);
-    await expect(siteComputersApi.setProjects('site', { projectIds: [] })).rejects.toMatchObject({
-      code: 'target_not_owned',
-    });
-  });
-
-  it('共有先の候補は、足すときは自分の、編集では計算機のshareable-projectsを読み、itemsの無い応答を空として扱わない', async () => {
-    const items = [{ id: 'p1', name: 'Speech' }];
-    const fetch = stubJsonResponse({ items });
-    await expect(siteComputersApi.ownShareableProjects()).resolves.toEqual(items);
-    await expect(siteComputersApi.shareableProjects('pc/1')).resolves.toEqual(items);
-    expect(call(fetch, 0)).toEqual({ path: '/api/targets/shareable-projects', method: 'GET', body: undefined });
-    expect(call(fetch, 1)).toEqual({
-      path: '/api/targets/pc%2F1/shareable-projects',
-      method: 'GET',
-      body: undefined,
-    });
-    stubJsonResponse({});
-    await expect(siteComputersApi.shareableProjects('pc')).rejects.toMatchObject({
-      code: 'invalid_response',
-    });
-    stubJsonResponse({ error: '所有者か全体管理者だけです', code: 'target_owner_required' }, 403);
-    await expect(siteComputersApi.shareableProjects('pc')).rejects.toMatchObject({
-      status: 403,
-      code: 'target_owner_required',
-    });
-  });
-
-  it('版の一覧・1つの版・新しい版の保存はtargetのjob-shellsを使う', async () => {
+describe('siteのjob shellのAPI呼び出し', () => {
+  it('バージョンの一覧・1つのバージョン・新しいバージョンの保存はtargetのjob-shellsを使う', async () => {
     const fetch = stubJsonResponse({ items: [] });
     await expect(siteComputersApi.jobShells('site')).resolves.toEqual([]);
     await siteComputersApi.jobShell('site', 'shell/2');
@@ -73,7 +37,7 @@ describe('計算機の共有とjob shellのAPI呼び出し', () => {
     });
   });
 
-  it('itemsの無い版の一覧を空として扱わない', async () => {
+  it('itemsの無いバージョンの一覧を空として扱わない', async () => {
     stubJsonResponse({});
     await expect(siteComputersApi.jobShells('site')).rejects.toMatchObject({ code: 'invalid_response' });
   });
@@ -101,7 +65,7 @@ describe('個人設定のAPI呼び出し', () => {
     const deleted = stubJsonResponse(null, 204);
     await expect(siteComputersApi.deleteMyPersonalSettings('site')).resolves.toBeUndefined();
     expect(call(deleted).method).toBe('DELETE');
-    stubJsonResponse({ error: '共用アカウントの計算機に自分の設定はありません', code: 'site_settings_invalid' }, 422);
+    stubJsonResponse({ error: '共用アカウントのコンピュータに自分の設定はありません', code: 'site_settings_invalid' }, 422);
     await expect(siteComputersApi.saveMyPersonalSettings('shared', {})).rejects.toMatchObject({
       code: 'site_settings_invalid',
     });

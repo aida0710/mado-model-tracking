@@ -9,13 +9,13 @@ export const artifactLifecycleText = {
   artifactUsageCount: '件数',
   artifactUsageBytes: '容量',
   artifactUsagePendingDeletion: '削除待ち',
-  artifactUsageOldVersions: '参照されていない古い版',
+  artifactUsageOldVersions: '参照されていない古いバージョン',
 };
 
 export const artifactLifecycleTextTemplates = {
   artifactDeleteConfirm: (path: string) =>
-    `「${path}」を削除します。一覧と取得からはすぐに消え、元に戻せません。同じパスに前の版があれば、それが表示されるようになります。`,
+    `「${path}」を削除します。一覧と取得からはすぐに消え、元に戻せません。同じパスに前のバージョンがあれば、それが表示されるようになります。`,
   artifactUsageNote: (graceDays: number) =>
-    `削除したArtifactの実ファイルは${graceDays}日後に回収します。古い版は自動では削除しません。`,
+    `削除したArtifactの実ファイルは${graceDays}日後に回収します。古いバージョンは自動では削除しません。`,
   artifactUsageFiles: (count: number, size: string) => `${count}件 · ${size}`,
 };

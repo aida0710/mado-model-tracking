@@ -33,8 +33,8 @@ curl -sS -X POST "$MMT_API_URL/api/projects/$PROJECT_ID/hooks" \
 | trigger | 起動するとき | Jobへ渡すもの |
 |---|---|---|
 | `manual` | `POST /projects/:p/hooks/:id/trigger` | 起動時の`payload` |
-| `model_registered` | ModelVersionの登録。学習中の登録は学習Runの成功を待つ | 登録された版 |
-| `run_finished` | Runの終了（失敗・取消を含む。`runStatuses`で絞る） | `inheritModelVersion`・`inheritOutputDatasets`でRunの版と出力 |
+| `model_registered` | ModelVersionの登録。学習中の登録は学習Runの成功を待つ | 登録されたバージョン |
+| `run_finished` | Runの終了（失敗・取消を含む。`runStatuses`で絞る） | `inheritModelVersion`・`inheritOutputDatasets`でRunのバージョンと出力 |
 | `array_finished` | arrayの全員の最後の試行が終わったとき | 全員の出力DatasetVersion |
 | `checkpoint_saved` | `POST /projects/:p/runs/:r/checkpoints`でのcheckpointの保存 | そのcheckpoint（`/mmt/inputs/checkpoint`） |
 | `webhook` | 署名の合う外部からのPOST | 送られた本文 |
@@ -65,7 +65,7 @@ SSOのgroup同期の期限（[operations.md](operations.md)の「SSOユーザー
 - `rate_limited`: 直近1時間の起動が`maxStartsPerHour`（既定60）に達しました。
 - `already_running`: `concurrency: "skip_if_running"`（または`checkpointMode: "skip_if_running"`）で、このフックのJobがまだ終わっていません。
 - `superseded`: `checkpointMode: "latest"`で、より新しいcheckpointが来ました。
-- `source_run_unsuccessful`・`source_run_timeout`: 学習中に登録された版で、学習Runが成功しなかった、または7日待っても終わりませんでした。
+- `source_run_unsuccessful`・`source_run_timeout`: 学習中に登録されたバージョンで、学習Runが成功しなかった、または7日待っても終わりませんでした。
 - `owner_access_revoked`・`hook_disabled`: 所有者の権限が無くなった、待っている間にフックが無効にされた。
 
 同じ出来事では1回だけ起動します。webhookの再送、終わったRunの再開と再終了でも、Jobは増えません。

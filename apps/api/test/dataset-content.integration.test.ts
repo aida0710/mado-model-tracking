@@ -81,7 +81,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     );
   }
 
-  it('files指定の版はサーバーがuri・digest・件数を決め、ファイル一覧とtreeで読める', async () => {
+  it('files指定のバージョンはサーバーがuri・digest・件数を決め、ファイル一覧とtreeで読める', async () => {
     const clip = await uploadArtifact({ path: 'upload/a.wav', body: 'RIFF-a' });
     const transcript = await uploadArtifact({ path: 'upload/a.txt', body: 'hello' });
     const response = await createVersion({
@@ -138,7 +138,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     });
   });
 
-  it('files付きの版は不変で、同じversionの再作成は409になり、files・digest・件数は変わらない', async () => {
+  it('files付きのバージョンは不変で、同じversionの再作成は409になり、files・digest・件数は変わらない', async () => {
     const first = await uploadArtifact({ path: 'one.txt', body: 'one' });
     const second = await uploadArtifact({ path: 'two.txt', body: 'two' });
     const version = await entity<DatasetVersion>(
@@ -168,7 +168,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     expect((await readFiles(version)).items.map((file) => file.artifactId)).toEqual([first.id]);
   });
 
-  it('他ProjectのArtifactを含むと422で、版もファイルも残らない', async () => {
+  it('他ProjectのArtifactを含むと422で、バージョンもファイルも残らない', async () => {
     const own = await uploadArtifact({ path: 'own.txt', body: 'own' });
     const otherProject = await entity<Project>(
       await request(harness.app, '/api/projects', {
@@ -288,7 +288,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     expect(unknown.status).toBe(404);
   });
 
-  it('versionを省略した版は整数で採番され、名前付きの版は採番に数えない', async () => {
+  it('versionを省略したバージョンは整数で採番され、名前付きのバージョンは採番に数えない', async () => {
     const artifact = await uploadArtifact({ path: 'a.txt', body: 'a' });
     const content = { kind: 'artifacts', files: [{ path: 'a.txt', artifactId: artifact.id }] };
     await entity(await createVersion({ version: '2026-10', content }));
@@ -297,7 +297,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     expect([first.version, second.version]).toEqual(['1', '2']);
   });
 
-  it('uri・digestで作る版とMLflow log-inputsの版は従来どおりreferenceで、ファイルを持たない', async () => {
+  it('uri・digestで作るバージョンとMLflow log-inputsのバージョンは従来どおりreferenceで、ファイルを持たない', async () => {
     const reference = await entity<DatasetVersion>(
       await createVersion({ version: 'ref', uri: 's3://bucket/speech', digest: 'abc' }),
     );
@@ -330,7 +330,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactを本体とするDatasetVersion（�
     expect(stored.rows).toEqual([{ content_kind: 'reference', file_count: null, total_size: null }]);
   });
 
-  it('viewerは版を作れず読むだけ、Project外の利用者はファイル一覧を読めない', async () => {
+  it('viewerはバージョンを作れず読むだけ、Project外の利用者はファイル一覧を読めない', async () => {
     const artifact = await uploadArtifact({ path: 'a.txt', body: 'a' });
     const content = { kind: 'artifacts', files: [{ path: 'a.txt', artifactId: artifact.id }] };
     expect((await createVersion({ version: 'v1', content }, fixture.viewer.cookie)).status).toBe(403);

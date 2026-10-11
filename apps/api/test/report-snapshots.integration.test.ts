@@ -195,7 +195,7 @@ describe.skipIf(!testDatabaseUrl)('レポートの作成時点での固定（独
     expect(snapshotOf(third, 'refreshed').capturedRevision).toBe(2);
   });
 
-  it('restoreは元の版の固定データを引き継ぐ', async () => {
+  it('restoreは元のバージョンの固定データを引き継ぐ', async () => {
     const created = await entity<ReportDetail>(await createReport([chart('snapshot')]));
     for (const run of runs) await logLoss(run.id, [3, 4]);
     await entity(
@@ -324,7 +324,7 @@ describe.skipIf(!testDatabaseUrl)('レポートの作成時点での固定（独
     );
   });
 
-  it('5MiBを超えるブロックの固定は413で、版を作らない', async () => {
+  it('5MiBを超えるブロックの固定は413で、バージョンを作らない', async () => {
     // 500 Runs with 12KB of parameters each make a Run table snapshot of about 6MB.
     await harness.database.query(
       `INSERT INTO runs(project_id,experiment_id,name,kind,status,parameters,created_by)
@@ -351,7 +351,7 @@ describe.skipIf(!testDatabaseUrl)('レポートの作成時点での固定（独
     expect(stored.rows[0]).toEqual({ count: 0 });
   });
 
-  it('1つの版の固定データの合計がMMT_REPORT_SNAPSHOT_MAX_BYTESを超えると413', async () => {
+  it('1つのバージョンの固定データの合計がMMT_REPORT_SNAPSHOT_MAX_BYTESを超えると413', async () => {
     const created = await entity<ReportDetail>(await createReport([chart('snapshot', 'one')]));
     const [snapshot] = (await readSnapshots(created.report.id)).items;
     // A limit that holds one chart but not two.

@@ -1,4 +1,4 @@
-"""Verify official MLflow 3 clients against the local Mado Model Tracking API."""
+"""Verify official MLflow 3 clients against the local mado ML Tracking API."""
 
 from __future__ import annotations
 

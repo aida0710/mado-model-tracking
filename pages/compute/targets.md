@@ -5,9 +5,11 @@ description: Jobを実行するGPUマシンをCompute targetとして登録す�
 
 # Compute target
 
-![Compute画面の計算機の一覧（所有者・共有先）とWorkers](/images/compute-targets.png)
+![プロジェクトのCompute。自分が使えるコンピュータの一覧とWorkers](/images/compute-targets.png)
 
-Compute targetは、Jobを実行するマシンの登録です。SSHの接続先、使えるGPU、対応するRuntime（Python、Docker、Singularity、Apptainer）、作業ディレクトリを登録します。targetへの接続とJobの実行はworkerが行い、API serverはtargetへ接続しません。
+Compute targetは、Jobを実行するマシンの登録です。コンピュータのうち、SSHとLocalのものを指します。SSHの接続先、使えるGPU、対応するRuntime（Python、Docker、Singularity、Apptainer）、作業ディレクトリを登録します。targetへの接続とJobの実行はworkerが行い、API serverはtargetへ接続しません。
+
+targetは全体設定の「コンピュータ」で足し、公開範囲（PublicかPrivate）で誰のJobが動くかを決めます。公開範囲と所有者の考え方は[コンピュータと公開範囲](/compute/computers)を参照してください。
 
 ```text
 API server ← worker（SSH鍵・known_hostsを持つ） → Compute target（GPUマシン）
@@ -72,7 +74,7 @@ sudo apt-get install -y apptainer
 apptainer --version
 ```
 
-SingularityとApptainerは、`exec`の`--cleanenv`、`--containall`、`--no-home`、`--no-mount`、`--no-eval`、`--pwd`と、GPU用の`--nv`に対応した版が必要です。古い版では接続確認でNGになります。
+SingularityとApptainerは、`exec`の`--cleanenv`、`--containall`、`--no-home`、`--no-mount`、`--no-eval`、`--pwd`と、GPU用の`--nv`に対応したバージョンが必要です。古いバージョンでは接続確認でNGになります。
 
 ### workerからSSHで入れるようにする
 
@@ -88,19 +90,21 @@ ssh-keygen -lf ~/.ssh/mmt_known_hosts
 
 最後のコマンドで表示されたフィンガープリントを、targetで`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`を実行した結果と比べ、一致することを確かめてください。workerは未知のホスト鍵や変わったホスト鍵を受け入れません（`StrictHostKeyChecking=yes`）。
 
-## targetを登録する
+## targetを登録する {#register-a-target}
 
-![［計算機を追加］のダイアログ（SSHのtarget）](/images/compute-target-dialog.png)
+![［コンピュータを追加］のダイアログ（SSHのtarget）](/images/compute-target-dialog.png)
 
-SSH・Localのtargetの登録と変更は、全体管理者が行います。研究者が自分で足せるのは、外部の計算機（site）だけです（[外部の計算機（site）](/compute/sites)）。
+SSH・Localのtargetを足せるのは全体管理者です。足した人がそのtargetの所有者になり、設定を変えられるのは所有者と全体管理者です。研究者が自分で足せるのは、外部のコンピュータ（site）だけです（[外部のコンピュータ（site）](/compute/sites)）。
 
-1. Computeを開き、［計算機を追加］を押します。
-2. 次の項目を入力します。
+1. 右上のユーザーメニューの［全体設定］から、サイドバーの［コンピュータ］を開きます（`/settings/computers`）。
+2. ［コンピュータを追加］を押します。
+3. 次の項目を入力します。
 
 | 項目 | 入力例 | 内容 |
 | --- | --- | --- |
 | 名前 | `gpu-host-1` | 画面とTaskの選択肢に表示する名前 |
-| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます。Site（外部の計算機。[外部の計算機（site）](/compute/sites)）も選べます |
+| Executor | SSH | 通常はSSHです。Local（開発専用）は開発モードでだけ選べます。Site（外部のコンピュータ。[外部のコンピュータ（site）](/compute/sites)）も選べます |
+| 公開範囲 | Public | Private（既定）では、所有者と、所有者が作ったService AccountのJobだけが動きます。どのProjectのJobも動かすならPublicにします（[公開範囲](/compute/computers#visibility)） |
 | Host、Port | `gpu-host-1.example.internal`、`22` | targetのSSHの接続先 |
 | SSHユーザー | `mmt` | SSHで接続するユーザー |
 | SSH鍵のパス | `/home/worker/.ssh/mmt_worker_ed25519` | workerのマシン上の秘密鍵のパス |
@@ -113,10 +117,10 @@ SSH・Localのtargetの登録と変更は、全体管理者が行います。研
 | データセットの転送 | workerが中継する | 入力データセットの取得方法（後述） |
 | データセットのcache上限（GiB） | `100` | target上のデータセットのcacheの上限 |
 
-3. ［保存］を押し、一覧に追加されたことを確かめます。
-4. 続けて、後述の［接続を確認］でtargetが使えることを確かめます。
+4. ［保存］を押します。一覧に追加され、その下にtargetの詳細が開きます。
+5. 続けて、後述の［接続を確認］でtargetが使えることを確かめます。
 
-鍵のパスなどの接続情報は、一般のviewerには表示しません。
+接続先や鍵のパスなどの接続情報は、所有者と全体管理者にだけ表示します。
 
 ### GPUの割り当て
 
@@ -134,21 +138,21 @@ Taskや自動実行ルールでGPU IDを選ぶと、そのJobの間はアプリ�
 | workerが中継する（既定） | workerがAPIから取得し、1本のtarでtargetへ送ります | GPUマシンからAPI serverへ直接届かない |
 | targetがAPIから直接取得する | targetがJob限定tokenでAPIから取得します | targetからAPIへ届き、workerを経由すると遅い |
 
-取得したデータセットは、作業ディレクトリの`.mmt-cache/datasets/`に置き、同じ版を次のJobでも使います。cacheが上限を超えると、最後に使ったのが古いものから消します。実行中のJobが使っているものは消しません。データセット版の詳細は[データセット](/data/datasets)を参照してください。
+取得したデータセットは、作業ディレクトリの`.mmt-cache/datasets/`に置き、同じバージョンを次のJobでも使います。cacheが上限を超えると、最後に使ったのが古いものから消します。実行中のJobが使っているものは消しません。データセットバージョンの詳細は[データセット](/data/datasets)を参照してください。
 
 ### targetの変更と無効化
 
-一覧の［計算機を編集］で設定を変えます。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
+全体設定の「コンピュータ」の一覧で、［コンピュータを編集］を押して設定を変えます。変えられるのは所有者と全体管理者です。待機中・実行中のJobが参照しているあいだは、接続先、Runtime、GPU、データセットの設定を変更できません。Jobが終わってから保存してください。
 
-有効のチェックを外すと、新しいJobの割り当て先から外れます。実行中のJobは、workerが引き続き管理します。
+一覧の［無効にする］を押すか、編集の［有効］のチェックを外すと、新しいJobの割り当て先から外れます。実行中のJobは、workerが引き続き管理します。
 
 ## 接続を確認する {#check-the-connection}
 
-![接続確認の結果](/images/compute-target-check.png)
+![接続確認の結果（見本のLocalのコンピュータ）](/images/compute-target-check.png)
 
-最初のJobを流す前に、一覧の［接続を確認］でtargetの準備ができているかを確かめます。確認はそのtargetを担当するworkerが、自分のSSH鍵で行います。
+最初のJobを流す前に、全体設定の「コンピュータ」の［接続を確認］で、targetの準備ができているかを確かめます。確認はそのtargetを担当するworkerが、自分のSSH鍵で行います。接続確認は、所有者と全体管理者が行えます。
 
-1. Computeの一覧で、targetの行の［接続を確認］を押します。下に［接続確認］の欄が開きます。
+1. 全体設定の「コンピュータ」の一覧で、targetの行の［接続を確認］を押します。一覧の下に、targetの詳細と［接続確認］の欄が開きます。
 2. 欄の右上の［接続を確認］を押します。workerが確認を受け取ると、状態が変わります。
 3. 項目ごとの結果を確かめます。NGの項目は［対処］の欄に直し方を表示します。
 
@@ -165,6 +169,8 @@ Taskや自動実行ルールでGPU IDを選ぶと、そのJobの間はアプリ�
 | GPU（nvidia-smi） | `nvidia-smi`が報告するGPUのindex、名前、メモリ |
 | 作業ディレクトリ | SSHユーザーが書き込めるか、空き容量 |
 | APIへの到達 | targetからAPI serverへ届くか |
+
+Localのtargetでは、最初の項目が「SSH接続」の代わりに「コマンドの起動」になります。
 
 結果の［OK］は使えること、［NG］はそのままではJobが失敗すること、［なし］はRuntimeやGitのような任意の道具が入っていないことを表します。
 
@@ -185,12 +191,15 @@ Taskや自動実行ルールでGPU IDを選ぶと、そのJobの間はアプリ�
 
 ## Workersを見る
 
-Computeの［Workers］に、このProjectに接続しているworkerの接続状態、版、ホスト名、最終応答、担当Job数を表示します。120秒以上応答が無いworkerは「オフライン」になります。workerの導入は[workerの導入と常駐](/compute/worker)を参照してください。
+プロジェクトの［Compute］には、このProjectで自分が使えるコンピュータの一覧（読むだけ）と［Workers］が出ます。［Workers］には、このProjectに接続しているworkerの接続状態、バージョン、ホスト名、最終応答、担当Job数を表示します。120秒以上応答が無いworkerは「オフライン」になります。workerの導入は[workerの導入と常駐](/compute/worker)を参照してください。
 
 ## 権限
 
 | 操作 | 必要な権限 |
 | --- | --- |
-| targetの一覧とWorkersを見る | viewer以上 |
-| SSH・Localのtargetの登録・変更・有効と無効の切り替え、接続確認 | 全体管理者 |
-| 外部の計算機（site）の登録・変更 | 所有者か全体管理者（[外部の計算機（site）](/compute/sites)） |
+| 全体設定の「コンピュータ」ですべてのtargetを見る | ログインしている人（使えないものは名前・種類・所有者・公開範囲・状態だけ） |
+| プロジェクトのComputeとWorkersを見る | viewer以上 |
+| SSH・Localのtargetを足す | 全体管理者 |
+| targetの変更・公開範囲の変更・有効と無効の切り替え、接続確認 | 所有者か全体管理者 |
+| targetでJobを動かす | Publicは誰でも。Privateは所有者と、所有者が作ったService Account |
+| 外部のコンピュータ（site）の登録・変更 | 誰でも足せます。変更は所有者か全体管理者（[外部のコンピュータ（site）](/compute/sites)） |

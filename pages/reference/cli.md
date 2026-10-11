@@ -77,7 +77,7 @@ workerはAPI serverとは別のプロセスで、Jobを受け取ってSSHの接�
 ```sh
 mado-tracking-worker run [--once]
 mado-tracking-worker install --api-url <URL> --worker-id <ID> [オプション]
-mado-tracking-worker upgrade --worker-id <ID> (--version <版> | --package-spec <指定>)
+mado-tracking-worker upgrade --worker-id <ID> (--version <バージョン> | --package-spec <指定>)
 mado-tracking-worker status --worker-id <ID> [--json]
 mado-tracking-worker doctor [--worker-id <ID>] [--ssh-key <パス>] [--known-hosts <パス>]
 ```
@@ -120,7 +120,7 @@ user unitでは`~/.config/mado-tracking-worker/<worker-id>.env`（mode 600）と
 
 ### upgrade
 
-unitの仮想環境へ新しい版を`pip install --upgrade`で入れ、unitを再起動します。実行中のJobは止まらず、再起動後のworkerが記録から引き継ぎます。pipが失敗したときは再起動しません。
+unitの仮想環境へ新しいバージョンを`pip install --upgrade`で入れ、unitを再起動します。実行中のJobは止まらず、再起動後のworkerが記録から引き継ぎます。pipが失敗したときは再起動しません。
 
 ```sh
 mado-tracking-worker upgrade --worker-id gpu-host-1 --version 0.2.0

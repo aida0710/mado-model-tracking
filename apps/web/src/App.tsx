@@ -2,11 +2,16 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AuthGate } from './hooks/useAuth';
 import { AppShell } from './layout/AppShell';
-import { AccountShell } from './layout/AccountShell';
-import { ACCOUNT_PASSWORD_PATH, ACCOUNT_PATH, ADMIN_PATH } from './layout/TopBar';
+import { SettingsShell } from './layout/SettingsShell';
+import { LegacySettingsRedirect } from './layout/LegacySettingsRedirect';
+import { LEGACY_SETTINGS_ROUTES } from './layout/legacySettingsPaths';
+import {
+  DEFAULT_SETTINGS_SECTION,
+  PASSWORD_CHANGE_PATH,
+  SETTINGS_PATH,
+  settingsSectionPath,
+} from './layout/settingsSections';
 import { Loading } from './components/Feedback';
-// Already in the main bundle because AuthGate shows it for a required change.
-import { ChangePasswordPage } from './pages/ChangePasswordPage';
 const ExperimentsPage = lazy(() =>
   import('./pages/ExperimentsPage').then((module) => ({ default: module.ExperimentsPage })),
 );
@@ -67,6 +72,14 @@ const SettingsPage = lazy(() =>
 const AccountPage = lazy(() =>
   import('./pages/AccountPage').then((module) => ({ default: module.AccountPage })),
 );
+const PasswordChangePage = lazy(() =>
+  import('./pages/PasswordChangePage').then((module) => ({ default: module.PasswordChangePage })),
+);
+const ComputersSettingsPage = lazy(() =>
+  import('./pages/ComputersSettingsPage').then((module) => ({
+    default: module.ComputersSettingsPage,
+  })),
+);
 const AdminPage = lazy(() =>
   import('./pages/AdminPage').then((module) => ({ default: module.AdminPage })),
 );
@@ -77,14 +90,20 @@ export function App() {
       <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/" element={<AppShell />} />
-          <Route element={<AccountShell />}>
+          <Route element={<SettingsShell />}>
             <Route
-              path={ACCOUNT_PASSWORD_PATH}
-              element={<ChangePasswordPage isRequired={false} />}
+              path={SETTINGS_PATH}
+              element={<Navigate replace to={settingsSectionPath(DEFAULT_SETTINGS_SECTION)} />}
             />
-            <Route path={ACCOUNT_PATH} element={<AccountPage />} />
-            <Route path={ADMIN_PATH} element={<AdminPage />} />
+            <Route path={settingsSectionPath('account')} element={<AccountPage />} />
+            <Route path={PASSWORD_CHANGE_PATH} element={<PasswordChangePage />} />
+            <Route path={settingsSectionPath('computers')} element={<ComputersSettingsPage />} />
+            {/* The 全体管理 sections; AdminPage sends anyone else and unknown names to the account. */}
+            <Route path={`${SETTINGS_PATH}/:section`} element={<AdminPage />} />
           </Route>
+          {LEGACY_SETTINGS_ROUTES.map((legacyPath) => (
+            <Route key={legacyPath} path={legacyPath} element={<LegacySettingsRedirect />} />
+          ))}
           <Route path="/projects/:projectId" element={<AppShell />}>
             <Route index element={<Navigate replace to="experiments" />} />
             <Route path="experiments" element={<ExperimentsPage />} />

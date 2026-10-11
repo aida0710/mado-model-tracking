@@ -11,7 +11,7 @@ import {
   automaticSiteSettings,
   globalSiteDetails,
   ownedSiteDetails,
-  sharedSiteForMember,
+  publicSiteForUser,
 } from '../../tests/fixtures/siteComputers';
 
 const sshTarget = { executor: 'ssh', host: 'gpu01', port: 2222, username: 'mmt', site: null } as const;
@@ -49,7 +49,7 @@ describe('Compute targetの表示', () => {
 
   it('手動投入のsiteと、設定を見られない人のsiteには接続先を出さない', () => {
     expect(formatTargetLocation(ownedSiteDetails)).toBe('—');
-    expect(formatTargetLocation(sharedSiteForMember)).toBe('—');
+    expect(formatTargetLocation(publicSiteForUser)).toBe('—');
   });
 
   it('siteのGPUはJobごとの数として表示する', () => {

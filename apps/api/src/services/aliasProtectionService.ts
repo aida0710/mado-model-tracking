@@ -55,7 +55,7 @@ async function requirePassedEvidence(
   )
     throw new DomainError(
       422,
-      '根拠の判定は、同じModel・同じ版・同じaliasを対象にしたものを指定してください',
+      '根拠の判定は、同じModel・同じバージョン・同じaliasを対象にしたものを指定してください',
       'alias_evaluation_mismatch',
     );
   if (decision.decision !== 'passed' || !decision.isLatest)
@@ -107,7 +107,7 @@ export function manualAliasGuard(
     if (protection.requirePassedEvaluation)
       throw new DomainError(
         422,
-        `保護alias「${change.alias}」を変更するには、この版の合格判定（evaluationId）を指定してください`,
+        `保護alias「${change.alias}」を変更するには、このバージョンの合格判定（evaluationId）を指定してください`,
         'alias_evaluation_required',
       );
     if (!evidence.reason?.trim())

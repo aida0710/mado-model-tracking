@@ -3,7 +3,7 @@ import type { Project, Run } from '@mmt/contracts';
 import { createHarness, entity, request, testDatabaseUrl, type Harness } from './harness.js';
 import { modelFixture, type ModelFixture, type VersionResponse } from './mlflow-models-fixtures.js';
 
-describe.skipIf(!testDatabaseUrl)('MLflow 3モデル版の参照・検索・保存時の固定', () => {
+describe.skipIf(!testDatabaseUrl)('MLflow 3モデルバージョンの参照・検索・保存時の固定', () => {
   let harness: Harness;
   let fixture: ModelFixture;
   beforeAll(async () => {
@@ -50,7 +50,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3モデル版の参照・検索・保�
     ]);
   });
 
-  it('元Logged Modelを削除しても登録版とaliasは同じ重み・環境Artifactを読む', async () => {
+  it('元Logged Modelを削除しても登録バージョンとaliasは同じ重み・環境Artifactを読む', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel({ weights: 'immutable-weights' });
     const registered = await entity<VersionResponse>(
@@ -123,7 +123,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3モデル版の参照・検索・保�
     ).toBe(409);
   });
 
-  it('Run Artifactを上書きしても既存登録版は保存時の重みを読む', async () => {
+  it('Run Artifactを上書きしても既存登録バージョンは保存時の重みを読む', async () => {
     await entity(await fixture.createRegistered(), 200);
     const root = `${fixture.base}/api/2.0/mlflow-artifacts/artifacts/runs/${fixture.run.id}/artifacts/model`;
     for (const [path, binary] of Object.entries({
@@ -172,7 +172,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3モデル版の参照・検索・保�
     expect(await snapshot.text()).toBe('old-weights');
   });
 
-  it('native uploadで保存したモデル一式もindex未登録pathのfallbackから版固定できる', async () => {
+  it('native uploadで保存したモデル一式もindex未登録pathのfallbackからバージョン固定できる', async () => {
     await entity(await fixture.createRegistered(), 200);
     for (const [path, binary] of Object.entries({
       'model/MLmodel': 'flavors:\n  sklearn:\n    pickled_model: model.pkl\n',
@@ -547,7 +547,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3モデル版の参照・検索・保�
     ).toBe(422);
   });
 
-  it('登録Modelを削除して再作成しても過去版を再公開せず数字版を再利用しない', async () => {
+  it('登録Modelを削除して再作成しても過去バージョンを再公開せず数字バージョンを再利用しない', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     await entity(await fixture.register(ready.model.info.model_id), 200);

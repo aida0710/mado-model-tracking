@@ -43,7 +43,7 @@ export const promotionText = {
   promotionEvaluationsEmpty: 'このpolicyの判定はまだありません',
   promotionEvaluatedAt: '日時',
   promotionDecision: '判定',
-  promotionCandidateVersion: '候補版',
+  promotionCandidateVersion: '候補バージョン',
   promotionEvaluationRuns: '評価Run',
   promotionCriterionResults: '基準ごとの結果',
   promotionCriterionPassed: '満たす',
@@ -78,20 +78,20 @@ export const promotionText = {
   promotionEvidence: '根拠となる判定',
   promotionEvidenceNone: '指定しない',
   promotionEvidenceChoose: '判定を選択',
-  promotionEvidenceRequired: 'このaliasを変更するには、この版の合格判定を選択してください。',
-  promotionEvidenceEmpty: 'この版には、このaliasを対象にした合格判定がありません。',
+  promotionEvidenceRequired: 'このaliasを変更するには、このバージョンの合格判定を選択してください。',
+  promotionEvidenceEmpty: 'このバージョンには、このaliasを対象にした合格判定がありません。',
   promotionReasonRequired: '理由を入力してください。',
   promotionReasonRequiredForFailed:
-    'この版はこのaliasの昇格判定で不合格です。昇格させる場合は理由を入力してください。',
+    'このバージョンはこのaliasの昇格判定で不合格です。昇格させる場合は理由を入力してください。',
   promotionReasonRequiredForProtected: '保護aliasを合格判定なしで変更するには理由を入力してください。',
   promotionAliasRequired: 'aliasを入力してください。',
-  promotionVersionRequired: '版を選択してください。',
+  promotionVersionRequired: 'バージョンを選択してください。',
   promotionProtectedAlias: '保護alias',
   // Promotion check card on the model version page.
   promotionCheck: '昇格の判定',
   promotionCheckEmpty: 'このモデルには昇格policyがありません。',
   promotionCheckPending: '判定待ち',
-  promotionCheckCurrentAlias: '現在この版を指しています',
+  promotionCheckCurrentAlias: '現在このバージョンを指しています',
   promotionCheckPromotedAutomatically: '自動昇格済み',
   promotionCheckBaselineChanged: '判定中に基準aliasが変わったため、自動昇格しませんでした。',
   promotionCheckPromotionDenied: 'aliasの変更が拒否されたため、自動昇格しませんでした。',
@@ -99,7 +99,7 @@ export const promotionText = {
   aliasProtections: '保護alias',
   aliasProtectionsEmpty: '保護aliasはありません。',
   aliasProtectionsHint:
-    '保護aliasは、必要なrole以上の利用者だけが変更できます。合格判定を必須にすると、その版の合格判定を根拠に指定したときだけ変更できます。MLflow互換APIからは変更できません。',
+    '保護aliasは、必要なrole以上の利用者だけが変更できます。合格判定を必須にすると、そのバージョンの合格判定を根拠に指定したときだけ変更できます。MLflow互換APIからは変更できません。',
   aliasProtectionAdd: '保護aliasを追加',
   aliasProtectionEdit: '保護aliasを編集',
   aliasProtectionRemove: '保護を解除',
@@ -113,7 +113,7 @@ export const promotionText = {
   aliasProtectionUpdatedAt: '更新日時',
   promotionCriterionNotCompared: '比較なし',
   promotionCheckBaselineMoved:
-    'この判定のあと、基準aliasが別の版へ移りました。今の基準版とは比べていないため、根拠には選んでいません。',
+    'この判定のあと、基準aliasが別のバージョンへ移りました。今の基準バージョンとは比べていないため、根拠には選んでいません。',
 } as const;
 
 export const promotionDecisionLabels: Record<PromotionDecision, string> = {
@@ -130,8 +130,8 @@ export const promotionCriterionReasonLabels: Record<PromotionCriterionReason, st
   baseline_metric_missing: '基準に値がありません',
   baseline_metric_not_finite: '基準の値がNaN/∞です',
   baseline_zero: '基準が0のため相対差を計算できません',
-  baseline_missing: '基準版がないため比べていません',
-  baseline_not_evaluated: '基準版に評価がありません',
+  baseline_missing: '基準バージョンがないため比べていません',
+  baseline_not_evaluated: '基準バージョンに評価がありません',
 };
 
 export const promotionDirectionLabels: Record<PromotionCriterionDirection, string> = {
@@ -180,5 +180,5 @@ export const promotionTextTemplates = {
   ruleOption: (ruleName: string, codeVersion: string) => `${ruleName}（${codeVersion}）`,
   reevaluationSequence: (sequence: number) => `再判定 ${sequence - 1}回目`,
   baselineMovedDetail: (judgedAgainst: string | null, current: string | null) =>
-    `判定時の基準版: ${judgedAgainst ?? 'なし'} / 今の基準版: ${current ?? 'なし'}`,
+    `判定時の基準バージョン: ${judgedAgainst ?? 'なし'} / 今の基準バージョン: ${current ?? 'なし'}`,
 };

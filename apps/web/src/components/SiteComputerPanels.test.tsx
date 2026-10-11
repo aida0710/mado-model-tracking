@@ -13,15 +13,15 @@ import { LaunchersTable } from './admin/LaunchersTable';
 import type { ManualSiteOwnership } from '../lib/manualSubmission';
 import { failedCheck, launcher, personalSettings, readyKey } from '../../tests/fixtures/siteComputers';
 
-// The scope of --all: the token's Project only, once per Project the PC is shared with.
+// The scope of --all: the token's Project only, once per Project whose Jobs the PC takes.
 const ALL_SCOPE_NOTE = '--allで受け取るのは、使ったtokenのProjectのJobです。';
 // Someone else's computer may be their PC or a site each requester logs in to: both are said.
 const OWNER_SUBMITS_NOTE =
-  'この計算機はAliceさんの計算機です。所有者が--watch --allで待ち受けている計算機（所有者のPCなど）では、所有者の側で投入されます。';
+  'このコンピュータはAliceさんのコンピュータです。所有者が--watch --allで待ち受けているコンピュータ（所有者のPCなど）では、所有者の側で投入されます。';
 const someoneElse: ManualSiteOwnership = { kind: 'someoneElse', ownerName: 'Alice' };
 
 describe('手動投入の案内', () => {
-  it('計算機の詳細: 1回の投入とPCでの待ち受けを出し、--allとその範囲は所有者にだけ出す', () => {
+  it('コンピュータの詳細: 1回の投入とPCでの待ち受けを出し、--allとその範囲は所有者にだけ出す', () => {
     const global = renderToStaticMarkup(
       <ManualSubmissionGuide targetId="pc" ownership={{ kind: 'global' }} />,
     );
@@ -32,10 +32,10 @@ describe('手動投入の案内', () => {
     expect(own).toContain('mado-tracking submit --site pc --watch --all</code>');
     expect(own).toContain(ALL_SCOPE_NOTE);
     expect(own).toContain('Projectごとに、そのProjectのtokenで--watch --allを動かします。');
-    expect(own).not.toContain('さんの計算機です');
+    expect(own).not.toContain('さんのコンピュータです');
   });
 
-  it('計算機の詳細: ほかの人の計算機では、今のコマンドに所有者の側で投入されることがある補足を足す', () => {
+  it('コンピュータの詳細: ほかの人のコンピュータでは、今のコマンドに所有者の側で投入されることがある補足を足す', () => {
     const html = renderToStaticMarkup(<ManualSubmissionGuide targetId="pc" ownership={someoneElse} />);
     expect(html).toContain('mado-tracking submit --site pc</code>');
     expect(html).toContain('mado-tracking submit --site pc --watch</code>');
@@ -44,7 +44,7 @@ describe('手動投入の案内', () => {
     expect(html).not.toContain(ALL_SCOPE_NOTE);
   });
 
-  it('待っているJobには本人のコマンドを出し、所有者には--allとその範囲、ほかの人の計算機では補足も出す', () => {
+  it('待っているJobには本人のコマンドを出し、所有者には--allとその範囲、ほかの人のコンピュータでは補足も出す', () => {
     const global = renderToStaticMarkup(
       <WaitingJobSubmission targetId="site" ownership={{ kind: 'global' }} />,
     );
@@ -53,7 +53,7 @@ describe('手動投入の案内', () => {
     const own = renderToStaticMarkup(<WaitingJobSubmission targetId="pc" ownership={{ kind: 'own' }} />);
     expect(own).toContain('mado-tracking submit --site pc</code>');
     expect(own).toContain('mado-tracking submit --site pc --watch --all</code>');
-    expect(own).toContain('所有者: 共有したProjectのメンバーのJobも待ち受けて投入する');
+    expect(own).toContain('所有者: Publicにしたコンピュータで、ほかの人のJobも待ち受けて投入する');
     expect(own).toContain(ALL_SCOPE_NOTE);
     // A supercomputer with OTP is submitted by each requester with their own account, so the
     // command stays; where the owner waits on their PC, the owner's side submits it.
@@ -63,7 +63,7 @@ describe('手動投入の案内', () => {
     expect(others).toContain(OWNER_SUBMITS_NOTE);
   });
 
-  it('Jobの詳細: 依頼した本人には実行するコマンドの案内を出し、ほかの人の計算機では補足も出す', () => {
+  it('Jobの詳細: 依頼した本人には実行するコマンドの案内を出し、ほかの人のコンピュータでは補足も出す', () => {
     const notice = (ownership: ManualSiteOwnership, isRequester: boolean) =>
       renderToStaticMarkup(
         <WaitingJobNotice targetId="pc" ownership={ownership} isRequester={isRequester} />,
@@ -79,7 +79,7 @@ describe('手動投入の案内', () => {
     expect(notice(someoneElse, false)).toContain(OWNER_SUBMITS_NOTE);
   });
 
-  it('Jobsの上の案内: 所有者の計算機にだけ--allを出し、ほかの人の計算機ではコマンドと補足を出す', () => {
+  it('Jobsの上の案内: 所有者のコンピュータにだけ--allを出し、ほかの人のコンピュータではコマンドと補足を出す', () => {
     const html = renderToStaticMarkup(
       <ManualSubmissionNotice
         groups={[
@@ -120,7 +120,7 @@ describe('launcherが作った鍵', () => {
         onRequested={() => undefined}
       />,
     );
-    expect(requested).toContain('launcherが鍵を作るのを待っています');
+    expect(requested).toContain('ランチャーが鍵を作るのを待っています');
     // The managers' table shows the same state, so one's own key does too while it waits.
     expect(requested).toContain('作成待ち');
     expect(requested).toContain('依頼日時');
@@ -155,13 +155,13 @@ describe('接続確認の結果', () => {
 });
 
 describe('利用者の設定の一覧', () => {
-  it('利用者・アカウント・変数・鍵を出し、作業ディレクトリが無ければ計算機の設定を使うと出す', () => {
+  it('利用者・アカウント・変数・鍵を出し、作業ディレクトリが無ければコンピュータの設定を使うと出す', () => {
     const html = renderToStaticMarkup(<SitePersonalSettingsList items={[personalSettings]} />);
     expect(html).toContain('Alice');
     expect(html).toContain('alice');
     expect(html).toContain('GROUP=gaa50000');
     expect(html).toContain('作成済み');
-    expect(html).toContain('計算機の設定');
+    expect(html).toContain('コンピュータの設定');
   });
 });
 

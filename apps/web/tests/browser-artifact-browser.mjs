@@ -126,9 +126,9 @@ try {
   assert.equal(await versions.count(), 1, 'only the older config is an earlier version');
   await versions.first().getByRole('button').click();
   await preview().getByText('old config').waitFor();
-  await preview().getByText('以前の版を表示しています').waitFor();
+  await preview().getByText('以前のバージョンを表示しています').waitFor();
   await screenshot('artifact-previous-version');
-  await preview().getByRole('button', { name: '最新の版に戻る' }).click();
+  await preview().getByRole('button', { name: '最新のバージョンに戻る' }).click();
   await preview().getByText('new config').waitFor();
   assert.equal(await file('config.txt').count(), 1, 'the latest list shows one row per path');
   assert.equal(latestConfig.path, 'config.txt');

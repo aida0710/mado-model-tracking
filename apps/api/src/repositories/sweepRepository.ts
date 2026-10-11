@@ -10,6 +10,7 @@ import { first, rows, type Connection } from '../db/database.js';
 import { notFound } from '../domain/errors.js';
 import type { SweepCreateInput } from '../domain/sweepValidation.js';
 import type { MetricPoint, TrialParameters } from '../domain/sweeps/types.js';
+import { liveProjectSql } from './projectRepository.js';
 
 /** A sweeps row without the per-trial aggregates that the API adds. */
 export type StoredSweep = Omit<Sweep, 'trialCounts' | 'bestTrial'>;
@@ -155,9 +156,11 @@ export async function listSweeps(
 
 /** Ids of sweeps the scheduler should visit. */
 export async function listSchedulableSweepIds(connection: Connection): Promise<string[]> {
+  // Sweeps of an archived Project wait untouched until it is restored.
   const found = await rows<{ id: string }>(
     connection,
-    "SELECT id FROM sweeps WHERE status IN ('running','paused') ORDER BY updated_at,id",
+    `SELECT s.id FROM sweeps s JOIN projects p ON p.id=s.project_id AND p.archived_at IS NULL
+    WHERE s.status IN ('running','paused') ORDER BY s.updated_at,s.id`,
   );
   return found.map((sweep) => sweep.id);
 }
@@ -337,7 +340,8 @@ export async function listObjectiveHistories(
 
 /**
  * Whether the sweep's creator may still launch trials: an active user who is a Project editor or
- * admin, or a global administrator (who can act on any Project in a session).
+ * admin by the effective role (direct grant, group binding or public visibility), or a global
+ * administrator (who can act on any Project in a session). Nobody can in an archived Project.
  */
 export async function hasSweepOwnerAccess(
   connection: Connection,
@@ -345,8 +349,9 @@ export async function hasSweepOwnerAccess(
 ): Promise<boolean> {
   const owner = await first<{ hasAccess: boolean }>(
     connection,
-    `SELECT (u.status='active' AND (u.is_admin OR COALESCE(m.role IN ('editor','admin'),false))) AS has_access
-    FROM users u LEFT JOIN project_members m ON m.user_id=u.id AND m.project_id=$2 WHERE u.id=$1`,
+    `SELECT (u.status='active' AND ${liveProjectSql('$2')}
+      AND (u.is_admin OR COALESCE(m.role IN ('editor','admin'),false))) AS has_access
+    FROM users u LEFT JOIN effective_project_roles m ON m.user_id=u.id AND m.project_id=$2 WHERE u.id=$1`,
     [sweep.createdBy, sweep.projectId],
   );
   return owner?.hasAccess === true;

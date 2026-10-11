@@ -1,8 +1,13 @@
 import type { ProjectRole } from '@mmt/contracts';
 import { canManagePlugins } from '../lib/permissions';
 import { text } from '../i18n/catalog';
-
-export const ADMIN_PATH = '/admin';
+import {
+  ADMIN_SECTIONS,
+  GENERAL_SETTINGS_SECTIONS,
+  SETTINGS_SECTION_LABELS,
+  settingsSectionPath,
+  type SettingsSection,
+} from './settingsSections';
 
 type ProjectScreen =
   | 'experiments'
@@ -21,17 +26,17 @@ type ProjectScreen =
   | 'settings';
 
 // The fourteen Project screens in the groups the sidebar and the drawer show, in display order.
-// The global administration page joins the last group.
+// The 全体設定 screens have groups of their own, shown only away from a Project.
 const SCREEN_GROUPS: { label: string; screens: ProjectScreen[] }[] = [
   { label: text.navigationGroupTracking, screens: ['experiments', 'sweeps', 'reports'] },
   { label: text.navigationGroupModels, screens: ['models', 'tasks', 'codes'] },
   { label: text.navigationGroupData, screens: ['datasets', 'artifacts', 'lineage'] },
   { label: text.navigationGroupExecution, screens: ['jobs', 'hooks', 'compute'] },
-  { label: text.navigationGroupManagement, screens: ['plugins', 'settings'] },
+  { label: text.navigationGroupProjectManagement, screens: ['plugins', 'settings'] },
 ];
 
-/** A Project screen, or the global administration page. */
-export type NavigationScreen = ProjectScreen | 'administration';
+/** A Project screen, or a 全体設定 screen (including the 全体管理 ones). */
+export type NavigationScreen = ProjectScreen | SettingsSection;
 
 export interface NavigationLink {
   screen: NavigationScreen;
@@ -50,31 +55,46 @@ interface NavigationAccess {
   isGlobalAdmin: boolean;
 }
 
+/** Where a Project opens: its experiments. */
+export function projectHomePath(projectId: string): string {
+  return `/projects/${projectId}/experiments`;
+}
+
+function settingsLinks(sections: readonly SettingsSection[]): NavigationLink[] {
+  return sections.map((section) => ({
+    screen: section,
+    to: settingsSectionPath(section),
+    label: SETTINGS_SECTION_LABELS[section],
+  }));
+}
+
 /**
- * The screens the main navigation offers, grouped: the open Project's screens (Plugins only for
- * those who may manage them) and, for global admins, the administration page. Groups without a
- * link are left out.
+ * The screens the main navigation offers, grouped. With a Project open: its screens (Plugins only
+ * for those who may manage them); 全体設定 is reached from the user menu instead. Without one (the
+ * 全体設定 screens, or no Project to open): 全体設定 for everyone and, for global admins, 全体管理.
+ * Groups without a link are left out.
  */
 export function navigationGroups({
   projectId,
   projectRole,
   isGlobalAdmin,
 }: NavigationAccess): NavigationGroup[] {
-  const groups: NavigationGroup[] = SCREEN_GROUPS.map(({ label, screens }) => ({
+  if (!projectId) return settingsGroups(isGlobalAdmin);
+  return SCREEN_GROUPS.map(({ label, screens }) => ({
     label,
-    links: projectId
-      ? screens
-          .filter((screen) => screen !== 'plugins' || canManagePlugins(projectRole, isGlobalAdmin))
-          .map((screen) => ({ screen, to: `/projects/${projectId}/${screen}`, label: text[screen] }))
-      : [],
-  }));
+    links: screens
+      .filter((screen) => screen !== 'plugins' || canManagePlugins(projectRole, isGlobalAdmin))
+      .map((screen) => ({ screen, to: `/projects/${projectId}/${screen}`, label: text[screen] })),
+  })).filter((group) => group.links.length > 0);
+}
+
+function settingsGroups(isGlobalAdmin: boolean): NavigationGroup[] {
+  const groups: NavigationGroup[] = [
+    { label: text.globalSettings, links: settingsLinks(GENERAL_SETTINGS_SECTIONS) },
+  ];
   if (isGlobalAdmin)
-    groups[groups.length - 1]!.links.push({
-      screen: 'administration',
-      to: ADMIN_PATH,
-      label: text.administration,
-    });
-  return groups.filter((group) => group.links.length > 0);
+    groups.push({ label: text.administration, links: settingsLinks(ADMIN_SECTIONS) });
+  return groups;
 }
 
 /** The same screens as navigationGroups, in one list. */

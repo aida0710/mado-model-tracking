@@ -3,7 +3,7 @@ import {
   globalSiteDetails,
   ownedSiteDetails,
   personalSettings,
-  sharedSiteForMember,
+  publicSiteForUser,
 } from '../../tests/fixtures/siteComputers';
 import {
   buildPersonalSettingsInput,
@@ -22,7 +22,7 @@ describe('自分の設定', () => {
     expect(personalSettingsScope({ ...globalSiteDetails, siteAccountMode: 'shared' })).toBe('none');
     expect(personalSettingsScope(ownedSiteDetails)).toBe('withoutAccount');
     // Everyone who may use a site knows its account mode, even without its settings.
-    expect(personalSettingsScope({ ...sharedSiteForMember, submissionMode: 'automatic' })).toBe(
+    expect(personalSettingsScope({ ...publicSiteForUser, submissionMode: 'automatic' })).toBe(
       'withAccount',
     );
   });
@@ -45,7 +45,7 @@ describe('自分の設定', () => {
     ).not.toHaveProperty('accountName');
   });
 
-  it('作業ディレクトリは空なら計算機の設定に戻し（null）、絶対パスでなければ拒否する', () => {
+  it('作業ディレクトリは空ならコンピュータの設定に戻し（null）、絶対パスでなければ拒否する', () => {
     const build = (personalWorkDirectory: string) =>
       buildPersonalSettingsInput(values({ personalWorkDirectory }), 'withoutAccount');
     expect(build('').workDirectory).toBeNull();

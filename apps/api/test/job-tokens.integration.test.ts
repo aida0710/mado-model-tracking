@@ -169,7 +169,7 @@ describe.skipIf(!testDatabaseUrl)('Job限定token（独立PostgreSQL）', () => 
     expect(refused.status).toBe(403);
   });
 
-  it('MLflow経路でset-tag・log-batch・Artifact・Logged Model・版登録ができる', async () => {
+  it('MLflow経路でset-tag・log-batch・Artifact・Logged Model・バージョン登録ができる', async () => {
     const fixture = await executionFixture(harness);
     const { jobToken, run } = await startedJob(fixture);
     const base = mlflowBase(fixture);

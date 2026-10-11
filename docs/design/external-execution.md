@@ -2,13 +2,13 @@
 
 状態：設計案。2026-10-09までの議論をまとめたものです。実装した部分の手順は[sites.md](../sites.md)、[hooks.md](../hooks.md)などにあります。
 
-**2026-10-10の変更**：計算機をWebから追加できるようにしました。そのため「trackingと外部実行を分ける」「接続情報や鍵はtrackingに置かない」をやめ、接続先・job shell・個人設定をtrackingで管理します。鍵だけはlauncherが自分のホストで作り、trackingには公開鍵だけを置きます。下の表と「実行先の設定」は、この変更に合わせて書き直しています。
+**2026-10-10の変更**：コンピュータをWebから追加できるようにしました。そのため「trackingと外部実行を分ける」「接続情報や鍵はtrackingに置かない」をやめ、接続先・job shell・個人設定をtrackingで管理します。鍵だけはlauncherが自分のホストで作り、trackingには公開鍵だけを置きます。下の表と「実行先の設定」は、この変更に合わせて書き直しています。
 
 ## 目的
 
-- モデル版の登録時だけでなく、決めたきっかけ（フック）でコードを実行できるようにする。
+- モデルバージョンの登録時だけでなく、決めたきっかけ（フック）でコードを実行できるようにする。
 - 実行はコンテナだけにする。実行先には、DockerかSingularity/Apptainerがあればよい。
-- 計算機はWebから足す。全体管理者は全員で使う計算機を、研究者は自分の計算機（PC・研究室のサーバー）を足す（2026-10-10に変更。以前は「trackingと外部実行を分け、trackingは計算機の事情を知らない」）。
+- コンピュータはWebから足す。全体管理者は全員で使うコンピュータを、研究者は自分のコンピュータ（PC・研究室のサーバー）を足す（2026-10-10に変更。以前は「trackingと外部実行を分け、trackingはコンピュータの事情を知らない」）。
 - SSHで入るGPUサーバーと、いろいろなスパコンで動かす。OTPが必要なサイトや、CPUがArmのサイトも含む。
 - 音声・動画・テキストの合成データを大量に作り（例：音声3000時間）、段階の間で受け渡す。
 
@@ -19,14 +19,14 @@
 | パイプライン（DAG） | 作らない（保留）。フック、ドライバー、起動の経緯の記録で代わりにする |
 | 実行の形 | コンテナだけにする。Python runtime（Jobごとのvenv）はやめる |
 | 実行先 | SSHで入るGPUサーバー（Docker）と、スケジューラのあるスパコン（Singularity/Apptainer）の混在 |
-| 実行先の設定 | 計算機ごとに、全体設定と個人設定を持つ。どちらもWebで編集し、trackingに保存する |
-| 計算機の追加 | Webで行う。全体管理者は全員の計算機、研究者は自分の計算機（本人と、本人が選んだProjectのメンバーが使う） |
+| 実行先の設定 | コンピュータごとに、全体設定と個人設定を持つ。どちらもWebで編集し、trackingに保存する |
+| コンピュータの追加 | Webで行う。全体管理者は全員のコンピュータ、研究者は自分のコンピュータ（本人と、本人が選んだProjectのメンバーが使う） |
 | 鍵 | launcherが作り、Webには公開鍵だけを出す。利用者はその公開鍵をサイトに登録する。秘密鍵はlauncherのホストから出ない |
-| launcher | 全体管理者がWebで登録し、tokenを1本発行する。担当の計算機の設定・job shell・鍵の依頼をAPIから読む |
-| 研究者のPC | launcherから入れない計算機は、そのPCで`mado-tracking submit --watch`を動かして待ち受ける |
-| 資源の指定 | 対応表を持たない。計算機ごとのjob shellが、スケジューラの書き方に直す |
+| launcher | 全体管理者がWebで登録し、tokenを1本発行する。担当のコンピュータの設定・job shell・鍵の依頼をAPIから読む |
+| 研究者のPC | launcherから入れないコンピュータは、そのPCで`mado-tracking submit --watch`を動かして待ち受ける |
+| 資源の指定 | 対応表を持たない。コンピュータごとのjob shellが、スケジューラの書き方に直す |
 | 課金グループ | 持たない。必要なサイトでは、job shellに変数で渡す |
-| Dockerの計算機 | 共用アカウントで動かす。利用者どうしの隔離はしない |
+| Dockerのコンピュータ | 共用アカウントで動かす。利用者どうしの隔離はしない |
 | OTPのあるサイト | 本人がログインして`mmt submit`で投入する。ログインノードには何も常駐させない |
 | 状態の監視 | runnerが計算ノードからtrackingへ直接報告する。SSHでの監視はやめる |
 | runner用API | 別のホスト名で公開する。受け付けるのは決めたpathとJob用tokenだけ |
@@ -47,7 +47,7 @@
 - **Job限定token**：自分のRunにしか書けず、別のRunやJobは作れません（[worker.md](../worker.md)「実行コードにはJob限定tokenを渡す」）。
 - **上限**：
   - 1つのJobの出力は既定1万ファイル（最大100万）
-  - Artifactを中身とするDatasetVersionは1版10万ファイルまで
+  - Artifactを中身とするDatasetVersionは1バージョン10万ファイルまで
   - 実行先のdataset cacheは既定100GiB
 - **署名付きURL**：取得には対応していません（[operations.md](../operations.md)）。
 - **未確認の結合**：実GPU・実SIF・実SSHを通した確認は、まだしていません（[worker.md](../worker.md)「テストと型検証を実行する」）。
@@ -55,7 +55,7 @@
 ## 全体の構成
 
 ```text
-tracking（MMT）  Run・指標・Artifact・版・lineage・フック・Jobの記録
+tracking（MMT）  Run・指標・Artifact・バージョン・lineage・フック・Jobの記録
   │ 実行の依頼 ↓          ↑ 報告（runnerから直接）
 launcher         SSHで入ってjob shellを動かすだけ（OTPのサイトは本人の mmt submit）
   └ job shell     サイトごとに書く。資源を確保してrunnerを起動する
@@ -79,7 +79,7 @@ SIF変換           imageのdigest×CPUの組ごとに1回変換して、S3へ�
 | image | digestに解決したもの |
 | 雛形 | repoとcommit |
 | startup command | コンテナの中で実行するargv |
-| 入力 | モデル版、データセット版と担当shard、checkpoint、上流のRun、起動のきっかけになった本文 |
+| 入力 | モデルバージョン、データセットバージョンと担当shard、checkpoint、上流のRun、起動のきっかけになった本文 |
 | 資源 | GPU数、制限時間、arrayの数 |
 | 実行先と依頼者 | 実行先の名前、依頼した人 |
 | 経緯 | 起動したもの（手動・フック・ドライバー）、元のイベント、親Job、連鎖の起点、深さ |
@@ -106,7 +106,7 @@ trackingは取消の印を付けるだけです。runnerがheartbeatの応答で
 
 ### 実行先の情報
 
-trackingは名前、CPU（amd64/arm64）、runtime、投入方式（自動/手動）に加えて、全体設定（接続先、known_hosts、アカウント方式、作業ディレクトリ、取消コマンド、GPUの渡し方、変数）とjob shellの版、各人の個人設定を持ちます（2026-10-10に変更）。鍵の秘密の半分は持ちません。
+trackingは名前、CPU（amd64/arm64）、runtime、投入方式（自動/手動）に加えて、全体設定（接続先、known_hosts、アカウント方式、作業ディレクトリ、取消コマンド、GPUの渡し方、変数）とjob shellのバージョン、各人の個人設定を持ちます（2026-10-10に変更）。鍵の秘密の半分は持ちません。
 
 ## 実行側
 
@@ -114,7 +114,7 @@ trackingは名前、CPU（amd64/arm64）、runtime、投入方式（自動/手�
 
 **全体設定**
 
-計算機の所有者と全体管理者（全体の計算機は全体管理者だけ）がWebで編集します。job shellは保存のたびに不変の版になり、Jobにはどの版で投入したかを記録します（2026-10-10に変更。以前は管理者のrepoに`site.yaml`と`job.sh`を置く案でした）。
+コンピュータの所有者と全体管理者（全体のコンピュータは全体管理者だけ）がWebで編集します。job shellは保存のたびに不変のバージョンになり、Jobにはどのバージョンで投入したかを記録します（2026-10-10に変更。以前は管理者のrepoに`site.yaml`と`job.sh`を置く案でした）。
 
 | 全体設定の項目 | 内容 |
 |---|---|
@@ -137,7 +137,7 @@ trackingは名前、CPU（amd64/arm64）、runtime、投入方式（自動/手�
 - 鍵：SSHで入る、本人アカウントのサイトだけに必要です。launcherが本人用の鍵を作り、Webに公開鍵を出します。本人はその公開鍵をサイトに登録します（2026-10-10に変更。以前は本人の鍵を暗号化して預かる案でした）。OTPのサイトは本人が投入するので、鍵は要りません。
 - 作業ディレクトリ・変数（`MMT_VAR_*`）：全体設定を上書きします。
 
-共用アカウントで自動投入する計算機には、個人設定はありません（利用者が共用アカウントの作業ディレクトリや変数を変えられないようにするため）。手動投入の計算機では、投入した人の個人設定を使います。所有者が`--all`で全員のJobを投入するときも、所有者の設定です。研究者が自分の個人設定の要否を知れるように、計算機の一覧はアカウント方式（`siteAccountMode`）を、その計算機を使える全員に出します。
+共用アカウントで自動投入するコンピュータには、個人設定はありません（利用者が共用アカウントの作業ディレクトリや変数を変えられないようにするため）。手動投入のコンピュータでは、投入した人の個人設定を使います。所有者が`--all`で全員のJobを投入するときも、所有者の設定です。研究者が自分の個人設定の要否を知れるように、コンピュータの一覧はアカウント方式（`siteAccountMode`）を、そのコンピュータを使える全員に出します。
 
 **共用アカウントのDockerホスト**
 
@@ -178,7 +178,7 @@ qsub -l select=1:ngpus="$MMT_GPU_COUNT" -l walltime="$MMT_WALLTIME" \
 
 ### runner
 
-- **配布**：x86用とArm用を用意し、Pythonを同梱します。サイトのmoduleには頼りません。launcherか`mmt submit`が、版ごとに作業ディレクトリへ置きます。
+- **配布**：x86用とArm用を用意し、Pythonを同梱します。サイトのmoduleには頼りません。launcherか`mmt submit`が、バージョンごとに作業ディレクトリへ置きます。
 - **入力**：担当のshardだけを署名付きURLで取得し、サイトのcacheに置きます。今のdataset cacheの仕組みを使います。
 - **SIF**：imageのdigest×CPUの組ごとにサイトのcacheへ置き、sha256を照合します。
 - **コンテナの起動**：今の[`docker_container.py`](../../python/src/mado_tracking/worker/docker_container.py)と[`sif_container.py`](../../python/src/mado_tracking/worker/sif_container.py)の安全な起動手順（mountの制限、`--user`、環境変数の渡し方）を使います。
@@ -199,7 +199,7 @@ qsub -l select=1:ngpus="$MMT_GPU_COUNT" -l walltime="$MMT_WALLTIME" \
 
 ### image
 
-- **build**：各自のPCでbuildし、Forgejoのregistryへpushします。x86とArmの両方で使うなら、`docker buildx build --platform linux/amd64,linux/arm64`でmulti-archにします。Apple SiliconのMacでは、Arm版はそのまま作れますが、x86版はエミュレーションになります。
+- **build**：各自のPCでbuildし、Forgejoのregistryへpushします。x86とArmの両方で使うなら、`docker buildx build --platform linux/amd64,linux/arm64`でmulti-archにします。Apple SiliconのMacでは、Armバージョンはそのまま作れますが、x86バージョンはエミュレーションになります。
 - **照合**：依頼を作るときに、tagをdigestへ解決して記録し、実行先のCPU向けのimageが含まれているかを照合します。Apptainerは、CPUの合わないimageでも変換してしまい、実行して初めて失敗するためです。
 - **SIFへの変換**：サーバー側で`apptainer pull --arch`を使います。変換するだけでコンテナを実行しないので、別のCPU向けでもエミュレーションは要りません。変換したSIFはS3に置き、runnerが署名付きURLで取得します。
 - **Dockerホストでの取得**：読み取り専用のpull tokenを使い、registryから直接pullします。
@@ -209,12 +209,12 @@ qsub -l select=1:ngpus="$MMT_GPU_COUNT" -l walltime="$MMT_WALLTIME" \
 
 ### フック
 
-研究者全員が作れて、作った人の権限で動きます。設定は変えられず、変えるときは新しい版にします（今の自動実行ルールと同じです）。参照する雛形は、作ったときのcommitに固定するのを既定にし、branchの最新を追う設定も選べるようにします。
+研究者全員が作れて、作った人の権限で動きます。設定は変えられず、変えるときは新しいバージョンにします（今の自動実行ルールと同じです）。参照する雛形は、作ったときのcommitに固定するのを既定にし、branchの最新を追う設定も選べるようにします。
 
 | きっかけ | 重複判定の単位 | 注意点 |
 |---|---|---|
 | 手動・起動API | 要求ID | LAN内のシステムからの起動もこれで受ける |
-| モデル登録 | フック×版 | 今の自動実行ルールを移す。学習の成功を待つ点と、過去の版へ遡らない点は今と同じ |
+| モデル登録 | フック×バージョン | 今の自動実行ルールを移す。学習の成功を待つ点と、過去のバージョンへ遡らない点は今と同じ |
 | Runの終了 | フック×Run（最初の終了だけ） | MLflowのRunは終了と再開を繰り返すことがあるので、最初の終了だけにする。そのフックが起点の連鎖に属するRunでは起動しない |
 | arrayの終了 | フック×array | 全部終わったら1回だけ起動する |
 | checkpointの保存 | フック×checkpoint | SDKで登録したcheckpointだけを対象にする。MLflowのcheckpointは、Runが終わるまでファイルが足され続け、完了の時点が無いため。「毎回」「k個ごと」「最新だけ」「実行中なら飛ばす」から選ぶ |
@@ -240,8 +240,8 @@ qsub -l select=1:ngpus="$MMT_GPU_COUNT" -l walltime="$MMT_WALLTIME" \
 ### データ
 
 - **形式**：合成データは、非圧縮のtar shardにします（1サンプル分のファイルを同じ名前でまとめる、WebDatasetの形）。Madoは非圧縮tarの中の音声・動画を、必要な部分だけ取得して再生できるので、そのまま中身を見られます。
-- **登録**：shardの一覧（uri、サイズ、sha256、サンプル数）をmanifestにまとめ、参照のDatasetVersionとして登録します。版のdigestは、manifestのhashにします。
-- **受け渡し**：段階の間はこの版で受け渡し、下流は担当のshardだけを取得します。こうすれば、dataset cacheの上限に当たりません。
+- **登録**：shardの一覧（uri、サイズ、sha256、サンプル数）をmanifestにまとめ、参照のDatasetVersionとして登録します。バージョンのdigestは、manifestのhashにします。
+- **受け渡し**：段階の間はこのバージョンで受け渡し、下流は担当のshardだけを取得します。こうすれば、dataset cacheの上限に当たりません。
 - **保存先**：Madoが扱うbucketにします。
 - **規模の目安**：音声3000時間を24kHz・16bit・モノラルで作ると、約520GBになります。1GBのshardなら約520個で、64並列なら1つのJobあたり8個ほどです。
 
@@ -308,13 +308,13 @@ M3をM4より先にするのは、フックやドライバーが作るJobも、a
 
 ## 実装の状況（2026-10-09）
 
-M1・M3・M4の大部分と、M2・M5の一部を実装しました（APIの詳細は[api-contract.md](../api-contract.md)の「外部の計算機（site）」「フックとドライバー」、使い方は[sites.md](../sites.md)と[hooks.md](../hooks.md)）。実機（M0）ではまだ確かめていません。
+M1・M3・M4の大部分と、M2・M5の一部を実装しました（APIの詳細は[api-contract.md](../api-contract.md)の「外部のコンピュータ（site）」「フックとドライバー」、使い方は[sites.md](../sites.md)と[hooks.md](../hooks.md)）。実機（M0）ではまだ確かめていません。
 
 設計から変えたこと:
 
 | 設計 | 実装 | 理由 |
 |---|---|---|
-| ComputeTargetを実行側へ移す | ComputeTargetに`executor='site'`を足す。全体設定・job shellの版・個人設定は別の表に持ち、Webで編集する（2026-10-10） | ssh/localの実行先と同じ一覧・権限・Job画面を使えます |
+| ComputeTargetを実行側へ移す | ComputeTargetに`executor='site'`を足す。全体設定・job shellのバージョン・個人設定は別の表に持ち、Webで編集する（2026-10-10） | ssh/localの実行先と同じ一覧・権限・Job画面を使えます |
 | SIFへの変換はtracking側 | runnerがsiteの上で`apptainer pull --arch`し、cacheを使い回す | 全部のスパコンが外へ通信できるので、変換したSIFを運ぶより速く、trackingに大きいファイルが溜まりません |
 | ジョブの雛形・siteの設定はYAML（`site.yaml`） | ジョブの雛形はTOML（`mmt-job.toml`）。siteの設定はWebで編集し、launcherはAPIから読む（2026-10-10） | Python標準のtomllibで読め、依存を増やしません。siteの設定はWebから追加するため |
 | 署名付きURLでの直接upload | 既存のupload session（再開可能、part単位）をJob tokenで使う | 保存先ごとの署名を作る仕組みが要るので後回しにしました |

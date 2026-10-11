@@ -87,7 +87,7 @@ function requireBaseRevision(report: Report, baseRevision: number): void {
   if (report.currentRevision !== baseRevision)
     throw new DomainError(
       409,
-      `ほかの編集が版${report.currentRevision}として保存されています。最新の版を開き直してから編集してください`,
+      `ほかの編集がバージョン${report.currentRevision}として保存されています。最新のバージョンを開き直してから編集してください`,
       'report_revision_conflict',
     );
 }
@@ -449,7 +449,7 @@ export class ReportService {
       if (totalBytes > this.dependencies.snapshotMaxBytes)
         throw new DomainError(
           413,
-          '1つの版の固定データの合計が上限を超えます。固定するブロックを減らしてください',
+          '1つのバージョンの固定データの合計が上限を超えます。固定するブロックを減らしてください',
           'report_snapshot_too_large',
         );
       snapshots.push(snapshot);
@@ -484,7 +484,7 @@ export class ReportService {
     ];
     for (const [table, ids] of tables)
       if ((await countProjectRows(this.database, { table, projectId, ids })) !== ids.length)
-        invalidReference('レポートが参照するRun・Sweep・版などがこのProjectにありません');
+        invalidReference('レポートが参照するRun・Sweep・バージョンなどがこのProjectにありません');
     const views = await findSavedViewVisibilities(this.database, {
       projectId,
       savedViewIds: references.savedViewIds,
@@ -544,7 +544,7 @@ export class ReportService {
     revision: { reportId: string; revision: number },
   ): Promise<ReportRevision> {
     const found = await findRevision(connection, revision);
-    if (!found) notFound('レポートの版');
+    if (!found) notFound('レポートのバージョン');
     return found;
   }
 

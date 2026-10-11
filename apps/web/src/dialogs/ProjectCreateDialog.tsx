@@ -1,50 +1,61 @@
 import { useState } from 'react';
-import type { Project } from '@mmt/contracts';
+import type { Project, ProjectVisibility } from '@mmt/contracts';
 import { administrationApi } from '../api/administration';
 import { useStorageBackendChoices } from '../hooks/useStorageBackends';
 import { useMutation } from '../hooks/useMutation';
 import { QueryDialog } from '../components/QueryDialog';
 import { Dialog } from '../components/Dialog';
 import { ErrorNotice } from '../components/Feedback';
+import { ProjectMemberGrantsField } from '../components/ProjectMemberGrantsField';
+import { ProjectVisibilityPicker } from '../components/ProjectVisibilityPicker';
 import { StorageBackendPicker } from '../components/StorageBackendPicker';
 import type { StorageBackendChoice } from '../hooks/useStorageBackends';
+import { buildProjectCreate, DEFAULT_PROJECT_VISIBILITY } from '../lib/projectCreateInput';
+import type { MemberGrantDraft } from '../lib/projectMemberGrants';
 import { text } from '../i18n/catalog';
 
-export function ProjectDialog({
+/**
+ * Creates a Project: name, description, visibility (with members for a Private one) and storage.
+ * The Project switcher, the admin Project list and the screen shown without Projects all open
+ * this one dialog; the caller opens the created Project.
+ */
+export function ProjectCreateDialog({
   onClose,
-  onSaved,
+  onCreated,
 }: {
   onClose: () => void;
-  onSaved: (project: Project) => void;
+  onCreated: (project: Project) => void;
 }) {
   const backends = useStorageBackendChoices();
   return (
     <QueryDialog title={text.newProject} onClose={onClose} query={backends}>
       {(choices) => (
-        <ProjectForm
+        <ProjectCreateForm
           choices={choices.items}
           defaultBackend={choices.defaultBackend}
           onClose={onClose}
-          onSaved={onSaved}
+          onCreated={onCreated}
         />
       )}
     </QueryDialog>
   );
 }
 
-function ProjectForm({
+function ProjectCreateForm({
   choices,
   defaultBackend,
   onClose,
-  onSaved,
+  onCreated,
 }: {
   choices: StorageBackendChoice[];
   defaultBackend: string;
   onClose: () => void;
-  onSaved: (project: Project) => void;
+  onCreated: (project: Project) => void;
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [visibility, setVisibility] = useState<ProjectVisibility>(DEFAULT_PROJECT_VISIBILITY);
+  const [memberDrafts, setMemberDrafts] = useState<MemberGrantDraft[]>([]);
   // New Projects start on the backend the global administrator chose as the default.
   const [backend, setBackend] = useState(defaultBackend);
   const mutation = useMutation();
@@ -55,14 +66,18 @@ function ProjectForm({
           event.preventDefault();
           void mutation
             .run(() =>
-              administrationApi.createProject({
-                name: name.trim(),
-                description: description.trim() || undefined,
-                artifactBackend: backend,
-              }),
+              administrationApi.createProject(
+                buildProjectCreate({
+                  name,
+                  description,
+                  visibility,
+                  artifactBackend: backend,
+                  memberDrafts,
+                }),
+              ),
             )
             .then((project) => {
-              if (project) onSaved(project);
+              if (project) onCreated(project);
             });
         }}
       >
@@ -83,14 +98,22 @@ function ProjectForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="new-project-description">{text.description}</label>
+            <label htmlFor="new-project-description">{text.projectDescriptionOptional}</label>
             <textarea
               id="new-project-description"
               value={description}
-              rows={4}
+              rows={3}
               onChange={(event) => setDescription(event.target.value)}
             />
           </div>
+          <ProjectVisibilityPicker
+            name="new-project-visibility"
+            value={visibility}
+            onChange={setVisibility}
+          />
+          {visibility === 'private' && (
+            <ProjectMemberGrantsField drafts={memberDrafts} onChange={setMemberDrafts} />
+          )}
           <StorageBackendPicker
             name="new-project-artifact-backend"
             choices={choices}

@@ -5,9 +5,11 @@ description: Register GPU machines that run Jobs as Compute targets. SSH setting
 
 # Compute targets
 
-![The computers with their owners and sharing, and the workers](/images/compute-targets.png)
+![A Project's Compute page: the computers you can use, and the workers](/images/compute-targets.png)
 
-A Compute target is a machine that runs Jobs. It registers the SSH destination, available GPUs, supported runtimes (Python, Docker, Singularity, Apptainer), and a working directory. The worker connects to the target and runs Jobs; the API server never connects to targets.
+A Compute target is a machine that runs Jobs: the SSH and Local kinds of computer. It registers the SSH destination, available GPUs, supported runtimes (Python, Docker, Singularity, Apptainer), and a working directory. The worker connects to the target and runs Jobs; the API server never connects to targets.
+
+Targets are added under コンピュータ (Computers) in the global settings, and their visibility (Public or Private) decides whose Jobs run on them. See [Computers and visibility](/en/compute/computers) for visibility and owners.
 
 ```text
 API server ← worker (holds the SSH key and known_hosts) → Compute target (GPU machine)
@@ -90,19 +92,21 @@ ssh-keygen -lf ~/.ssh/mmt_known_hosts
 
 Compare the fingerprint from the last command with the output of `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the target. The worker never accepts unknown or changed host keys (`StrictHostKeyChecking=yes`).
 
-## Register the target
+## Register the target {#register-a-target}
 
-![The 計算機を追加 (Add a computer) dialog for an SSH target](/images/compute-target-dialog.png)
+![The コンピュータを追加 (Add a computer) dialog for an SSH target](/images/compute-target-dialog.png)
 
-Global administrators register and change SSH and Local targets. Researchers can add only external computers (sites) themselves ([External computers (sites)](/en/compute/sites)).
+Only global administrators can add SSH and Local targets. Whoever adds a target becomes its owner, and the owner and global administrators can change it. Researchers can add only external computers (sites) themselves ([External computers (sites)](/en/compute/sites)).
 
-1. Open Compute and press **計算機を追加** (Add a computer).
-2. Fill in the fields.
+1. Click **全体設定** (Global settings) in the user menu at the top right, and open **コンピュータ** (Computers) in the sidebar (`/settings/computers`).
+2. Press **コンピュータを追加** (Add a computer).
+3. Fill in the fields.
 
 | Field | Example | Meaning |
 | --- | --- | --- |
 | **名前** (Name) | `gpu-host-1` | Shown on screen and in Task choices |
 | **Executor** | SSH | Normally SSH. Local (development only) appears only in development mode. Site is for external computers ([External computers (sites)](/en/compute/sites)) |
+| **公開範囲** (Visibility) | Public | With Private (the default), only Jobs of the owner and of the Service Accounts the owner created run. Choose Public to run Jobs from any Project ([Visibility](/en/compute/computers#visibility)) |
 | **Host**, **Port** | `gpu-host-1.example.internal`, `22` | SSH destination of the target |
 | **SSHユーザー** (SSH user) | `mmt` | User to connect as |
 | **SSH鍵のパス** (SSH key path) | `/home/worker/.ssh/mmt_worker_ed25519` | Path of the private key on the worker machine |
@@ -115,10 +119,10 @@ Global administrators register and change SSH and Local targets. Researchers can
 | **データセットの転送** (Dataset transfer) | Relayed by the worker | How input datasets are fetched (below) |
 | **データセットのcache上限（GiB）** (Dataset cache limit) | `100` | Limit of the dataset cache on the target |
 
-3. Press **保存** (Save) and check that the target appears in the list.
-4. Check the target with **接続を確認** (Check connection), described below.
+4. Press **保存** (Save). The target appears in the list, and its details open below it.
+5. Check the target with **接続を確認** (Check connection), described below.
 
-Connection details such as key paths are not shown to ordinary viewers.
+Connection details such as the destination and key paths are shown only to the owner and global administrators.
 
 ### GPU assignment
 
@@ -140,17 +144,17 @@ Downloaded datasets are cached in `.mmt-cache/datasets/` under the working direc
 
 ### Change or disable a target
 
-Use **計算機を編集** (Edit the computer). While queued or running Jobs reference the target, the destination, runtimes, GPUs, and dataset settings cannot be changed; save after the Jobs end.
+In the list under コンピュータ in the global settings, press **コンピュータを編集** (Edit the computer). The owner and global administrators can change a target. While queued or running Jobs reference the target, the destination, runtimes, GPUs, and dataset settings cannot be changed; save after the Jobs end.
 
-Clearing **有効** (Enabled) removes the target from new assignments. The worker keeps managing running Jobs.
+Pressing **無効にする** (Disable) in the list, or clearing **有効** (Enabled) in the editor, removes the target from new assignments. The worker keeps managing running Jobs.
 
 ## Check the connection
 
-![Connection check results](/images/compute-target-check.png)
+![Connection check results (the sample Local computer)](/images/compute-target-check.png)
 
-Before the first Job, use **接続を確認** to check that the target is ready. The worker that handles the target runs the check with its own SSH key.
+Before the first Job, use **接続を確認** under コンピュータ in the global settings to check that the target is ready. The worker that handles the target runs the check with its own SSH key. The owner and global administrators can run checks.
 
-1. Press **接続を確認** on the target's row. The **接続確認** (Connection check) panel opens below.
+1. In the list under コンピュータ in the global settings, press **接続を確認** on the target's row. The target's details and the **接続確認** (Connection check) panel open below the list.
 2. Press **接続を確認** at the top right of the panel. The status changes when a worker picks up the check.
 3. Read the result of each item. Failing items show a fix in the **対処** (Fix) column.
 
@@ -165,6 +169,8 @@ Before the first Job, use **接続を確認** to check that the target is ready.
 | GPU (nvidia-smi) | Index, name, and memory of GPUs reported by `nvidia-smi` |
 | Working directory | Writable by the SSH user, and free space |
 | API reachability | The target reaches the API server |
+
+For a Local target, the first item is コマンドの起動 (Starting a command) instead of SSH接続 (SSH connection).
 
 **OK** means usable, **NG** means Jobs will fail as is, and **なし** (none) means an optional tool such as a runtime or Git is not installed.
 
@@ -185,12 +191,15 @@ A worker without `MMT_WORKER_TARGET_IDS` still processes Jobs but never picks up
 
 ## Workers
 
-**Workers** in Compute shows each worker connected to the Project with its status, version, host name, last response, and number of Jobs. A worker without a response for 120 seconds is shown as offline. See [Install and run the worker](/en/compute/worker).
+A Project's **Compute** page shows the computers you can use in the Project (read only) and **Workers**. **Workers** shows each worker connected to the Project with its status, version, host name, last response, and number of Jobs. A worker without a response for 120 seconds is shown as offline. See [Install and run the worker](/en/compute/worker).
 
 ## Permissions
 
 | Action | Required role |
 | --- | --- |
-| View targets and workers | viewer or higher |
-| Register, change, enable, or disable SSH and Local targets; run connection checks | Global administrator |
-| Register or change external computers (sites) | Owner or global administrator ([External computers (sites)](/en/compute/sites)) |
+| See every target under コンピュータ in the global settings | Anyone signed in (for ones you cannot use, only the name, kind, owner, visibility, and state) |
+| View a Project's Compute page and its workers | viewer or higher |
+| Add SSH and Local targets | Global administrator |
+| Change a target or its visibility, enable or disable it, run connection checks | Owner or global administrator |
+| Run Jobs on a target | Public: everyone. Private: the owner and the Service Accounts the owner created |
+| Register or change external computers (sites) | Anyone can add one; the owner or a global administrator changes it ([External computers (sites)](/en/compute/sites)) |

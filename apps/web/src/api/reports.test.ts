@@ -25,7 +25,7 @@ describe('レポートAPIのpathとbody', () => {
     ]);
   });
 
-  it('過去の版はrevisionをqueryで、固定データは版ごとに読む', async () => {
+  it('過去のバージョンはrevisionをqueryで、固定データはバージョンごとに読む', async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(json(document))
       .mockResolvedValueOnce(json(document))
@@ -44,7 +44,7 @@ describe('レポートAPIのpathとbody', () => {
     ]);
   });
 
-  it('保存は編集を始めた版と作り直す固定ブロックをPUTし、戻すとアーカイブはPOSTする', async () => {
+  it('保存は編集を始めたバージョンと作り直す固定ブロックをPUTし、戻すとアーカイブはPOSTする', async () => {
     const fetch = vi.fn().mockImplementation(() => Promise.resolve(json(document)));
     vi.stubGlobal('fetch', fetch);
     await reportsApi.create('project', { title: '週報', blocks });
@@ -71,10 +71,10 @@ describe('レポートAPIのpathとbody', () => {
     ]);
   });
 
-  it('409 report_revision_conflictだけを版の衝突として見分ける', async () => {
+  it('409 report_revision_conflictだけをバージョンの衝突として見分ける', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(json({ error: '別の版が保存されています', code: 'report_revision_conflict' }, 409)),
+      vi.fn().mockResolvedValue(json({ error: '別のバージョンが保存されています', code: 'report_revision_conflict' }, 409)),
     );
     const failure = await reportsApi.update('project', 'report', { baseRevision: 1, title: 't', blocks }).catch((error) => error);
     expect(isReportRevisionConflict(failure)).toBe(true);
@@ -92,7 +92,7 @@ describe('レポートAPIのpathとbody', () => {
     expect((await reportsApi.shareableSavedViews('project')).map((view) => view.id)).toEqual(['shared']);
   });
 
-  it('版や配列の欠けた応答は契約違反として扱う', async () => {
+  it('バージョンや配列の欠けた応答は契約違反として扱う', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ report: { id: 'report' } })));
     await expect(reportsApi.get('project', 'report')).rejects.toMatchObject({ code: 'invalid_response' });
   });

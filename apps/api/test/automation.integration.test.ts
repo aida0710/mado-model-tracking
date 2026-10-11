@@ -1081,7 +1081,7 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
     ).rows[0]!.state;
   }
 
-  it('学習Runのrunning中に登録した版は保留し、worker completeのfinishedで1組だけ起動する', async () => {
+  it('学習Runのrunning中に登録したバージョンは保留し、worker completeのfinishedで1組だけ起動する', async () => {
     const fixture = await containerFixture(harness);
     const rule = await registerRule(fixture);
     const training = await startTrainingJob(fixture, 'Training');
@@ -1200,7 +1200,7 @@ describe.skipIf(!testDatabaseUrl)('モデル登録後の自動推論・評価（
     ).toEqual([expect.objectContaining({ ruleId: createdLater.id, status: 'queued' })]);
   });
 
-  it('MLflowのrunning Run中にlog_modelして登録した版も、UpdateRun FINISHEDで1回だけ起動する', async () => {
+  it('MLflowのrunning Run中にlog_modelして登録したバージョンも、UpdateRun FINISHEDで1回だけ起動する', async () => {
     const fixture = await containerFixture(harness);
     const rule = await registerRule(fixture);
     const mlflow = `/api/mlflow/projects/${fixture.project.id}/api/2.0/mlflow`;

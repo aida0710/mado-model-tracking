@@ -188,7 +188,7 @@ describe.skipIf(!testDatabaseUrl)('学習の途中再開（独立PostgreSQL）',
     expect(await listCheckpoints(run.id)).toEqual([checkpoint]);
   });
 
-  it('同じRunとstepの二重登録は409で、版は更新も削除もできない', async () => {
+  it('同じRunとstepの二重登録は409で、バージョンは更新も削除もできない', async () => {
     const run = await trainingRun();
     const checkpoint = await checkpointAt(run.id, 5);
     const artifact = await saveArtifact(run.id, { path: 'checkpoints/again.tar' });
@@ -392,7 +392,7 @@ describe.skipIf(!testDatabaseUrl)('学習の途中再開（独立PostgreSQL）',
     expect(second.run.resumeCheckpointId).toBe(checkpoints[0]!.id);
   });
 
-  it('推論Run・別Codeの版・別Projectのcheckpointへの指定は拒否する', async () => {
+  it('推論Run・別Codeのバージョン・別Projectのcheckpointへの指定は拒否する', async () => {
     const { checkpoints } = await failedTrainingWithCheckpoints([10]);
     const checkpointId = checkpoints[0]!.id;
     const inference = await request(harness.app, `${fixture.basePath}/runs`, {

@@ -18,7 +18,7 @@ import {
 } from './containerFixtures.js';
 import { trackingClient } from './mlflow-tracking-fixtures.js';
 
-describe.skipIf(!testDatabaseUrl)('モデル版の評価集約とexecutionの絞り込み（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('モデルバージョンの評価集約とexecutionの絞り込み（独立PostgreSQL）', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await createHarness();
@@ -104,7 +104,7 @@ describe.skipIf(!testDatabaseUrl)('モデル版の評価集約とexecutionの絞
     );
   }
 
-  it('評価Run2件の版は2件とlatestMetricsを返し、削除済みと別の版のRunを含めない', async () => {
+  it('評価Run2件のバージョンは2件とlatestMetricsを返し、削除済みと別のバージョンのRunを含めない', async () => {
     const fixture = await containerFixture(harness);
     const version = await registerVersion(fixture, 'candidate');
     const other = await registerVersion(fixture, 'other');
@@ -185,7 +185,7 @@ describe.skipIf(!testDatabaseUrl)('モデル版の評価集約とexecutionの絞
     });
   });
 
-  it('viewerは版と評価一覧を読め、別Projectの版は404、非メンバーは403', async () => {
+  it('viewerはバージョンと評価一覧を読め、別Projectのバージョンは404、非メンバーは403', async () => {
     const fixture = await containerFixture(harness);
     const version = await registerVersion(fixture, 'readable');
     await entity(

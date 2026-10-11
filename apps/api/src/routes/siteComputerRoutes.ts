@@ -12,28 +12,16 @@ import type { SiteConnectionCheckService } from '../services/siteConnectionCheck
 import type { SiteJobShellService } from '../services/siteJobShellService.js';
 import type { SiteKeyService } from '../services/siteKeyService.js';
 import type { SitePersonalSettingsService } from '../services/sitePersonalSettingsService.js';
-import type { TargetService } from '../services/targetService.js';
 
 // Mounted at /api/targets: what a site has besides its ComputeTarget fields.
 export function siteComputerRoutes(services: {
-  targets: TargetService;
   jobShells: SiteJobShellService;
   personalSettings: SitePersonalSettingsService;
   keys: SiteKeyService;
   connectionChecks: SiteConnectionCheckService;
 }): Hono<ApiEnvironment> {
-  const { targets, jobShells, personalSettings, keys, connectionChecks } = services;
+  const { jobShells, personalSettings, keys, connectionChecks } = services;
   const routes = new Hono<ApiEnvironment>();
-  // Ahead of the /:id routes. No GET /api/targets/:id exists; one added (also in targetRoutes,
-  // which is mounted first) must come after this path, or the computer ID pattern takes it.
-  routes.get('/shareable-projects', async (context) =>
-    context.json({ items: await targets.ownShareableProjects(principal(context)) }),
-  );
-  routes.get('/:id/shareable-projects', async (context) =>
-    context.json({
-      items: await targets.shareableProjects(principal(context), uuidParam(context, 'id')),
-    }),
-  );
   routes.get('/:id/job-shells', async (context) =>
     context.json({ items: await jobShells.list(principal(context), uuidParam(context, 'id')) }),
   );

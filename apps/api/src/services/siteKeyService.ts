@@ -37,14 +37,14 @@ export async function siteKeyAccount(
   const { target } = request;
   const settings = await findSiteSettings(connection, target.id);
   if (target.submissionMode !== 'automatic' || !settings?.launcherId)
-    keyUnavailable('launcherが投入する計算機にだけ鍵があります');
+    keyUnavailable('launcherが投入するコンピュータにだけ鍵があります');
   if (!request.personal) {
-    await requireTargetManager(connection, principal, target);
-    if (settings.accountMode !== 'shared') keyUnavailable('この計算機は共用アカウントを使いません');
+    requireTargetManager(principal, target);
+    if (settings.accountMode !== 'shared') keyUnavailable('このコンピュータは共用アカウントを使いません');
     return { userId: null, launcherId: settings.launcherId };
   }
   await requireTargetUser(connection, principal, target);
-  if (settings.accountMode !== 'personal') keyUnavailable('この計算機は共用アカウントで動きます');
+  if (settings.accountMode !== 'personal') keyUnavailable('このコンピュータは共用アカウントで動きます');
   const personal = await findPersonalSettings(connection, {
     targetId: target.id,
     userId: principal.user.id,

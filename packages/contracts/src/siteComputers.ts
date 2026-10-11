@@ -123,13 +123,11 @@ export interface SiteSettings {
 export type SiteSettingsInput = Partial<Omit<SiteSettings, 'jobShell'>>;
 
 /**
- * GET/POST/PATCH /targets. `site` and `projectIds` are filled for the computer's owner and global
- * administrators only; everyone else sees what the computer is, not how it is reached.
+ * GET/POST/PATCH /targets: a computer for those who may use or manage it. `site` is filled for its
+ * owner and global administrators only; its users see what the computer is, not how it is reached.
  */
 export interface ComputeTargetDetails extends ComputeTarget {
   ownerName: string | null;
-  /** Projects whose members may use an owned computer; [] for global ones (every Project). */
-  projectIds: string[];
   site: SiteSettings | null;
   /**
    * Sites: whose account their Jobs run as, for everyone who may use the computer, so they know
@@ -140,31 +138,13 @@ export interface ComputeTargetDetails extends ComputeTarget {
 
 /**
  * What POST /targets takes for a site beyond the ComputeTarget fields, and PATCH /targets/:id for
- * `site`. A researcher who is not a global administrator adds only owned (`personal`) sites.
+ * `site`. Whoever adds a computer owns it; a researcher who is not a global administrator adds
+ * sites only.
  */
 export interface ComputeTargetSiteFields {
   site?: SiteSettingsInput;
-  /** Owned by the person who adds it; global administrators may add global sites too. */
-  personal?: boolean;
-  /** Owned sites only: the Projects whose members may use it besides its owner. */
-  projectIds?: string[];
   /** The first job shell version. */
   jobShell?: string;
-}
-
-/** PUT /targets/:id/projects: the Projects an owned computer is shared with (owner's choice). */
-export interface ComputeTargetSharing {
-  projectIds: string[];
-}
-
-/**
- * GET /targets/:id/shareable-projects: a Project that PUT /targets/:id/projects accepts for an
- * owned computer, one where its owner is an editor or above. A global administrator editing
- * someone else's computer chooses among these, not among their own Projects.
- */
-export interface ShareableProject {
-  id: string;
-  name: string;
 }
 
 export type SiteKeyStatus = 'requested' | 'ready';

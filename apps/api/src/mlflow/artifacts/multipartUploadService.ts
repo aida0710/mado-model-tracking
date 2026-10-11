@@ -222,7 +222,7 @@ export class MlflowMultipartUploadService {
 function writableLocation<T extends MultipartAccess>(request: T): T & { owner: WritableOwner } {
   const owner = validateArtifactOwner(request.owner);
   if (owner.kind === 'model-version')
-    throw new DomainError(409, '登録モデル版のArtifactは変更できません', 'conflict');
+    throw new DomainError(409, '登録モデルバージョンのArtifactは変更できません', 'conflict');
   return { ...request, owner: { kind: owner.kind, id: owner.id } };
 }
 

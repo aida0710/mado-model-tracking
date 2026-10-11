@@ -256,7 +256,11 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
       }),
       200,
     );
-    expect(otherPage.items.map((event) => event.projectId)).toEqual([other.id]);
+    // Newest first: the role change, then the creation of the Project.
+    expect(otherPage.items.map(({ projectId, action }) => ({ projectId, action }))).toEqual([
+      { projectId: other.id, action: 'project.member.set' },
+      { projectId: other.id, action: 'project.create' },
+    ]);
   });
 
   it('全体一覧はglobal adminのsessionだけが読め、Project限定tokenとProject adminは403', async () => {
@@ -315,7 +319,10 @@ describe.skipIf(!testDatabaseUrl)('監査ログの記録と参照（独立Postgr
       }),
       200,
     );
-    expect(filtered.items.map((event) => event.projectId)).toEqual([other.id]);
+    expect(filtered.items.map(({ projectId, action }) => ({ projectId, action }))).toEqual([
+      { projectId: other.id, action: 'project.member.set' },
+      { projectId: other.id, action: 'project.create' },
+    ]);
     // Screens show who acted and in which Project by name, not by UUID.
     expect(filtered.items[0]).toMatchObject({
       actorUserId: fixture.outsider.userId,

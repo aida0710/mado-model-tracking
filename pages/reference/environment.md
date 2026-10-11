@@ -90,7 +90,7 @@ openssl rand -base64 32
 | --- | --- | --- |
 | `MMT_NOTIFICATION_*` | なし | WebhookのURLと署名の鍵。名前は自由に付け、通知先にはその名前を登録する |
 | `MMT_SMTP_URL` | なし | SMTPサーバーのURL。`smtp://`（STARTTLS）か`smtps://` |
-| `MMT_SMTP_FROM` | なし | 送信元のアドレス。例: `Mado Model Tracking <mmt@example.com>` |
+| `MMT_SMTP_FROM` | なし | 送信元のアドレス。例: `mado ML Tracking <mmt@example.com>` |
 | `NODE_EXTRA_CA_CERTS` | なし | 社内CAの証明書（PEM）のパス。SMTPやWebhookの送信先の検証に使う |
 
 ## そのほかのAPI serverの設定
@@ -99,7 +99,7 @@ openssl rand -base64 32
 | --- | --- | --- |
 | `MMT_CHECKPOINT_KEEP_COUNT` | `5` | Runごとに一覧へ出すcheckpointの数 |
 | `MMT_CSV_EXPORT_MAX_ROWS` | `50000` | Run検索のCSV出力の最大行数 |
-| `MMT_REPORT_SNAPSHOT_MAX_BYTES` | `52428800` | 共有レポートの1つの版で固定するデータの上限（バイト） |
+| `MMT_REPORT_SNAPSHOT_MAX_BYTES` | `52428800` | 共有レポートの1つのバージョンで固定するデータの上限（バイト） |
 | `MMT_GIT_SSH_KEY_PATH`、`MMT_GIT_KNOWN_HOSTS_PATH` | なし | エディタへSSHのGitリポジトリを読み込むための秘密鍵とknown_hosts（絶対パス）。両方を設定する |
 | `MMT_MADO_PLUGIN_TOKEN` | なし | Mado pluginへ接続するシークレットの例。変数名はPluginの登録で指定する（[PluginとMado連携](/admin/plugins)） |
 
@@ -148,10 +148,10 @@ workerはJobの実行コードに次の変数を渡します。実行コード�
 | --- | --- |
 | `MMT_API_URL`、`MMT_API_TOKEN`、`MLFLOW_TRACKING_TOKEN` | 接続先とJob限定token |
 | `MMT_PROJECT_ID`、`MMT_EXPERIMENT_ID`、`MMT_RUN_ID`、`MMT_JOB_ID`、`MMT_JOB_KIND` | 実行するRunのIDと種類 |
-| `MMT_JOB_CONTEXT_FILE` | Job、Run、パラメータ、モデル版、入力データセットなどをまとめたJSON |
+| `MMT_JOB_CONTEXT_FILE` | Job、Run、パラメータ、モデルバージョン、入力データセットなどをまとめたJSON |
 | `MMT_PARAMETERS_FILE`、`MMT_PARAMETERS_JSON` | パラメータ |
-| `MMT_MODEL_VERSION_FILE`、`MMT_MODEL_VERSION_ID` | 使うモデル版 |
-| `MMT_DATASET_VERSIONS_FILE`、`MMT_INPUT_DATASET_VERSION_IDS`、`MMT_INPUT_DATASET_DIRS` | 入力データセットの版と、本体を置いたディレクトリ |
+| `MMT_MODEL_VERSION_FILE`、`MMT_MODEL_VERSION_ID` | 使うモデルバージョン |
+| `MMT_DATASET_VERSIONS_FILE`、`MMT_INPUT_DATASET_VERSION_IDS`、`MMT_INPUT_DATASET_DIRS` | 入力データセットのバージョンと、本体を置いたディレクトリ |
 | `MMT_UPSTREAM_RUN_ID`、`MMT_UPSTREAM_RUN_FILE` | 上流のRun（あるときだけ） |
 | `MMT_RESUME_CHECKPOINT_DIR`、`MMT_RESUME_STEP`、`MMT_RESUME_CHECKPOINT_FILE` | 再開元のcheckpoint（再開するときだけ） |
 | `MMT_OUTPUTS_DIR`、`MMT_RESULT_FILE` | 出力のディレクトリと`result.json`のパス |

@@ -57,7 +57,7 @@ export class ArtifactTransferService {
     try {
       upload = { ...upload, owner: validateArtifactOwner(upload.owner) };
       if (upload.owner.kind === 'model-version')
-        throw new DomainError(409, '登録モデル版のArtifactは変更できません', 'conflict');
+        throw new DomainError(409, '登録モデルバージョンのArtifactは変更できません', 'conflict');
       validateArtifactPath(upload.path);
       const path = nativeArtifactPath(upload);
       const authorized = await transaction(this.database, async (connection) => {
@@ -151,7 +151,7 @@ export class ArtifactTransferService {
   async delete(access: ArtifactAccess & { path: string }): Promise<void> {
     access = { ...access, owner: validateArtifactOwner(access.owner) };
     if (access.owner.kind === 'model-version')
-      throw new DomainError(409, '登録モデル版のArtifactは削除できません', 'conflict');
+      throw new DomainError(409, '登録モデルバージョンのArtifactは削除できません', 'conflict');
     const path = validateArtifactPath(access.path, { directory: true });
     await transaction(this.database, async (connection) => {
       const identity = await requireArtifactProject(connection, access, { lock: true });

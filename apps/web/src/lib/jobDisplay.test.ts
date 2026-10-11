@@ -38,7 +38,7 @@ describe('Jobの段階と終了の理由', () => {
   });
 
   it('段階の詳細は、launcherを待つsiteのJobを待機中として示し、終わったJobは最後の段階を残す', () => {
-    expect(jobPhaseText({ status: 'queued', phase: null }, true)).toBe('待機中（launcherの投入待ち）');
+    expect(jobPhaseText({ status: 'queued', phase: null }, true)).toBe('待機中（ランチャーの投入待ち）');
     expect(jobPhaseText({ status: 'queued', phase: null }, false)).toBeNull();
     const phases: JobPhase[] = ['waiting_manual', 'submitting', 'submitted', 'waiting_resources', 'running'];
     expect(phases.map((phase) => jobPhaseText({ status: 'canceled', phase }, true))).toEqual([

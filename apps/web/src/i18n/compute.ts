@@ -14,7 +14,7 @@ export const computeText = {
   workerStatus: '接続状態',
   workerOnline: 'オンライン',
   workerOffline: 'オフライン',
-  workerVersion: '版',
+  workerVersion: 'バージョン',
   workerHostname: 'ホスト名',
   workerToken: 'トークン',
   workerTargets: '対象target',
@@ -63,9 +63,9 @@ export const computeText = {
   saveTargetCandidates: '選んだ候補を保存',
   targetCheckCandidatesSaved: 'targetの設定を保存しました',
   // Sites: their connection, accounts and job shell are set here; the launcher makes their keys.
-  siteExecutor: 'Site（launcherかmado-tracking submitで投入）',
+  siteExecutor: 'Site（ランチャーかmado-tracking submitで投入）',
   submissionMode: '投入方式',
-  submissionModeAutomatic: '自動（launcherが投入）',
+  submissionModeAutomatic: '自動（ランチャーが投入）',
   submissionModeManual: '手動（依頼した本人がmado-tracking submitで投入）',
   cpuArch: 'CPUアーキテクチャ',
   supportsArray: 'job shellがarrayを1回の投入で扱える',
@@ -74,7 +74,7 @@ export const computeText = {
   queueTimeoutPlaceholder: '72:00:00',
   siteRuntimeKinds: '対応Runtime（siteはコンテナだけ）',
   siteTargetNotice:
-    'siteの接続先・アカウント・job shellは、ここで設定してtrackingに保存します。SSHの鍵はlauncherが作り、Webには公開鍵だけが出ます（秘密鍵はlauncherのホストから出ません）。',
+    'siteの接続先・アカウント・job shellは、ここで設定してtrackingに保存します。SSHの鍵はランチャーが作り、Webには公開鍵だけが出ます（秘密鍵はランチャーのホストから出ません）。',
   targetGpuPerJob: 'Jobごとに数を指定',
   submissionAutomaticBadge: '自動投入',
   submissionManualBadge: '手動投入',
@@ -143,7 +143,7 @@ export const targetCheckCodeHints = {
   docker_daemon_unreachable: 'Docker daemonが起動しているか確認してください',
   container_cli_missing: 'コンテナを使う場合は導入してください',
   container_flags_missing:
-    'execに必要なオプション（--containall、--no-mount、--nvなど）がありません。新しい版へ更新してください',
+    'execに必要なオプション（--containall、--no-mount、--nvなど）がありません。新しいバージョンへ更新してください',
   nvidia_smi_missing: 'GPUを使う場合はNVIDIAドライバとnvidia-smiを導入してください',
   nvidia_smi_failed: 'nvidia-smiが失敗しました。ドライバの状態を確認してください',
   work_directory_not_writable: 'SSHユーザーが書き込めるディレクトリを指定してください',

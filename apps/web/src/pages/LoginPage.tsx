@@ -4,6 +4,7 @@ import { authApi } from '../api/auth';
 import { useMutation } from '../hooks/useMutation';
 import { ErrorNotice } from '../components/Feedback';
 import { LocalLoginForm } from '../components/LocalLoginForm';
+import { ProductLogo } from '../components/ProductLogo';
 import { text } from '../i18n/catalog';
 import { rememberAuthReturnPath } from '../lib/authReturnPath';
 import { loginMethods } from '../lib/loginMethods';
@@ -57,7 +58,9 @@ export function LoginPage({ config, onLogin }: { config: AuthConfig; onLogin: ()
   return (
     <div className="login-page">
       <main className="login-card">
-        <div className="login-mark">{text.appName}</div>
+        <div className="login-mark">
+          <ProductLogo />
+        </div>
         <p className="login-eyebrow">{text.loginEyebrow}</p>
         <h1>{text.loginTitle}</h1>
         {methods.development && <DevelopmentLoginForm onLogin={onLogin} />}

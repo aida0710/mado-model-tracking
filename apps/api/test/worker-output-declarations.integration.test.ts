@@ -214,7 +214,7 @@ describe.skipIf(!testDatabaseUrl)('workerによる出力の宣言と登録（独
     );
   }
 
-  it('宣言したモデルとデータセットを版として登録し、sourceRun・親版・URIが入る', async () => {
+  it('宣言したモデルとデータセットをバージョンとして登録し、sourceRun・親バージョン・URIが入る', async () => {
     const { fixture, token } = await setup();
     const dataset = await createDataset(fixture.basePath, fixture.editor.cookie, 'Test split');
     const claimed = await launchTraining(fixture, token);
@@ -616,7 +616,34 @@ describe.skipIf(!testDatabaseUrl)('workerによる出力の宣言と登録（独
     ).toBe('project_forbidden');
   });
 
-  it('registerDatasetVersionはprincipalの権限を確かめ、明示した版名は採番に数えない', async () => {
+  it('Publicで入っているだけのRunの作成者も、宣言したデータセットとモデルを登録できる', async () => {
+    const { fixture, token } = await setup();
+    const dataset = await createDataset(fixture.basePath, fixture.editor.cookie, 'Public split');
+    const claimed = await launchTraining(fixture, token);
+    await uploadOutput(fixture, claimed, WEIGHTS_OUTPUT);
+    await uploadOutput(fixture, claimed, SPLIT_OUTPUT);
+    // The creator keeps the editor role only through the Project's public visibility.
+    await harness.database.query("UPDATE projects SET visibility='public' WHERE id=$1", [
+      fixture.project.id,
+    ]);
+    await harness.database.query('DELETE FROM project_members WHERE project_id=$1 AND user_id=$2', [
+      fixture.project.id,
+      fixture.editor.userId,
+    ]);
+    const response = await entity<WorkerOutputsResponse>(
+      await declare(token, claimed, [
+        { index: 0, kind: 'model', path: WEIGHTS_OUTPUT, modelId: fixture.model.id },
+        { index: 1, kind: 'dataset', datasetId: dataset.id, path: SPLIT_OUTPUT, digest: 'sha256:split' },
+      ]),
+      200,
+    );
+    expect(response.items.map((item) => [item.index, item.kind])).toEqual([
+      [0, 'model'],
+      [1, 'dataset'],
+    ]);
+  });
+
+  it('registerDatasetVersionはprincipalの権限を確かめ、明示したバージョン名は採番に数えない', async () => {
     const { fixture } = await setup();
     const dataset = await createDataset(fixture.basePath, fixture.editor.cookie, 'Direct');
     const principalOf = async (cookie: string) =>

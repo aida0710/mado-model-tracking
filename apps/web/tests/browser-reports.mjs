@@ -190,10 +190,10 @@ try {
   await dialog.getByRole('button', { name: '反映' }).click();
   await dialog.waitFor({ state: 'detached' });
 
-  await saveEdit(page, '最初の版');
+  await saveEdit(page, '最初のバージョン');
   await page.locator('.report-editor').waitFor({ state: 'detached' });
   // Creating the report made revision 1 (empty); the first save is revision 2.
-  await page.getByText('版 2・レポート管理者が').waitFor();
+  await page.getByText('バージョン 2・レポート管理者が').waitFor();
   await page.locator('.report-embed').nth(4).waitFor();
   assert.equal(await page.locator('.report-embed').count(), 5);
   await page.locator('.report-markdown strong').getByText('0.01').waitFor();
@@ -229,31 +229,31 @@ try {
   await otherTab.getByRole('button', { name: '編集', exact: true }).click();
   await page.getByLabel('題名').fill('学習率の比較（タブA）');
   await saveEdit(page, 'タブAの変更');
-  await page.getByText('版 3・レポート管理者が').waitFor();
+  await page.getByText('バージョン 3・レポート管理者が').waitFor();
   await otherTab.getByLabel('題名').fill('学習率の比較（タブB）');
   await saveEdit(otherTab);
   await otherTab.getByTestId('report-conflict').waitFor();
   await screenshot(otherTab, 'report-conflict');
-  await otherTab.getByRole('button', { name: '最新の版を読み込む' }).click();
+  await otherTab.getByRole('button', { name: '最新のバージョンを読み込む' }).click();
   await otherTab.waitForFunction(() => document.querySelector('.report-editor input')?.value === '学習率の比較（タブA）');
   await otherTab.getByRole('button', { name: '編集をやめる' }).click();
   await otherTab.close();
 
   console.log('A past revision is read-only and can be restored');
-  await page.getByRole('button', { name: '版の履歴' }).click();
+  await page.getByRole('button', { name: 'バージョンの履歴' }).click();
   const history = page.locator('.report-history');
   await history.getByText('タブAの変更').waitFor();
-  await history.locator('li', { hasText: '最初の版' }).getByRole('button', { name: '表示' }).click();
+  await history.locator('li', { hasText: '最初のバージョン' }).getByRole('button', { name: '表示' }).click();
   await page.getByTestId('report-past-notice').waitFor();
   assert.equal(new URL(page.url()).searchParams.get('revision'), '2');
   assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), '学習率の比較');
   assert.equal(await page.getByRole('button', { name: '編集', exact: true }).count(), 0, 'A past revision is read-only');
   await screenshot(page, 'report-past-revision');
-  await history.locator('li', { hasText: '最初の版' }).getByRole('button', { name: 'この版に戻す' }).click();
-  await page.getByRole('dialog', { name: '版を戻す' }).getByRole('button', { name: 'この版に戻す' }).click();
-  await page.getByText('版 4・レポート管理者が').waitFor();
+  await history.locator('li', { hasText: '最初のバージョン' }).getByRole('button', { name: 'このバージョンに戻す' }).click();
+  await page.getByRole('dialog', { name: 'バージョンを戻す' }).getByRole('button', { name: 'このバージョンに戻す' }).click();
+  await page.getByText('バージョン 4・レポート管理者が').waitFor();
   assert.equal(await page.getByRole('heading', { level: 1 }).textContent(), '学習率の比較');
-  await history.getByText('版 2 から復元').waitFor();
+  await history.getByText('バージョン 2 から復元').waitFor();
   await page.locator('.report-embed').nth(4).waitFor();
 
   console.log('Comments on the report');
@@ -273,9 +273,9 @@ try {
   assert.equal(await viewer.page.getByRole('button', { name: '編集', exact: true }).count(), 0);
   assert.equal(await viewer.page.getByRole('button', { name: 'アーカイブ' }).count(), 0);
   assert.equal(await viewer.page.locator('.comment-thread textarea').count(), 0);
-  await viewer.page.getByRole('button', { name: '版の履歴' }).click();
+  await viewer.page.getByRole('button', { name: 'バージョンの履歴' }).click();
   await viewer.page.locator('.report-history li').first().waitFor();
-  assert.equal(await viewer.page.getByRole('button', { name: 'この版に戻す' }).count(), 0);
+  assert.equal(await viewer.page.getByRole('button', { name: 'このバージョンに戻す' }).count(), 0);
   await viewer.page.goto(`${projectBase}/reports`);
   await viewer.page.getByRole('link', { name: '学習率の比較' }).waitFor();
   assert.equal(await viewer.page.getByRole('button', { name: 'レポートを作成' }).count(), 0);

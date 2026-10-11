@@ -24,7 +24,7 @@ You can compare a new version's evaluation with that of the version `production`
 
 - **指標の集約** (Metric summary): values from the newest successful evaluation Run, the baseline values, and the sign of the difference.
 - **評価Run** (Evaluation Runs): the evaluation Runs of this version, with the rule that ran each automatic one.
-- **基準版との評価比較** (Comparison with the baseline): after choosing **基準にする版** (Baseline version), the candidate, baseline, difference, and relative difference per metric, plus the reference set and evaluation code version used.
+- **基準バージョンとの評価比較** (Comparison with the baseline): after choosing **基準にするバージョン** (Baseline version), the candidate, baseline, difference, and relative difference per metric, plus the reference set and evaluation code version used.
 
 The difference is candidate − baseline, and the relative difference is difference ÷ |baseline|. The comparison does not judge whether higher or lower is better; promotion policies define that.
 
@@ -126,7 +126,7 @@ A policy decides with its run-as user's permissions, and automatic promotions ar
 
 Press **昇格** (Promote) in **昇格の判定** on a version page, or **Aliasを設定** in Models, to open the promotion dialog.
 
-1. Specify **Alias** and **版** (Version).
+1. Specify **Alias** and **バージョン** (Version).
 2. In **根拠となる判定** (Evidence), select a passing decision for this version. A protected alias that requires a passing decision cannot be saved without one.
 3. Without a passing decision, or when promoting a failed version, enter **理由** (Reason).
 4. Press **保存** (Save) and check the alias list and alias history.
@@ -156,7 +156,7 @@ You can restrict who may change aliases such as `production` by hand. Only Proje
 | What | Where |
 | --- | --- |
 | When and by whom an alias moved | **Aliasの履歴** (Alias history) in Models |
-| Which version passed or failed which criteria | **判定履歴** in promotion policies, and **この版の昇格判定** on the version page |
+| Which version passed or failed which criteria | **判定履歴** in promotion policies, and **このバージョンの昇格判定** on the version page |
 | Creating and changing policies and protections | The audit log ([Audit log](/en/admin/audit)) |
 
 All of these are append-only.

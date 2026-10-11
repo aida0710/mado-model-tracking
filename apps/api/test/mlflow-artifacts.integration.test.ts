@@ -252,7 +252,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow Artifact転送（隔離PostgreSQL）',
     expect(invalid.headers.get('Content-Range')).toBe('bytes */10');
   });
 
-  it('重複uploadで新しいArtifactへmappingを更新し、既存モデル版の参照を保持する', async () => {
+  it('重複uploadで新しいArtifactへmappingを更新し、既存モデルバージョンの参照を保持する', async () => {
     const fixture = await artifactFixture(harness);
     const url = transferUrl(fixture.mlflowPath, fixture.runRoot, 'weights.bin');
     expect(

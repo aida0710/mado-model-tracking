@@ -84,7 +84,7 @@ SWEEP_DEADLINE_SECONDS = 600
 WORKER_HEARTBEAT_SECONDS = 0.5
 # The point the report check logs after saving: the step after the resumed training.
 REPORT_EXTRA_STEP = TRAINING_STEPS + RESUMED_STEPS
-OUT_OF_SCOPE = ["実GPU", "実SSO（Authentik）", "実S3", "外部の実計算機", "実SSH target", "コンテナruntime"]
+OUT_OF_SCOPE = ["実GPU", "実SSO（Authentik）", "実S3", "外部の実コンピュータ", "実SSH target", "コンテナruntime"]
 
 SLOW_TRIAL_ENTRY = f'''"""Sweep trial: sweep_training.py, pausing after each epoch for hyperband."""
 import time

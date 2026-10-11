@@ -1,4 +1,4 @@
-# Official base image for Mado Model Tracking Jobs: a GPU framework image for amd64 and arm64,
+# Official base image for mado ML Tracking Jobs: a GPU framework image for amd64 and arm64,
 # the mado-tracking SDK, and the /mmt paths the runner mounts. Project images add only their own
 # dependencies on top of it (images/base/README.md). Build from the repository root, which holds
 # the SDK in python/:
@@ -11,7 +11,7 @@
 ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.10-py3
 FROM ${BASE_IMAGE}
 ARG BASE_IMAGE
-LABEL org.opencontainers.image.title="Mado Model Tracking base" \
+LABEL org.opencontainers.image.title="mado ML Tracking base" \
   org.opencontainers.image.description="GPU framework image with the mado-tracking SDK for Jobs" \
   org.opencontainers.image.base.name="${BASE_IMAGE}"
 

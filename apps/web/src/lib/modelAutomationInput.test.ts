@@ -49,7 +49,7 @@ const values = {
   tags: '{"suite":"test"}',
 };
 describe('モデル自動実行ルールの入力', () => {
-  it('実験・コード版・データセット版・Targetを固定して登録する', () => {
+  it('実験・コードバージョン・データセットバージョン・Targetを固定して登録する', () => {
     expect(buildAutomationRuleInput(values, catalog)).toMatchObject({
       experimentId: 'experiment',
       codeVersionId: 'code-v1',
@@ -138,7 +138,7 @@ describe('モデル自動実行ルールの入力', () => {
   it('最大試行回数がAPIの上限を超えると拒否する', () => {
     expect(() => buildAutomationRuleInput({ ...values, maxAttempts: '101' }, catalog)).toThrow();
   });
-  it('Targetやコード版を変えると古いGPU選択を残さない', () => {
+  it('Targetやコードバージョンを変えると古いGPU選択を残さない', () => {
     expect(
       updateAutomationValues({
         previous: values,

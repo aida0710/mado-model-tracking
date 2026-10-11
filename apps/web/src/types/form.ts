@@ -5,6 +5,19 @@ export interface SelectOption {
   label: string;
 }
 
+/** Candidates that complete what is typed in a text field, and an optional note about the value. */
+export interface FieldSuggestions {
+  items: string[];
+  /** Shown under the field, for example that the typed path does not exist. */
+  note?: string;
+}
+
+/**
+ * Looks up the candidates for `value`. The caller decides where they come from (an API, a fixed
+ * list); `signal` aborts a lookup that a newer value has replaced.
+ */
+export type SuggestFieldValues = (value: string, signal: AbortSignal) => Promise<FieldSuggestions>;
+
 export interface FormField {
   name: string;
   label: string;
@@ -28,4 +41,6 @@ export interface FormField {
   max?: number;
   maxLength?: number;
   readOnly?: boolean;
+  /** Offers candidates under a text field as it is typed. */
+  suggest?: SuggestFieldValues;
 }

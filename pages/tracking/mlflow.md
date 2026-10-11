@@ -5,9 +5,9 @@ description: 公式のMLflow 3 SDKをMLFLOW_TRACKING_URIとAPI tokenで接続す
 
 # MLflow 3から記録する
 
-![Settings画面の「MLflow 3から接続」](/images/tracking-mlflow-connection.png)
+![［プロジェクト設定］の「MLflow 3から接続」](/images/tracking-mlflow-connection.png)
 
-公式の`mlflow` Python SDK（MLflow 3）から、Mado Model TrackingのProjectへ記録できます。接続先とtokenを環境変数で指定するだけで、既存のMLflowのコードを変えずに使えます。記録したRun・metrics・Artifact・登録モデルは、画面から記録したものと同じデータとして扱います。
+公式の`mlflow` Python SDK（MLflow 3）から、mado ML TrackingのProjectへ記録できます。接続先とtokenを環境変数で指定するだけで、既存のMLflowのコードを変えずに使えます。記録したRun・metrics・Artifact・登録モデルは、画面から記録したものと同じデータとして扱います。
 
 MLflowの全機能を提供するサーバーではありません。対応している機能は[対応範囲](#supported-features)の表で確認してください。
 
@@ -19,7 +19,7 @@ MLflowの全機能を提供するサーバーではありません。対応し�
 
 ## 接続する
 
-1. Projectの［Settings］を開き、［MLflow 3から接続］を確認します。`MLFLOW_TRACKING_URI`と`MLFLOW_REGISTRY_URI`には同じURL（`https://<サーバー>/api/mlflow/projects/<ProjectのID>`）が表示されます
+1. ［プロジェクト設定］を開き、「MLflow 3から接続」を確認します。`MLFLOW_TRACKING_URI`と`MLFLOW_REGISTRY_URI`には同じURL（`https://<サーバー>/api/mlflow/projects/<ProjectのID>`）が表示されます
 2. ［このProject用のAPI tokenを発行］を選びます。scopeに`read`・`runs:write`・`registry:write`・`artifacts:write`が選ばれた状態で発行画面が開くので、名前と期限を入力して発行します。tokenはこのときだけ表示されるので控えておきます（ボタンはeditor以上にだけ表示されます）
 3. 学習を実行するマシンのターミナルで、MLflowをインストールして環境変数を設定します
 
@@ -39,7 +39,7 @@ export MLFLOW_TRACKING_TOKEN
 | Experiment・Run・params・metrics・tagsの記録 | `runs:write` |
 | 入力Datasetの新規登録 | `runs:write`と`registry:write` |
 | Artifactのアップロード | `artifacts:write` |
-| Logged Model・モデル版・aliasの登録や変更 | `registry:write` |
+| Logged Model・モデルバージョン・aliasの登録や変更 | `registry:write` |
 
 記録するユーザーには、そのProjectのeditor以上の役割が必要です。Workerや自動処理のように長く動かすものには、人ではなくService Accountのtokenを使ってください。SSOでログインするユーザーのtokenは、グループの確認から7日を過ぎると止まります（[API token](/admin/tokens)）。
 
@@ -134,10 +134,10 @@ mlflow.MlflowClient().set_registered_model_alias("regression", "candidate", vers
 loaded = mlflow.pyfunc.load_model("models:/regression@candidate")
 ```
 
-- 版の番号は1、2、3…と自動で付きます。画面から登録した版と同じ系列で数え、削除した版の番号は再利用しません
-- 登録した版は、モデル一式のファイルを版ごとに固定します。元のRunのファイルを上書きしても、版の内容は変わりません
-- 読み込みには`models:/名前/版`か`models:/名前@alias`を使います
-- 入力Dataset、生成元のRun、登録した版の関係は［Lineage］に表示します
+- バージョンの番号は1、2、3…と自動で付きます。画面から登録したバージョンと同じ系列で数え、削除したバージョンの番号は再利用しません
+- 登録したバージョンは、モデル一式のファイルをバージョンごとに固定します。元のRunのファイルを上書きしても、バージョンの内容は変わりません
+- 読み込みには`models:/名前/バージョン`か`models:/名前@alias`を使います
+- 入力Dataset、生成元のRun、登録したバージョンの関係は［Lineage］に表示します
 
 登録をきっかけに推論・評価を自動で動かすには、登録モデルのtag `mmt.model_family`に系列名を指定し、その系列の自動実行ルールをProjectに用意します。
 

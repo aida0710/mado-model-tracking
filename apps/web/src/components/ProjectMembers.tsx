@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ProjectMember } from '@mmt/contracts';
+import type { ProjectMember, ProjectVisibility } from '@mmt/contracts';
 import type { useProjectMembers } from '../hooks/useProjectMembers';
 import { useProject } from '../hooks/useProject';
 import { ResponsiveTable } from './ResponsiveTable';
@@ -14,13 +14,20 @@ import {
 import { text } from '../i18n/catalog';
 import { projectAccessTextTemplates } from '../i18n/projectAccess';
 
+// Public Projects let everyone in as editors without listing them, so the list says who is not
+// shown.
+const VISIBILITY_NOTES: Record<ProjectVisibility, string> = {
+  public: text.projectMembersPublicNote,
+  private: text.projectMembersPrivateNote,
+};
+
 /** Everyone with a Project role, where that role comes from, and direct grants for admins. */
 export function ProjectMembers({
   projectMembers,
 }: {
   projectMembers: ReturnType<typeof useProjectMembers>;
 }) {
-  const { isProjectAdmin, reloadProjects } = useProject();
+  const { project, isProjectAdmin, reloadProjects } = useProject();
   const { members, saveMember, removeMember } = projectMembers;
   const [editing, setEditing] = useState<ProjectMember | 'new' | null>(null);
   const [removing, setRemoving] = useState<ProjectMember | null>(null);
@@ -39,6 +46,7 @@ export function ProjectMembers({
           </button>
         )}
       </div>
+      <p className="muted">{VISIBILITY_NOTES[project.visibility]}</p>
       <Resource query={members}>
         {(items) => (
           <ResponsiveTable

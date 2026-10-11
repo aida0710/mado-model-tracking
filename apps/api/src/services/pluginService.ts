@@ -195,7 +195,7 @@ export class PluginService {
           existing.digest !== imported.digest ||
           existing.uri !== imported.uri
         )
-          conflict('既存のDatasetVersionとpluginの版が一致しません');
+          conflict('既存のDatasetVersionとpluginのバージョンが一致しません');
         return existing;
       }
       return this.registry.insertDatasetVersion(connection, projectId, {

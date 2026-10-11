@@ -50,7 +50,7 @@ try {
 
   await page.goto(`${base}${projectBase}/codes?version=${verified.sourceCodeVersionId}`);
   await page.getByText(verified.image, { exact: true }).waitFor();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
   const versionDialog = page.getByRole('dialog');
   await getRequiredField(versionDialog, 'Version').fill(codeVersionName);
   await getRequiredField(versionDialog, 'Runtime').selectOption('docker');
@@ -85,9 +85,9 @@ try {
   await getRequiredField(ruleDialog, '対象モデル系列').selectOption('linear');
   await getRequiredField(ruleDialog, '実行種別').selectOption('evaluation');
   await getRequiredField(ruleDialog, 'Experiments').selectOption(verified.experimentId);
-  await getRequiredField(ruleDialog, 'コード版').selectOption(codeVersion.id);
+  await getRequiredField(ruleDialog, 'コードバージョン').selectOption(codeVersion.id);
   await getRequiredField(ruleDialog, 'Compute target').selectOption(verified.targetId);
-  await ruleDialog.getByLabel('入力データセット版', { exact: true }).selectOption(verified.inputDatasetVersionId);
+  await ruleDialog.getByLabel('入力データセットバージョン', { exact: true }).selectOption(verified.inputDatasetVersionId);
   await ruleDialog.getByLabel('有効', { exact: true }).uncheck();
   const [ruleResponse] = await Promise.all([
     page.waitForResponse((response) =>

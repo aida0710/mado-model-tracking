@@ -24,10 +24,10 @@ export function StorageBackendPicker({
       ? choices
       : [...choices, { name: value }];
   return (
-    <fieldset className="storage-picker">
+    <fieldset className="choice-picker">
       <legend>{text.storage}</legend>
       {listed.map((choice) => (
-        <label key={choice.name} className="storage-picker-option">
+        <label key={choice.name} className="choice-picker-option">
           <input
             type="radio"
             name={name}

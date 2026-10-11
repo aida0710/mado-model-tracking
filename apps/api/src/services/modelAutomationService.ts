@@ -179,7 +179,7 @@ export class ModelAutomationService {
         targetId: input.targetId,
         gpuIds: input.gpuIds,
         runtime: code.runtime,
-        usage: { projectId, userId: principal.user.id },
+        usage: { userId: principal.user.id },
       });
       const created = (await first<{ id: string }>(
         connection,
@@ -675,7 +675,7 @@ export class ModelAutomationService {
         if (attempts.hasActive)
           throw new DomainError(
             409,
-            '同じルールとモデル版の実行が待機中または実行中です',
+            '同じルールとモデルバージョンの実行が待機中または実行中です',
             'automation_execution_active',
           );
         const executionId = await this.executeRule(connection, {
@@ -734,7 +734,7 @@ export class ModelAutomationService {
     if (rule.trigger !== 'upstream_run_finished')
       throw new DomainError(
         422,
-        'モデル登録で起動するルールにはモデル版のID（modelVersionId）を指定します',
+        'モデル登録で起動するルールにはモデルバージョンのID（modelVersionId）を指定します',
         'automation_trigger_mismatch',
       );
     const run = await findRun(connection, { projectId: rule.projectId, id: input.triggerRunId });

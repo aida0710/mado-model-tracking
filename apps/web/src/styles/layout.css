@@ -1,33 +1,21 @@
-/* The Project selector (in the sidebar or as the bar under the header) and the workspace height.
+/* The Project switcher (in the sidebar or as the bar under the header) and the workspace height.
    The header, sidebar, drawer, page header, tabs and login card come from
    @mado/design-system/shell.css and components.css. The sidebar takes the header's dark colours in
-   both themes, so the selector inside it uses the --header colours too. */
+   both themes, so the switcher inside it uses the --header colours too. */
 .sidebar-project {
   display: grid;
   gap: 6px;
   padding: 14px 16px 12px;
   border-bottom: 1px solid var(--header-border);
 }
-.sidebar-project label {
+.sidebar-project .project-switcher {
   display: grid;
   gap: 6px;
   min-width: 0;
 }
-.sidebar-project label > span,
-.sidebar-project .project-role {
-  color: var(--header-text-muted);
+.project-switcher-label {
+  color: var(--muted);
   font-size: 11px;
-}
-.sidebar-project select {
-  width: 100%;
-  min-width: 0;
-  font-size: 12px;
-  padding: 5px 22px 5px 8px;
-  /* The browser draws the arrow and the open list for a dark field. */
-  color-scheme: dark;
-  background: var(--header-active);
-  color: var(--header-text);
-  border-color: var(--header-control-hover);
 }
 .projectbar {
   min-height: var(--projectbar-height);
@@ -38,28 +26,162 @@
   border-bottom: 1px solid var(--border);
   background: var(--background);
 }
-.projectbar label {
+.projectbar .project-switcher {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
-}
-.projectbar label > span {
-  color: var(--muted);
-  font-size: 11px;
-}
-.projectbar select {
-  max-width: 260px;
-  min-width: 140px;
-  font-size: 12px;
-  padding: 5px 22px 5px 8px;
-  border-color: var(--border);
 }
 .project-role {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
   flex-shrink: 0;
+}
+/* The button that opens the Project switcher looks like the select it replaces. */
+.project-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.project-switcher-trigger:hover,
+.project-switcher-trigger[aria-expanded='true'] {
+  background: var(--surface-hover);
+}
+.projectbar .project-switcher-trigger {
+  min-width: 140px;
+  max-width: 260px;
+}
+.project-switcher-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-switcher-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+/* The dropdown sits in the top layer (popover="manual"); useAnchoredPopover sets where and how big. */
+.project-switcher-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  z-index: 30;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text);
+  box-shadow: var(--shadow-popover);
+}
+.project-switcher-popover:popover-open {
+  display: flex;
+}
+@supports not selector(:popover-open) {
+  .project-switcher-popover {
+    display: flex;
+  }
+}
+.project-switcher-filter {
+  flex: 0 0 auto;
+  margin: 8px;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.project-switcher-empty {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.project-switcher-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+.project-switcher-list:focus-visible {
+  outline-offset: -2px;
+}
+.project-switcher-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.project-switcher-option.active {
+  background: var(--surface-hover);
+}
+.project-switcher-option[aria-selected='true'] {
+  font-weight: 600;
+}
+.project-switcher-check {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.project-switcher-check[data-current='false'] {
+  visibility: hidden;
+}
+.project-switcher-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-switcher-role {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+/* Creating a Project ends the list, under a line, so it never reads as one of the Projects. */
+.project-switcher-create {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  color: var(--link);
+}
+.visibility-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+/* The sidebar is dark in both themes (the header's colors); the dropdown keeps the page's. */
+.sidebar-project .project-switcher-label,
+.sidebar-project .project-role,
+.sidebar-project .project-switcher-chevron,
+.sidebar-project .project-switcher-trigger .visibility-label {
+  color: var(--header-text-muted);
+}
+.sidebar-project .project-switcher-trigger {
+  border-color: var(--header-border);
+  background: var(--header-active);
+  color: var(--header-text-strong);
+}
+.sidebar-project .project-switcher-trigger:hover,
+.sidebar-project .project-switcher-trigger[aria-expanded='true'] {
+  background: var(--header-control-hover);
+}
+/* The sidebar's focus mark is the header teal, too light on the dropdown's page background. */
+.project-switcher-popover :focus-visible {
+  outline-color: var(--accent);
 }
 /* The project bar shows whenever the sidebar is not full: the rail, the drawer, or collapsed. */
 .app-shell[data-project-bar='true'] {
@@ -73,18 +195,20 @@
     gap: 10px;
     padding: 4px var(--page-padding);
   }
-  .projectbar label {
+  .projectbar .project-switcher {
     flex: 1 1 auto;
   }
-  .projectbar select {
-    width: 100%;
+  .projectbar .project-switcher-trigger {
+    max-width: none;
     min-width: 0;
     min-height: var(--tap-target);
-    text-overflow: ellipsis;
+  }
+  .project-switcher-option {
+    min-height: var(--tap-target);
   }
 }
 @media (width < 640px) {
-  .projectbar label > span {
+  .projectbar .project-switcher-label {
     display: none;
   }
 }

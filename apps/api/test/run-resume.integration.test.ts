@@ -326,7 +326,7 @@ describe.skipIf(!testDatabaseUrl)('Runの再開（独立PostgreSQL）', () => {
     ).rejects.toThrow(/append-only/);
     await expect(
       harness.database.query('DELETE FROM run_resume_events WHERE id=$1', [event!.id]),
-    ).rejects.toThrow(/append-only/);
+    ).rejects.toThrow(/only be deleted by purging their Project/);
   });
 
   it('再開すると監査run.resumeが成功で残り、拒否はdeniedで残る', async () => {

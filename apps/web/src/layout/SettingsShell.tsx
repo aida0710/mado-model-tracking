@@ -4,8 +4,11 @@ import { useNavigation } from '../hooks/useNavigation';
 import { NavigationSidebar } from './NavigationSidebar';
 import { TopBar } from './TopBar';
 
-/** Layout for screens that belong to no Project: the signed-in user's account and /admin. */
-export function AccountShell() {
+/**
+ * Layout for 全体設定 (/settings/<section>), the screens that belong to no Project. Its navigation
+ * holds only the 全体設定 group and, for global administrators, 全体管理.
+ */
+export function SettingsShell() {
   const navigation = useNavigation();
   return (
     <div
@@ -15,9 +18,7 @@ export function AccountShell() {
     >
       <TopBar navigation={navigation} />
       <div className="app-body">
-        {navigation.mode !== 'drawer' && navigation.groups.length > 0 && (
-          <NavigationSidebar navigation={navigation} />
-        )}
+        {navigation.mode !== 'drawer' && <NavigationSidebar navigation={navigation} />}
         <main id="content" className="page app-content">
           <Outlet />
         </main>

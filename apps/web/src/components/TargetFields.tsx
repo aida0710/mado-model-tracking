@@ -6,19 +6,15 @@ import {
   SITE_GPU_ASSIGNMENTS,
   type ComputeTargetDetails,
   type Launcher,
-  type Project,
-  type ShareableProject,
 } from '@mmt/contracts';
-import { siteComputersApi } from '../api/siteComputers';
-import { useQuery, type QueryState } from '../hooks/useQuery';
 import type { FormField, FormValues } from '../types/form';
-import { Resource } from './Feedback';
 import { FormFields } from './FormFields';
 import { JobShellEditor } from './JobShellEditor';
+import { VisibilityPicker } from './VisibilityPicker';
 import { getFieldValue } from '../lib/formValues';
-import { SITE_RUNTIME_KINDS, TARGET_OWNERSHIPS } from '../lib/targetInput';
+import { SITE_RUNTIME_KINDS } from '../lib/targetInput';
 import { JOB_SHELL_TEMPLATES } from '../lib/jobShellTemplates';
-import { launcherOptions, targetSharingOptions } from '../lib/siteComputerDisplay';
+import { launcherOptions } from '../lib/siteComputerDisplay';
 import { EXECUTION_RUNTIME_KINDS } from '../lib/runtimeValidation';
 import { runtimeLabels } from '../i18n/runtime';
 import { cpuArchLabels } from '../i18n/compute';
@@ -26,8 +22,8 @@ import {
   jobShellTemplateLabels,
   siteAccountModeLabels,
   siteGpuAssignmentLabels,
-  targetOwnershipLabels,
 } from '../i18n/siteComputers';
+import { computerVisibilityHints } from '../i18n/computers';
 import { text } from '../i18n/catalog';
 
 const MAX_PORT = 65535;
@@ -35,64 +31,47 @@ const MAX_CONCURRENT_JOBS = 128;
 
 /**
  * The target dialog's fields. ssh and local targets keep their connection here; a site also takes
- * its global settings (submission, connection, accounts, how it runs) and, when it is added, whose
- * it is and its first job shell. A researcher adds only a site of their own. An owned computer is
- * shared among its owner's Projects as the API lists them: the adder's when it is added, its
- * owner's when it is edited. A global administrator sees every Project but is a member of only
- * some, and may edit someone else's computer, so their own Project list would not do.
+ * its global settings (submission, connection, accounts, how it runs) and, when it is added, its
+ * first job shell. Every computer has a visibility; whoever adds it becomes its owner. A
+ * researcher adds sites only.
  */
 export function TargetFields({
   values,
   onChange,
   target,
-  canAddGlobal,
+  canAddSshOrLocal,
   allowLocal,
   launchers,
-  projects,
 }: {
   values: FormValues;
   onChange: (values: FormValues) => void;
   /** The target being edited; a new one when absent. */
   target?: ComputeTargetDetails;
-  /** A global administrator, who adds global targets of every executor. */
-  canAddGlobal: boolean;
+  /** A global administrator, who adds and keeps targets of every executor. */
+  canAddSshOrLocal: boolean;
   allowLocal: boolean;
   launchers: Launcher[];
-  projects: Project[];
 }) {
   const isNew = !target;
   const isSite = getFieldValue(values, 'executor') === 'site';
   const isSsh = getFieldValue(values, 'executor') === 'ssh';
-  const isOwned = target
-    ? target.ownerUserId !== null
-    : getFieldValue(values, 'ownership') === 'personal';
   const isAutomatic = getFieldValue(values, 'submissionMode') === 'automatic';
   const isSharedAccount = getFieldValue(values, 'accountMode') === 'shared';
   const launcherId = getFieldValue(values, 'launcherId');
-  // Owned computers are sites only; only global ones may change their executor.
-  const canChooseExecutor = canAddGlobal && (!target || target.ownerUserId === null);
+  // A computer from before owners serves everyone; with no one to be private for, it stays public.
+  const canChooseVisibility = !target || target.ownerUserId !== null;
   const targetFields: FormField[] = [
     { name: 'name', label: text.name, required: true },
     {
       name: 'executor',
       label: text.executor,
       type: 'select',
-      visible: () => canChooseExecutor,
+      visible: () => canAddSshOrLocal,
       options: [
         { value: 'ssh', label: text.ssh },
         ...(allowLocal ? [{ value: 'local', label: text.local }] : []),
         { value: 'site', label: text.siteExecutor },
       ],
-    },
-    {
-      name: 'ownership',
-      label: text.targetOwnership,
-      type: 'select',
-      visible: () => isSite && isNew && canAddGlobal,
-      options: TARGET_OWNERSHIPS.map((ownership) => ({
-        value: ownership,
-        label: targetOwnershipLabels[ownership],
-      })),
     },
   ];
   const descriptionFields: FormField[] = [
@@ -272,10 +251,18 @@ export function TargetFields({
   ];
   return (
     <>
-      {isNew && !canAddGlobal && <p className="notice">{text.personalTargetNotice}</p>}
+      {isNew && !canAddSshOrLocal && <p className="notice">{text.siteComputerNotice}</p>}
       <FormFields fields={targetFields} values={values} onChange={onChange} />
-      {isSite && isOwned && (
-        <TargetSharing target={target} projects={projects} values={values} onChange={onChange} />
+      {canChooseVisibility ? (
+        <VisibilityPicker
+          name="target-visibility"
+          legend={text.computerVisibility}
+          hints={computerVisibilityHints}
+          value={getFieldValue(values, 'visibility') === 'public' ? 'public' : 'private'}
+          onChange={(visibility) => onChange({ ...values, visibility })}
+        />
+      ) : (
+        <p className="muted">{text.ownerlessComputerVisibilityNotice}</p>
       )}
       {isSite && isNew && <p className="muted">{text.jobShellTemplateHint}</p>}
       <FormFields fields={descriptionFields} values={values} onChange={onChange} />
@@ -312,64 +299,5 @@ export function TargetFields({
         </>
       )}
     </>
-  );
-}
-
-interface SharingProps {
-  values: FormValues;
-  onChange: (values: FormValues) => void;
-  /** The computer being edited; a new one, which the one adding it will own, when absent. */
-  target?: ComputeTargetDetails;
-  /** The editor's Projects, which name those the owner may no longer share it with. */
-  projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>;
-}
-
-/** Reads the owner's Projects: the adder's for a new computer, the owner's for an edited one. */
-function TargetSharing(props: SharingProps) {
-  const { target } = props;
-  const shareable = useQuery(
-    target ? `target-shareable-projects:${target.id}` : 'own-shareable-projects',
-    (signal) =>
-      target
-        ? siteComputersApi.shareableProjects(target.id, signal)
-        : siteComputersApi.ownShareableProjects(signal),
-  );
-  return <TargetSharingFields {...props} shareable={shareable} />;
-}
-
-/**
- * The sharing choices once the owner's Projects are known. Until then, or when they cannot be
- * read, the field stays hidden and the sharing unchanged (an edit sends no PUT for it).
- */
-export function TargetSharingFields({
-  values,
-  onChange,
-  target,
-  projects,
-  shareable,
-}: SharingProps & { shareable: QueryState<ShareableProject[]> }) {
-  // The one adding a computer will own it; the one editing it may be someone else.
-  const hint = target ? text.ownedTargetProjectsHint : text.targetProjectsHint;
-  const empty = target ? text.noOwnedTargetShareableProjects : text.noShareableProjects;
-  return (
-    <Resource query={shareable}>
-      {(ownerProjects) => {
-        const options = targetSharingOptions(ownerProjects, target?.projectIds ?? [], projects);
-        return (
-          <>
-            {options.length > 0 && (
-              <FormFields
-                fields={[
-                  { name: 'projectIds', label: text.targetProjects, type: 'multiselect', options },
-                ]}
-                values={values}
-                onChange={onChange}
-              />
-            )}
-            <p className="muted">{options.length ? hint : empty}</p>
-          </>
-        );
-      }}
-    </Resource>
   );
 }

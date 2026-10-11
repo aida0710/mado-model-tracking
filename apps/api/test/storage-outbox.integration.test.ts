@@ -260,7 +260,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactとplugin outbox（独立PostgreSQL�
     });
   });
 
-  it('完了後に登録した出力DatasetVersionもoutboxへ保存し、保存失敗なら版とRunの変更を戻す', async () => {
+  it('完了後に登録した出力DatasetVersionもoutboxへ保存し、保存失敗ならバージョンとRunの変更を戻す', async () => {
     const fixture = await executionFixture(harness);
     await entity<PluginConnection>(
       await request(harness.app, `${fixture.basePath}/plugins`, {
@@ -533,7 +533,7 @@ describe.skipIf(!testDatabaseUrl)('Artifactとplugin outbox（独立PostgreSQL�
     ).toHaveLength(0);
   });
 
-  it('plugin dataset importは同じ外部版を重複させず、変更されたdigestを拒否する', async () => {
+  it('plugin dataset importは同じ外部バージョンを重複させず、変更されたdigestを拒否する', async () => {
     const fixture = await executionFixture(harness);
     const plugin = await entity<PluginConnection>(
       await request(harness.app, `${fixture.basePath}/plugins`, {

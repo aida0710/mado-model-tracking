@@ -2,14 +2,13 @@ import type { AuthConfig, ComputeTargetDetails, Launcher } from '@mmt/contracts'
 import { authApi } from '../api/auth';
 import { launchersApi } from '../api/launchers';
 import { useAuth } from '../hooks/useAuth';
-import { useProject } from '../hooks/useProject';
 import { useQuery } from '../hooks/useQuery';
 import { useTargetForm } from '../hooks/useTargetForm';
 import { Dialog } from '../components/Dialog';
 import { ErrorNotice } from '../components/Feedback';
 import { QueryDialog } from '../components/QueryDialog';
 import { TargetFields } from '../components/TargetFields';
-import { canAddGlobalTarget } from '../lib/permissions';
+import { canAddSshOrLocalTarget } from '../lib/permissions';
 import { text } from '../i18n/catalog';
 
 /** What the dialog reads before it opens: whether local targets exist here, and the launchers. */
@@ -19,8 +18,8 @@ async function loadTargetChoices(signal: AbortSignal) {
 }
 
 /**
- * Adds or edits a computer. A global administrator adds ssh, local and site targets, global or of
- * their own; a researcher adds a site of their own and shares it with chosen Projects.
+ * Adds or edits a computer and chooses its visibility. Whoever adds one owns it: a global
+ * administrator adds ssh, local and site targets, a researcher sites.
  */
 export function TargetDialog({
   onClose,
@@ -65,9 +64,8 @@ function TargetForm({
   onSaved: (target: ComputeTargetDetails) => void;
 }) {
   const { user } = useAuth();
-  const { projects } = useProject();
-  const canAddGlobal = canAddGlobalTarget(user);
-  const form = useTargetForm({ target, newOwnership: canAddGlobal ? 'global' : 'personal' });
+  const canAddSshOrLocal = canAddSshOrLocalTarget(user);
+  const form = useTargetForm({ target, canAddSshOrLocal });
   return (
     <Dialog title={title} onClose={onClose} busy={form.pending} wide>
       <form
@@ -83,10 +81,9 @@ function TargetForm({
             values={form.values}
             onChange={form.changeValues}
             target={target}
-            canAddGlobal={canAddGlobal}
+            canAddSshOrLocal={canAddSshOrLocal}
             allowLocal={auth.mode === 'development' || target?.executor === 'local'}
             launchers={launchers}
-            projects={projects}
           />
         </fieldset>
         <ErrorNotice message={form.error} />

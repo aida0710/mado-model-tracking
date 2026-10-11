@@ -9,7 +9,7 @@ import { canManageTarget } from '../lib/permissions';
 import { personalSettingsScope } from '../lib/sitePersonalSettingsInput';
 
 /**
- * A site's details below the Compute list. Everyone who may use it reads its job shell, keeps
+ * A site's details below 全体設定 → コンピュータ. Everyone who may use it reads its job shell, keeps
  * their own settings (and key, where the launcher logs in as each person) and, on a manual site,
  * sees how to submit. Its owner and global administrators also save job shell versions, authorize
  * the shared account's key and see everyone's settings.

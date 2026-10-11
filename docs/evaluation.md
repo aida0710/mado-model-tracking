@@ -1,17 +1,17 @@
-# 評価と基準版との比較
+# 評価と基準バージョンとの比較
 
-モデル版の評価結果を、同じ条件で評価した基準版（既定は alias `production` が指す版）と並べて比べる仕組みと、その比較で合否を決める昇格policyを説明する。API の形は [API契約](api-contract.md) の「評価結果の比較」を正とする。
+モデルバージョンの評価結果を、同じ条件で評価した基準バージョン（既定は alias `production` が指すバージョン）と並べて比べる仕組みと、その比較で合否を決める昇格policyを説明する。API の形は [API契約](api-contract.md) の「評価結果の比較」を正とする。
 
 ## 評価Runの作り方
 
 評価は `kind=evaluation` の Run として記録する。比べられるのは、次をすべて満たす Run だけである。
 
-- `modelVersionId` に評価したモデル版が入っている
+- `modelVersionId` に評価したモデルバージョンが入っている
 - `status=finished` で、削除されていない（`lifecycleStage=active`）
-- `codeVersionId` に評価コードの版が入っている（コード版を持たない手動Runどうしも比べられる）
+- `codeVersionId` に評価コードのバージョンが入っている（コードバージョンを持たない手動Runどうしも比べられる）
 - `inputDatasetVersionIds` に評価に使った DatasetVersion が入っている
 
-条件を揃えるには、モデル登録後の自動実行 rule（[コンテナと自動実行](containers-automation.md)）で評価を回すのが確実である。rule は評価コード版と入力 DatasetVersion を固定して保存するため、どのモデル版にも同じ条件の評価 Run ができる。手動で評価する場合も、同じ DatasetVersion と評価コード版を指定する。
+条件を揃えるには、モデル登録後の自動実行 rule（[コンテナと自動実行](containers-automation.md)）で評価を回すのが確実である。rule は評価コードバージョンと入力 DatasetVersion を固定して保存するため、どのモデルバージョンにも同じ条件の評価 Run ができる。手動で評価する場合も、同じ DatasetVersion と評価コードバージョンを指定する。
 
 ## 正解セットと上流出力
 
@@ -19,24 +19,24 @@
 
 | 役割 | 中身 | Run の項目 |
 |---|---|---|
-| 正解セット | 正解の書き起こし・評価用音声など、どのモデル版でも同じ評価データ | `inputDatasetVersionIds` − `upstreamDatasetVersionIds` |
-| 上流出力 | 推論 Run の出力（予測結果）など、モデル版ごとに別物になるデータ | `upstreamDatasetVersionIds` |
+| 正解セット | 正解の書き起こし・評価用音声など、どのモデルバージョンでも同じ評価データ | `inputDatasetVersionIds` − `upstreamDatasetVersionIds` |
+| 上流出力 | 推論 Run の出力（予測結果）など、モデルバージョンごとに別物になるデータ | `upstreamDatasetVersionIds` |
 
-`upstreamDatasetVersionIds` は `inputDatasetVersionIds` の部分集合で、Run の作成時に決まり、後から変更できない（DB の CHECK 制約と trigger で拒否する）。「登録→推論→評価」の連鎖では、評価 Run の入力が「rule の固定分＋推論の出力」になる。推論の出力はモデル版ごとに違うため、入力全体を比べると候補版と基準版が一致しない。そこで比較の条件は正解セットだけで判定する。MLflow の dataset context（どのデータで測った値か）に近い考え方である。
+`upstreamDatasetVersionIds` は `inputDatasetVersionIds` の部分集合で、Run の作成時に決まり、後から変更できない（DB の CHECK 制約と trigger で拒否する）。「登録→推論→評価」の連鎖では、評価 Run の入力が「rule の固定分＋推論の出力」になる。推論の出力はモデルバージョンごとに違うため、入力全体を比べると候補バージョンと基準バージョンが一致しない。そこで比較の条件は正解セットだけで判定する。MLflow の dataset context（どのデータで測った値か）に近い考え方である。
 
 値を入れるのは自動実行の連鎖（上流の出力を `upstreamDatasetVersionIds` に入れる）で、native/MLflow の Run 作成 API からは指定できない。手動の Run では空のままなので、全入力が正解セットになる。
 
 ## 一致の条件
 
-候補版と基準版の評価 Run は、次がすべて一致するときだけ比べる。
+候補バージョンと基準バージョンの評価 Run は、次がすべて一致するときだけ比べる。
 
 1. 同じ Project
 2. `kind=evaluation`、`status=finished`、削除されていない
 3. 正解セットが集合として一致する（順序と重複は無視。1つでも多い・少ないと不一致）
-4. 評価コード版（`codeVersionId`）が一致する
+4. 評価コードバージョン（`codeVersionId`）が一致する
 5. `evaluationRuleId` を指定した場合は、その rule の自動実行が作った Run に限る（手動の評価 Run を除く）。自動実行の Job を手動 retry して成功した Run も、元の自動実行の Run として扱う
 
-一致する Run が複数あれば、`endedAt` が最も新しいもの（同時刻なら id の降順で先のもの）を使う。条件を指定しなければ、候補版の最新の評価 Run から正解セットと評価コード版を取る。
+一致する Run が複数あれば、`endedAt` が最も新しいもの（同時刻なら id の降順で先のもの）を使う。条件を指定しなければ、候補バージョンの最新の評価 Run から正解セットと評価コードバージョンを取る。
 
 ## 比べる値と fallback
 
@@ -57,23 +57,23 @@ metric ごとに次の順で値を選び、どちらを使ったかを `source` 
 |---|---|
 | `ok` | 候補と基準の両方に同じ条件の評価がある |
 | `baseline_missing` | 基準 alias が設定されていない |
-| `candidate_not_evaluated` | 候補版に条件に合う評価が無い |
-| `baseline_not_evaluated` | 基準版に同じ条件の評価が無い |
+| `candidate_not_evaluated` | 候補バージョンに条件に合う評価が無い |
+| `baseline_not_evaluated` | 基準バージョンに同じ条件の評価が無い |
 
 `baseline_missing` と `baseline_not_evaluated` でも、候補の評価があれば候補側の値だけを並べて返す。
 
 ## 昇格policy（合否の判定）
 
-昇格policy は「この Model の版を、この評価 rule の結果で合否判定する」設定である。評価 Run が `finished` になった同じ transaction の中で判定し、結果を判定履歴に残す。API の形は [API契約](api-contract.md) の「昇格policyと判定履歴」を正とする。
+昇格policy は「この Model のバージョンを、この評価 rule の結果で合否判定する」設定である。評価 Run が `finished` になった同じ transaction の中で判定し、結果を判定履歴に残す。API の形は [API契約](api-contract.md) の「昇格policyと判定履歴」を正とする。
 
 ### 判定の対象
 
 判定するのは、policy の `evaluationRuleId` に指定した評価 rule（`kind=evaluation` の自動実行 rule）の自動実行が作った Run だけである。手動 retry で成功した Run も、元の自動実行の Run として判定する。
 
-- 人が作った評価 Run は判定しない。同じ版・同じ正解セット・同じ評価コード版で作り、`finished` にしても判定しない。
+- 人が作った評価 Run は判定しない。同じバージョン・同じ正解セット・同じ評価コードバージョンで作り、`finished` にしても判定しない。
 - 別の評価 rule が作った Run も判定しない。
-- 基準版の評価も、同じ rule の自動実行が作った Run だけを使う。手動の評価 Run や別 rule の Run は基準に使わない。
-- 正解セットと評価コード版は、policy に入力させずに rule の固定入力（`inputDatasetVersionIds`）と `codeVersionId` を使う。rule は作成後に変更できないため、同じ policy の判定はすべて同じ条件で比べる。
+- 基準バージョンの評価も、同じ rule の自動実行が作った Run だけを使う。手動の評価 Run や別 rule の Run は基準に使わない。
+- 正解セットと評価コードバージョンは、policy に入力させずに rule の固定入力（`inputDatasetVersionIds`）と `codeVersionId` を使う。rule は作成後に変更できないため、同じ policy の判定はすべて同じ条件で比べる。
 - 判定は `finished` の Run だけで行う。`failed`・`canceled` の Run は判定しない。
 - 1つの Run を同じ policy で自動判定するのは1回だけである。worker の complete の再送や MLflow の Run の再開では増えない。
 
@@ -103,7 +103,7 @@ editor は評価 Run を自由に作れるため、条件の一致だけで対�
 ]
 ```
 
-1行目は「accuracy が 0.8 以上」、2行目は「accuracy が基準版から下がらない」、3行目は「wer が基準版より 5% 以上下がる」。値が小さいほど良い metric は `direction: lower` にし、改善を求めるなら閾値を負にする。
+1行目は「accuracy が 0.8 以上」、2行目は「accuracy が基準バージョンから下がらない」、3行目は「wer が基準バージョンより 5% 以上下がる」。値が小さいほど良い metric は `direction: lower` にし、改善を求めるなら閾値を負にする。
 
 ### 判定の結果
 
@@ -111,12 +111,12 @@ editor は評価 Run を自由に作れるため、条件の一致だけで対�
 |---|---|
 | `passed` | すべての基準を満たした |
 | `failed` | 満たさない基準が1つ以上ある |
-| `insufficient` | 判定に必要な評価が無い（基準版に同じ rule の評価が無い、など） |
+| `insufficient` | 判定に必要な評価が無い（基準バージョンに同じ rule の評価が無い、など） |
 | `skipped` | 判定できなかった（policy の実行ユーザーの権限が失効している、判定中にエラーが起きた） |
 
 - 値が NaN・無限大、または記録されていない metric の基準は `failed` にし、基準ごとの `reason`（`candidate_metric_missing`、`baseline_metric_not_finite` など）に理由を残す。基準が 0 の `relative_delta` も `failed`（`baseline_zero`）である。
 - 基準 alias（既定 `production`）が未設定の初回は、`missingBaseline`（既定 `pass`）に従う。`pass` なら差・相対差の基準を合格扱いにし、判定の `reason` に `baseline_missing_first_promotion` を残す。`absolute` の基準は初回でも判定する。`fail` なら `failed`（`baseline_missing`）である。
-- 基準 alias はあるが、その版に同じ rule の評価が無い場合、差・相対差の基準は `insufficient`（`baseline_not_evaluated`）になる。基準版にも rule を適用して評価してから再判定する。
+- 基準 alias はあるが、そのバージョンに同じ rule の評価が無い場合、差・相対差の基準は `insufficient`（`baseline_not_evaluated`）になる。基準バージョンにも rule を適用して評価してから再判定する。
 - policy の実行ユーザー（`runAsUserId`。作成時は作成者）が Project admin（直接付与または group binding）でも全体管理者でもなくなっていれば、判定せずに `skipped`（`creator_access_revoked`）を残す。
 - 判定中のエラーは `skipped`（`evaluation_error`）として残す。エラーでも評価 Run の終端と plugin への通知は確定する。
 
@@ -124,12 +124,12 @@ editor は評価 Run を自由に作れるため、条件の一致だけで対�
 
 ### 合格時の自動昇格
 
-`autoPromote`（既定 false）の policy は、評価 Run の終端で `passed` と判定したとき、同じ transaction の中で `targetAlias` を候補版へ切り替える。条件は次のとおり。
+`autoPromote`（既定 false）の policy は、評価 Run の終端で `passed` と判定したとき、同じ transaction の中で `targetAlias` を候補バージョンへ切り替える。条件は次のとおり。
 
 - 対象は評価 Run の終端での自動判定だけである。Project admin の再判定は alias を動かさない（人が昇格ダイアログで判定を根拠に切り替える）。
-- 判定の直前に読んだ基準 alias と対象 alias が、Model の行 lock を取った後も同じ版を指していること。判定中に誰かが手動で alias を変えていたら、その変更を上書きせず、判定に `reason='baseline_changed'`、`promoted=false` を残す。
-- 候補版が既に `targetAlias` なら何もしない（`promoted=false`）。
-- policy の実行ユーザーが、alias の lock を取った後も Project admin か全体管理者であること。保護 alias の条件はこれで満たす（判定そのものが、この alias と版への合格判定であるため）。alias の変更が拒否されたら `reason='promotion_denied'`、`promoted=false` を残し、評価 Run の終端は確定させる。
+- 判定の直前に読んだ基準 alias と対象 alias が、Model の行 lock を取った後も同じバージョンを指していること。判定中に誰かが手動で alias を変えていたら、その変更を上書きせず、判定に `reason='baseline_changed'`、`promoted=false` を残す。
+- 候補バージョンが既に `targetAlias` なら何もしない（`promoted=false`）。
+- policy の実行ユーザーが、alias の lock を取った後も Project admin か全体管理者であること。保護 alias の条件はこれで満たす（判定そのものが、この alias とバージョンへの合格判定であるため）。alias の変更が拒否されたら `reason='promotion_denied'`、`promoted=false` を残し、評価 Run の終端は確定させる。
 - 切り替えた場合は、判定に `promoted=true` と `aliasEventId` を残す。alias の変更履歴には `source='promotion_policy'`、`promotionEvaluationId`（その判定）、actor＝policy の実行ユーザー、理由＝policy 名と基準ごとの値の要約（2000 文字まで）が残る。
 
 ### 保護 alias
@@ -139,13 +139,13 @@ editor は評価 Run を自由に作れるため、条件の一致だけで対�
 | 設定 | 手動で変えられる人と条件 |
 |---|---|
 | `requiredRole: admin` | Project admin（全体管理者を含む）だけ。合格判定か理由が要る |
-| `requiredRole: editor`、`requirePassedEvaluation: true` | editor 以上で、その版のこの alias への合格判定を根拠に指定したときだけ（admin も同じ） |
+| `requiredRole: editor`、`requirePassedEvaluation: true` | editor 以上で、そのバージョンのこの alias への合格判定を根拠に指定したときだけ（admin も同じ） |
 | `requiredRole: editor`、`requirePassedEvaluation: false` | editor 以上。合格判定か理由が要る |
 | `requiredRole: admin`、`requirePassedEvaluation: true` | Project admin が合格判定を指定したときだけ |
 
-- 根拠にできる判定は、評価 rule の自動実行 Run による判定（昇格policy の判定履歴）で、同じ Model・同じ版・policy の `targetAlias` がこの alias で、`passed` かつ同じ候補 Run の最新の判定（後の再判定で置き換わっていない）であるもの。
+- 根拠にできる判定は、評価 rule の自動実行 Run による判定（昇格policy の判定履歴）で、同じ Model・同じバージョン・policy の `targetAlias` がこの alias で、`passed` かつ同じ候補 Run の最新の判定（後の再判定で置き換わっていない）であるもの。
 - 保護 alias の解除は `requiredRole` 以上が要り、`requirePassedEvaluation` の保護では Project admin が要る（判定は解除の根拠にならない）。
-- MLflow 互換 API（公式 SDK の `set_registered_model_alias`、alias 削除、版・Model の削除で外れる alias を含む）は理由も判定も渡せないので、保護 alias には常に `PERMISSION_DENIED` を返す。保護 alias は Web か native API で変える。
+- MLflow 互換 API（公式 SDK の `set_registered_model_alias`、alias 削除、バージョン・Model の削除で外れる alias を含む）は理由も判定も渡せないので、保護 alias には常に `PERMISSION_DENIED` を返す。保護 alias は Web か native API で変える。
 - 保護 alias の追加・変更・解除は Project admin と全体管理者だけで、監査ログ（`model_alias.protection.set`／`model_alias.protection.delete`）に残る。
 
 ### policy の変更
@@ -160,18 +160,18 @@ policy は実行ユーザー（`runAsUserId`）の権限で判定し、自動昇
 
 評価コードの CodeVersion を変えると、旧コードの評価と新コードの評価は比べられない。次の順で切り替える。
 
-1. 新しい評価コード版で、新しい評価 rule を作る（rule は変更できない）。
+1. 新しい評価コードバージョンで、新しい評価 rule を作る（rule は変更できない）。
 2. 新しい rule を指定して、新しい policy を作る。古い policy は無効にする。
-3. 基準版（`production` などが指す版）にも新しい rule を手動適用する（Project admin。[コンテナと自動実行](containers-automation.md) の「既存版への手動適用」）。基準版の評価が無いと、差・相対差の基準は `insufficient` になる。
-4. 基準版の評価が終わったら、`insufficient` だった判定を再判定する。
+3. 基準バージョン（`production` などが指すバージョン）にも新しい rule を手動適用する（Project admin。[コンテナと自動実行](containers-automation.md) の「既存バージョンへの手動適用」）。基準バージョンの評価が無いと、差・相対差の基準は `insufficient` になる。
+4. 基準バージョンの評価が終わったら、`insufficient` だった判定を再判定する。
 
 ## 画面
 
-`EvaluationComparisonPanel`（apps/web/src/components）が比較を表示する部品である。基準 alias を選ぶ（既定は `production`、無ければ名前順で最初の alias）と、metric ごとの候補・基準・差・相対差、値の出典、比較に使った正解セットと評価コード版、比べた評価 Run へのリンクを表示する。
+`EvaluationComparisonPanel`（apps/web/src/components）が比較を表示する部品である。基準 alias を選ぶ（既定は `production`、無ければ名前順で最初の alias）と、metric ごとの候補・基準・差・相対差、値の出典、比較に使った正解セットと評価コードバージョン、比べた評価 Run へのリンクを表示する。
 
-- Models 画面の「Aliasを設定」は昇格ダイアログ（`PromotionDialog`）で、alias・版・根拠となる判定・理由を入力する。保護 alias では合格判定の選択を出し、不合格の版を付けるときと、判定なしで保護 alias を変えるときは理由を必須にする。
+- Models 画面の「Aliasを設定」は昇格ダイアログ（`PromotionDialog`）で、alias・バージョン・根拠となる判定・理由を入力する。保護 alias では合格判定の選択を出し、不合格のバージョンを付けるときと、判定なしで保護 alias を変えるときは理由を必須にする。
 - Models 画面の「保護alias」タブ（`AliasProtectionSettings`）で保護の一覧を見られ、Project admin は追加・変更・解除できる。
-- モデル版の画面の「昇格の判定」（`PromotionCheckCard`。editor 以上に表示）は、Model の policy ごとに、この版の判定（合格／不合格／判定待ち）と基準ごとの値を出し、「昇格」から合格判定を根拠にした昇格ダイアログを開く。
+- モデルバージョンの画面の「昇格の判定」（`PromotionCheckCard`。editor 以上に表示）は、Model の policy ごとに、このバージョンの判定（合格／不合格／判定待ち）と基準ごとの値を出し、「昇格」から合格判定を根拠にした昇格ダイアログを開く。
 
 ## 評価サンプルの推奨形式
 

@@ -20,7 +20,8 @@ export async function projectFixture(harness: Harness) {
     await request(harness.app, '/api/projects', {
       method: 'POST',
       cookie: administrator.cookie,
-      body: { name: 'Test Project' },
+      // Private, so access comes only from the roles granted below (outsider has none).
+      body: { name: 'Test Project', visibility: 'private' },
     }),
   );
   for (const [identity, role] of [
@@ -101,6 +102,8 @@ export async function executionFixture(harness: Harness) {
         maxConcurrentJobs: 2,
         enabled: true,
         executor: 'local',
+        // The Project's members run their Jobs on it.
+        visibility: 'public',
       },
     }),
   );

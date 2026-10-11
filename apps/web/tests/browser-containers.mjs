@@ -22,9 +22,9 @@ const projectBase = base + '/projects/' + api.state.project.id;
 const dialog = () => page.getByRole('dialog').last();
 const fill = (label, value) => dialog().getByLabel(label).fill(value);
 const select = (label, value) => dialog().getByLabel(label).selectOption(value);
-// getByLabel matches part of a label, and '版' is also in '編集元のコード版'; the exact accessible
-// name tells the two apart (the label text with its required mark is '版 *', so exact getByLabel fails).
-const versionField = () => dialog().getByRole('textbox', { name: '版', exact: true });
+// getByLabel matches part of a label, and 'バージョン' is also in '編集元のコードバージョン'; the exact accessible
+// name tells the two apart (the label text with its required mark is 'バージョン *', so exact getByLabel fails).
+const versionField = () => dialog().getByRole('textbox', { name: 'バージョン', exact: true });
 const clickSave = async () => {
   const versionSave = dialog().getByTestId('code-version-save');
   if (await versionSave.count()) await versionSave.click();
@@ -45,8 +45,8 @@ async function fillCodeCommand() {
   await select('対応する実行種別', 'inference');
 }
 async function openNewVersion() {
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await dialog().getByLabel('編集元のコード版').selectOption('');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await dialog().getByLabel('編集元のコードバージョン').selectOption('');
 }
 try {
   console.log('Browser containers: Docker, command, optional source, digest validation');
@@ -169,8 +169,8 @@ try {
   );
 
   console.log('Browser containers: target runtimes and launch compatibility');
-  await page.goto(projectBase + '/compute');
-  await page.getByRole('button', { name: '計算機を追加', exact: true }).click();
+  await page.goto(base + '/settings/computers');
+  await page.getByRole('button', { name: 'コンピュータを追加', exact: true }).click();
   await fill('名前', 'Container target');
   await select('Executor', 'local');
   await fill('Host', 'localhost');
@@ -182,8 +182,10 @@ try {
   await waitClosed();
   const containerTarget = api.state.targets.find((target) => target.name === 'Container target');
   assert.deepEqual(containerTarget.runtimeKinds, ['python', 'docker', 'singularity', 'apptainer']);
-  // Only a new site asks whose it is ('使える範囲'); a global admin's local computer is global.
-  assert.equal(containerTarget.ownerUserId, null);
+  // Whoever adds a computer owns it, private unless chosen otherwise; its owner runs Jobs on it.
+  assert.equal(containerTarget.ownerUserId, api.state.user.id);
+  assert.equal(containerTarget.visibility, 'private');
+  await page.goto(projectBase + '/compute');
   await page
     .locator('tr')
     .filter({ hasText: 'Container target' })
@@ -193,7 +195,7 @@ try {
   await page.getByRole('button', { name: 'ジョブを起動', exact: true }).click();
   await fill('Run名', 'Container launch');
   await select('Experiments', api.state.experiments[0].id);
-  await select('コード版', dockerVersion.id);
+  await select('コードバージョン', dockerVersion.id);
   await dialog().getByRole('button', { name: '次へ', exact: true }).click();
   const targetOptions = await dialog()
     .getByLabel('Compute target')
@@ -206,7 +208,7 @@ try {
   await select('Compute target', containerTarget.id);
   await select('GPU ID · CPUのみ', '1');
   await dialog().getByRole('button', { name: '戻る', exact: true }).click();
-  await select('コード版', singularityVersion.id);
+  await select('コードバージョン', singularityVersion.id);
   await dialog().getByRole('button', { name: '次へ', exact: true }).click();
   assert.equal(await dialog().getByLabel('Compute target').inputValue(), '');
   assert.deepEqual(
@@ -234,7 +236,7 @@ try {
   await select('対象モデル系列', 'test-family');
   await select('実行種別', 'evaluation');
   await select('Experiments', api.state.experiments[0].id);
-  await select('コード版', dockerVersion.id);
+  await select('コードバージョン', dockerVersion.id);
   assert.equal(
     await dialog()
       .getByLabel('Compute target')
@@ -244,7 +246,7 @@ try {
   );
   await select('Compute target', containerTarget.id);
   await select('GPU ID · CPUのみ', '0');
-  await select('入力データセット版', api.state.datasetVersions[0].id);
+  await select('入力データセットバージョン', api.state.datasetVersions[0].id);
   await fill('パラメータ（JSON）', '{"batch_size":4}');
   await fill('タグ（JSON）', '{"suite":"regression"}');
   api.state.failNextAutomation = true;

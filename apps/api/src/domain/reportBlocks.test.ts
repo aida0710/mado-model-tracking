@@ -212,7 +212,7 @@ describe('レポートのブロックの検証', () => {
     expect(domainErrorCode(() => validateReportBlocks(large))).toBe('report_blocks_too_large');
   });
 
-  it('refreshSnapshotBlockIdsはその版のsnapshotブロックだけを指せる', () => {
+  it('refreshSnapshotBlockIdsはそのバージョンのsnapshotブロックだけを指せる', () => {
     const blocks = [
       { type: 'markdown', id: 'text', text: '' },
       { type: 'chart', id: 'fixed', panel, runSet: { runIds: [RUN_A] }, mode: 'snapshot' },

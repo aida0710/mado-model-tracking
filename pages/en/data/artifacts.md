@@ -22,7 +22,7 @@ The web UI is in Japanese. This page shows UI labels in Japanese followed by an 
 
 ## Paths and versions
 
-Artifacts are organized by path within a Run, such as `data/vowel-a.wav` or `checkpoints/step-1000/model.pt`. Saving to the same path in the same Run stores a new Artifact and makes the path show the new one. The earlier file is kept as a previous version (以前の版) and is not overwritten.
+Artifacts are organized by path within a Run, such as `data/vowel-a.wav` or `checkpoints/step-1000/model.pt`. Saving to the same path in the same Run stores a new Artifact and makes the path show the new one. The earlier file is kept as a previous version (以前のバージョン) and is not overwritten.
 
 Some Artifacts do not belong to a Run: files of dataset versions created from a folder, and files uploaded from the **Models** or **Code** pages.
 
@@ -40,7 +40,7 @@ Open the **Artifacts** tab of a Run. The file list is on the left and the previe
 
 The open folder is kept in the URL, so reloading or going back returns to the same folder.
 
-Open **詳細** (Details) under the preview to see the Artifact ID, SHA-256, storage name, and previous versions of the same path (up to 100). Select a previous version to preview it, and click **最新の版に戻る** (Back to latest version) to return.
+Open **詳細** (Details) under the preview to see the Artifact ID, SHA-256, storage name, and previous versions of the same path (up to 100). Select a previous version to preview it, and click **最新のバージョンに戻る** (Back to latest version) to return.
 
 Users who can edit see **Artifactをアップロード** (Upload Artifact). See [Large file uploads](/en/data/uploads).
 
@@ -48,15 +48,15 @@ Users who can edit see **Artifactをアップロード** (Upload Artifact). See 
 
 ![Artifacts page of a Project](/images/data-artifacts-browser.png)
 
-Open **Artifacts** in the top bar to search every Artifact in the Project.
+Open **Artifacts** in the sidebar to search every Artifact in the Project.
 
 | Filter | Values |
 | --- | --- |
 | 検索 (Search) | Text contained in the saved path (up to 200 characters) |
 | 種類 (Type) | All, audio, image, video, text, other files |
 | Run | All Runs, or one of the recent Runs (up to 200) |
-| モデル (Model) | All models, or one model. After choosing a model you can also filter by モデル版 (model version) |
-| 以前の版も表示 (Show previous versions) | Include old versions that were replaced by newer files |
+| モデル (Model) | All models, or one model. After choosing a model you can also filter by モデルバージョン (model version) |
+| 以前のバージョンも表示 (Show previous versions) | Include old versions that were replaced by newer files |
 
 Results show the saved path, Run, type, size, and creation time, 100 at a time. Artifacts without a Run show Runなし (no Run). Filters are kept in the URL, so sharing the URL opens the same results.
 
@@ -105,14 +105,14 @@ MLflow SDK `delete_artifacts` follows the same rules. Through the API, call `DEL
 
 ## Check usage
 
-Artifactの使用量 (Artifact usage) at the bottom of the Project **Settings** shows usage per storage.
+Artifactの使用量 (Artifact usage) at the top of **プロジェクト設定** (Project settings) shows usage per storage.
 
 | Column | Meaning |
 | --- | --- |
 | 保存先 (Storage) | Storage name |
 | 件数, 容量 (Count, Size) | Number and total size of Artifacts that are not deleted, including previous versions |
 | 削除待ち (Pending deletion) | Deleted Artifacts whose files have not been removed yet |
-| 参照されていない古い版 (Unreferenced old versions) | Versions replaced by a newer one and not referenced by model versions, dataset versions, and so on. Candidates for deletion |
+| 参照されていない古いバージョン (Unreferenced old versions) | Versions replaced by a newer one and not referenced by model versions, dataset versions, and so on. Candidates for deletion |
 
 ## Related pages
 

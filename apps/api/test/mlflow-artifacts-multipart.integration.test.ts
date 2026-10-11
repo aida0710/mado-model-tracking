@@ -305,7 +305,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow multipart upload（独立PostgreSQL）
     expect(session!.status).toBe('aborted');
   });
 
-  it('PENDINGのLogged Modelへ書き込み、READYのLogged Modelと登録モデル版へのcreateは409', async () => {
+  it('PENDINGのLogged Modelへ書き込み、READYのLogged Modelと登録モデルバージョンへのcreateは409', async () => {
     const fixture = await artifactFixture(harness);
     const model = await fixture.loggedModel();
     const created = await entity<CreateResponse>(

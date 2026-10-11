@@ -56,9 +56,9 @@ If the username already exists, the command makes that user an active global adm
 
 A global administrator creates local accounts on the screen. You can create them in any `AUTH_MODE`, but they cannot sign in when the mode is `oidc`.
 
-![The Users tab of global administration](/images/admin-users.png)
+![The Users page under global administration](/images/admin-users.png)
 
-1. Open **全体管理** (Administration) in the top bar and select the **ユーザー** (Users) tab.
+1. Open **全体設定** (Global settings) from the user menu, then **ユーザー** (Users) under 全体管理 (Global administration) in the sidebar (`/settings/users`).
 2. Click **ローカルユーザーを作成** (Create local user).
 3. Enter the following and save.
 
@@ -72,14 +72,14 @@ A global administrator creates local accounts on the screen. You can create them
 
 The account is created when it appears in the list. Give the initial password to the user through a safe channel. The user must change it at the first login.
 
-A new user does not belong to any Project yet. Add the user under **Members** in the Project's **Settings** ([Permissions and roles](/en/admin/permissions)).
+A new user can use Public Projects right away. To use a Private Project, add the user under **Members** in **プロジェクト設定** (Project settings) ([Permissions and roles](/en/admin/permissions)).
 
 ## Passwords
 
 Local account passwords are stored as Argon2id hashes. A new password must be 12 to 1024 bytes and differ from the current one.
 
-- Change your own: open the user menu in the top bar, then **アカウント** (Account) → password (`/account/password`). Changing it ends your logins in other browsers and machines.
-- Forgotten password: a global administrator clicks **パスワード再設定** (Reset password) on the user's row in the Users tab. A temporary password is shown once; give it to the user through a safe channel. The user's sessions end and the next login asks for a new password.
+- Change your own: open **パスワードの変更** (Change password) from the user menu (your avatar) at the top right (`/settings/account/password`). You can also change it under パスワード (Password) on **アカウント** (Account) in the global settings. Changing it ends your logins in other browsers and machines.
+- Forgotten password: a global administrator clicks **パスワード再設定** (Reset password) on the user's row in **全体管理** → **ユーザー**. A temporary password is shown once; give it to the user through a safe channel. The user's sessions end and the next login asks for a new password.
 - SSO-only users have no password in this application. Their passwords are managed in Authentik.
 
 Login and current-password checks are rate limited. Over the limit, the screen says the attempt limit was reached and the API returns 429 with `Retry-After`.
@@ -94,7 +94,7 @@ The counters live in the API process memory and reset when the API restarts. An 
 
 ## Disable and re-enable users
 
-When someone leaves or changes teams, a global administrator uses the Users tab.
+When someone leaves or changes teams, a global administrator uses **全体管理** → **ユーザー**.
 
 1. Click **無効化** (Disable) on the row and confirm. The user's sessions end immediately, and the user's API tokens (including the MLflow-compatible API) return 401 from the next request.
 2. For SSO users, also remove the user from the Authentik groups. If you re-enable the user without doing so, the next login restores the global role derived from the groups.
@@ -115,8 +115,8 @@ To move an environment that used local accounts to SSO, go through `hybrid`.
 
 If Authentik stops and nobody can sign in, change back to `AUTH_MODE=hybrid` and restart; the local administrator can sign in again.
 
-## Check your account
+## Check your account {#check-your-account}
 
-Open **アカウント** (Account) from the user menu in the top bar to see your display name, email, login method, whether you are a global administrator, your groups (SSO users only, with the last sync time), and your API tokens.
+Open **アカウント** (Account) from the user menu (your avatar) at the top right (`/settings/account`) to see your display name, email, login method, whether you are a global administrator, your groups (SSO users only, with the last sync time), and your API tokens. Local accounts can also change their password here. You can also open it from **アカウント** in the global settings sidebar.
 
 ![The account screen](/images/admin-account.png)

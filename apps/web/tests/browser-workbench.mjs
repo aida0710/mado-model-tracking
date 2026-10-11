@@ -109,16 +109,16 @@ page.on('worker', (worker) => workerUrls.push(worker.url()));
 const projectBase = `${process.env.MMT_WEB_URL ?? 'http://127.0.0.1:5182'}/projects/${api.state.project.id}`;
 const dialog = () => page.getByRole('dialog').last();
 const fill = (label, value) => dialog().getByLabel(label).fill(value);
-// getByLabel matches part of a label, and '版' is also in '編集元のコード版'; the exact accessible
-// name tells the two apart (the label text with its required mark is '版 *', so exact getByLabel fails).
-const versionField = () => dialog().getByRole('textbox', { name: '版', exact: true });
+// getByLabel matches part of a label, and 'バージョン' is also in '編集元のコードバージョン'; the exact accessible
+// name tells the two apart (the label text with its required mark is 'バージョン *', so exact getByLabel fails).
+const versionField = () => dialog().getByRole('textbox', { name: 'バージョン', exact: true });
 const clickSave = () => dialog().getByTestId('code-version-save').click();
 try {
   console.log('Workbench: Git overlay, multiple files, save failure and immutable version');
   await page.goto(projectBase + '/codes');
   await page.getByRole('heading', { name: 'Code', exact: true }).waitFor();
   assert.equal(editorRequests.length, 0, 'Monaco loaded before opening the editor');
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
   await versionField().fill('edited-v2');
   controls.failRepository = true;
   await dialog().getByTestId('repository-load').click();
@@ -175,7 +175,7 @@ try {
   assert.equal(api.state.codeVersions[0].source.deletedFiles.length, 1);
 
   console.log('Workbench: unsaved changes and mobile modal');
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
   await versionField().fill('discard-me');
   await dialog().getByRole('button', { name: '閉じる', exact: true }).click();
   await dialog().getByRole('button', { name: '編集を続ける', exact: true }).click();
@@ -189,8 +189,8 @@ try {
   await page.setViewportSize({ width: 1440, height: 960 });
 
   console.log('Workbench: standalone samples and test command');
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await dialog().getByLabel('編集元のコード版').selectOption('');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await dialog().getByLabel('編集元のコードバージョン').selectOption('');
   await versionField().fill('smoke-v3');
   await dialog().getByLabel('リポジトリの選択').selectOption('standalone');
   await dialog().getByLabel('サンプル').selectOption('sdk');
@@ -228,7 +228,7 @@ try {
   await page.goto(projectBase + '/tasks');
   await page.getByRole('button', { name: 'Taskを作成', exact: true }).click();
   await fill('名前', 'Browser Task');
-  await dialog().getByLabel('コード版').selectOption(smoke.id);
+  await dialog().getByLabel('コードバージョン').selectOption(smoke.id);
   await dialog().getByLabel('Compute target').selectOption(api.state.targets[0].id);
   await dialog().getByLabel('GPU ID', { exact: true }).selectOption([]);
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
@@ -238,9 +238,9 @@ try {
   await dialog().getByTestId('task-edit-code').click();
   await versionField().fill('task-code-v4');
   await clickSave();
-  await dialog().getByLabel('コード版').locator('option:checked').getByText(/task-code-v4/).waitFor({ state: 'attached' });
+  await dialog().getByLabel('コードバージョン').locator('option:checked').getByText(/task-code-v4/).waitFor({ state: 'attached' });
   const taskCode = api.state.codeVersions.find((version) => version.version === 'task-code-v4');
-  assert.equal(await dialog().getByLabel('コード版').inputValue(), taskCode.id);
+  assert.equal(await dialog().getByLabel('コードバージョン').inputValue(), taskCode.id);
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   await page.getByTestId('task-revision').getByText('2', { exact: true }).waitFor();
@@ -270,9 +270,9 @@ try {
   assert.deepEqual(normalRun.executionSnapshot.entrypoint, smoke.entrypoint);
   assert.equal(normalRun.taskRevision, 2);
 
-  console.log('Workbench: Compute edit/toggle with failure, plugin preset/edit/toggle/manifest');
-  await page.goto(projectBase + '/compute');
-  await page.getByRole('button', { name: '計算機を編集', exact: true }).click();
+  console.log('Workbench: computer edit/toggle with failure, plugin preset/edit/toggle/manifest');
+  await page.goto(new URL('/settings/computers', projectBase).href);
+  await page.getByRole('button', { name: 'コンピュータを編集', exact: true }).click();
   assert.equal(await dialog().getByLabel('GPU ID（1行に1件）').inputValue(), '0\n1');
   await fill('名前', 'Edited Compute');
   controls.failTarget = true;
@@ -281,8 +281,9 @@ try {
   controls.failTarget = false;
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await page.getByRole('checkbox', { name: 'Compute targetを無効にする: Edited Compute', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Compute targetを有効にする: Edited Compute', exact: true }).waitFor();
+  const editedRow = page.getByRole('row').filter({ hasText: 'Edited Compute' });
+  await editedRow.getByRole('button', { name: '無効にする', exact: true }).click();
+  await editedRow.getByRole('button', { name: '有効にする', exact: true }).waitFor();
   assert.deepEqual(api.state.calls.filter((call) => call.method === 'PATCH' && call.path.includes('/targets/')).at(-1).body, { enabled: false });
   await page.goto(projectBase + '/plugins');
   await page.getByRole('button', { name: 'Pluginを編集', exact: true }).click();

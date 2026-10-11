@@ -1,8 +1,8 @@
 import { defineConfig } from "vitepress";
 
-const repository = "https://github.com/aida0710/mado-model-tracking";
-const siteUrl = "https://aida0710.github.io/mado-model-tracking/";
-const base = process.env.MMT_DOCS_BASE ?? "/mado-model-tracking/";
+const repository = "https://github.com/aida0710/mado-ml-tracking";
+const siteUrl = "https://aida0710.github.io/mado-ml-tracking/";
+const base = process.env.MMT_DOCS_BASE ?? "/mado-ml-tracking/";
 
 const jaDescription =
   "MLflow 3互換の実験管理アプリ。学習結果の登録、推論・評価の自動実行、音声などのArtifact、Authentikのgroupによる権限管理に対応。";
@@ -11,7 +11,7 @@ const enDescription =
 
 const jaSidebar = [
   { text: "はじめる", items: [
-    { text: "Mado Model Trackingとは", link: "/guide/getting-started" },
+    { text: "mado ML Trackingとは", link: "/guide/getting-started" },
     { text: "インストール", link: "/guide/install" },
     { text: "クイックスタート", link: "/guide/quickstart" },
   ] },
@@ -26,15 +26,16 @@ const jaSidebar = [
     { text: "メモとコメント", link: "/tracking/notes" },
   ] },
   { text: "モデルと自動実行", items: [
-    { text: "モデルと版", link: "/models/registry" },
-    { text: "Taskとコード版", link: "/models/tasks" },
+    { text: "モデルとバージョン", link: "/models/registry" },
+    { text: "Taskとコードバージョン", link: "/models/tasks" },
     { text: "推論・評価の自動実行", link: "/models/automation" },
     { text: "評価と昇格", link: "/models/promotion" },
     { text: "学習の途中再開", link: "/models/checkpoints" },
   ] },
   { text: "実行環境", items: [
+    { text: "コンピュータと公開範囲", link: "/compute/computers" },
     { text: "Compute target", link: "/compute/targets" },
-    { text: "外部の計算機（site）", link: "/compute/sites" },
+    { text: "外部のコンピュータ（site）", link: "/compute/sites" },
     { text: "workerの導入", link: "/compute/worker" },
   ] },
   { text: "データと保存先", items: [
@@ -48,6 +49,7 @@ const jaSidebar = [
   { text: "管理と権限", items: [
     { text: "認証方式とローカルアカウント", link: "/admin/auth" },
     { text: "AuthentikでSSO", link: "/admin/sso" },
+    { text: "Projectの作成と管理", link: "/admin/projects" },
     { text: "権限", link: "/admin/permissions" },
     { text: "API tokenとService Account", link: "/admin/tokens" },
     { text: "監査ログ", link: "/admin/audit" },
@@ -65,7 +67,7 @@ const jaSidebar = [
 
 const enSidebar = [
   { text: "Get started", items: [
-    { text: "What is Mado Model Tracking?", link: "/en/guide/getting-started" },
+    { text: "What is mado ML Tracking?", link: "/en/guide/getting-started" },
     { text: "Install", link: "/en/guide/install" },
     { text: "Quickstart", link: "/en/guide/quickstart" },
   ] },
@@ -87,6 +89,7 @@ const enSidebar = [
     { text: "Resume training", link: "/en/models/checkpoints" },
   ] },
   { text: "Compute", items: [
+    { text: "Computers and visibility", link: "/en/compute/computers" },
     { text: "Compute targets", link: "/en/compute/targets" },
     { text: "External computers (sites)", link: "/en/compute/sites" },
     { text: "Install a worker", link: "/en/compute/worker" },
@@ -102,6 +105,7 @@ const enSidebar = [
   { text: "Administration and access", items: [
     { text: "Authentication modes and local accounts", link: "/en/admin/auth" },
     { text: "SSO with Authentik", link: "/en/admin/sso" },
+    { text: "Create and manage Projects", link: "/en/admin/projects" },
     { text: "Permissions", link: "/en/admin/permissions" },
     { text: "API tokens and Service Accounts", link: "/en/admin/tokens" },
     { text: "Audit log", link: "/en/admin/audit" },
@@ -118,7 +122,7 @@ const enSidebar = [
 ];
 
 export default defineConfig({
-  title: "Mado Model Tracking",
+  title: "mado ML Tracking",
   description: jaDescription,
   lang: "ja",
   base,
@@ -126,9 +130,10 @@ export default defineConfig({
   lastUpdated: true,
   sitemap: { hostname: siteUrl },
   head: [
-    ["meta", { name: "theme-color", content: "#008682" }],
+    // 上部バーと同じ暗い色（@mado/design-system の --header）。
+    ["meta", { name: "theme-color", content: "#151515" }],
     ["meta", { property: "og:type", content: "website" }],
-    ["meta", { property: "og:title", content: "Mado Model Tracking" }],
+    ["meta", { property: "og:title", content: "mado ML Tracking" }],
     ["meta", { property: "og:description", content: jaDescription }],
     ["meta", { property: "og:image", content: `${siteUrl}images/guide-model-version.png` }],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
@@ -151,7 +156,6 @@ export default defineConfig({
         outlineTitle: "このページの内容",
         lastUpdatedText: "最終更新",
         docFooter: { prev: "前のページ", next: "次のページ" },
-        darkModeSwitchLabel: "表示テーマ",
         sidebarMenuLabel: "メニュー",
         returnToTopLabel: "ページの先頭へ",
       },
@@ -162,7 +166,7 @@ export default defineConfig({
       link: "/en/",
       description: enDescription,
       head: [
-        ["meta", { property: "og:title", content: "Mado Model Tracking" }],
+        ["meta", { property: "og:title", content: "mado ML Tracking" }],
         ["meta", { property: "og:description", content: enDescription }],
       ],
       themeConfig: {
@@ -182,8 +186,8 @@ export default defineConfig({
     },
   },
   themeConfig: {
-    logo: "/logo.svg",
-    siteTitle: "Mado Model Tracking",
+    // 名前はテーマの ProductLogo.vue で、印と太さを付けて組む。
+    siteTitle: false,
     search: {
       provider: "local",
       options: {
@@ -208,4 +212,6 @@ export default defineConfig({
       copyright: "Copyright © www.aida0710.work",
     },
   },
+  // mado のドキュメントと同じく、アプリの暗い枠と白い本文の一つの見た目にそろえ、テーマの切替は置かない。
+  appearance: false,
 });

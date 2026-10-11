@@ -1,7 +1,4 @@
 import type {
-  ComputeTargetDetails,
-  ComputeTargetSharing,
-  ShareableProject,
   SiteConnectionCheck,
   SiteConnectionCheckRequest,
   SiteJobShell,
@@ -15,8 +12,8 @@ import type {
 } from '@mmt/contracts';
 import { encodeId, invalidResponseError, jsonRequest, request, requestItems } from './http';
 
-// Computers added on the Web: who they are shared with, their job shell versions, the personal
-// settings of the people who use them, and the launcher's keys and connection checks.
+// What a site has beyond its ComputeTarget fields: its job shell versions, the personal settings of
+// the people who use it, and the launcher's keys and connection checks.
 
 const targetPath = (targetId: string) => `/targets/${encodeId(targetId)}`;
 const jobShellsPath = (targetId: string) => `${targetPath(targetId)}/job-shells`;
@@ -37,15 +34,6 @@ async function myPersonalSettings(
 }
 
 export const siteComputersApi = {
-  /** Owned computers only: the Projects whose members may use it besides its owner. */
-  setProjects: (targetId: string, body: ComputeTargetSharing) =>
-    request<ComputeTargetDetails>(`${targetPath(targetId)}/projects`, jsonRequest('PUT', body)),
-  /** What adding a computer of one's own accepts as projectIds: one's own Projects. */
-  ownShareableProjects: (signal?: AbortSignal) =>
-    requestItems<ShareableProject>('/targets/shareable-projects', signal),
-  /** What setProjects accepts: its owner's Projects, also when someone else edits the computer. */
-  shareableProjects: (targetId: string, signal?: AbortSignal) =>
-    requestItems<ShareableProject>(`${targetPath(targetId)}/shareable-projects`, signal),
   /** The job shell's versions, newest (the current one) first. */
   jobShells: (targetId: string, signal?: AbortSignal) =>
     requestItems<SiteJobShellSummary>(jobShellsPath(targetId), signal),

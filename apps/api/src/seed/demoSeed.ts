@@ -21,7 +21,11 @@ import {
   qwenInferenceProgram,
 } from './samplePrograms.js';
 
-const DEMO_PROJECT_NAME = 'Mado Model Tracking Demo';
+const DEMO_PROJECT_NAME = 'mado ML Tracking Demo';
+// demo_seed_history.name of a seed made before the product was renamed. A database seeded then
+// keeps that Project, so it still counts as seeded and is not created a second time.
+const LEGACY_DEMO_PROJECT_NAME = 'Mado Model Tracking Demo';
+const DEMO_SEED_NAMES = [DEMO_PROJECT_NAME, LEGACY_DEMO_PROJECT_NAME];
 
 export async function seedDemo(
   options: ApplicationOptions,
@@ -38,13 +42,16 @@ export async function seedDemo(
     await seedLock.query('SELECT pg_advisory_lock(4182,2)');
     const complete = await first<{ projectId: string }>(
       database,
-      'SELECT project_id FROM demo_seed_history WHERE name=$1',
-      [DEMO_PROJECT_NAME],
+      'SELECT project_id FROM demo_seed_history WHERE name=ANY($1::text[])',
+      [DEMO_SEED_NAMES],
     );
     if (complete) return { projectId: complete.projectId, alreadySeeded: true };
-    const incomplete = await first(database, 'SELECT id FROM projects WHERE name=$1', [
-      DEMO_PROJECT_NAME,
-    ]);
+    // A purged Project keeps only its name (a tombstone), which does not block a new seed.
+    const incomplete = await first(
+      database,
+      'SELECT id FROM projects WHERE name=ANY($1::text[]) AND purged_at IS NULL',
+      [DEMO_SEED_NAMES],
+    );
     if (incomplete)
       throw new DomainError(
         409,
@@ -64,6 +71,9 @@ export async function seedDemo(
       name: DEMO_PROJECT_NAME,
       description: '明示許可で投入したデモ。CPU計算と生成音声は実データ、QwenのRunは未実行。',
       artifactBackend: 'filesystem',
+      // The seed gives editor and viewer their roles below; public access would make both editors.
+      visibility: 'private',
+      members: [],
     });
     for (const role of ['editor', 'viewer'] as const) {
       const email = `${role}@localhost`;
@@ -315,6 +325,8 @@ export async function seedDemo(
           cpuArch: 'amd64',
           supportsArray: false,
           queueTimeoutSeconds: null,
+          // The demo's Runs belong to its Project members, who all run on it.
+          visibility: 'public',
         }, NO_REQUEST_METADATA);
     }
     await database.query('INSERT INTO demo_seed_history(name,project_id) VALUES($1,$2)', [

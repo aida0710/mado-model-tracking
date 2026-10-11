@@ -29,7 +29,7 @@ Sweep の試行は、既存の Task の起動（Run と Job）として ComputeT
 
 ### W&B の sweep config との対応
 
-| W&B | Mado Model Tracking | 備考 |
+| W&B | mado ML Tracking | 備考 |
 |---|---|---|
 | `method: grid / random / bayes` | `method` | 同じ |
 | `metric.name` / `metric.goal` | `objective.metric` / `objective.goal` | goal は `minimize` / `maximize` |
@@ -160,7 +160,7 @@ SDK（`python/src/mado_tracking/sweep_config.py` の `convert_sweep_config`）�
 ## 試行の制御
 
 - 試行の Run は Sweep の作成者が作ったものとして記録する（自動実行の rule と同じ）。名前は `<Sweep名>-<trial_index>`、予約 tag `mmt.sweepId`・`mmt.sweepTrialIndex` をサーバーが付ける。
-- Task の revision は作成時に固定する。Task を編集すると、次の投入時に Sweep を `paused`（`task_revision_changed`）にする。新しい版で勝手に回さないため。再開はできず、新しい Sweep を作る。
+- Task の revision は作成時に固定する。Task を編集すると、次の投入時に Sweep を `paused`（`task_revision_changed`）にする。新しいバージョンで勝手に回さないため。再開はできず、新しい Sweep を作る。
 - 作成者が Project の editor でなくなったら、次の投入時に `paused`（`owner_forbidden`）にする。
 - Job の登録に失敗したら（target の無効化など）`paused`（`launch_failed`）。原因を直して resume する。
 - 試行の Job を手で retry して作った Run は Sweep の試行に数えない（tag は引き継がれるが `sweep_trials` には入らない）。

@@ -35,7 +35,7 @@ export async function reserveModelVersion(
     return requested;
   }
   if (BigInt(model.nextVersion) > MAX_NUMERIC_MODEL_VERSION)
-    conflict('モデル版の採番上限に達しました');
+    conflict('モデルバージョンの採番上限に達しました');
   await connection.query('UPDATE models SET next_version=next_version+1 WHERE id=$1', [
     reservation.modelId,
   ]);

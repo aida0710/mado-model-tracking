@@ -12,7 +12,7 @@ AuthentikのOIDC（Authorization Code Flow＋PKCE）でログインします。M
 | 段 | 決め方 | 変える場所 |
 | --- | --- | --- |
 | ログインできるか・全体管理者か | Authentikのgroupと、API serverの環境変数の対応表 | Authentikのgroupの所属と`.env` |
-| ProjectのRole（Viewer／Editor／Admin） | 人への直接付与と、groupへの付与のうち強い方 | Projectの［Settings］ |
+| ProjectのRole（Viewer／Editor／Admin） | 人への直接付与と、groupへの付与のうち強い方。PublicのProjectでは、ログインできる全員がEditor | ［プロジェクト設定］ |
 
 ## 1. Authentikに登録する
 
@@ -28,10 +28,10 @@ AuthentikでApplicationとOAuth2/OpenID Providerを作ります。下の`https:/
 | Scopes | `openid`、`profile`、`email`、`offline_access`の各mapping |
 | Back-channel logout URI | `https://tracking.example.com/api/auth/oidc/backchannel-logout` |
 
-3. ［Applications］→［Create］でApplicationを作り、上のProviderを選びます。slugは例として`model-tracking`にします。
+3. ［Applications］→［Create］でApplicationを作り、上のProviderを選びます。slugは例として`ml-tracking`にします。
 4. ProviderのClient IDとClient Secretを控えます。Client SecretはAPI serverの`.env`にだけ置きます。
 
-IssuerのURLはApplication単位で、slugが`model-tracking`なら`https://sso.example.com/application/o/model-tracking/`です。
+IssuerのURLはApplication単位で、slugが`ml-tracking`なら`https://sso.example.com/application/o/ml-tracking/`です。
 
 ### scopeとgroups
 
@@ -54,7 +54,7 @@ NODE_ENV=production
 AUTH_MODE=hybrid
 MMT_PUBLIC_URL=https://tracking.example.com
 MMT_WEB_ORIGIN=https://tracking.example.com
-OIDC_ISSUER_URL=https://sso.example.com/application/o/model-tracking/
+OIDC_ISSUER_URL=https://sso.example.com/application/o/ml-tracking/
 OIDC_CLIENT_ID=<ProviderのClient ID>
 OIDC_CLIENT_SECRET=<ProviderのClient Secret>
 OIDC_LABEL=Authentik
@@ -88,15 +88,15 @@ openssl rand -base64 32
 | Authentikのgroupの例 | `OIDC_ALLOWED_GROUPS` | 対応表のrole | 結果 |
 | --- | --- | --- | --- |
 | `mmt-admins` | 含む | `admin` | ログインでき、全体管理者になる |
-| `mmt-users` | 含む | `user` | ログインできる。Projectの権限は別に付ける |
+| `mmt-users` | 含む | `user` | ログインできる。PublicのProjectはEditorとして使える。それ以外の権限は別に付ける |
 | `mmt-proj-asr-editors`だけ | 含まない | — | ログインできない |
 | `mmt-users`と`mmt-proj-asr-editors` | `mmt-users`を含む | `user` | ログインでき、`mmt-proj-asr-editors`への付与も効く |
 
 ### 確かめる
 
 1. ブラウザでこのアプリを開き、ログイン画面に［Authentik］（`OIDC_LABEL`の値）のボタンが出ることを確かめます。
-2. `mmt-admins`の人がSSOでログインし、上部バーに［全体管理］が出ることを確かめます。
-3. `mmt-users`だけの人がSSOでログインし、［全体管理］が出ないことを確かめます。
+2. `mmt-admins`の人がSSOでログインし、ユーザーメニューの［全体設定］を開いて、サイドバーに「全体管理」の組（プロジェクト、ユーザーなど）が出ることを確かめます。
+3. `mmt-users`だけの人がSSOでログインし、ユーザーメニューの［全体設定］を開いて、サイドバーに「全体設定」の組（アカウント、コンピュータ）は出て、「全体管理」の組は出ないことを確かめます。
 4. どちらかのgroupに入っていない人がログインを断られることを確かめます。断られた理由は監査ログの「SSOログインの拒否」（`auth.oidc.denied`）に残ります（[トラブルシューティング](/reference/troubleshooting)の「SSOでログインできない」）。
 
 ## ログインのたびに同期すること
@@ -145,7 +145,7 @@ workerや自動実行、CIのように長く動くものには、人のtokenで�
 
 1. Authentikで、Projectごとのgroupを作ります（例: `mmt-proj-asr-editors`）。
 2. 使う人をgroupに入れ、一度SSOでログインしてもらいます。
-3. Projectの［Settings］を開き、「Authentik group」の［groupを追加］を押します。
+3. ［プロジェクト設定］を開き、「Authentik group」の［groupを追加］を押します。
 4. group名とRoleを入力して保存します。
 
 | 項目 | 入力値 |

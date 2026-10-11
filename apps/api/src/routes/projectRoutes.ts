@@ -2,13 +2,8 @@ import { Hono } from 'hono';
 import type { ProjectGroupBindingService } from '../services/projectGroupBindingService.js';
 import type { ProjectService } from '../services/projectService.js';
 import type { TokenService } from '../services/tokenService.js';
-import {
-  groupNameSchema,
-  namedEntitySchema,
-  projectCreateSchema,
-  projectPatchSchema,
-  roleAssignmentSchema,
-} from '../domain/validation.js';
+import { projectCreateSchema, projectPatchSchema } from '../domain/projectValidation.js';
+import { groupNameSchema, namedEntitySchema, roleAssignmentSchema } from '../domain/validation.js';
 import { experimentPatchSchema } from '../domain/registryLifecycleValidation.js';
 import { jsonBody, parse, principal, uuidParam, type ApiEnvironment } from '../http/request.js';
 import { requestMetadata } from '../http/requestMetadata.js';
@@ -24,7 +19,11 @@ export function projectRoutes(
   );
   routes.post('/', async (context) =>
     context.json(
-      await projects.create(principal(context), await jsonBody(context, projectCreateSchema)),
+      await projects.create(
+        principal(context),
+        await jsonBody(context, projectCreateSchema),
+        requestMetadata(context),
+      ),
       201,
     ),
   );
@@ -32,11 +31,15 @@ export function projectRoutes(
     context.json(
       await projects.patch(
         principal(context),
-        uuidParam(context, 'p'),
-        await jsonBody(context, projectPatchSchema),
+        { projectId: uuidParam(context, 'p'), input: await jsonBody(context, projectPatchSchema) },
+        requestMetadata(context),
       ),
     ),
   );
+  routes.post('/:p/archive', async (context) => {
+    await projects.archive(principal(context), uuidParam(context, 'p'), requestMetadata(context));
+    return context.body(null, 204);
+  });
   routes.get('/:p/members', async (context) =>
     context.json({ items: await projects.members(principal(context), uuidParam(context, 'p')) }),
   );

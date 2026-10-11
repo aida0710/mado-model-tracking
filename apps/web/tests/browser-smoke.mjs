@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { createBrowserApi } from './browserApi.mjs';
+import { openProjectSwitcher } from './projectSwitcher.mjs';
 
 // Reuse an installed Playwright without changing the shared workspace dependencies.
 const modulePath = process.env.MMT_PLAYWRIGHT_MODULE;
@@ -137,7 +138,7 @@ try {
     ['lineage', 'Lineage'],
     ['compute', 'Compute'],
     ['plugins', 'Plugins'],
-    ['settings', 'Settings'],
+    ['settings', 'プロジェクト設定'],
   ]) {
     await page.goto(`${projectBase}/${route}`);
     await page.getByRole('heading', { name: heading, exact: true }).waitFor();
@@ -158,9 +159,9 @@ try {
   await sourceRow.getByText('artifact://' + sourceArtifact.id, { exact: true }).waitFor();
   await closeUploadDialog(standaloneUploadDialog);
   await page.goto(`${projectBase}/models`);
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  // '版' is also part of '親の版' and '既定のコード版'; the exact accessible name picks the field.
-  await page.getByRole('dialog').getByRole('textbox', { name: '版', exact: true }).fill('v2');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  // 'バージョン' is also part of '親のバージョン' and '既定のコードバージョン'; the exact accessible name picks the field.
+  await page.getByRole('dialog').getByRole('textbox', { name: 'バージョン', exact: true }).fill('v2');
   await page.getByRole('dialog').getByRole('button', { name: '保存', exact: true }).click();
   // Each version in the list links to its own page.
   await page.getByRole('link', { name: 'v2', exact: true }).waitFor();
@@ -302,13 +303,14 @@ try {
 
   console.log('Browser check: tokens');
   await page.goto(`${projectBase}/settings`);
-  // Project creation lives in the settings "Projects" section, not in the project bar.
-  await page.getByRole('heading', { name: 'Projects', exact: true }).waitFor();
-  await page.getByRole('link', { name: api.state.project.name, exact: true }).waitFor();
-  assert.equal(
-    await page.locator('.projectbar').getByRole('button', { name: 'プロジェクトを作成' }).count(),
-    0,
-  );
+  // The settings page holds this Project's own settings only; Projects are created from the
+  // switcher's last entry.
+  await page.getByRole('heading', { name: 'プロジェクト設定', exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'プロジェクトを作成' }).count(), 0);
+  const switcher = await openProjectSwitcher(page);
+  await switcher.getByRole('option', { name: 'プロジェクトを作成', exact: true }).waitFor();
+  await page.keyboard.press('Escape');
+  await switcher.waitFor({ state: 'detached' });
   await page.getByRole('heading', { name: '監査ログ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'API tokenを発行', exact: true }).click();
   await page.getByRole('dialog').getByLabel('名前').fill('browser-test-token');
@@ -337,8 +339,9 @@ try {
 
   console.log('Browser check: password change');
   await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'パスワードを変更', exact: true }).click();
-  await page.waitForURL(`${base}/account/password`);
+  await page.getByRole('menuitem', { name: 'パスワードの変更', exact: true }).click();
+  await page.waitForURL(`${base}/settings/account/password`);
+  await page.locator('.page-header .eyebrow').getByText('全体設定', { exact: true }).waitFor();
   await page.getByLabel('現在のパスワード').fill('current-password-value');
   await page.getByLabel('新しいパスワード', { exact: true }).fill('new-password-value');
   await page.getByLabel('新しいパスワード（確認）').fill('new-password-value');
@@ -352,8 +355,8 @@ try {
   await dialog.getByLabel('Run名').fill('browser-training-launch');
   await dialog.getByLabel('Experiments').selectOption(api.state.experiments[0].id);
   await dialog.getByLabel('実行種別').selectOption('training');
-  await dialog.getByLabel('モデル版', { exact: true }).selectOption(api.state.modelVersions[0].id);
-  await dialog.getByLabel('コード版').selectOption(api.state.codeVersions[0].id);
+  await dialog.getByLabel('モデルバージョン', { exact: true }).selectOption(api.state.modelVersions[0].id);
+  await dialog.getByLabel('コードバージョン').selectOption(api.state.codeVersions[0].id);
   await dialog.getByRole('button', { name: '次へ', exact: true }).click();
   await dialog.getByLabel('Compute target').selectOption(api.state.targets[0].id);
   await dialog.getByRole('button', { name: '次へ', exact: true }).click();

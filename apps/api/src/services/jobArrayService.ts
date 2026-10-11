@@ -208,7 +208,7 @@ export async function assertPartitionVersion(
   if (!partition.inputIds.includes(version.id) || version.contentKind !== 'artifacts')
     throw new DomainError(
       422,
-      '分割するDatasetVersionは、入力に含まれるartifactsの版にしてください',
+      '分割するDatasetVersionは、入力に含まれるartifactsのバージョンにしてください',
       'dataset_partition_invalid',
     );
 }

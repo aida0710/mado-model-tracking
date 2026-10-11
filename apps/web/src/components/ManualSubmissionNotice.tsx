@@ -44,7 +44,7 @@ function ManualSiteOwnerNote({ ownership }: { ownership: ManualSiteOwnership }) 
 /**
  * How a manual site's waiting Jobs get submitted, for the viewer: each requester runs the command
  * with their own account, and the owner of a computer may also take everyone's, waiting on it
- * (`--watch --all`) once per Project it is shared with.
+ * (`--watch --all`) once per Project whose Jobs it takes.
  */
 export function WaitingJobSubmission({
   targetId,

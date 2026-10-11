@@ -1,11 +1,11 @@
-# Mado Model Tracking worker (system unit template). One instance per worker ID:
+# mado ML Tracking worker (system unit template). One instance per worker ID:
 #   /etc/systemd/system/mado-tracking-worker@.service      (this file)
 #   /etc/mado-tracking-worker/<worker-id>.env               (mode 600, root; see worker.env.example)
 #   systemctl enable --now mado-tracking-worker@<worker-id>.service
 # `sudo mado-tracking-worker install --systemd-system --service-user mado-worker ...` writes the same
 # unit with your venv path and service user. Edit User= and ExecStart= when installing by hand.
 [Unit]
-Description=Mado Model Tracking worker %i
+Description=mado ML Tracking worker %i
 Wants=network-online.target
 After=network-online.target
 

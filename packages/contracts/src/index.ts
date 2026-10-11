@@ -7,6 +7,12 @@ export type JsonValue =
   | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 export type ProjectRole = 'viewer' | 'editor' | 'admin';
+/**
+ * public: every active human user may open the Project as an editor without being a member;
+ * private: only members (direct grants and group bindings) may open it. The admin role always
+ * comes from membership.
+ */
+export type ProjectVisibility = 'public' | 'private';
 export type RunKind = 'inference' | 'evaluation' | 'training' | 'finetuning' | 'processing';
 export type RunStatus = 'queued' | 'running' | 'finished' | 'failed' | 'canceled';
 export type JobStatus = RunStatus | 'claimed';
@@ -55,6 +61,7 @@ export { MAX_DATASET_VERSION_FILES } from './datasetContent.js';
 export type { Comment, CommentAuthor, CommentCreate, CommentPage, CommentTargetType, CommentUpdate, RunNote, RunNoteUpdate } from './comments.js';
 export { COMMENT_MAX_LENGTH, RUN_NOTE_MAX_LENGTH, RUN_NOTE_TAG } from './comments.js';
 export type { ProjectGroupBinding, ProjectMember, ProjectMemberGroupRole, UserSearchResult } from './projectAccess.js';
+export type { AdminProject, AdminProjectQuery, ProjectCreate, ProjectMemberGrant, ProjectPatch } from './projectAdministration.js';
 export type { ServiceAccount, ServiceAccountCreate, ServiceAccountTokenCreate, ServiceAccountUpdate, TokenScope } from './serviceAccounts.js';
 export { TOKEN_SCOPE_REQUIRED_ROLE, TOKEN_SCOPES } from './serviceAccounts.js';
 export type {
@@ -76,7 +83,7 @@ export type {
 export type { PromotionPolicyOwnerTransfer } from './promotion.js';
 export { PROMOTION_CRITERIA_MAX, PROMOTION_FIRST_RELEASE_REASON } from './promotion.js';
 export type { Account, AdminUser, AdminUserCreate, AdminUserPasswordReset, AdminUserPatch, AdminUserQuery, UserKind } from './adminUsers.js';
-export type { StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';
+export type { DirectorySuggestions, StorageBackend, StorageBackendChoices, StorageBackendCreate, StorageBackendKind, StorageBackendPatch, StorageBackendSource, StorageSettings, StorageTestResult, StorageTestStep } from './storageBackends.js';
 export type { ContainerResultArtifact, ContainerResultDataset, ContainerResultMetric, ContainerResultModel, ContainerResultV2, RunOutputDeclaration, WorkerOutputDeclaration, WorkerOutputsRequest, WorkerOutputsResponse } from './workerOutputs.js';
 export type { ChartPanelConfig, ChartPanelLayout, ChartSmoothing, ChartXAxis, RunGroupBy } from './chartPanels.js';
 export type {
@@ -222,8 +229,13 @@ export {
   SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS,
 } from './siteExecution.js';
 export type {
+  ComputeTargetLauncherStatus,
+  ComputeTargetOverview,
+  ComputeTargetVisibility,
+} from './computeTargetAccess.js';
+export { COMPUTE_TARGET_VISIBILITIES } from './computeTargetAccess.js';
+export type {
   ComputeTargetDetails,
-  ComputeTargetSharing,
   ComputeTargetSiteFields,
   Launcher,
   LauncherConfiguration,
@@ -235,7 +247,6 @@ export type {
   LauncherKeyPublish,
   LauncherSite,
   ManualSiteConfiguration,
-  ShareableProject,
   SiteAccountMode,
   SiteConnection,
   SiteConnectionCheck,
@@ -330,6 +341,7 @@ export {
   hookWebhookPath,
 } from './hooks.js';
 import type { CpuArch, JobEndReason, JobPhase, SiteSubmissionMode } from './siteExecution.js';
+import type { ComputeTargetVisibility } from './computeTargetAccess.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
@@ -355,6 +367,7 @@ export interface Project {
   name: string;
   description: string;
   artifactBackend: ArtifactBackend;
+  visibility: ProjectVisibility;
   role: ProjectRole;
   createdAt: string;
 }
@@ -573,8 +586,13 @@ export interface ComputeTarget {
   supportsArray: boolean;
   /** Sites: a Job still in the scheduler queue after this many seconds fails as queue_timeout. */
   queueTimeoutSeconds: number | null;
-  /** null: managed by global administrators; otherwise the researcher who added the site. */
+  /**
+   * Whoever added the computer; null for one from before owners, which global administrators
+   * manage. Its owner and global administrators change it.
+   */
   ownerUserId: string | null;
+  /** Public: every Project's Jobs; private: its owner's and their Service Accounts' only. */
+  visibility: ComputeTargetVisibility;
 }
 export interface Job {
   id: string;

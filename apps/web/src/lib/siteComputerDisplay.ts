@@ -1,67 +1,21 @@
-import type {
-  ComputeTargetDetails,
-  Launcher,
-  Project,
-  ShareableProject,
-  SiteConnectionCheck,
-  SiteKey,
-} from '@mmt/contracts';
+import type { ComputeTarget, Launcher, SiteConnectionCheck, SiteKey } from '@mmt/contracts';
 import type { SelectOption } from '../types/form';
 import { text } from '../i18n/catalog';
-import { siteComputersTextTemplates } from '../i18n/siteComputers';
 
 // Enough of a SHA-256 to tell versions apart in a table; the full value is in the title.
 const SHORT_SHA256_LENGTH = 12;
 
-/** Whose computer it is, for the Compute list: a global one, one's own, or someone else's. */
+/**
+ * Whose a computer is, for the lists: everyone's (one from before owners), one's own, or its
+ * owner's name (their ID when the name is unknown).
+ */
 export function targetOwnerLabel(
-  target: Pick<ComputeTargetDetails, 'ownerUserId' | 'ownerName'>,
+  target: Pick<ComputeTarget, 'ownerUserId'> & { ownerName: string | null },
   userId: string,
 ): string {
   if (target.ownerUserId === null) return text.targetOwnerGlobal;
   if (target.ownerUserId === userId) return text.targetOwnerSelf;
-  return siteComputersTextTemplates.targetOwnerName(target.ownerName ?? target.ownerUserId);
-}
-
-/**
- * Where a computer may be used: every Project for a global one, otherwise the Projects its owner
- * shared it with. Only its owner and global administrators see those; for others it is null.
- */
-export function targetSharingLabel(
-  target: Pick<ComputeTargetDetails, 'ownerUserId' | 'projectIds'>,
-  projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>,
-  canSeeSharing: boolean,
-): string | null {
-  if (target.ownerUserId === null) return text.targetSharedEverywhere;
-  if (!canSeeSharing) return null;
-  if (!target.projectIds.length) return text.targetSharedNowhere;
-  return target.projectIds.map((id) => projectName(projects, id)).join(', ');
-}
-
-const projectName = (projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>, id: string) =>
-  projects.find((project) => project.id === id)?.name ?? id;
-
-/**
- * The Projects an owned computer may be shared with: those its owner may share it with, as the API
- * lists them, then those an edited one is already shared with that its owner no longer may
- * (marked, and named from the editor's Projects), so they can be taken off. Keeping one of those
- * while changing the others is refused.
- */
-export function targetSharingOptions(
-  ownerProjects: readonly ShareableProject[],
-  sharedProjectIds: readonly string[],
-  projects: ReadonlyArray<Pick<Project, 'id' | 'name'>>,
-): SelectOption[] {
-  const shareableIds = new Set(ownerProjects.map((project) => project.id));
-  return [
-    ...ownerProjects.map((project) => ({ value: project.id, label: project.name })),
-    ...sharedProjectIds
-      .filter((id) => !shareableIds.has(id))
-      .map((id) => ({
-        value: id,
-        label: siteComputersTextTemplates.projectNoLongerShareable(projectName(projects, id)),
-      })),
-  ];
+  return target.ownerName ?? target.ownerUserId;
 }
 
 /**

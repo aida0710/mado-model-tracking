@@ -27,7 +27,7 @@ MMT_SESSION_ENCRYPTION_KEY is required when AUTH_MODE=hybrid
 
 `OIDC_ALLOWED_GROUPS`が空のとき、`OIDC_ROLE_MAPPING_JSON`に`admin`・`user`以外のroleを書いたとき、`OIDC_ADMIN_GROUP`と対応表のadminのgroupが食い違うときも起動しません。SMTPの設定は、`MMT_SMTP_URL`と`MMT_SMTP_FROM`の片方だけでは起動しません。
 
-更新したあとに起動しない場合は、新しく必須になった設定が無いかを確かめてください。SSOの再確認を含む版からは`MMT_SESSION_ENCRYPTION_KEY`が、groupで許可を決める版からは`OIDC_ALLOWED_GROUPS`が必須です。
+更新したあとに起動しない場合は、新しく必須になった設定が無いかを確かめてください。SSOの再確認を含むバージョンからは`MMT_SESSION_ENCRYPTION_KEY`が、groupで許可を決めるバージョンからは`OIDC_ALLOWED_GROUPS`が必須です。
 
 ## SSOでログインできない
 
@@ -41,7 +41,7 @@ https://tracking.example.com/api/audit-events?action=auth.oidc.denied
 | --- | --- | --- |
 | `group_not_allowed` | `OIDC_ALLOWED_GROUPS`のどのgroupにも入っていない | Authentikでgroupに入れる。ID tokenに`groups`が出ているかも確かめる |
 | `email_not_verified` | `email`が無いか、`email_verified`がtrueでない | Authentikでメールアドレスを検証済みにし、scope mappingで`email_verified`を出す |
-| `user_disabled` | このアプリでユーザーが無効になっている | 全体管理者が［全体管理］→［ユーザー］で有効化する |
+| `user_disabled` | このアプリでユーザーが無効になっている | 全体管理者が「全体管理」→［ユーザー］で有効化する |
 | `last_admin` | 同期すると有効な全体管理者が0人になる | 別の全体管理者（ローカルの管理者でもよい）を先に用意する |
 | `privileged_link_required` | 同じメールアドレスの特権を持つローカルアカウントがある | 自動では結び付けない。全体管理者がローカルアカウントの権限を確かめて対応する |
 | `service_account` | Service Accountとしてログインしようとした | Service Accountはログインできない |
@@ -104,7 +104,7 @@ curl -sS -H "Authorization: Bearer $MMT_API_TOKEN" "$MMT_API_URL/api/auth/token"
 
 ## 通知が届かない
 
-1. ［Settings］の「通知」の通知先で、［送信設定］が「設定済み」かを確かめます。「未設定」なら、API serverの`.env`に環境変数が無いか、APIを再起動していません。
+1. ［プロジェクト設定］の「通知」の通知先で、［送信設定］が「設定済み」かを確かめます。「未設定」なら、API serverの`.env`に環境変数が無いか、APIを再起動していません。
 2. ［テスト送信］で、その場で送れるかを確かめます。
 3. 「直近の送信履歴」で、状態と失敗の理由を確かめます。理由ごとの確認項目は[通知と運用アラート](/admin/notifications)の「送信の流れと失敗したとき」にあります。
 4. 通知ルールが有効で、イベントと条件が合っているかを確かめます。workerの停止とPlugin送信の滞留は、実行種別や実験の条件を付けたルールには届きません。
@@ -133,6 +133,16 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 
 詳しくは[worker](/compute/worker)を参照してください。
 
+## コンピュータが実行先に出ない・Jobを作れない（`target_not_available`）
+
+- 実行先には、自分が使えるコンピュータだけが出ます。全体設定の「コンピュータ」の［自分が使えるか］で確かめます。
+- ほかの人のPrivateのコンピュータは使えません。全体管理者も同じです。所有者にPublicにしてもらうか、自分のコンピュータを足します。
+- 自動実行ルール・フック・Sweepは、それぞれの所有者で判定します。ルールをService Accountへ移したときは、そのService Accountをコンピュータの所有者が作ったかを確かめます。
+- 待機中のJobが`submit_failed`で失敗したときは、Jobを作ったあとでコンピュータがPrivateに変わった可能性があります。
+- siteのjob shell・鍵・自分の設定を開いて403 `target_not_available`になるのも、そのコンピュータを使えないためです。
+
+詳しくは[コンピュータと公開範囲](/compute/computers)を参照してください。
+
 ## Runの終了後の処理が欠けている
 
 出力モデルの登録など、Runの終了後の処理が失敗すると、APIの標準エラー出力に次の1行が出ます。Runの終了とGPUの解放は確定しています。自動では再実行しないので、そのRunの登録記録や自動実行の記録が欠けていないかを確かめてください。
@@ -143,4 +153,4 @@ journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 
 ## 保存先のArtifactが503になる
 
-`MMT_STORAGE_SECRET_KEY`を変えると、画面で追加したS3の保存先のシークレットを復号できなくなります。APIの起動時に`storage_backend_unavailable`がログに出ます。［全体管理］→［ストレージ］で、各S3の保存先のシークレットを入れ直してください（[保存先](/data/storage)）。
+`MMT_STORAGE_SECRET_KEY`を変えると、画面で追加したS3の保存先のシークレットを復号できなくなります。APIの起動時に`storage_backend_unavailable`がログに出ます。「全体管理」→［ストレージ］で、各S3の保存先のシークレットを入れ直してください（[保存先](/data/storage)）。

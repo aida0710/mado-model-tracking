@@ -12,7 +12,8 @@ const target: ComputeTarget = { id: 'target', name: 'Compute', host: 'example.in
   username: 'test', sshKeyPath: '', knownHostsPath: '', workDirectory: '/work', pythonExecutable: 'python',
   runtimeKinds: ['docker'], gpuIds: ['0'], maxConcurrentJobs: 1, enabled: true, executor: 'ssh',
   datasetCacheMaxBytes: 107374182400, datasetTransfer: 'relay', submissionMode: 'automatic',
-  cpuArch: 'amd64', supportsArray: false, queueTimeoutSeconds: null, ownerUserId: null };
+  cpuArch: 'amd64', supportsArray: false, queueTimeoutSeconds: null, ownerUserId: null,
+  visibility: 'public' };
 const catalog = { experiments: [{ id: 'experiment' }], codes: [], models: [], datasets: [], runs: [],
   codeVersions: [code], modelVersions: [], datasetVersions: [] } as unknown as ExecutionCatalog;
 const task: ExperimentTask = { id: 'task', projectId: 'project', experimentId: 'experiment',
@@ -22,12 +23,12 @@ const task: ExperimentTask = { id: 'task', projectId: 'project', experimentId: '
 const values = createTaskValues(task);
 
 describe('Taskの保存と起動', () => {
-  it('保存したrevisionとtestモードを送り、コードの再選択で起動版を取り違えない', () => {
+  it('保存したrevisionとtestモードを送り、コードの再選択で起動バージョンを取り違えない', () => {
     const input = buildTaskLaunchInput({ task, mode: 'test', values: { ...values, codeVersionId: 'other' }, catalog, targets: [target] });
     expect(input).toMatchObject({ expectedRevision: 4, executionMode: 'test', targetId: 'target', gpuIds: [], modelVersionId: null });
     expect(input).not.toHaveProperty('codeVersionId');
   });
-  it('testコマンドが保存されていない版をtest起動しない', () => {
+  it('testコマンドが保存されていないバージョンをtest起動しない', () => {
     expect(() => buildTaskLaunchInput({ task, mode: 'test', values, catalog: {
       ...catalog, codeVersions: [{ ...code, testEntrypoint: [] }],
     }, targets: [target] })).toThrow();
@@ -43,7 +44,7 @@ describe('Taskの保存と起動', () => {
     for (const override of overrides)
       expect(() => buildTaskInput({ values: { ...values, ...override }, catalog, targets: [target] })).toThrow();
   });
-  it('実行種別が変わると非対応のコード版を解除し、target変更ではGPUを解除する', () => {
+  it('実行種別が変わると非対応のコードバージョンを解除し、target変更ではGPUを解除する', () => {
     expect(updateTaskValues({ previous: values, next: { ...values, kind: 'training' }, catalog, targets: [target] }).codeVersionId).toBe('');
     expect(updateTaskValues({ previous: { ...values, gpuIds: ['0'] }, next: { ...values, targetId: '', gpuIds: ['0'] }, catalog, targets: [target] }).gpuIds).toEqual([]);
   });
@@ -90,22 +91,22 @@ describe('Taskの出力モデル設定', () => {
     for (const outputModelArtifactPath of ['', '/model', '../model', 'model//weights', 'model\\weights', 'model/'])
       expect(() => buildTraining({ outputModelArtifactPath })).toThrow();
   });
-  it('系列の候補は選択中の学習コード版の対応系列に絞り、対応外の系列は保存しない', () => {
+  it('系列の候補は選択中の学習コードバージョンの対応系列に絞り、対応外の系列は保存しない', () => {
     expect(getOutputModelCandidates(trainingCatalog.models, trainingCode).map((item) => item.id)).toEqual(['qwen']);
     expect(() => buildTraining({ outputModelId: 'llama' })).toThrow();
     expect(() => buildTraining({ outputModelTarget: 'create', outputModelName: 'new', outputModelFamily: 'Llama' })).toThrow();
   });
-  it('学習コード版を変えると、新しい版が扱えない登録先と既定コード版を解除する', () => {
+  it('学習コードバージョンを変えると、新しいバージョンが扱えない登録先と既定コードバージョンを解除する', () => {
     const selected = { ...trainingValues, outputModelFamily: 'Qwen3', outputModelDefaultCodeVersionId: inferenceCode.id };
     const updated = updateTaskValues({ previous: selected, next: { ...selected, codeVersionId: otherFamilyCode.id },
       catalog: trainingCatalog, targets: [target] });
     expect(updated).toMatchObject({ outputModelId: '', outputModelFamily: '', outputModelDefaultCodeVersionId: '' });
   });
-  it('既定コード版は登録する系列に対応する版だけを受け付ける', () => {
+  it('既定コードバージョンは登録する系列に対応するバージョンだけを受け付ける', () => {
     expect(buildTraining({ outputModelDefaultCodeVersionId: inferenceCode.id }).outputModel?.defaultCodeVersionId).toBe(inferenceCode.id);
     expect(() => buildTraining({ outputModelDefaultCodeVersionId: otherFamilyCode.id })).toThrow();
   });
-  it('画面にない版の命名規則とmetadataは編集後も保存済みの値を残す', () => {
+  it('画面にないバージョンの命名規則とmetadataは編集後も保存済みの値を残す', () => {
     const saved = { ...task, kind: 'training' as const, codeVersionId: trainingCode.id, outputModel: {
       modelId: 'qwen', createModel: null, artifactPath: 'model', versionTemplate: 'run-{runId}', metadata: { owner: 'team' } } };
     expect(buildTaskInput({ values: createTaskValues(saved), catalog: trainingCatalog, targets: [target], task: saved }).outputModel)
