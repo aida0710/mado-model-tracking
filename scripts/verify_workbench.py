@@ -166,7 +166,7 @@ async def verify_task_history(scenario: TaskScenario) -> dict[str, Any]:
     experiment = scenario.request(
         "POST", "experiments", json={"name": "コードとテストの追跡"}
     )
-    code = scenario.request("POST", "codes", json={"name": "Git版の実行サンプル"})
+    code = scenario.request("POST", "codes", json={"name": "Gitバージョンの実行サンプル"})
     first_code = scenario.publish_code(code["id"], version=1)
     second_code = scenario.publish_code(code["id"], version=2)
     first_task = scenario.request(

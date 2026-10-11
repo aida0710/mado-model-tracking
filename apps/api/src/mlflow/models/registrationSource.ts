@@ -84,7 +84,7 @@ export async function resolveRegistrationSource(
     !Array.isArray(stored.artifactManifest) ||
     !source.artifactUri
   )
-    invalidParameter('sourceのモデル版には保存済みMLflowモデル一式がありません');
+    invalidParameter('sourceのモデルバージョンには保存済みMLflowモデル一式がありません');
   const manifest: ArtifactManifestEntry[] = [];
   for (const entry of stored.artifactManifest) {
     if (

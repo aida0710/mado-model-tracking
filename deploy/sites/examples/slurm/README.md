@@ -17,13 +17,13 @@ GPUは`--gres=gpu:N`で要求します。GPUの種類を指定するサイトで
 
 ## Webに入れる値
 
-雛形「Slurm」を選ぶと、job shell、取消コマンド（`scancel "$MMT_SCHEDULER_JOB_ID"`）、array、GPUの渡し方（スケジューラ）、runtime（`apptainer`）が入ります。そのほかは次の例のように入れます。利用者がすることはありません（共用アカウントの計算機には「自分の設定」がありません）。
+雛形「Slurm」を選ぶと、job shell、取消コマンド（`scancel "$MMT_SCHEDULER_JOB_ID"`）、array、GPUの渡し方（スケジューラ）、runtime（`apptainer`）が入ります。そのほかは次の例のように入れます。利用者がすることはありません（共用アカウントのコンピュータには「自分の設定」がありません）。
 
 | 全体設定 | 例の値 | 内容 |
 |---|---|---|
 | 投入方式 | 自動 | launcherがSSHで入って投入します |
 | 接続先 | host `slurm-login.example.internal`、port 22 | known_hostsにはログインノードの行を入れます |
-| ログインするアカウント | 共用のアカウント、`mmt-launcher` | 計算機の詳細に出る公開鍵を、このアカウントの`~/.ssh/authorized_keys`に登録します |
+| ログインするアカウント | 共用のアカウント、`mmt-launcher` | コンピュータの詳細に出る公開鍵を、このアカウントの`~/.ssh/authorized_keys`に登録します |
 | 作業ディレクトリ | `/shared/mmt` | ログインノードと計算ノードから同じパスで見える場所 |
 | runnerのPython | `/shared/mmt/python/bin/python3` | 計算ノードのPython 3.11以上 |
 | runnerから見たAPIのURL | `https://tracking.example.internal` | LANの中のクラスタなら、trackingのhostnameそのものを使えます |

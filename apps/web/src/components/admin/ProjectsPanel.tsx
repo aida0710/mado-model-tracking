@@ -10,7 +10,7 @@ import { projectHomePath } from '../../layout/navigationLinks';
 import { ProjectCreateDialog } from '../../dialogs/ProjectCreateDialog';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Resource } from '../Feedback';
-import { AdminSectionHeader } from './AdminSectionHeader';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { AdminProjectsTable, type AdminProjectAction } from './AdminProjectsTable';
 import { ProjectPurgeDialog } from './ProjectPurgeDialog';
 import { text, textTemplates } from '../../i18n/catalog';
@@ -35,7 +35,7 @@ export function ProjectsPanel() {
   };
   return (
     <section className="admin-projects">
-      <AdminSectionHeader
+      <SettingsPageHeader
         section="projects"
         actions={
           <>

@@ -44,7 +44,7 @@
   min-width: 0;
   font-size: 12px;
 }
-.choice-picker-text .project-visibility {
+.choice-picker-text .visibility-label {
   color: var(--text);
   font-weight: 600;
 }

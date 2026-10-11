@@ -1,7 +1,9 @@
 import {
   Archive,
   Box,
+  CircleUser,
   Code,
+  Computer,
   Database,
   FileText,
   FlaskConical,
@@ -38,6 +40,9 @@ export const NAVIGATION_ICONS: Record<NavigationScreen, LucideIcon> = {
   compute: Server,
   plugins: Puzzle,
   settings: Settings,
+  account: CircleUser,
+  // 全体設定 lists every computer; the Project's Compute (Server) shows the ones it can use.
+  computers: Computer,
   projects: FolderKanban,
   users: Users,
   storage: HardDrive,

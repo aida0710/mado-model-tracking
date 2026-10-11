@@ -5,8 +5,8 @@ import { useAccount } from '../hooks/useAccount';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DataTable } from '../components/DataTable';
 import { Resource } from '../components/Feedback';
-import { PageHeader } from '../components/PageHeader';
 import { PasswordChangeForm } from '../components/PasswordChangeForm';
+import { SettingsPageHeader } from '../components/SettingsPageHeader';
 import { formatDate } from '../lib/format';
 import { isSsoUser, userAuthSourceLabels } from '../lib/adminUserDisplay';
 import { canChangeOwnPassword } from '../lib/permissions';
@@ -118,13 +118,16 @@ function AccountTokens({
   );
 }
 
-/** The signed-in user's own account: profile, SSO groups, password and API tokens (/account). */
+/**
+ * 全体設定 → アカウント (/settings/account): the signed-in user's profile, SSO groups, password and
+ * API tokens.
+ */
 export function AccountPage() {
   const { account, tokens, projectNames } = useAccount();
   const [revokingToken, setRevokingToken] = useState<TokenSummary | null>(null);
   return (
     <>
-      <PageHeader title={text.account} />
+      <SettingsPageHeader section="account" />
       <Resource query={account}>
         {(value) => (
           <div className="account-page">

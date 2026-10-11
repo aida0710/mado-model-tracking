@@ -142,7 +142,7 @@ async function evaluationFixture(harness: Harness) {
   };
 }
 
-describe.skipIf(!testDatabaseUrl)('評価結果の基準版との比較（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('評価結果の基準バージョンとの比較（独立PostgreSQL）', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await createHarness();
@@ -507,7 +507,7 @@ describe.skipIf(!testDatabaseUrl)('評価結果の基準版との比較（独立
     });
   });
 
-  it('他Projectの版・DatasetVersionは404、基準の二重指定は422にする', async () => {
+  it('他Projectのバージョン・DatasetVersionは404、基準の二重指定は422にする', async () => {
     const fixture = await evaluationFixture(harness);
     const otherProject = await entity<Project>(
       await request(harness.app, '/api/projects', {

@@ -214,7 +214,7 @@ describe.skipIf(!testDatabaseUrl)('workerによる出力の宣言と登録（独
     );
   }
 
-  it('宣言したモデルとデータセットを版として登録し、sourceRun・親版・URIが入る', async () => {
+  it('宣言したモデルとデータセットをバージョンとして登録し、sourceRun・親バージョン・URIが入る', async () => {
     const { fixture, token } = await setup();
     const dataset = await createDataset(fixture.basePath, fixture.editor.cookie, 'Test split');
     const claimed = await launchTraining(fixture, token);
@@ -643,7 +643,7 @@ describe.skipIf(!testDatabaseUrl)('workerによる出力の宣言と登録（独
     ]);
   });
 
-  it('registerDatasetVersionはprincipalの権限を確かめ、明示した版名は採番に数えない', async () => {
+  it('registerDatasetVersionはprincipalの権限を確かめ、明示したバージョン名は採番に数えない', async () => {
     const { fixture } = await setup();
     const dataset = await createDataset(fixture.basePath, fixture.editor.cookie, 'Direct');
     const principalOf = async (cookie: string) =>

@@ -37,7 +37,6 @@ export const PROJECT_PURGE_STEPS: readonly ProjectPurgeStep[] = [
     'notification_channels',
     'operations_alerts',
     'workers',
-    'compute_target_projects',
     'project_group_bindings',
     'project_members',
     'demo_seed_history',

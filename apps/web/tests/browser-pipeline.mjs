@@ -197,8 +197,8 @@ async function addCodeVersion({ name, version, files, entrypoint, taskType }) {
   await dialog().getByLabel('名前', { exact: false }).fill(name);
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
   await dialog().waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await dialog().getByLabel('版', { exact: false }).fill(version);
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await dialog().getByLabel('バージョン', { exact: false }).fill(version);
   await dialog().getByLabel('ソース形式', { exact: false }).selectOption('inline');
   for (const [fileName, content] of Object.entries(files)) {
     await dialog().getByLabel('ファイルのパス', { exact: false }).fill(fileName);
@@ -306,7 +306,7 @@ try {
   });
 
   await stage('storage_connection_test', '全体管理画面で保存先（filesystem）の接続テストが全段階成功する', async () => {
-    await page.goto(`${BASE}/admin/storage`);
+    await page.goto(`${BASE}/settings/storage`);
     const row = page.getByRole('row').filter({ hasText: 'Filesystem' }).first();
     await row.getByRole('button', { name: '接続テスト' }).click();
     await waitOnScreen(page.getByText('すべての段階が成功しました'), { timeout: 30_000 });
@@ -386,7 +386,7 @@ try {
     return { workerId: `browser-pipeline-${projectId.slice(0, 8)}` };
   });
 
-  await stage('code_versions', 'コード版（学習・推論・評価）をinlineのファイルで登録する', async () => {
+  await stage('code_versions', 'コードバージョン（学習・推論・評価）をinlineのファイルで登録する', async () => {
     const read = (name) => readFile(path.join(EXAMPLES, name), 'utf8');
     ids.trainingCodeVersionId = (
       await addCodeVersion({ name: 'Browser training', version: 'v1', files: { 'training.py': await read('training.py') }, entrypoint: ['python', 'training.py'], taskType: 'training' })
@@ -412,7 +412,7 @@ try {
     await dialog().getByLabel('対象モデル系列', { exact: false }).selectOption([MODEL_FAMILY]);
     await dialog().getByLabel('実行種別', { exact: false }).selectOption('inference');
     await dialog().getByLabel('Experiments', { exact: false }).selectOption(ids.experimentId);
-    await dialog().getByLabel('コード版', { exact: false }).selectOption(ids.inferenceCodeVersionId);
+    await dialog().getByLabel('コードバージョン', { exact: false }).selectOption(ids.inferenceCodeVersionId);
     await dialog().getByLabel('Compute target', { exact: false }).selectOption(ids.targetId);
     await dialog().getByLabel('パラメータ（JSON）', { exact: false }).fill(JSON.stringify({ outputDatasetId: ids.outputDatasetId }));
     await dialog().getByRole('button', { name: '作成', exact: true }).click();
@@ -424,9 +424,9 @@ try {
     await dialog().getByLabel('対象モデル系列', { exact: false }).selectOption([MODEL_FAMILY]);
     await dialog().getByLabel('実行種別', { exact: false }).selectOption('evaluation');
     await dialog().getByLabel('Experiments', { exact: false }).selectOption(ids.experimentId);
-    await dialog().getByLabel('コード版', { exact: false }).selectOption(ids.evaluationCodeVersionId);
+    await dialog().getByLabel('コードバージョン', { exact: false }).selectOption(ids.evaluationCodeVersionId);
     await dialog().getByLabel('Compute target', { exact: false }).selectOption(ids.targetId);
-    await dialog().getByLabel('入力データセット版', { exact: false }).selectOption([ids.referenceVersionId]);
+    await dialog().getByLabel('入力データセットバージョン', { exact: false }).selectOption([ids.referenceVersionId]);
     await dialog().getByRole('button', { name: '作成', exact: true }).click();
     await dialog().waitFor({ state: 'hidden' });
     const rules = (await api('GET', `/projects/${projectId}/automation-rules`)).items;
@@ -460,10 +460,10 @@ try {
     await dialog().getByLabel('名前', { exact: false }).fill(taskName);
     await dialog().getByLabel('Experiments', { exact: false }).selectOption(ids.experimentId);
     await dialog().getByLabel('実行種別', { exact: false }).selectOption('training');
-    await dialog().getByLabel('コード版', { exact: false }).selectOption(ids.trainingCodeVersionId);
+    await dialog().getByLabel('コードバージョン', { exact: false }).selectOption(ids.trainingCodeVersionId);
     await dialog().getByLabel('Compute target', { exact: false }).selectOption(ids.targetId);
     const output = dialog().getByTestId('task-output-model');
-    await output.getByLabel('成功時にモデル版を登録').check();
+    await output.getByLabel('成功時にモデルバージョンを登録').check();
     await output.getByLabel('登録先のモデル', { exact: false }).selectOption(modelId);
     await output.getByLabel('Artifactのパス', { exact: false }).fill('model/weights.json');
     await dialog().getByRole('button', { name: '保存', exact: true }).click();
@@ -474,7 +474,7 @@ try {
     return { taskId: task.id, outputModel: task.outputModel };
   });
 
-  await stage('first_run_to_evaluation', '学習を実行→CPU workerで完了→版の自動登録→推論・評価がFinishedでmetricsが出る', async () => {
+  await stage('first_run_to_evaluation', '学習を実行→CPU workerで完了→バージョンの自動登録→推論・評価がFinishedでmetricsが出る', async () => {
     await launchTask();
     await waitOnScreen(page.getByRole('row').filter({ hasText: '完了' }));
     const version = await newestVersion(1);
@@ -492,16 +492,16 @@ try {
     return { aliases: detail.aliases };
   });
 
-  await stage('second_run_baseline_comparison', '2回目の学習の版を基準版（production）と比べ、理由を入れて昇格する', async () => {
+  await stage('second_run_baseline_comparison', '2回目の学習のバージョンを基準バージョン（production）と比べ、理由を入れて昇格する', async () => {
     await launchTask();
     const version = await newestVersion(2);
     ids.secondVersionId = version.id;
     await waitForAutomation(version.id);
-    const comparison = page.getByRole('region', { name: '基準版との評価比較' });
+    const comparison = page.getByRole('region', { name: '基準バージョンとの評価比較' });
     await waitOnScreen(comparison.getByRole('row').filter({ hasText: 'evaluation.duration_match_rate' }), { reload: reloadVersionPage });
     await screenshot('04-version-2-baseline-comparison');
     const comparisonText = await comparison.innerText();
-    await promoteWithReason('基準版と同じ一致率を保ったため');
+    await promoteWithReason('基準バージョンと同じ一致率を保ったため');
     const detail = await api('GET', `/projects/${projectId}/model-versions/${version.id}`);
     assert.deepEqual(detail.aliases, [PROMOTION_ALIAS]);
     return { version: version.version, comparisonExcerpt: comparisonText.slice(0, 400) };
@@ -510,9 +510,9 @@ try {
   await stage('alias_history', 'Modelsの画面でaliasの履歴に2回の昇格と理由が残る', async () => {
     await page.goto(`${projectBase}/models`);
     await page.getByRole('button', { name: MODEL_NAME }).first().click();
-    // The history is the table under the heading 「Aliasの履歴」 (columns 旧版 → 新版, 理由).
+    // The history is the table under the heading 「Aliasの履歴」 (columns 旧バージョン → 新バージョン, 理由).
     const history = page.getByRole('table').filter({ hasText: '理由' }).filter({ hasText: '経路' });
-    await waitOnScreen(history.getByText('基準版と同じ一致率を保ったため'), { timeout: 30_000 });
+    await waitOnScreen(history.getByText('基準バージョンと同じ一致率を保ったため'), { timeout: 30_000 });
     await waitOnScreen(history.getByText('初回の評価で全サンプルの長さが一致したため'), { timeout: 5_000 });
     await screenshot('05-alias-history');
     const events = (await api('GET', `/projects/${projectId}/models/${modelId}/alias-events`)).items;

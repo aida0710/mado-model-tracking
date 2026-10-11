@@ -7,8 +7,8 @@ export function isSsoUser(user: Pick<User, 'authSources'>): boolean {
 }
 
 /**
- * Login methods as shown in the users table and /account. Service Accounts have no login method
- * and act only through tokens; development logins hold neither and are not Service Accounts.
+ * Login methods as shown in the users table and the account page. Service Accounts have no login
+ * method and act only through tokens; development logins hold neither and are not Service Accounts.
  */
 export function userAuthSourceLabels(user: Pick<User, 'authSources' | 'kind'>): string[] {
   if (user.kind === 'service') return [text.userAuthServiceToken];

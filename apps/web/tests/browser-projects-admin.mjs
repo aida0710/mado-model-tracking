@@ -1,5 +1,5 @@
 // Browser check of Projects against the isolated mock API (tests/browserApi.mjs): the sidebar's
-// 「プロジェクト管理」 and 「全体管理」 groups, the Project switcher (keyboard, filter, staying inside
+// 「プロジェクト管理」, 「全体設定」 and 「全体管理」 groups, the Project switcher (keyboard, filter, staying inside
 // the window, the narrow project bar, both themes, Japanese input in its filter, presses inside it),
 // creating a Private Project with members (Enter in the member search, the focus after a pick),
 // adding a member from the Project settings, 全体管理 → プロジェクト (archive with its 409, archived rows, restore, purge confirmed by name),
@@ -95,10 +95,15 @@ try {
   const dialog = () => page.getByRole('dialog');
   const mainProject = api.state.project;
 
-  console.log('Projects: the sidebar groups Project management and global administration');
+  console.log('Projects: the sidebar groups Project management, 全体設定 and 全体管理');
   await page.goto(`${base}/projects/${mainProject.id}/experiments`);
   const sidebar = page.locator('.navigation-sidebar');
   await sidebar.getByRole('group', { name: 'プロジェクト管理' }).waitFor();
+  const settingsGroup = sidebar.getByRole('group', { name: '全体設定', exact: true });
+  assert.deepEqual(await settingsGroup.getByRole('link').allInnerTexts(), [
+    'アカウント',
+    'コンピュータ',
+  ]);
   const adminGroup = sidebar.getByRole('group', { name: '全体管理', exact: true });
   assert.deepEqual(await adminGroup.getByRole('link').allInnerTexts(), [
     'プロジェクト',
@@ -257,8 +262,9 @@ try {
   await projectSwitcherButton(page).getByText('話者分離 検証').waitFor();
 
   console.log('Projects: 全体管理 → プロジェクト lists, archives, restores and purges');
+  // The old /admin still opens the Project list, now at /settings/projects.
   await page.goto(`${base}/admin`);
-  await page.waitForURL(`${base}/admin/projects`);
+  await page.waitForURL(`${base}/settings/projects`);
   await page.getByRole('heading', { name: 'プロジェクト', exact: true }).waitFor();
   await page.locator('.page-header .eyebrow').getByText('全体管理').waitFor();
   const visionRow = () => page.getByRole('row', { name: /Vision 評価/ });
@@ -337,7 +343,7 @@ try {
   assert.ok(!page.url().includes(mainProject.id));
 
   console.log('Projects: the filesystem root offers server directories as it is typed');
-  await page.goto(`${base}/admin/storage`);
+  await page.goto(`${base}/settings/storage`);
   await page.getByRole('button', { name: '保存先を追加', exact: true }).click();
   await dialog().getByLabel('種類').selectOption('filesystem');
   const rootPath = dialog().getByRole('combobox', { name: /ルートディレクトリ/ });
@@ -385,7 +391,7 @@ try {
   );
   await screenshot('10-switcher-projectbar-narrow');
   await page.keyboard.press('Escape');
-  await page.goto(`${base}/admin/projects`);
+  await page.goto(`${base}/settings/projects`);
   await page.getByRole('row', { name: /TTS 本番/ }).waitFor();
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),

@@ -1,4 +1,4 @@
-import type { ComputeTarget, ComputeTargetDetails, ShareableProject } from '@mmt/contracts';
+import type { ComputeTarget, ComputeTargetDetails, ComputeTargetOverview } from '@mmt/contracts';
 import type { Principal } from '../auth/principal.js';
 import type { ApiConfig } from '../config.js';
 import { first, rows, transaction, type Connection, type Database } from '../db/database.js';
@@ -18,11 +18,9 @@ import type { TargetCreate, TargetPatch } from '../domain/validation.js';
 import type { RequestMetadata } from '../http/requestMetadata.js';
 import { writeAuditEvent } from '../repositories/auditRepository.js';
 import {
-  listShareableProjects,
-  listTargetProjects,
-  replaceTargetProjects,
+  listTargetOverviewRows,
   targetUsableSql,
-} from '../repositories/computeTargetSharingRepository.js';
+} from '../repositories/computeTargetAccessRepository.js';
 import { isLiveLauncher } from '../repositories/launcherRepository.js';
 import { insertJobShell } from '../repositories/siteJobShellRepository.js';
 import { reconcileSiteKeys } from '../repositories/siteKeyRepository.js';
@@ -41,8 +39,6 @@ import { requireSession } from './tokenService.js';
 
 export interface TargetCreateRequest extends TargetCreate {
   site?: SiteSettingsInputValues;
-  personal?: boolean;
-  projectIds?: string[];
   jobShell?: string;
 }
 export interface TargetPatchRequest extends TargetPatch {
@@ -71,12 +67,22 @@ function siteOnly(message: string): never {
   throw new DomainError(422, message, 'site_only_setting');
 }
 
-// Only owned computers have Projects to share with.
-function targetNotOwned(): never {
+// ssh and local targets reach hosts through the workers' own SSH keys, so only global
+// administrators add or keep them; everyone else adds sites.
+function targetAdminRequired(): never {
+  throw new DomainError(
+    403,
+    '全体管理者でない人が持てるコンピュータはsiteだけです',
+    'target_admin_required',
+  );
+}
+
+// A private computer serves its owner, so one from before owners must stay public.
+function ownerRequiredForPrivate(): never {
   throw new DomainError(
     422,
-    '全体の計算機はどのProjectからも使えるので、共有先を選びません',
-    'target_not_owned',
+    '所有者のいないコンピュータはPrivateにできません',
+    'target_owner_missing',
   );
 }
 
@@ -101,8 +107,9 @@ export class TargetService {
   ) {}
 
   /**
-   * Global computers, one's own, and those shared with a Project one is a member of; with
-   * `projectId`, only those one may use in that Project (where Jobs are created).
+   * The computers one may use (public ones, one's own, and one's creator's for a Service Account)
+   * and those one manages (one's own; every computer for a global administrator). With
+   * `projectId`, only those one may use, for the screens that create Jobs in that Project.
    */
   async list(principal: Principal, query: { projectId?: string } = {}): Promise<ComputeTargetDetails[]> {
     requireScope(principal, 'read');
@@ -112,13 +119,31 @@ export class TargetService {
         role: 'viewer',
         scope: 'read',
       });
-    const everything = principal.user.isAdmin && principal.method === 'session' && !query.projectId;
+    const includeManaged = !query.projectId;
     const targets = await rows<TargetRow>(
       this.database,
-      `${targetSelect} WHERE $1::boolean OR ${targetUsableSql('$2::uuid', '$3::uuid')} ORDER BY t.name,t.id`,
-      [everything, principal.user.id, query.projectId ?? null],
+      `${targetSelect} WHERE ${targetUsableSql('$1::uuid')}
+        OR ($2::boolean AND (t.owner_user_id=$1 OR $3::boolean)) ORDER BY t.name,t.id`,
+      [principal.user.id, includeManaged, isGlobalAdministrator(principal)],
     );
     return this.details(this.database, principal, targets);
+  }
+
+  /**
+   * GET /targets/overview: every computer with whether one may use and manage it, and nothing of
+   * how it is reached, so someone else's private computer is seen but not described.
+   */
+  async overview(principal: Principal): Promise<ComputeTargetOverview[]> {
+    requireScope(principal, 'read');
+    const found = await listTargetOverviewRows(this.database, principal.user.id);
+    return found.map(({ launcherName, launcherLastSeenAt, launcherRevokedAt, ...target }) => ({
+      ...target,
+      canManage: isTargetManager(principal, target),
+      launcher:
+        launcherName === null
+          ? null
+          : { name: launcherName, lastSeenAt: launcherLastSeenAt, revoked: launcherRevokedAt !== null },
+    }));
   }
 
   async create(
@@ -126,17 +151,10 @@ export class TargetService {
     request: TargetCreateRequest,
     metadata: RequestMetadata,
   ): Promise<ComputeTargetDetails> {
-    const { site, personal: personalRequest, projectIds = [], jobShell, ...fields } = request;
-    const administrator = isGlobalAdministrator(principal);
-    const personal = personalRequest ?? !administrator;
-    if (!administrator) {
-      requireSession(principal, '計算機の追加');
-      if (!personal || fields.executor !== 'site')
-        throw new DomainError(
-          403,
-          '全体管理者でない人が足せるのは、自分の計算機（site）だけです',
-          'target_admin_required',
-        );
+    const { site, jobShell, ...fields } = request;
+    if (!isGlobalAdministrator(principal)) {
+      requireSession(principal, 'コンピュータの追加');
+      if (fields.executor !== 'site') targetAdminRequired();
     }
     // A site's runner downloads inputs itself with the Job token; ssh/local relay through the worker.
     const input = {
@@ -144,9 +162,8 @@ export class TargetService {
       datasetTransfer: fields.datasetTransfer ?? (fields.executor === 'site' ? 'direct' : 'relay'),
     };
     validateTargetConfiguration(input, this.config.allowLocalExecutor);
-    if (input.executor !== 'site' && (site || personal || projectIds.length || jobShell))
-      siteOnly('全体設定・所有者・共有・job shellはsiteだけの設定です');
-    if (!personal && projectIds.length) targetNotOwned();
+    if (input.executor !== 'site' && (site || jobShell))
+      siteOnly('全体設定・job shellはsiteだけの設定です');
     const settings = mergeSiteSettings(DEFAULT_SITE_SETTINGS, site ?? {});
     if (input.executor === 'site') validateSiteSettings(input, settings);
     return transaction(this.database, async (connection) => {
@@ -154,8 +171,8 @@ export class TargetService {
       const target = (await first<ComputeTarget>(
         connection,
         `INSERT INTO compute_targets(name,host,port,username,ssh_key_path,known_hosts_path,work_directory,python_executable,gpu_ids,max_concurrent_jobs,enabled,executor,runtime_kinds,dataset_cache_max_bytes,dataset_transfer,
-          submission_mode,cpu_arch,supports_array,queue_timeout_seconds,owner_user_id)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) RETURNING *`,
+          submission_mode,cpu_arch,supports_array,queue_timeout_seconds,owner_user_id,visibility)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING *`,
         [
           input.name,
           input.host,
@@ -176,7 +193,9 @@ export class TargetService {
           input.cpuArch,
           input.supportsArray,
           input.queueTimeoutSeconds,
-          personal ? principal.user.id : null,
+          // Whoever adds a computer owns it, a global administrator's ssh or local target too.
+          principal.user.id,
+          input.visibility,
         ],
       ))!;
       let jobShellVersion: number | null = null;
@@ -195,7 +214,6 @@ export class TargetService {
           automatic: target.submissionMode === 'automatic',
           settings,
         });
-        await this.share(connection, { target, projectIds, sharedBy: principal.user.id });
       }
       await writeAuditEvent(connection, {
         ...auditActor(principal),
@@ -208,8 +226,7 @@ export class TargetService {
           name: target.name,
           executor: target.executor,
           submissionMode: target.submissionMode,
-          personal,
-          projectIds,
+          visibility: target.visibility,
           jobShellVersion,
         },
       });
@@ -235,11 +252,11 @@ export class TargetService {
     return recordDenial(this.database, draft, () =>
       transaction(this.database, async (connection) => {
         const target = await findTarget(connection, targetId, { lock: true });
-        await requireTargetManager(connection, principal, target);
+        requireTargetManager(principal, target);
         const updated = { ...target, ...input };
         validateTargetConfiguration(updated, this.config.allowLocalExecutor);
-        if (target.ownerUserId && updated.executor !== 'site')
-          siteOnly('自分の計算機はsiteのままです');
+        if (!isGlobalAdministrator(principal) && updated.executor !== 'site') targetAdminRequired();
+        if (updated.visibility === 'private' && !updated.ownerUserId) ownerRequiredForPrivate();
         if (site && updated.executor !== 'site') siteOnly('全体設定はsiteだけの設定です');
         const occupancy = (await first<{ pending: number; active: number }>(
           connection,
@@ -256,7 +273,7 @@ export class TargetService {
           `UPDATE compute_targets SET name=$2,host=$3,port=$4,username=$5,ssh_key_path=$6,known_hosts_path=$7,
           work_directory=$8,python_executable=$9,gpu_ids=$10,max_concurrent_jobs=$11,enabled=$12,executor=$13,runtime_kinds=$14,
           dataset_cache_max_bytes=$15,dataset_transfer=$16,submission_mode=$17,cpu_arch=$18,supports_array=$19,
-          queue_timeout_seconds=$20
+          queue_timeout_seconds=$20,visibility=$21
           WHERE id=$1`,
           [
             targetId,
@@ -279,65 +296,27 @@ export class TargetService {
             updated.cpuArch,
             updated.supportsArray,
             updated.queueTimeoutSeconds,
+            updated.visibility,
           ],
         );
         // Settings are checked when they or the submission mode change, so an older site that has
         // not been filled in yet can still be switched off.
         if (updated.executor === 'site' && (site || updated.submissionMode !== target.submissionMode))
           await this.updateSite(connection, principal, { target: updated, site });
-        await writeAuditEvent(connection, { ...draft, outcome: 'success' });
+        // Who opened a private computer to everyone, or closed a public one, is worth finding.
+        await writeAuditEvent(connection, {
+          ...draft,
+          outcome: 'success',
+          details: {
+            ...draft.details,
+            ...(updated.visibility !== target.visibility && {
+              visibility: { from: target.visibility, to: updated.visibility },
+            }),
+          },
+        });
         return this.detail(connection, principal, targetId);
       }),
     );
-  }
-
-  /** PUT /targets/:id/projects: the Projects whose members may use an owned computer. */
-  async replaceProjects(
-    principal: Principal,
-    targetId: string,
-    sharing: { projectIds: string[]; metadata: RequestMetadata },
-  ): Promise<ComputeTargetDetails> {
-    const draft: AuditEventDraft = {
-      ...auditActor(principal),
-      ...sharing.metadata,
-      action: 'compute_target.share',
-      resourceType: 'compute_target',
-      resourceId: targetId,
-      details: { projectIds: sharing.projectIds },
-    };
-    return recordDenial(this.database, draft, () =>
-      transaction(this.database, async (connection) => {
-        const target = await findTarget(connection, targetId, { lock: true });
-        await requireTargetManager(connection, principal, target);
-        if (!target.ownerUserId) targetNotOwned();
-        await this.share(connection, { target, projectIds: sharing.projectIds, sharedBy: principal.user.id });
-        await writeAuditEvent(connection, { ...draft, outcome: 'success' });
-        return this.detail(connection, principal, targetId);
-      }),
-    );
-  }
-
-  /**
-   * GET /targets/shareable-projects: the projectIds POST /targets accepts for a computer of one's
-   * own, for whoever may add one (a browser session, or a global administrator's admin token). A
-   * global administrator sees every Project but shares only with those they are a member of.
-   */
-  async ownShareableProjects(principal: Principal): Promise<ShareableProject[]> {
-    if (!isGlobalAdministrator(principal)) requireSession(principal, '計算機の追加');
-    return listShareableProjects(this.database, principal.user.id);
-  }
-
-  /**
-   * GET /targets/:id/shareable-projects: what PUT /targets/:id/projects accepts. They are the
-   * owner's Projects, so a global administrator editing someone else's computer is offered
-   * those rather than their own.
-   */
-  async shareableProjects(principal: Principal, targetId: string): Promise<ShareableProject[]> {
-    requireScope(principal, 'read');
-    const target = await findTarget(this.database, targetId);
-    await requireTargetManager(this.database, principal, target);
-    if (!target.ownerUserId) targetNotOwned();
-    return listShareableProjects(this.database, target.ownerUserId);
   }
 
   private async updateSite(
@@ -372,29 +351,6 @@ export class TargetService {
       throw new DomainError(422, '選んだlauncherはありません（失効しています）', 'site_launcher_invalid');
   }
 
-  // Accepts exactly what ownShareableProjects (a new computer) and shareableProjects list.
-  private async share(
-    connection: Connection,
-    sharing: { target: ComputeTarget; projectIds: string[]; sharedBy: string },
-  ): Promise<void> {
-    const { target, projectIds } = sharing;
-    if (!target.ownerUserId) return;
-    const shareable = new Set(
-      (await listShareableProjects(connection, target.ownerUserId)).map((project) => project.id),
-    );
-    if (!projectIds.every((projectId) => shareable.has(projectId)))
-      throw new DomainError(
-        422,
-        '共有できるのは、計算機の所有者がeditor以上のProjectだけです',
-        'target_project_forbidden',
-      );
-    await replaceTargetProjects(connection, {
-      targetId: target.id,
-      projectIds,
-      createdBy: sharing.sharedBy,
-    });
-  }
-
   private async detail(
     connection: Connection,
     principal: Principal,
@@ -404,8 +360,8 @@ export class TargetService {
     return (await this.details(connection, principal, [target]))[0]!;
   }
 
-  // Settings and sharing are their manager's; everyone else sees what the computer is and whose
-  // account its Jobs run as.
+  // Settings are their manager's; everyone else who may use a computer sees what it is and whose
+  // account its Jobs run as. How an ssh or local target is reached is shown in a browser session.
   private async details(
     connection: Connection,
     principal: Principal,
@@ -415,16 +371,10 @@ export class TargetService {
       connection,
       targets.filter((target) => target.executor === 'site').map((target) => target.id),
     );
-    const projects = await listTargetProjects(
-      connection,
-      targets.filter((target) => isTargetManager(principal, target)).map((target) => target.id),
-    );
-    const fullView = principal.user.isAdmin && principal.method === 'session';
     return targets.map((target) => {
       const managedHere = isTargetManager(principal, target);
       return {
-        ...(fullView ? target : withoutConnection(target)),
-        projectIds: managedHere ? (projects.get(target.id) ?? []) : [],
+        ...(managedHere && principal.method === 'session' ? target : withoutConnection(target)),
         site: managedHere ? (settings.get(target.id) ?? null) : null,
         siteAccountMode: settings.get(target.id)?.accountMode ?? null,
       };

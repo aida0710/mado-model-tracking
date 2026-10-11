@@ -102,6 +102,8 @@ export async function executionFixture(harness: Harness) {
         maxConcurrentJobs: 2,
         enabled: true,
         executor: 'local',
+        // The Project's members run their Jobs on it.
+        visibility: 'public',
       },
     }),
   );

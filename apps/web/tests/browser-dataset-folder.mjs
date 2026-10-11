@@ -131,7 +131,7 @@ try {
   await dialog.getByLabel('フォルダを選択').setInputFiles(folder);
   await dialog.getByText('3件のファイル').waitFor();
   await screenshot(page, 'dataset-folder-selected');
-  await dialog.getByRole('button', { name: 'uploadして版を作成' }).click();
+  await dialog.getByRole('button', { name: 'uploadしてバージョンを作成' }).click();
   await dialog.waitFor({ state: 'detached', timeout: VERSION_TIMEOUT_MS });
 
   const versions = await (await page.request.get(`${WEB_URL}/api/projects/${project.id}/datasets/${dataset.id}/versions`)).json();
@@ -169,7 +169,7 @@ try {
     const folderDialog = page.getByRole('dialog');
     await folderDialog.getByLabel('フォルダを選択').setInputFiles(largeFolder);
     await folderDialog.getByText('2件のファイル').waitFor();
-    await folderDialog.getByRole('button', { name: 'uploadして版を作成' }).click();
+    await folderDialog.getByRole('button', { name: 'uploadしてバージョンを作成' }).click();
     const largeRow = folderDialog.locator('[data-testid="upload-queue-row"]', { hasText: 'big.bin' });
     await folderDialog.locator('[data-testid="upload-queue-row"][data-status="uploading"]', { hasText: 'big.bin' }).waitFor();
     await folderDialog.locator('[data-testid="upload-queue-row"][data-status="completed"]', { hasText: 'tone.wav' }).waitFor({ timeout: VERSION_TIMEOUT_MS });
@@ -179,7 +179,7 @@ try {
   }
   const leftOut = await uploadAndCancelLarge();
   await screenshot(page, 'dataset-folder-canceled-choice');
-  await leftOut.getByRole('button', { name: '残りのファイルを除いて版を作成' }).click();
+  await leftOut.getByRole('button', { name: '残りのファイルを除いてバージョンを作成' }).click();
   await leftOut.waitFor({ state: 'detached', timeout: VERSION_TIMEOUT_MS });
   const afterLeftOut = await (await page.request.get(`${WEB_URL}/api/projects/${project.id}/datasets/${dataset.id}/versions`)).json();
   assert.equal(afterLeftOut.items.length, 2);

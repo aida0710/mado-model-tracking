@@ -116,7 +116,7 @@ describe.skipIf(!testDatabaseUrl)('Registryのライフサイクル（独立Post
     return { model, version, experiment, dataset };
   }
 
-  it('editorはModelの説明を変えられ、単体取得とネストした版の取得に反映され、監査に残る', async () => {
+  it('editorはModelの説明を変えられ、単体取得とネストしたバージョンの取得に反映され、監査に残る', async () => {
     const fixture = await executionFixture(harness);
     const updated = await entity<Model>(
       await patch(`${fixture.basePath}/models/${fixture.model.id}`, {
@@ -274,7 +274,7 @@ describe.skipIf(!testDatabaseUrl)('Registryのライフサイクル（独立Post
     ).toBe(409);
   });
 
-  it('archiveしたDatasetの版は新しいRunの入力で422になり、既存Runの参照とJob作成は残る', async () => {
+  it('archiveしたDatasetのバージョンは新しいRunの入力で422になり、既存Runの参照とJob作成は残る', async () => {
     const fixture = await executionFixture(harness);
     const { dataset, version } = await datasetWithVersion(fixture);
     const existing = await entity<Run>(await runWithInputs(fixture, [version.id]));
@@ -386,7 +386,7 @@ describe.skipIf(!testDatabaseUrl)('Registryのライフサイクル（独立Post
     ).toBe(422);
   });
 
-  it('archive済みDatasetの版を使うJobのretryは新しいRunを作るので422', async () => {
+  it('archive済みDatasetのバージョンを使うJobのretryは新しいRunを作るので422', async () => {
     const fixture = await executionFixture(harness);
     const { dataset, version } = await datasetWithVersion(fixture);
     const run = await entity<Run>(await runWithInputs(fixture, [version.id]));
@@ -414,7 +414,7 @@ describe.skipIf(!testDatabaseUrl)('Registryのライフサイクル（独立Post
     expect(await retry.json()).toMatchObject({ code: 'dataset_archived' });
   });
 
-  it('他ProjectのModel・版・Experiment・DatasetのIDは404', async () => {
+  it('他ProjectのModel・バージョン・Experiment・DatasetのIDは404', async () => {
     const fixture = await executionFixture(harness);
     const other = await otherProject(fixture);
     const { cookie } = fixture.editor;
@@ -442,7 +442,7 @@ describe.skipIf(!testDatabaseUrl)('Registryのライフサイクル（独立Post
     expect(untouched.rows[0]).toEqual({ archived_at: null });
   });
 
-  it('同じProjectでも別Modelの版はネストした取得で404', async () => {
+  it('同じProjectでも別Modelのバージョンはネストした取得で404', async () => {
     const fixture = await executionFixture(harness);
     const sibling = await entity<Model>(
       await request(harness.app, `${fixture.basePath}/models`, {

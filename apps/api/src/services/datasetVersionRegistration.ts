@@ -128,7 +128,7 @@ export async function registerDatasetVersion(
       reference.name !== dataset.name ||
       reference.namespace !== dataset.namespace
     )
-      conflict('External datasetの参照が登録する版と一致しません');
+      conflict('External datasetの参照が登録するバージョンと一致しません');
   }
   const stored = describeStoredContent(registration);
   const version = registration.version ?? (await nextDatasetVersion(connection, dataset.id));

@@ -1,6 +1,7 @@
-// Browser check for /admin/users and /account: create a local user and see its initial password
-// once, disable a user after the confirmation, reset a password, keep SSO roles read-only, and
-// send non-administrators away from /admin/users. The users API is mocked here until it is integrated.
+// Browser check for 全体設定 → ユーザー (/settings/users) and アカウント (/settings/account): create a
+// local user and see its initial password once, disable a user after the confirmation, reset a
+// password, keep SSO roles read-only, and send non-administrators from /settings/users to their
+// account. The users API is mocked here until it is integrated.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -111,13 +112,17 @@ try {
   const page = await context.newPage();
   page.on('pageerror', (error) => pageErrors.push(error.message));
 
-  // The user menu opens the global administration (its Project list); the sidebar switches to Users.
+  // The user menu opens 全体設定 on the account; the sidebar's 全体管理 group switches to Users.
   await page.goto(`${webUrl}/projects/${api.state.project.id}/experiments`);
   await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
-  await page.getByRole('menuitem', { name: '全体管理', exact: true }).click();
-  await page.waitForURL(/\/admin\/projects$/);
-  await page.getByRole('link', { name: 'ユーザー', exact: true }).click();
-  await page.waitForURL(/\/admin\/users$/);
+  assert.equal(await page.getByRole('menuitem', { name: '全体管理', exact: true }).count(), 0);
+  await page.getByRole('menuitem', { name: '全体設定', exact: true }).click();
+  await page.waitForURL(/\/settings\/account$/);
+  await page
+    .getByRole('group', { name: '全体管理', exact: true })
+    .getByRole('link', { name: 'ユーザー', exact: true })
+    .click();
+  await page.waitForURL(/\/settings\/users$/);
   await page.getByRole('heading', { name: 'ユーザー', exact: true }).waitFor();
   assert.equal(
     await page.getByRole('link', { name: 'ユーザー', exact: true }).getAttribute('aria-current'),
@@ -191,33 +196,40 @@ try {
     .click();
   assert.ok(!(await page.content()).includes(RESET_PASSWORD));
 
-  // The avatar opens the user menu; /account shows the profile, password form and tokens.
+  // The avatar opens the user menu; the account shows the profile, password form and tokens.
   await page.getByRole('button', { name: 'ユーザーメニュー' }).click();
-  await page.getByRole('menuitem', { name: 'パスワードを変更' }).waitFor();
+  await page.getByRole('menuitem', { name: 'パスワードの変更', exact: true }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/05-user-menu.png` });
-  await page.getByRole('menuitem', { name: 'アカウント' }).click();
-  await page.waitForURL(/\/account$/);
+  await page.getByRole('menuitem', { name: 'アカウント', exact: true }).click();
+  await page.waitForURL(/\/settings\/account$/);
   await page.getByRole('heading', { name: 'プロフィール' }).waitFor();
   await page.getByLabel('現在のパスワード').waitFor();
   await page.getByRole('heading', { name: '自分のAPI token' }).waitFor();
   assert.equal(await page.getByRole('heading', { name: '所属group' }).count(), 0);
   await page.screenshot({ path: `${outputDirectory}/06-account-local.png`, fullPage: true });
 
-  // An SSO user sees their groups read-only and no password form.
+  // An SSO user sees their groups read-only and no password form. The URL from before 全体設定
+  // still opens the account.
   signedInUser.authSources = ['oidc'];
   account.groups = ['mmt-users', 'team-a'];
   account.groupsSyncedAt = now;
   await page.goto(`${webUrl}/account`);
+  await page.waitForURL(/\/settings\/account$/);
   await page.getByRole('heading', { name: '所属group' }).waitFor();
   await page.getByText('team-a', { exact: true }).waitFor();
   await page.getByText(/Authentikのgroupが正本です/).waitFor();
   assert.equal(await page.getByLabel('現在のパスワード').count(), 0);
   await page.screenshot({ path: `${outputDirectory}/07-account-sso.png`, fullPage: true });
 
-  // Someone who is not a global administrator gets no links, and /admin sends them back.
+  // Someone who is not a global administrator gets 全体設定 but no 全体管理 links, and the users
+  // section, by its old or new URL, sends them to their account.
   signedInUser.isAdmin = false;
-  await page.goto(`${webUrl}/admin/users`);
-  await page.waitForURL(/\/projects\/[^/]+\/experiments$/);
+  for (const usersPath of ['/admin/users', '/settings/users']) {
+    await page.goto(`${webUrl}${usersPath}`);
+    await page.waitForURL(/\/settings\/account$/);
+  }
+  await page.getByRole('group', { name: '全体設定', exact: true }).waitFor();
+  assert.equal(await page.getByRole('group', { name: '全体管理', exact: true }).count(), 0);
   assert.equal(await page.getByRole('link', { name: 'ユーザー', exact: true }).count(), 0);
   await page.screenshot({ path: `${outputDirectory}/08-non-admin-redirected.png` });
 

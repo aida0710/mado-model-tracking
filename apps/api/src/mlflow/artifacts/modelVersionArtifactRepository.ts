@@ -34,7 +34,7 @@ export async function modelVersionArtifactManifest(
     !manifest.data.length ||
     new Set(manifest.data.map((entry) => entry.path)).size !== manifest.data.length
   )
-    throw new DomainError(409, '登録モデル版のArtifact manifestが不正です', 'invalid_reference');
+    throw new DomainError(409, '登録モデルバージョンのArtifact manifestが不正です', 'invalid_reference');
   // Resolve only the immutable snapshot; source Run and Logged Model lifecycle do not affect a registered version.
   const artifacts = await rows<{ id: string; sha256: string; size: number }>(
     connection,
@@ -46,7 +46,7 @@ export async function modelVersionArtifactManifest(
     const artifact = saved.get(entry.artifactId);
     if (!artifact) notFound('Artifact');
     if (artifact.sha256 !== entry.sha256 || artifact.size !== entry.size)
-      throw new DomainError(409, '登録モデル版のArtifact参照が一致しません', 'invalid_reference');
+      throw new DomainError(409, '登録モデルバージョンのArtifact参照が一致しません', 'invalid_reference');
   }
   return manifest.data;
 }

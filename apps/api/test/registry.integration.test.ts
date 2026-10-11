@@ -222,7 +222,7 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
     ).toBe(422);
   });
 
-  it('同じ版名は409になり、DBに直接UPDATEしても版は変更できない', async () => {
+  it('同じバージョン名は409になり、DBに直接UPDATEしてもバージョンは変更できない', async () => {
     const fixture = await executionFixture(harness);
     expect(
       (
@@ -283,7 +283,7 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
       deletedFiles: ['folder/old.py', 'folder'],
     },
   ])(
-    '$conflictの版登録は422になり、コード版・Run・Jobを作らない',
+    '$conflictのバージョン登録は422になり、コードバージョン・Run・Jobを作らない',
     async ({ conflict: _conflict, ...overlay }) => {
       const fixture = await projectFixture(harness);
       const code = await entity<Code>(
@@ -328,7 +328,7 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
     },
   );
 
-  it('別projectの実験・親Run・モデル・コード・データセット・Artifact・親版は参照できない', async () => {
+  it('別projectの実験・親Run・モデル・コード・データセット・Artifact・親バージョンは参照できない', async () => {
     const fixture = await executionFixture(harness);
     const other = await entity<Project>(
       await request(harness.app, '/api/projects', {
@@ -715,7 +715,7 @@ describe.skipIf(!testDatabaseUrl)('Project認可と不変なRegistry（独立Pos
   });
 });
 
-describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('出力モデル登録とバージョンの自動採番（独立PostgreSQL）', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await createHarness();
@@ -753,7 +753,7 @@ describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（
     );
   }
 
-  it('versionを省略した連続登録は1,2,3になり、明示した整数版の後から続き、整数でない版は採番に含めない', async () => {
+  it('versionを省略した連続登録は1,2,3になり、明示した整数バージョンの後から続き、整数でないバージョンは採番に含めない', async () => {
     const fixture = await executionFixture(harness);
     const numbered: string[] = [];
     for (let index = 0; index < 3; index += 1)
@@ -773,7 +773,7 @@ describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（
     expect(afterConflict.version).toBe('12');
   });
 
-  it('同時の登録でもUNIQUE違反なく別々の版を払い出す', async () => {
+  it('同時の登録でもUNIQUE違反なく別々のバージョンを払い出す', async () => {
     const fixture = await executionFixture(harness);
     const responses = await Promise.all(
       Array.from({ length: 5 }, () => registerVersion(fixture, fixture.model.id)),
@@ -797,7 +797,7 @@ describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（
     expect((await byName('qwen2 test')).items).toEqual([]);
   });
 
-  it('ネイティブとMLflowの登録を交互にしても重複せず、削除した版を再利用せずRunの出力から外す', async () => {
+  it('ネイティブとMLflowの登録を交互にしても重複せず、削除したバージョンを再利用せずRunの出力から外す', async () => {
     const fixture = await modelFixture(harness);
     await entity(await fixture.createRegistered('Classifier'), 200);
     const ready = await fixture.readyModel();
@@ -861,7 +861,7 @@ describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（
     expect(outputs).not.toContain(idsByVersion.get('4'));
   });
 
-  it('inference Runと削除済みRunをsourceRunIdにすると422になり、版もcounterも残さない', async () => {
+  it('inference Runと削除済みRunをsourceRunIdにすると422になり、バージョンもcounterも残さない', async () => {
     const fixture = await executionFixture(harness);
     const inference = await fixture.newRun();
     const rejectedKind = await registerVersion(fixture, fixture.model.id, {
@@ -951,7 +951,7 @@ describe.skipIf(!testDatabaseUrl)('出力モデル登録と版の自動採番（
   });
 });
 
-describe.skipIf(!testDatabaseUrl)('版counterの移行（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('バージョンcounterの移行（独立PostgreSQL）', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await createHarness({ applyMigrations: false });
@@ -960,7 +960,7 @@ describe.skipIf(!testDatabaseUrl)('版counterの移行（独立PostgreSQL）', (
     await harness?.close();
   });
 
-  it('011は整数の版の最大+1とMLflow側counterの大きい方から始め、以後のMLflow登録と重複しない', async () => {
+  it('011は整数のバージョンの最大+1とMLflow側counterの大きい方から始め、以後のMLflow登録と重複しない', async () => {
     await applyMigrationsBefore(harness.database, '011_run_output_models.sql');
     const project = (
       await harness.database.query<{ id: string }>(

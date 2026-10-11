@@ -1,7 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { useAuditEvents } from '../../hooks/useAuditEvents';
 import { AuditEventLog } from '../AuditEventLog';
-import { AdminSectionHeader } from './AdminSectionHeader';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { text } from '../../i18n/catalog';
 
 /**
@@ -12,7 +12,7 @@ export function AuditEventsPanel() {
   const audit = useAuditEvents('global');
   return (
     <section className="admin-audit">
-      <AdminSectionHeader
+      <SettingsPageHeader
         section="audit"
         actions={
           <button className="icon-button" aria-label={text.refresh} onClick={audit.reload}>

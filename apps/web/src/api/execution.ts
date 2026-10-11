@@ -1,5 +1,6 @@
 import type {
   ComputeTargetDetails,
+  ComputeTargetOverview,
   Job,
   JobListItem,
   JobRetryRequest,
@@ -42,9 +43,15 @@ async function listRunCheckpoints(
 }
 
 export const executionApi = {
-  /** Every target the signed-in person may see: global ones, their own and those shared with them. */
+  /**
+   * Every computer, someone else's private one too, with what anyone may know: no connection or
+   * settings. Whether the signed-in person may use or manage each comes with it.
+   */
+  targetOverview: (signal?: AbortSignal) =>
+    requestItems<ComputeTargetOverview>('/targets/overview', signal),
+  /** The computers the signed-in person may use or manage, in full as far as they may see. */
   targets: (signal?: AbortSignal) => requestItems<ComputeTargetDetails>('/targets', signal),
-  /** The targets the signed-in person may run on in the Project: global, their own and shared ones. */
+  /** The computers the signed-in person may run Jobs on: public ones and their own. */
   projectTargets: (projectId: string, signal?: AbortSignal) =>
     requestItems<ComputeTargetDetails>(`/targets?${new URLSearchParams({ projectId })}`, signal),
   createTarget: (body: CreateTarget) =>

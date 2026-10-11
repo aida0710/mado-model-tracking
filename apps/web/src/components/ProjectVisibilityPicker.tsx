@@ -1,10 +1,8 @@
 import type { ProjectVisibility } from '@mmt/contracts';
-import { ProjectVisibilityLabel } from './ProjectVisibilityLabel';
+import { VisibilityPicker } from './VisibilityPicker';
 import { text } from '../i18n/catalog';
 
-const PROJECT_VISIBILITIES: readonly ProjectVisibility[] = ['public', 'private'];
-
-const VISIBILITY_HINTS: Record<ProjectVisibility, string> = {
+const PROJECT_VISIBILITY_HINTS: Record<ProjectVisibility, string> = {
   public: text.projectVisibilityPublicHint,
   private: text.projectVisibilityPrivateHint,
 };
@@ -20,23 +18,12 @@ export function ProjectVisibilityPicker({
   onChange: (visibility: ProjectVisibility) => void;
 }) {
   return (
-    <fieldset className="choice-picker">
-      <legend>{text.projectVisibility}</legend>
-      {PROJECT_VISIBILITIES.map((visibility) => (
-        <label key={visibility} className="choice-picker-option">
-          <input
-            type="radio"
-            name={name}
-            value={visibility}
-            checked={visibility === value}
-            onChange={() => onChange(visibility)}
-          />
-          <span className="choice-picker-text">
-            <ProjectVisibilityLabel visibility={visibility} />
-            <span className="muted">{VISIBILITY_HINTS[visibility]}</span>
-          </span>
-        </label>
-      ))}
-    </fieldset>
+    <VisibilityPicker
+      name={name}
+      legend={text.projectVisibility}
+      hints={PROJECT_VISIBILITY_HINTS}
+      value={value}
+      onChange={onChange}
+    />
   );
 }

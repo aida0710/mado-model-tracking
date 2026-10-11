@@ -11,7 +11,7 @@ import { executionFixture } from './fixtures.js';
 import { createHarness, entity, login, request, testDatabaseUrl, type Harness } from './harness.js';
 import { trackingClient } from './mlflow-tracking-fixtures.js';
 
-describe.skipIf(!testDatabaseUrl)('Run・モデル版のスレッド形式コメント（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('Run・モデルバージョンのスレッド形式コメント（独立PostgreSQL）', () => {
   let harness: Harness;
   let fixture: Awaited<ReturnType<typeof executionFixture>>;
   let runId: string;
@@ -239,7 +239,7 @@ describe.skipIf(!testDatabaseUrl)('Run・モデル版のスレッド形式コメ
     ).toBe(404);
   });
 
-  it('削除済みのRun・モデル版への投稿は409になる', async () => {
+  it('削除済みのRun・モデルバージョンへの投稿は409になる', async () => {
     await entity(
       await trackingClient(harness.app, fixture).post('/runs/delete', { run_id: runId }),
       200,
@@ -274,7 +274,7 @@ describe.skipIf(!testDatabaseUrl)('Run・モデル版のスレッド形式コメ
     ).toBe(409);
   });
 
-  it('モデル版への投稿にはregistry:writeが要り、runs:writeだけのtokenは403になる', async () => {
+  it('モデルバージョンへの投稿にはregistry:writeが要り、runs:writeだけのtokenは403になる', async () => {
     const runsOnly = await mintEditorToken(['read', 'runs:write']);
     const versionTarget = { targetType: 'model_version', targetId: fixture.modelVersion.id };
     expect((await postComment({ ...versionTarget, body: 'x' }, { token: runsOnly })).status).toBe(

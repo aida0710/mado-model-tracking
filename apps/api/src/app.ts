@@ -396,12 +396,12 @@ export function createApplication(options: ApplicationOptions) {
     const databaseCode = (error as { code?: string }).code;
     if (databaseCode === '23505')
       return context.json(
-        { error: '同じ名前または版が既に登録されています', code: 'already_exists' },
+        { error: '同じ名前またはバージョンが既に登録されています', code: 'already_exists' },
         409,
       );
     if (databaseCode === '23503' || databaseCode === '23514')
       return context.json(
-        { error: '参照または不変な版の制約に違反しています', code: 'invalid_reference' },
+        { error: '参照または不変なバージョンの制約に違反しています', code: 'invalid_reference' },
         422,
       );
     // SQL and provider exception details can include sensitive values.
@@ -527,7 +527,6 @@ export function createApplication(options: ApplicationOptions) {
   app.route(
     '/api/targets',
     siteComputerRoutes({
-      targets,
       jobShells: new SiteJobShellService(database),
       personalSettings: new SitePersonalSettingsService(database),
       keys: new SiteKeyService(database),

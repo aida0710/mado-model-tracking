@@ -14,11 +14,12 @@ export function submissionCountSql(supportsArray: string, filter = ''): string {
 }
 
 /**
- * Fails a site Job whose runner never started: the job shell refused it, no result came back, or
- * it waited in the scheduler queue too long. A Job still in a scheduler queue is also marked for
- * the launcher to remove (scheduler_cancel_state). The caller holds the Job's row lock.
+ * Fails a Job whose runner never started: a site's job shell refused it, no result came back, or
+ * it waited in the scheduler queue too long; or its requester may no longer use the computer (an
+ * ssh or local Job too, when a worker would claim it). A Job still in a scheduler queue is also
+ * marked for the launcher to remove (scheduler_cancel_state). The caller holds the Job's row lock.
  */
-export async function failUnstartedSiteJob(
+export async function failUnstartedJob(
   connection: Connection,
   runCompletion: RunCompletionService,
   failure: { job: Job; endReason: Exclude<JobEndReason, 'timed_out'>; error: string },

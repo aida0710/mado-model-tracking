@@ -91,7 +91,7 @@ async function createCode({ name, sample, sourceKind }) {
   const code = await saveEntity({ method: 'POST', resource: `${projectApi}/codes`,
     click: () => dialog().getByRole('button', { name: '保存', exact: true }).click() });
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
   if (sourceKind === 'git') {
     await field('Git URL').fill(repositoryUrl);
     await field('Commit').fill(repositoryCommit);
@@ -131,8 +131,8 @@ async function createTask({ name, codeVersionId, targetId, kind = 'processing', 
   await page.getByRole('button', { name: 'Taskを作成', exact: true }).click();
   await field('名前').fill(name);
   await field('実行種別').selectOption(kind);
-  if (modelVersionId) await field('モデル版').selectOption(modelVersionId);
-  await field('コード版').selectOption(codeVersionId);
+  if (modelVersionId) await field('モデルバージョン').selectOption(modelVersionId);
+  await field('コードバージョン').selectOption(codeVersionId);
   await field('Compute target').selectOption(targetId);
   const task = await saveEntity({ method: 'POST', resource: `${projectApi}/tasks`,
     click: () => dialog().getByRole('button', { name: '保存', exact: true }).click() });
@@ -248,7 +248,7 @@ try {
     click: () => dialog().getByTestId('code-version-save').click() });
   assert.equal(secondCode.source.files['main.py'], sdk.version.source.files['main.py'].replace('2.0 * value + 1.0', '3.0 * value + 1.0'));
   assert.equal(secondCode.source.files['test_smoke.py'], sdk.version.source.files['test_smoke.py'].replace('7.0', '10.0'));
-  await field('コード版').locator('option:checked').getByText(/v2/).waitFor({ state: 'attached' });
+  await field('コードバージョン').locator('option:checked').getByText(/v2/).waitFor({ state: 'attached' });
   task = await saveEntity({ method: 'PATCH', resource: `${projectApi}/tasks/${task.id}`,
     click: () => dialog().getByRole('button', { name: '保存', exact: true }).click() });
   await page.getByRole('dialog').waitFor({ state: 'hidden' });

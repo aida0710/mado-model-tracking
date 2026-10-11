@@ -157,7 +157,7 @@ export function validateHookSettings(input: HookCreateInput): void {
     invalidHook('checkpointModeはtriggerがcheckpoint_savedのときだけ指定します');
   // The registered version is the input; a fixed one would silently be ignored.
   if (input.trigger === 'model_registered' && input.template.modelVersionId !== null)
-    invalidHook('model_registeredのフックでは、登録された版を使うのでmodelVersionIdを指定しません');
+    invalidHook('model_registeredのフックでは、登録されたバージョンを使うのでmodelVersionIdを指定しません');
   if (input.template.datasetPartitionVersionId && input.template.arraySize === null)
     invalidHook('datasetPartitionVersionIdはarraySizeと一緒に指定します');
   // A condition on a fact the trigger's event does not have would never match.

@@ -158,7 +158,7 @@ describe('MLflowモデルの検索・保存・公式protocol', () => {
     expect(selectWeightsArtifact(saved, {}).path).toBe('trained/custom.pkl');
   });
 
-  it('数字版の最新は文字列順や作成時刻ではなく版番号で選ぶ', () => {
+  it('数字バージョンの最新は文字列順や作成時刻ではなくバージョン番号で選ぶ', () => {
     expect(
       latestVersions([
         { ...version, version: '2' },

@@ -34,7 +34,7 @@ describe('手動投入を待つJob', () => {
     ]);
   });
 
-  it('PCのJobは、所有者には自分の計算機、ほかのメンバーには所有者の計算機として分ける', () => {
+  it('PCのJobは、所有者には自分のコンピュータ、ほかのメンバーには所有者のコンピュータとして分ける', () => {
     const jobs = [
       { ...waiting, id: 'a', targetId: alicePc.id },
       { ...waiting, id: 'b' },

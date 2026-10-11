@@ -182,7 +182,7 @@ export class JobService {
       retryOnFailure: input.retryOnFailure,
       retryOnTimeout: input.retryOnTimeout,
       runtime: code.runtime,
-      usage: { projectId: run.projectId, userId: run.createdBy },
+      usage: { userId: run.createdBy },
     });
     // ssh and local Jobs name their GPUs; a site Job asks only for a number.
     const gpuCount = target.executor === 'site' ? (input.gpuCount ?? 0) : input.gpuIds.length;
@@ -218,8 +218,8 @@ export class JobService {
   }
 
   /**
-   * `usage` is whose Jobs will run there: the Run's creator (a rule's, hook's or Sweep's owner),
-   * who must be allowed to use the computer in the Project.
+   * `usage` is whom the Jobs will run as: the Run's creator (a rule's, hook's, Task's or Sweep's
+   * owner), who must be allowed to use the computer.
    */
   async validateTarget(
     connection: Connection,
@@ -230,7 +230,7 @@ export class JobService {
       gpuCount?: number;
       retryOnFailure?: boolean;
       retryOnTimeout?: boolean;
-      usage: { projectId: string; userId: string };
+      usage: { userId: string };
     },
   ): Promise<ComputeTarget> {
     const target = await first<ComputeTarget>(

@@ -391,7 +391,7 @@ describe.skipIf(!testDatabaseUrl)('合格時のalias自動切替と保護alias�
     ]);
   });
 
-  it('合格判定が必要な保護aliasは、同じ版の合格判定でだけeditorが変えられる', async () => {
+  it('合格判定が必要な保護aliasは、同じバージョンの合格判定でだけeditorが変えられる', async () => {
     const fixture = await promotionFixture(harness);
     const rule = await fixture.registerEvaluationRule('Evaluation A');
     await fixture.createPolicy(rule);

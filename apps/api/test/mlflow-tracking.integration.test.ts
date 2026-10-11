@@ -208,7 +208,7 @@ describe.skipIf(!testDatabaseUrl)('公式MLflow 3 tracking契約（隔離Postgre
     ).toBe(false);
   });
 
-  it('Run終了とresumeで同じ版・parametersを保持し、終了時刻をクリアする', async () => {
+  it('Run終了とresumeで同じバージョン・parametersを保持し、終了時刻をクリアする', async () => {
     const run = await client.createRun({ start_time: metric.timestamp });
     await entity(
       await client.post('/runs/log-parameter', {
@@ -674,7 +674,7 @@ describe.skipIf(!testDatabaseUrl)('公式MLflow 3 tracking契約（隔離Postgre
     ).toHaveLength(1);
   });
 
-  it('Dataset log-inputsはdigest/source/contextを保持しnative版とlineageへ結び、再送を重複させない', async () => {
+  it('Dataset log-inputsはdigest/source/contextを保持しnativeバージョンとlineageへ結び、再送を重複させない', async () => {
     const run = await client.createRun();
     const input = {
       run_id: run.info.run_id,
@@ -771,7 +771,7 @@ describe.skipIf(!testDatabaseUrl)('公式MLflow 3 tracking契約（隔離Postgre
     }
   });
 
-  it('Dataset入力batchは途中の保存失敗でもnative版・Run参照を残さない', async () => {
+  it('Dataset入力batchは途中の保存失敗でもnativeバージョン・Run参照を残さない', async () => {
     const run = await client.createRun();
     await harness.database.query(
       "CREATE FUNCTION reject_dataset_version() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture storage failure'; END $$",
@@ -795,7 +795,7 @@ describe.skipIf(!testDatabaseUrl)('公式MLflow 3 tracking契約（隔離Postgre
     }
   });
 
-  it('runs:write tokenは新しいRegistry版を作れず、登録済みDatasetの入力追加はできる', async () => {
+  it('runs:write tokenは新しいRegistryバージョンを作れず、登録済みDatasetの入力追加はできる', async () => {
     const run = await client.createRun();
     const minted = await entity<{ token: string }>(
       await request(harness.app, '/api/tokens', {

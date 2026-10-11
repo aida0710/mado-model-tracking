@@ -325,6 +325,8 @@ export async function seedDemo(
           cpuArch: 'amd64',
           supportsArray: false,
           queueTimeoutSeconds: null,
+          // The demo's Runs belong to its Project members, who all run on it.
+          visibility: 'public',
         }, NO_REQUEST_METADATA);
     }
     await database.query('INSERT INTO demo_seed_history(name,project_id) VALUES($1,$2)', [

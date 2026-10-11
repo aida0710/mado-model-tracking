@@ -5,25 +5,13 @@ import { ErrorNotice } from '../components/Feedback';
 import { ProductLogo } from '../components/ProductLogo';
 import { text } from '../i18n/catalog';
 
-// isRequired: shown by AuthGate before any other screen until the initial password is replaced.
-// onChanged reloads the session there; a voluntary change keeps the current session as is.
-export function ChangePasswordPage({
-  isRequired,
-  onChanged = () => undefined,
-}: {
-  isRequired: boolean;
-  onChanged?: () => void;
-}) {
+/**
+ * Shown by AuthGate before any other screen until the initial password is replaced; onChanged
+ * reloads the session. It replaces the app, so it also offers the only way out besides changing.
+ * A voluntary change is PasswordChangePage in 全体設定.
+ */
+export function RequiredPasswordChangePage({ onChanged }: { onChanged: () => void }) {
   const logout = useMutation();
-  const form = <PasswordChangeForm isRequired={isRequired} onChanged={onChanged} />;
-  if (!isRequired)
-    return (
-      <section className="login-card">
-        <h1>{text.changePasswordTitle}</h1>
-        {form}
-      </section>
-    );
-  // The required screen replaces the app, so it also offers the only way out besides changing.
   return (
     <div className="login-page">
       <main className="login-card">
@@ -31,7 +19,7 @@ export function ChangePasswordPage({
           <ProductLogo />
         </div>
         <h1>{text.changePasswordTitle}</h1>
-        {form}
+        <PasswordChangeForm isRequired onChanged={onChanged} />
         <ErrorNotice message={logout.error} />
         <button
           type="button"

@@ -18,7 +18,7 @@ import { text } from '../i18n/catalog';
 
 /**
  * The open Project's own settings. Creating and listing Projects belong to the Project switcher
- * and the global administration.
+ * and 全体管理.
  */
 export function SettingsPage() {
   const { project, isProjectAdmin } = useProject();

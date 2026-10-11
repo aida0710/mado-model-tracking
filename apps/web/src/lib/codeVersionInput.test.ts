@@ -19,7 +19,7 @@ const values = {
 const build = (overrides = {}, artifacts = [sifArtifact]) =>
   buildCodeVersionInput({ values: { ...values, ...overrides }, artifacts, projectId: 'project' });
 
-describe('コード版のコンテナ登録', () => {
+describe('コードバージョンのコンテナ登録', () => {
   it('sourceなしでdigest固定imageとargvを保存しPython用requirementsを送らない', () => {
     expect(build({ requirements: 'torch' })).toMatchObject({
       runtime: dockerCodeVersion.runtime,

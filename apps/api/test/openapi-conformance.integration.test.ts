@@ -120,7 +120,7 @@ describe.skipIf(!testDatabaseUrl)('OpenAPIの応答schemaと実応答（独立Po
     expect(page.items.map((item) => item.id)).toEqual([run.id]);
   });
 
-  it('Model・版・aliasの応答がschemaに適合する', async () => {
+  it('Model・バージョン・aliasの応答がschemaに適合する', async () => {
     const fixture = await executionFixture(harness);
     const { basePath, editor, viewer } = fixture;
     const model = await conforms<Model>(

@@ -77,12 +77,6 @@ function makeRequestedKeys() {
       });
 }
 
-// GET /targets/shareable-projects answers one's own Projects (adding a computer), and
-// GET /targets/:id/shareable-projects its owner's; a step changes the owner's or makes them
-// unreadable.
-const ownProjects = [{ id: api.state.project.id, name: api.state.project.name }];
-let ownerProjects = ownProjects;
-
 const calls = [];
 await context.route(
   (url) => url.pathname.startsWith('/api/'),
@@ -102,13 +96,13 @@ await context.route(
     if (parts[0] === 'targets' || parts[0] === 'launchers')
       calls.push({ method, path, search: url.search, body });
     if (path === '/targets' && method === 'POST') {
-      const { personal, projectIds, jobShell, site: settings, ...fields } = body;
+      const { jobShell, site: settings, ...fields } = body;
+      // Whoever adds a computer owns it.
       const target = {
         id: id(),
         ...fields,
-        ownerUserId: personal ? user.id : null,
-        ownerName: personal ? user.displayName : null,
-        projectIds: personal ? (projectIds ?? []) : [],
+        ownerUserId: user.id,
+        ownerName: user.displayName,
         site: settings ? { ...settings, jobShell: null } : null,
         siteAccountMode: settings ? settings.accountMode : null,
       };
@@ -117,10 +111,7 @@ await context.route(
       if (settings?.accountMode === 'shared' && settings.launcherId) requestKey(target.id, null);
       return reply(target, 201);
     }
-    // Before the /targets/:id routes, as in the API.
-    if (path === '/targets/shareable-projects' && method === 'GET')
-      return reply({ items: ownProjects });
-    if (parts[0] === 'targets' && parts.length >= 2) {
+    if (parts[0] === 'targets' && parts.length >= 2 && parts[1] !== 'overview') {
       const target = api.state.targets.find((item) => item.id === parts[1]);
       const [, , resource, key] = parts;
       if (!resource && method === 'PATCH') {
@@ -129,14 +120,6 @@ await context.route(
         if (settings) target.site = { ...target.site, ...settings };
         return reply(target);
       }
-      if (resource === 'projects' && method === 'PUT') {
-        target.projectIds = body.projectIds;
-        return reply(target);
-      }
-      if (resource === 'shareable-projects' && method === 'GET')
-        return ownerProjects
-          ? reply({ items: ownerProjects })
-          : reply({ error: 'ComputeTargetが見つかりません', code: 'not_found' }, 404);
       if (resource === 'job-shells') {
         const versions = site.jobShells.get(target.id) ?? [];
         if (method === 'GET' && !key) return reply({ items: versions.map(summary) });
@@ -242,9 +225,12 @@ const screenshot = async (name) => {
     await page.screenshot({ path: `${screenshotDirectory}/${name}.png`, fullPage: true });
 };
 const workDirectoryLabel = '作業ディレクトリ（計算ノードからも同じパスで見える絶対パス）';
+const computersPage = `${base}/settings/computers`;
+const visibilityChoice = (name) => dialog().getByRole('radio', { name, exact: false });
+const computerRow = (name) => page.getByRole('row').filter({ hasText: name });
 
 console.log('Site computers: a launcher shows its token once with launcher.toml, and gets a new one');
-await page.goto(`${base}/admin/launchers`);
+await page.goto(`${base}/settings/launchers`);
 await page.getByText('ランチャーはまだ登録されていません。').waitFor();
 await page.getByRole('button', { name: 'ランチャーを登録', exact: true }).click();
 await fill('名前', 'main');
@@ -270,11 +256,13 @@ assert.equal(await rotatedToken.inputValue(), 'mmt_browser_rotated');
 assert.equal(lastCall('POST', /\/token$/).path, `/launchers/${mainLauncher.id}/token`);
 await dialog().getByRole('button', { name: '閉じる', exact: true }).last().click();
 
-console.log('Site computers: a global administrator adds a global Slurm site from its template');
-await page.goto(`${projectBase}/compute`);
-await page.getByRole('button', { name: '計算機を追加', exact: true }).click();
+console.log('Site computers: a global administrator adds a public Slurm site from its template');
+await page.goto(computersPage);
+await page.getByRole('button', { name: 'コンピュータを追加', exact: true }).click();
 await select('Executor', 'site');
-assert.equal(await dialog().getByLabel('使える範囲').inputValue(), 'global');
+// Private unless chosen otherwise; the administrator opens this one to everyone.
+assert.equal(await visibilityChoice('Private').isChecked(), true);
+await visibilityChoice('Public').check();
 await select('job shellの雛形', 'slurm');
 assert.equal(await jobShellEditor(dialog()).inputValue(), exampleJobShell('slurm'));
 assert.equal(
@@ -295,7 +283,8 @@ await screenshot('site-computers-target-dialog');
 await dialog().getByRole('button', { name: '保存', exact: true }).click();
 await page.getByRole('dialog').waitFor({ state: 'hidden' });
 const createdSlurm = lastCall('POST', /^\/targets$/).body;
-assert.equal(createdSlurm.personal, false);
+assert.equal(createdSlurm.visibility, 'public');
+assert.ok(!('personal' in createdSlurm));
 assert.ok(!('projectIds' in createdSlurm));
 assert.equal(createdSlurm.jobShell, exampleJobShell('slurm'));
 assert.deepEqual(createdSlurm.runtimeKinds, ['apptainer']);
@@ -312,7 +301,7 @@ const slurm = api.state.targets.find((target) => target.name === 'Slurm cluster'
 console.log('Site computers: the new site shows its job shell, shared key and login checks');
 const details = page.getByTestId('site-computer-details');
 await details.getByRole('heading', { name: 'Slurm cluster' }).waitFor();
-await details.getByText('版1を表示しています').waitFor();
+await details.getByText('バージョン1を表示しています').waitFor();
 await details.getByText('自分の設定はありません', { exact: false }).waitFor();
 // The key requested with the site appears once the launcher has made it (the next poll).
 await details.getByText('mmt-launcher:main:', { exact: false }).waitFor({ timeout: 15000 });
@@ -330,44 +319,44 @@ assert.deepEqual(lastCall('POST', /keys\/rotate$/).body, { personal: false });
 console.log('Site computers: job shell versions, saved only when the content changes');
 await details.getByRole('button', { name: 'job shellを編集', exact: true }).click();
 assert.equal(await jobShellEditor(details).inputValue(), exampleJobShell('slurm'));
-await details.getByRole('button', { name: '新しい版として保存', exact: true }).click();
-await details.getByText('内容が今の版と同じなので', { exact: false }).waitFor();
+await details.getByRole('button', { name: '新しいバージョンとして保存', exact: true }).click();
+await details.getByText('内容が今のバージョンと同じなので', { exact: false }).waitFor();
 await details.getByRole('button', { name: 'job shellを編集', exact: true }).click();
 await jobShellEditor(details).fill('#!/bin/sh\necho v2\n');
-await details.getByRole('button', { name: '新しい版として保存', exact: true }).click();
-await details.getByText('版2を保存しました', { exact: false }).waitFor();
-await details.getByText('版2を表示しています').waitFor();
+await details.getByRole('button', { name: '新しいバージョンとして保存', exact: true }).click();
+await details.getByText('バージョン2を保存しました', { exact: false }).waitFor();
+await details.getByText('バージョン2を表示しています').waitFor();
 await details.getByRole('row').filter({ hasText: 'v1' }).getByRole('button', { name: '表示' }).click();
-await details.getByText('版1を表示しています').waitFor();
+await details.getByText('バージョン1を表示しています').waitFor();
 await details.locator('.job-shell-content').getByText('sbatch', { exact: false }).first().waitFor();
-await details.getByRole('button', { name: '今の版を表示', exact: true }).click();
+await details.getByRole('button', { name: '今のバージョンを表示', exact: true }).click();
 await details.getByText('echo v2').waitFor();
 
-console.log('Site computers: a researcher adds their own manual PC and shares it with the Project');
+console.log('Site computers: a researcher adds their own manual PC, private by default');
 api.state.user.isAdmin = false;
-await page.goto(`${projectBase}/compute`);
-await page.getByRole('button', { name: '計算機を追加', exact: true }).click();
-await dialog().getByText('自分の計算機として追加します', { exact: false }).waitFor();
+await page.goto(computersPage);
+await page.getByRole('button', { name: 'コンピュータを追加', exact: true }).click();
+await dialog().getByText('追加した人が所有者になります', { exact: false }).waitFor();
 assert.equal(await dialog().getByLabel('Executor').count(), 0);
-assert.equal(await dialog().getByLabel('使える範囲').count(), 0);
+assert.equal(await dialog().getByLabel('共有するProject').count(), 0);
+assert.equal(await visibilityChoice('Private').isChecked(), true);
 await select('job shellの雛形', 'direct-docker');
 await select('投入方式', 'manual');
 assert.equal(await dialog().getByLabel('ランチャー').count(), 0);
 await fill('名前', 'Alice PC');
-await select('共有するProject', [api.state.project.id]);
 await fill(workDirectoryLabel, '/home/ui/mmt');
+await screenshot('site-computers-add-dialog');
 await dialog().getByRole('button', { name: '保存', exact: true }).click();
 await page.getByRole('dialog').waitFor({ state: 'hidden' });
 const createdPc = lastCall('POST', /^\/targets$/).body;
 assert.equal(createdPc.executor, 'site');
-assert.equal(createdPc.personal, true);
-assert.deepEqual(createdPc.projectIds, [api.state.project.id]);
+assert.equal(createdPc.visibility, 'private');
+assert.ok(!('personal' in createdPc));
 assert.equal(createdPc.site.connection, null);
 assert.equal(createdPc.site.gpuAssignment, 'lease');
 assert.equal(createdPc.jobShell, exampleJobShell('direct-docker'));
-// The choices were the adder's own Projects, as the API lists them.
-assert.ok(lastCall('GET', /^\/targets\/shareable-projects$/));
 const pc = api.state.targets.find((target) => target.name === 'Alice PC');
+await computerRow('Alice PC').getByText('Private').waitFor();
 
 console.log('Site computers: its owner waits with --watch, takes everyone\'s Jobs with --all');
 const pcDetails = page.getByTestId('site-computer-details');
@@ -376,7 +365,7 @@ await pcDetails.getByText(`mado-tracking submit --site ${pc.id} --watch`, { exac
 await pcDetails.getByText(`mado-tracking submit --site ${pc.id} --watch --all`, { exact: true }).waitFor();
 assert.equal(await pcDetails.getByLabel('あなたのアカウント名').count(), 0);
 await pcDetails
-  .getByLabel('変数（任意。NAME=VALUEを1行に1つ。計算機の変数より優先します）')
+  .getByLabel('変数（任意。NAME=VALUEを1行に1つ。コンピュータの変数より優先します）')
   .fill('GROUP=lab');
 await pcDetails.getByRole('button', { name: '自分の設定を保存', exact: true }).click();
 await pcDetails.getByText('自分の設定を保存しました。').waitFor();
@@ -389,63 +378,64 @@ await personalList.getByRole('button', { name: '再読み込み' }).click();
 await personalList.getByText('GROUP=lab').waitFor();
 await screenshot('site-computers-owned-pc');
 
-console.log('Site computers: the owner stops sharing; the edit PUTs the Projects after the PATCH');
+console.log('Site computers: the owner opens the PC to everyone; the edit PATCHes its visibility');
 await page.getByTestId(`target-edit-${pc.id}`).click();
 assert.equal(await dialog().getByLabel('Executor').count(), 0);
-await select('共有するProject', []);
+await visibilityChoice('Public').check();
 await dialog().getByRole('button', { name: '保存', exact: true }).click();
 await page.getByRole('dialog').waitFor({ state: 'hidden' });
-assert.deepEqual(lastCall('PUT', /\/projects$/).body, { projectIds: [] });
 assert.equal(lastCall('PATCH', /^\/targets\/[^/]+$/).path, `/targets/${pc.id}`);
-await page.getByRole('row').filter({ hasText: 'Alice PC' }).getByText('共有なし（本人だけ）').waitFor();
+assert.equal(lastCall('PATCH', /^\/targets\/[^/]+$/).body.visibility, 'public');
+await computerRow('Alice PC').getByText('Public').waitFor();
 
-console.log("Site computers: a global administrator editing someone else's PC chooses among its owner's Projects");
+console.log("Site computers: someone else's private computer is listed, but neither opened nor described");
+const bobPc = {
+  ...pc,
+  id: id(),
+  name: 'Bob PC',
+  visibility: 'private',
+  ownerUserId: id(),
+  ownerName: 'Bob',
+  site: { ...pc.site, workDirectory: '/home/bob/secret' },
+};
+api.state.targets.push(bobPc);
+await page.goto(computersPage);
+const bobRow = computerRow('Bob PC');
+await bobRow.getByText('Private').waitFor();
+await bobRow.getByText('使えない').waitFor();
+assert.equal(await page.getByTestId(`target-details-${bobPc.id}`).count(), 0);
+assert.equal(await page.getByTestId(`target-edit-${bobPc.id}`).count(), 0);
+assert.equal(await page.getByText('/home/bob/secret').count(), 0);
+await screenshot('site-computers-overview-researcher');
+
+console.log("Site computers: a global administrator manages someone else's private PC without using it");
 api.state.user.isAdmin = true;
-Object.assign(pc, { ownerUserId: id(), ownerName: 'Bob', projectIds: [api.state.project.id] });
-ownerProjects = [{ id: id(), name: 'Owner Lab' }];
-await page.goto(`${projectBase}/compute`);
-await page.getByRole('row').filter({ hasText: 'Alice PC' }).getByText('Bobさんの計算機').waitFor();
-await page.getByTestId(`target-edit-${pc.id}`).click();
-const ownerSharing = dialog().getByLabel('共有するProject');
-await ownerSharing.waitFor();
-// Bob may no longer share it with the Project it is shared with, which stays to be taken off.
-assert.deepEqual(await ownerSharing.locator('option').allTextContents(), [
-  'Owner Lab',
-  `${api.state.project.name}（所有者がEditor以上ではありません）`,
-]);
-await dialog().getByText('選べるのは、所有者がEditor以上のProjectです。', { exact: false }).waitFor();
-assert.equal(lastCall('GET', /shareable-projects$/).path, `/targets/${pc.id}/shareable-projects`);
-await select('共有するProject', [ownerProjects[0].id]);
-await dialog().getByRole('button', { name: '保存', exact: true }).click();
-await page.getByRole('dialog').waitFor({ state: 'hidden' });
-assert.deepEqual(lastCall('PUT', /\/projects$/).body, { projectIds: [ownerProjects[0].id] });
-
-console.log("Site computers: when the owner's Projects cannot be read, an edit leaves the sharing alone");
-const sharingPuts = () =>
-  calls.filter((call) => call.method === 'PUT' && /\/projects$/.test(call.path)).length;
-const sharingPutsBefore = sharingPuts();
-ownerProjects = null;
-await page.getByTestId(`target-edit-${pc.id}`).click();
-await dialog().getByRole('alert').waitFor();
-assert.equal(await dialog().getByLabel('共有するProject').count(), 0);
-await dialog().getByRole('button', { name: '保存', exact: true }).click();
-await page.getByRole('dialog').waitFor({ state: 'hidden' });
-assert.equal(sharingPuts(), sharingPutsBefore);
-// The researcher again, owning the PC.
+await page.goto(computersPage);
+await computerRow('Bob PC').getByText('使えない').waitFor();
+await page.getByTestId(`target-edit-${bobPc.id}`).click();
+assert.equal(await visibilityChoice('Private').isChecked(), true);
+await dialog().getByRole('button', { name: 'キャンセル', exact: true }).click();
+await screenshot('site-computers-overview-administrator');
 api.state.user.isAdmin = false;
-ownerProjects = ownProjects;
-Object.assign(pc, { ownerUserId: api.state.user.id, ownerName: api.state.user.displayName });
-await page.goto(`${projectBase}/compute`);
+await page.goto(computersPage);
 
 console.log('Site computers: on a site of personal accounts, a researcher saves theirs and gets a key');
-// As a researcher sees a global site: its account mode, not its settings.
-const personalSite = { ...slurm, id: id(), name: 'ABCI', site: null, siteAccountMode: 'personal' };
+// As a researcher sees someone else's public site: its account mode, not its settings.
+const personalSite = {
+  ...slurm,
+  id: id(),
+  name: 'ABCI',
+  ownerUserId: id(),
+  ownerName: '管理者',
+  site: null,
+  siteAccountMode: 'personal',
+};
 api.state.targets.push(personalSite);
 await page.getByRole('button', { name: '再読み込み', exact: true }).first().click();
 await page.getByTestId(`target-details-${personalSite.id}`).click();
 const personalDetails = page.getByTestId('site-computer-details');
 await personalDetails
-  .getByText('アカウント名を保存するまで、この計算機でJobを作れません', { exact: false })
+  .getByText('アカウント名を保存するまで、このコンピュータでJobを作れません', { exact: false })
   .waitFor();
 await personalDetails.getByText('job shellがまだありません', { exact: false }).waitFor();
 assert.equal(await personalDetails.getByRole('button', { name: 'job shellを編集' }).count(), 0);
@@ -507,7 +497,7 @@ const siteJob = {
 };
 api.state.jobs.push(siteJob);
 await page.goto(`${projectBase}/jobs?job=${siteJob.id}`);
-await page.locator('.job-detail').getByText('job shellの版').waitFor();
+await page.locator('.job-detail').getByText('job shellのバージョン').waitFor();
 await page.locator('.job-detail').getByText('v1', { exact: true }).waitFor();
 // Screens that choose where a Job runs read only the targets usable in the Project.
 assert.ok(
@@ -519,13 +509,14 @@ assert.ok(
 
 console.log('Site computers: a revoked launcher stays on its site, marked, until another is chosen');
 api.state.user.isAdmin = true;
-await page.goto(`${base}/admin/launchers`);
+await page.goto(`${base}/settings/launchers`);
 await page.getByRole('button', { name: '失効させる', exact: true }).click();
 await dialog().getByRole('button', { name: '失効させる', exact: true }).click();
 await page.getByRole('dialog').waitFor({ state: 'hidden' });
 await page.getByRole('row').filter({ hasText: 'main' }).getByText('失効', { exact: true }).waitFor();
 assert.equal(await page.getByRole('button', { name: 'tokenを作り直す', exact: true }).count(), 0);
-await page.goto(`${projectBase}/compute`);
+await page.goto(computersPage);
+await computerRow('Slurm cluster').getByText('ランチャーは失効').waitFor();
 await page.getByTestId(`target-edit-${slurm.id}`).click();
 const launcherSelect = dialog().getByLabel('ランチャー');
 assert.equal(await launcherSelect.inputValue(), mainLauncher.id);
@@ -533,9 +524,21 @@ assert.equal(await launcherSelect.locator('option:checked').textContent(), 'main
 await dialog().getByText('ランチャーはまだ登録されていません', { exact: false }).waitFor();
 await dialog().getByRole('button', { name: 'キャンセル', exact: true }).click();
 
+console.log("Site computers: the Project's Compute lists only the computers one may use, read only");
+api.state.user.isAdmin = false;
+await page.goto(`${projectBase}/compute`);
+await page.getByRole('row').filter({ hasText: 'Alice PC' }).waitFor();
+assert.equal(await page.getByRole('row').filter({ hasText: 'Bob PC' }).count(), 0);
+assert.equal(await page.getByRole('button', { name: 'コンピュータを追加', exact: true }).count(), 0);
+assert.equal(await page.getByTestId(`target-edit-${pc.id}`).count(), 0);
+await screenshot('site-computers-project-compute');
+await page.getByRole('link', { name: '全体設定の「コンピュータ」を開く' }).click();
+await page.waitForURL(/\/settings\/computers$/);
+api.state.user.isAdmin = true;
+
 console.log('Site computers: at phone width the details stay within the screen');
 await page.setViewportSize({ width: 390, height: 844 });
-await page.goto(`${projectBase}/compute`);
+await page.goto(computersPage);
 await page.getByTestId(`target-details-${slurm.id}`).click();
 await page.getByTestId('site-computer-details').waitFor();
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

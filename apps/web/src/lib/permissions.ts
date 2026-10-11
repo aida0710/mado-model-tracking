@@ -86,19 +86,19 @@ export function canTransferHookOwners(role: ProjectRole, globalAdmin: boolean): 
 }
 
 /**
- * Adding a computer: anyone signed in may add a site of their own (POST /targets with
- * `personal: true` from a session); global administrators also add global targets of any executor.
+ * Adding a computer: anyone signed in may add a site (POST /targets from a session), and becomes
+ * its owner; global administrators also add ssh and local targets.
  */
 export function canAddTarget(user: Pick<User, 'status'>): boolean {
   return user.status !== 'disabled';
 }
 
-/** Global computers serve every Project, so only global administrators add them (ssh and local too). */
-export function canAddGlobalTarget(user: Pick<User, 'isAdmin'>): boolean {
+/** ssh and local targets run through the workers' own SSH keys, so only global administrators add them. */
+export function canAddSshOrLocalTarget(user: Pick<User, 'isAdmin'>): boolean {
   return isGlobalAdmin(user);
 }
 
-/** The researcher who added a site owns it; a global computer has no owner. */
+/** Whoever added a computer owns it; one from before owners has none. */
 export function isTargetOwner(
   user: Pick<User, 'id'>,
   target: Pick<ComputeTarget, 'ownerUserId'>,
@@ -107,9 +107,9 @@ export function isTargetOwner(
 }
 
 /**
- * Editing a computer, sharing it, saving its job shell, its shared account key and everyone's
- * settings on it: a global administrator or its owner (targetService). Everyone who may use it
- * reads its job shell and keeps their own settings and key.
+ * Editing a computer (its visibility too), saving its job shell, its shared account key and
+ * everyone's settings on it: a global administrator or its owner (targetService). Everyone who may
+ * use it reads its job shell and keeps their own settings and key.
  */
 export function canManageTarget(
   user: Pick<User, 'id' | 'isAdmin'>,

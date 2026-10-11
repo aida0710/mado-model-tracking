@@ -16,7 +16,7 @@ sudo apt-get install python3 python3-venv python3-pip openssh-client git
 python3 --version
 ```
 
-Pythonの版が3.11未満なら、対応するPythonを別途用意する。リポジトリのrootから、専用venvにSDKとworkerを入れる。
+Pythonのバージョンが3.11未満なら、対応するPythonを別途用意する。リポジトリのrootから、専用venvにSDKとworkerを入れる。
 
 ```bash
 python3 -m venv python/.venv
@@ -72,9 +72,9 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 `create_run()`は`queued`のRunを作る。workerに渡すRunをSDKで`start()`しないこと。workerが供給する`MMT_RUN_ID`があれば、引数なしの`start_run()`でそのRunへ接続する。このcontextの状態はworkerが終了時に確定する。job実行開始後の`log_params()`はAPIに拒否されるため、実行設定はRun作成時に渡す。
 
-`register_model()` / `register_dataset()`は通常の版登録、`register_output_model()` / `register_output_dataset()`はRunの出力登録。出力は`sourceRunId`と親の版IDを保存する。出力モデルは`training` / `finetuning`で登録できる。
+`register_model()` / `register_dataset()`は通常のバージョン登録、`register_output_model()` / `register_output_dataset()`はRunの出力登録。出力は`sourceRunId`と親のバージョンIDを保存する。出力モデルは`training` / `finetuning`で登録できる。
 
-`register_model()` / `register_output_model()`は`model_name=`で既存のModelを名前で探して再利用し、無ければ作成する（`GET /projects/:p/models?name=`で探し、無ければPOST、同時作成で409になったら再GET）。既存Modelのfamilyが`family=`と違う場合は`ConfigurationError`になる。`version`を省略するとAPIが整数で採番する（1, 2, 3, …）。従来の`name=`も同じ動作の別名として受け付ける。出力モデルはRunの`outputModelVersionIds`に登録順で現れ、版を削除すると外れる。sourceRunがtraining/finetuning以外なら422 `output_model_kind`、削除済みRunなら422 `source_run_deleted`になる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。64MiB以上のファイルは次節のupload sessionで送る。
+`register_model()` / `register_output_model()`は`model_name=`で既存のModelを名前で探して再利用し、無ければ作成する（`GET /projects/:p/models?name=`で探し、無ければPOST、同時作成で409になったら再GET）。既存Modelのfamilyが`family=`と違う場合は`ConfigurationError`になる。`version`を省略するとAPIが整数で採番する（1, 2, 3, …）。従来の`name=`も同じ動作の別名として受け付ける。出力モデルはRunの`outputModelVersionIds`に登録順で現れ、バージョンを削除すると外れる。sourceRunがtraining/finetuning以外なら422 `output_model_kind`、削除済みRunなら422 `source_run_deleted`になる。Artifactはファイルまたはbinary streamからraw bodyで送信し、読み込みを1MiBずつに制限する。64MiB以上のファイルは次節のupload sessionで送る。
 
 `run.download_input_model("inputs/weights.json")`は、workerが渡したModelVersion metadataをRunの固定された`modelVersionId`とprojectへ照合してから、Artifactをstreamで取得する。途中で接続が切れたら、受信済みのbyte位置からRangeで再開する（後述）。ローカルの`file://` URIにも対応する。worker外で使う場合は`model_version=...`に登録済みModelVersionのmetadataを渡す。ダウンロード完了後にファイルを置き換え、通信失敗で部分的な重みを残さない。
 
@@ -90,7 +90,7 @@ contextが正常に終了するとRunは`finished`、例外が出ると`failed`�
 
 ### Artifactのdownloadは切断後にRangeで再開する
 
-`client.download_artifact_to(project_id, artifact_id, stream)`は、seek可能なstreamへArtifactを書き、`{sha256, size}`を返す。`Accept-Encoding: identity`で取得し、接続が切れたら`Range: bytes=<受信済み>-`と`If-Range: <ETag>`で続きを要求する。content endpointのETagは`"sha256-<hex>"`で版を表す。途中で版が変わってAPIが200で全体を返した場合は、受信済みのbytesを捨てて最初から書き直す。最後に全体のSHA-256をETagと照合する。最初の要求がHTTPエラーになった場合は再試行せず、そのまま`ApiError`にする。再開は最大6回まで。`client.download_artifact()`のiteratorは従来どおり再開しない。
+`client.download_artifact_to(project_id, artifact_id, stream)`は、seek可能なstreamへArtifactを書き、`{sha256, size}`を返す。`Accept-Encoding: identity`で取得し、接続が切れたら`Range: bytes=<受信済み>-`と`If-Range: <ETag>`で続きを要求する。content endpointのETagは`"sha256-<hex>"`でバージョンを表す。途中でバージョンが変わってAPIが200で全体を返した場合は、受信済みのbytesを捨てて最初から書き直す。最後に全体のSHA-256をETagと照合する。最初の要求がHTTPエラーになった場合は再試行せず、そのまま`ApiError`にする。再開は最大6回まで。`client.download_artifact()`のiteratorは従来どおり再開しない。
 
 ## workerを起動する
 
@@ -125,7 +125,7 @@ compute targetからも`MMT_API_URL`に到達できる必要がある。SSH targ
 実行コードの`MMT_API_TOKEN`と`MLFLOW_TRACKING_TOKEN`には、APIがJobごとに発行するJob限定token（`mmtj_`で始まる）が入る。worker自身のtokenは実行コードの環境変数に入らない。
 
 - 権限はRunの作成者のもの。scopeは`read`・`runs:write`・`artifacts:write`・`registry:write`で、Project権限は作成者の現在のmembershipで決まる（editorが投入したコードはeditorの権限で動く。作成者をProjectから外すと403）。
-- 書けるのは対象Run（metrics・params・tags・logs・入力Dataset・Artifact）、そのRunをsourceとするモデル・データセットの版、そのRunのLogged Model、出力先Modelの作成だけ。同じProjectの別Run、worker API、token発行、Project設定、自動実行rule、Runの説明文とコメントは403。読み出しは同じProject内なら可能（上流RunのArtifact取得など）。
+- 書けるのは対象Run（metrics・params・tags・logs・入力Dataset・Artifact）、そのRunをsourceとするモデル・データセットのバージョン、そのRunのLogged Model、出力先Modelの作成だけ。同じProjectの別Run、worker API、token発行、Project設定、自動実行rule、Runの説明文とコメントは403。読み出しは同じProject内なら可能（上流RunのArtifact取得など）。
 - Jobが終わる（成功・失敗・cancel）かleaseが変わると401になる。
 - tokenはworkerのstate directory（mode 700、ファイルは600）のjournalに保存し、worker再起動後の実行中Jobはその値を使い続ける。state directoryを失った場合、実行中Jobの新しい起動はしない。
 - workerは実行開始の直後に`running`のheartbeatを送る。`claimed`のままworkerが再起動するとAPIはtokenを再発行するため、実行中processのtokenが失効しないようにする。
@@ -163,7 +163,7 @@ DockerのGPUは`--gpus device=...`でJobに予約されたIDだけを指定し�
 
 SIF CLIには`exec`の`--cleanenv`, `--containall`, `--no-home`, `--no-mount`, `--no-eval`, `--pwd`が必要。起動前に対応を確認する。envは`APPTAINERENV_`または`SINGULARITYENV_`で渡し、shell評価とhostのhome/cwd/設定済みbindを無効にする。対応CLIが無い場合は`state.runtimeCapability.available=false`と理由を返し、Jobを失敗にする。[Apptainer exec](https://apptainer.org/docs/user/latest/cli/apptainer_exec.html)、[Singularity exec](https://docs.sylabs.io/guides/latest/user-guide/cli/singularity_exec.html)
 
-## 任意sourceは保存した版から展開する
+## 任意sourceは保存したバージョンから展開する
 
 sourceは次の3種類を実行できる。
 
@@ -177,19 +177,19 @@ zip/tarは展開量4GiB、10万entryまで。展開時に既存ファイルを�
 
 workerはRun kindとCodeVersionの`taskTypes`、モデル系列、project、pinned version、GPU一覧を確認する。`inference`, `evaluation`, `training`, `finetuning`, `processing`を扱う。`CUDA_VISIBLE_DEVICES`はjobの`gpuIds`を使い、CodeVersionの環境変数より優先する。
 
-Runの`executionSnapshot`とコード版を照合し、`executionMode=test`では保存済みの`testEntrypoint`を使う。実行前に`.mmt/source.zip`と`.mmt/source-manifest.json`を作成し、終了時にRunのArtifactsへ保存する。manifestにはRun・Job・コード版・commit・コマンドとファイルのhashを記録し、環境変数の値は含めない。sourceなしコンテナはmanifestだけを保存する。再接続時は作成済みのsnapshotを回収し、コードを再展開しない。
+Runの`executionSnapshot`とコードバージョンを照合し、`executionMode=test`では保存済みの`testEntrypoint`を使う。実行前に`.mmt/source.zip`と`.mmt/source-manifest.json`を作成し、終了時にRunのArtifactsへ保存する。manifestにはRun・Job・コードバージョン・commit・コマンドとファイルのhashを記録し、環境変数の値は含めない。sourceなしコンテナはmanifestだけを保存する。再接続時は作成済みのsnapshotを回収し、コードを再展開しない。
 
 ## 実行コードはcontextファイルから入力を読む
 
-workerは以下をファイルと環境変数で供給する。ファイルの権限は600。版のIDをそのまま渡し、aliasを実行中に引き直さない。
+workerは以下をファイルと環境変数で供給する。ファイルの権限は600。バージョンのIDをそのまま渡し、aliasを実行中に引き直さない。
 
 | 環境変数 | 内容 |
 |---|---|
 | `MMT_JOB_CONTEXT_FILE` | job/run/project/kind、parameters、ModelVersion、入力DatasetVersions、codeVersionId、GPU一覧のJSON |
 | `MMT_PARAMETERS_FILE`, `MMT_PARAMETERS_JSON` | parametersのJSON |
-| `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデル版ID |
-| `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONと版ID配列のJSON |
-| `MMT_INPUT_DATASET_DIRS` | 入力DatasetVersionの本体を置いたディレクトリ`{versionId: path}`のJSON（read-only）。記述子だけの版（`urn:`・`mmt-artifact:`）は入らない（「入力Datasetの本体はworkerが実行前に用意する」節） |
+| `MMT_MODEL_VERSION_FILE`, `MMT_MODEL_VERSION_ID` | `{modelVersion: ...}`のJSONとモデルバージョンID |
+| `MMT_DATASET_VERSIONS_FILE`, `MMT_INPUT_DATASET_VERSION_IDS` | `{inputDatasets: [...]}`のJSONとバージョンID配列のJSON |
+| `MMT_INPUT_DATASET_DIRS` | 入力DatasetVersionの本体を置いたディレクトリ`{versionId: path}`のJSON（read-only）。記述子だけのバージョン（`urn:`・`mmt-artifact:`）は入らない（「入力Datasetの本体はworkerが実行前に用意する」節） |
 | `MMT_UPSTREAM_RUN_ID`, `MMT_UPSTREAM_RUN_FILE` | 上流Run（`run.parentRunId`）のIDと`upstream-run.json`のpath。上流が無いJobには付かない |
 | `MMT_RESUME_CHECKPOINT_DIR`, `MMT_RESUME_STEP`, `MMT_RESUME_CHECKPOINT_FILE` | 再開元checkpointの展開先（read-only）、保存時のstep、`resume-checkpoint.json`のpath。checkpointから再開しないJobには付かない（「学習を途中から再開する」節） |
 | `MMT_API_URL`, `MMT_API_TOKEN` | SDK接続情報。tokenはJob限定token |
@@ -214,15 +214,15 @@ if upstream_run_id() is not None:
     wavs = download_upstream_artifacts("upstream", prefix="wav/")  # upstream/wav/... に保存
 ```
 
-上流が無いJobでは`upstream_run_id()`はNone、2つの関数は空の配列を返し、APIを呼ばない。同じpathに複数の版があれば最新の版を取る。`..`や絶対パスを含むArtifact pathがあれば、何も書かずに`ConfigurationError`にする。保存は一時ファイルからのrenameなので、途中で失敗しても壊れたファイルは残らない。Rangeでの再開は未対応（全体を取り直す）。
+上流が無いJobでは`upstream_run_id()`はNone、2つの関数は空の配列を返し、APIを呼ばない。同じpathに複数のバージョンがあれば最新のバージョンを取る。`..`や絶対パスを含むArtifact pathがあれば、何も書かずに`ConfigurationError`にする。保存は一時ファイルからのrenameなので、途中で失敗しても壊れたファイルは残らない。Rangeでの再開は未対応（全体を取り直す）。
 
 ## 入力Datasetの本体はworkerが実行前に用意する
 
 workerは実行コードを起動する前に、入力DatasetVersionごとに本体をtargetへ用意して照合する。用意できなければentrypointを起動せずJobを`failed`で完了する（APIがGPU予約を解放する）。理由はRunのログにerrorで残り、`Job.error`にも入る。
 
-| 版 | 取得元 | 照合 |
+| バージョン | 取得元 | 照合 |
 |---|---|---|
-| `contentKind=artifacts` | files API（`GET /projects/:p/datasets/:d/versions/:v/files`）の一覧のArtifact | 一覧からmanifest digestを計算し直して版の`digest`と一致させ、各ファイルのsha256・sizeを照合する |
+| `contentKind=artifacts` | files API（`GET /projects/:p/datasets/:d/versions/:v/files`）の一覧のArtifact | 一覧からmanifest digestを計算し直してバージョンの`digest`と一致させ、各ファイルのsha256・sizeを照合する |
 | `reference`の`file://` | target上の既存path。copyしない | 存在と読み取り権限だけ確かめる |
 | `reference`の`https://` | 認証無しのGET。redirectは追わない。保存名はURLの最後のpath区間 | `digest`が`sha256:<hex>`か64桁hexならsha256を照合する。それ以外の形のdigestは照合できない |
 | `reference`の`s3://bucket/key` | target上の`AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`・`AWS_SESSION_TOKEN`・`AWS_REGION`（無ければ`us-east-1`）・`AWS_ENDPOINT_URL_S3`/`AWS_ENDPOINT_URL`・`AWS_CA_BUNDLE`で署名v4。keyがobjectそのものならその1つ、それ以外は`key/`配下の全object | sizeを照合する（S3のETagはsha256ではない） |
@@ -233,7 +233,7 @@ workerは実行コードを起動する前に、入力DatasetVersionごとに本
 
 ### 転送方式（targetの`datasetTransfer`）
 
-- `relay`（既定）: workerがworker tokenでAPIからArtifactを取得し（Range再開・sha256照合）、HTTPSも取得して、1本のtarでtargetへ送る。GPU計算機がAPIへ届かなくてよい。worker側の一時ファイルはstate directory配下のjournalに置き、送信後に消す（worker側にも一時的に版1つ分の空きが要る）。
+- `relay`（既定）: workerがworker tokenでAPIからArtifactを取得し（Range再開・sha256照合）、HTTPSも取得して、1本のtarでtargetへ送る。GPUコンピュータがAPIへ届かなくてよい。worker側の一時ファイルはstate directory配下のjournalに置き、送信後に消す（worker側にも一時的にバージョン1つ分の空きが要る）。
 - `direct`: targetがJob token（`mmtj_`）で`GET /projects/:p/artifacts/:a/content`を呼ぶ。HTTPSもtargetが取得する。worker tokenはtargetへ渡さない。Job tokenはrunnerのstdinで渡し（worker側では権限600の一時ファイルを経由して送信後に消す）、argvやtarget上のファイルに残さない。targetから`MMT_API_URL`（workerのAPI URL）へ届く必要がある。
 - `s3://`と`file://`は方式によらずtarget側で扱う。S3の認証情報はtargetのSSH非対話シェル（local executorならworker process）の環境変数に置く。APIやworkerには置かない。
 
@@ -241,12 +241,12 @@ target側の取得がネットワークやサーバー側の理由で失敗し�
 
 ### dataset cache
 
-本体は`<workDirectory>/.mmt-cache/datasets/<key>/data`に置く。`<key>`は`artifacts`の版ではmanifest digestのhex、`reference`の版では`r-`＋`sha256(uri + "\n" + digest)`。
+本体は`<workDirectory>/.mmt-cache/datasets/<key>/data`に置く。`<key>`は`artifacts`のバージョンではmanifest digestのhex、`reference`のバージョンでは`r-`＋`sha256(uri + "\n" + digest)`。
 
 - 同じkeyは`<key>.lock`（flock）で排他する。完了マーカー`complete.json`があればそのまま使い、取得し直さない。同じworkerの並列Jobはworker内でも待ち合わせるので、`relay`でも取得は1回。別のworkerのJobとはtargetのlockで待ち合わせる（`relay`ではそれぞれのworkerが一度取得し、後に着いた方のtarは使わずに捨てる）。
 - 完了マーカーの無いentry（取得中に中断したもの）は信用せず、消して作り直す。
 - 完了したファイルはread-only（ファイル0400、ディレクトリ0500）。host pythonはworkspaceの`inputs/datasets/<versionId>`（cacheへのsymlink）、Docker・Singularity・Apptainerは`/mmt/datasets/<versionId>`（read-only bind）で読む。起動直前にもう一度完了マーカーを確かめる。
-- 上限はtargetの`datasetCacheMaxBytes`（既定100GiB、Compute画面のtarget編集で変えられる）。新しいentryを入れる前に、最終使用（`last-used`のmtime）の古い順に消す。未終了のJobが使うentry（`users/<jobId>`のworkspaceが終端でない）は消さない。使用中のentryだけで上限を超えるときは、そのまま取得してRunのログに残す。1つの版が上限より大きければJobを失敗させる。
+- 上限はtargetの`datasetCacheMaxBytes`（既定100GiB、全体設定の「コンピュータ」のtarget編集で、所有者か全体管理者が変えられる）。新しいentryを入れる前に、最終使用（`last-used`のmtime）の古い順に消す。未終了のJobが使うentry（`users/<jobId>`のworkspaceが終端でない）は消さない。使用中のentryだけで上限を超えるときは、そのまま取得してRunのログに残す。1つのバージョンが上限より大きければJobを失敗させる。
 - 起動前に失敗・取消したJobは自分の使用印を外す。外せずに残った使用印は、workspaceが24時間起動しなければ無効になる。
 
 `MMT_DATASET_VERSIONS_FILE`・`MMT_INPUT_DATASET_VERSION_IDS`と、上流Runの`MMT_UPSTREAM_RUN_ID`・`upstream-run.json`は従来どおり渡すので、記述子やSDKで読むコードはそのまま動く。
@@ -271,7 +271,7 @@ worker tokenには`read` scopeが要る（files APIを読むため）。
 | `/mmt/inputs/checkpoint` | 再開元checkpointのファイル（再開するJobだけ） | read-only |
 | `/mmt/datasets/<versionId>` | 入力DatasetVersionの本体（targetのdataset cacheか`file://`のpath） | read-only |
 | `/mmt/context` | context、parameters、model-version、dataset-versionsのJSON | read-only |
-| `/mmt/source` | 任意sourceの固定版。source=nullならmountしない | read-only |
+| `/mmt/source` | 任意sourceの固定バージョン。source=nullならmountしない | read-only |
 | `/mmt/outputs` | imageが生成する結果 | read/write |
 
 Artifact重みはworkerが認証済みAPIからstream取得し、targetへの転送後もSHA256とサイズを確認する。SIFも登録SHA256と実ファイルを照合する。途中でdownload/転送が失敗した入力からentrypointを起動しない。`file://`の重みはtarget側のregular fileからcopyする。HTTP(S)の重みはworker側の別clientで取得し、API tokenやCookieを転送せず、redirectを追わない。DatasetのURIは次節の規則でだけ取得する。
@@ -333,7 +333,7 @@ SDKを入れないコンテナでも、実行時に決まる出力を自分で�
 - モデルを宣言できるのは training / finetuning の Run だけ（APIが422 `output_model_kind`で拒否し、Jobはfailedになる）。上限はRunごとにモデル16件・Dataset 64件で、超えた`result.json`はtarget側の検証で失敗する。
 - workerは全Artifactの保存とmetricsの送信の後、complete の前に `POST /worker/jobs/:id/outputs` で宣言を送る。`index` は `models` を0から、続けて `datasets` を `models.length` からの通し番号にする。登録できた `index` はjournalに残し、worker再起動後は未登録の分だけを送る。応答が失われて再送しても同じ `index` なので二重登録にならない。
 - worker token に `registry:write` が必要。宣言のAPIエラー（scope不足の403、Model・Datasetが無い404、上限超過やTaskと別Modelの422など）はJobをfailedにする。lease切れ（409 `invalid_lease`、401、410）だけはlease拒否として扱い、completeを送らない。
-- 登録した版の自動実行は学習Runの成功まで待ち、失敗・キャンセルなら skip される。
+- 登録したバージョンの自動実行は学習Runの成功まで待ち、失敗・キャンセルなら skip される。
 
 ### 出力の一括転送（tar stream）
 
@@ -342,7 +342,7 @@ SDKを入れないコンテナでも、実行時に決まる出力を自分で�
 1. runnerはentrypoint成功後の検証で、宣言された全ファイルの一覧（index、JSON Lines）をworkspaceの`output-index.jsonl`へ保存し、`state.json`には件数・合計サイズ・indexのSHA256・metrics・宣言だけを持つ（ファイル数が増えてもpollの応答が大きくならない）。
 2. workerは保存済み（journalで確認済み）の`path:sha256`の一覧をstdinで渡して`output-archive`を起動する。runnerは非圧縮のtar（PAX形式）をstdoutへ書く。先頭のmemberがindex、続いて未確認のファイルをindexの順に並べる。
 3. workerはstreamを読みながら、indexのSHA256を`state.json`の値と、各memberのpath・サイズ・順序をindexと照合する。regular file以外（symlink、hardlink、ディレクトリ、デバイス）、宣言外のpath、`..`や絶対パスを含むmemberがあれば、そのmemberを保存する前に回収を失敗させる。1ファイルずつ一時ファイルへ書きながらSHA256を計算し、一致したものだけを`artifact_uploads`（64MiB以上はupload session）で保存する。1ファイルでもSHA256が合わなければ、そのファイルを保存せずJobをfailedにする。
-4. 保存できたファイルは`path:sha256`でjournalに記録する。journalの書き込みは最大1秒に1回にまとめる（1万ファイルで毎回journal全体を書き直すと遅いため）。worker processが落ちた場合、最後の1秒分のファイルを再び保存することがあり、同じ内容のArtifactの版が1つ増える。
+4. 保存できたファイルは`path:sha256`でjournalに記録する。journalの書き込みは最大1秒に1回にまとめる（1万ファイルで毎回journal全体を書き直すと遅いため）。worker processが落ちた場合、最後の1秒分のファイルを再び保存することがあり、同じ内容のArtifactのバージョンが1つ増える。
 5. streamが途中で切れた、または300秒何も届かない場合は、通常の再接続（指数backoff）の後、未確認のファイルだけを指定してtarを取り直す。runnerが検証後に変わったファイルを見つけた場合は終了コード65で拒否し、workerは再試行せずJobをfailedにする。
 
 workerが一度に持つのは1ファイル分の一時ファイルと、indexとjournal（1ファイルあたり数百byte）だけ。target側でも出力を圧縮・複製しない。tarは手で中身を確かめられる（`python3 <runner.pyz> output-archive <workspace> < /dev/null | tar tvf -`）。
@@ -351,15 +351,15 @@ SSHの接続共有（ControlMaster/ControlPersist）は、接続先の`sshd`の�
 
 ### Taskの出力設定で学習済みモデルを登録する
 
-training/finetuningのTaskに`outputModel`を保存すると、そのTaskから起動したRunが`finished`になったとき、APIが`artifactPath`のArtifactを版として登録する。学習コードにSDKの登録処理は要らない。
+training/finetuningのTaskに`outputModel`を保存すると、そのTaskから起動したRunが`finished`になったとき、APIが`artifactPath`のArtifactをバージョンとして登録する。学習コードにSDKの登録処理は要らない。
 
 | 項目 | 内容 |
 |---|---|
 | 登録先 | `modelId`（既存Model）か`createModel:{name,family}`（同じ名前があれば再利用、無ければ作成）。系列はTaskのCodeVersionの対応系列から選ぶ |
 | `artifactPath` | Run Artifactのファイルpath。`MMT_OUTPUTS_DIR/model/weights.bin`なら`container/model/weights.bin`。同じpathが複数あれば最新 |
-| 版名 | 省略時は整数の自動採番。`versionTemplate`は`{runId}`・`{runName}`・`{taskRevision}`を使える |
-| 親版・source | 親版はRunの入力モデル版（finetuningの元）、sourceRunはそのRun |
-| 二重登録 | 学習コードが同じModelへSDKやMLflowで登録済みなら、Task側は`skipped`（`already_registered_by_run`）で版は1件。下流の自動推論も1回だけ。別のModelへの登録はTask側を妨げない |
+| バージョン名 | 省略時は整数の自動採番。`versionTemplate`は`{runId}`・`{runName}`・`{taskRevision}`を使える |
+| 親バージョン・source | 親バージョンはRunの入力モデルバージョン（finetuningの元）、sourceRunはそのRun |
+| 二重登録 | 学習コードが同じModelへSDKやMLflowで登録済みなら、Task側は`skipped`（`already_registered_by_run`）でバージョンは1件。下流の自動推論も1回だけ。別のModelへの登録はTask側を妨げない |
 | 失敗 | Artifactが無い、Runの作成者が編集権限を失った、などは`failed`と理由を記録し、Runは`finished`のまま |
 | 対象外 | failed/canceledのRun、テスト実行 |
 
@@ -397,7 +397,7 @@ rules = client.list_automation_rules(project_id)
 executions = client.list_automation_executions(project_id)
 ```
 
-有効ruleは、その後に保存が確定したModelVersionから起動する。過去の版は対象外。同じruleとモデル版の組合せは一度だけqueueへ入る。`register_output_model()`もこの登録経路を使う。rule自体の受付状態と、作られたRun/Jobの実行状態は`automation-executions`で確認する。
+有効ruleは、その後に保存が確定したModelVersionから起動する。過去のバージョンは対象外。同じruleとモデルバージョンの組合せは一度だけqueueへ入る。`register_output_model()`もこの登録経路を使う。rule自体の受付状態と、作られたRun/Jobの実行状態は`automation-executions`で確認する。
 
 ## CPUの学習と推論を短時間で試す
 
@@ -417,9 +417,9 @@ export MMT_ALLOW_LOCAL_EXECUTOR=true
 python/.venv/bin/mado-tracking-worker --once
 ```
 
-training例はゼロから初期化してlossを記録し、weights.jsonをArtifactへ保存して、固定のModel `cpu-linear`に自動採番で出力ModelVersionを足す。終了後にRunの`outputModelVersionIds`から版IDを取り出し、表示されたinferenceCodeVersionIdとともに新しいinference Runへ指定する。inference例は固定されたモデル版のArtifactから重みを読み、予測結果をArtifactと出力DatasetVersionに保存する。
+training例はゼロから初期化してlossを記録し、weights.jsonをArtifactへ保存して、固定のModel `cpu-linear`に自動採番で出力ModelVersionを足す。終了後にRunの`outputModelVersionIds`からバージョンIDを取り出し、表示されたinferenceCodeVersionIdとともに新しいinference Runへ指定する。inference例は固定されたモデルバージョンのArtifactから重みを読み、予測結果をArtifactと出力DatasetVersionに保存する。
 
-同じtrainingコードを`kind="finetuning"`のRunで実行すると、入力ModelVersionの`weight`と`bias`から学習を続ける。Runの`modelVersionId`へ固定された入力モデル版を指定する。重みは`MMT_MODEL_FILE`があればそのファイルから、なければSDKの`download_input_model()`で読み込む。familyは`linear`、weight/biasは有限の数値であることを確認し、入力なし・不正な重みは失敗させる。出力ModelVersionには親版IDと、実際に使った初期weight/biasを記録する。kindは接続したRunから判断し、`MMT_JOB_KIND`が指定されている場合は一致も確認する。
+同じtrainingコードを`kind="finetuning"`のRunで実行すると、入力ModelVersionの`weight`と`bias`から学習を続ける。Runの`modelVersionId`へ固定された入力モデルバージョンを指定する。重みは`MMT_MODEL_FILE`があればそのファイルから、なければSDKの`download_input_model()`で読み込む。familyは`linear`、weight/biasは有限の数値であることを確認し、入力なし・不正な重みは失敗させる。出力ModelVersionには親バージョンIDと、実際に使った初期weight/biasを記録する。kindは接続したRunから判断し、`MMT_JOB_KIND`が指定されている場合は一致も確認する。
 
 APIなしでも、明示した入力ファイルからのfine-tuningを試せる。
 
@@ -462,7 +462,7 @@ with start_run(kind="training", parameters={"steps": 1000}) as run:
 ### 再開する
 
 - Webの**Run詳細**の**Checkpoint**タブで、失敗・停止したRunの行の「このcheckpointから再開」を押すと、そのRunのJobをretryして新しいRunへ移る。**Jobs**の「最新checkpointから再開」は最大stepのcheckpointを選ぶ（そのRunにcheckpointが無く、Run自体が再開Runなら、その再開元を引き継ぐ）。
-- APIでは`POST /projects/:p/jobs/:j/retry`の本文`{checkpointId}`か`{resumeFromLatestCheckpoint:true}`、Task起動・Run作成の`resumeCheckpointId`。再開できるのは、checkpointと同じProjectで、元のRunと同じkind（trainingまたはfinetuning）、同じCode（版は違ってよい）のRunだけ。
+- APIでは`POST /projects/:p/jobs/:j/retry`の本文`{checkpointId}`か`{resumeFromLatestCheckpoint:true}`、Task起動・Run作成の`resumeCheckpointId`。再開できるのは、checkpointと同じProjectで、元のRunと同じkind（trainingまたはfinetuning）、同じCode（バージョンは違ってよい）のRunだけ。
 - 新しいRunには`resumeCheckpointId`、`environment.resume={checkpointId, sourceRunId, step}`、`parentRunId`（元のRun）が入り、Jobの作成後は変えられない。
 
 ### workerが行うこと
@@ -503,25 +503,25 @@ logsとmetricsは少なくとも1回送る方式。APIの保存成功後に応�
 
 ## workerの在籍と応答途絶を確認する
 
-workerはclaimとresumeで`workerInfo`（パッケージ`mado-tracking`の版とホスト名）をAPIへ送る。APIはtoken IDとworkerIdの組で`workers`へ記録し、Compute画面の「Workers」に接続状態、版、ホスト名、最終応答、担当Job数を出す。一覧は`GET /projects/:p/workers`（viewer）と`GET /workers`（全体管理者）でも読める。
+workerはclaimとresumeで`workerInfo`（パッケージ`mado-tracking`のバージョンとホスト名）をAPIへ送る。APIはtoken IDとworkerIdの組で`workers`へ記録し、Compute画面の「Workers」に接続状態、バージョン、ホスト名、最終応答、担当Job数を出す。一覧は`GET /projects/:p/workers`（viewer）と`GET /workers`（全体管理者）でも読める。
 
 - workerは120秒応答がないと「オフライン」になる。idleでも毎秒claimするので、通常はオンラインのまま。
 - claimは毎秒届くため、最終応答の書き込みは15秒ごとにまとめる。表示される最終応答は最大15秒古い。
 - Jobのheartbeatが60秒途絶すると、Jobs画面に「応答なし」を出す。Jobの状態、GPUの予約、leaseは変えず、再claimや自動再実行もしない（前節の方針）。止まったままのJobは、workerホストで状態を確認してからcancelやretryを手で行う。
-- 版は`importlib.metadata`で読む。インストールせずに動かしている場合は版を送らず、画面は「—」になる。
+- バージョンは`importlib.metadata`で読む。インストールせずに動かしている場合はバージョンを送らず、画面は「—」になる。
 - `parallelJobs`はAPIでは受け付けるが、現在のworkerはまだ送らない。
 
 ## Compute targetの接続を確認する
 
-最初のJobを流す前に、targetへSSHで入れるか、Python・venv・pip・git・Docker・Apptainer/Singularity・GPUが使えるかをCompute画面の「接続を確認」で確かめる。API serverはSSH鍵を持たないので、確認はそのtargetを担当するworkerが自分の鍵で行う。
+最初のJobを流す前に、targetへSSHで入れるか、Python・venv・pip・git・Docker・Apptainer/Singularity・GPUが使えるかを、全体設定の「コンピュータ」（`/settings/computers`）の「接続を確認」で確かめる（所有者か全体管理者）。API serverはSSH鍵を持たないので、確認はそのtargetを担当するworkerが自分の鍵で行う。
 
 - 確認するのは`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけ。`MMT_WORKER_TARGET_IDS`の無いworkerは確認をclaimしない。依頼から5分claimされなければ「workerがありません」（`no_worker`）で終わる。
 - workerはJobのclaimが空いた間に5秒間隔で`POST /worker/target-checks/claim`を呼び、Jobの監視と並行して確認する。確認は同時に1件。
 - 確認は3段階で、最初に失敗した段階を結果にする。
   1. `true`を送ってSSH接続を確かめる（失敗は`ssh_failed`。sshのエラー文は鍵のパスを含みうるので結果に入れない）。workerホストに鍵やknown_hostsが無い・鍵の権限が600でないときは接続せずに`ssh_configuration`で`failed`にする。
-  2. `pythonExecutable -c`でPythonの版と実行パスを得る（無ければ`python_missing`、3.11未満は`python_too_old`）。
+  2. `pythonExecutable -c`でPythonのバージョンと実行パスを得る（無ければ`python_missing`、3.11未満は`python_too_old`）。
   3. 固定の確認スクリプト（`worker/target_probe.py`の`PROBE_SCRIPT`。Python 3.6以上の標準ライブラリだけ）を送り、構造化JSONで受け取る。各コマンドは15秒、全体は90秒で打ち切る。
-- 確認する項目: venvとensurepip、`python -m pip --version`、`git --version`、`docker --version`と`docker version`（daemonへの到達。届かないときはsocketの読み書き権限で`docker_socket_denied`と`docker_daemon_unreachable`を分ける）、`apptainer`/`singularity`の版と`exec --help`の必須flag（`sif_container.py`の`REQUIRED_SIF_FLAGS`と`--nv`）、`nvidia-smi --query-gpu=index,uuid,name,memory.total`、`workDirectory`（無ければ一番近い既存の親）への書き込みと空き容量、targetから`MMT_API_URL/health`への到達。
+- 確認する項目: venvとensurepip、`python -m pip --version`、`git --version`、`docker --version`と`docker version`（daemonへの到達。届かないときはsocketの読み書き権限で`docker_socket_denied`と`docker_daemon_unreachable`を分ける）、`apptainer`/`singularity`のバージョンと`exec --help`の必須flag（`sif_container.py`の`REQUIRED_SIF_FLAGS`と`--nv`）、`nvidia-smi --query-gpu=index,uuid,name,memory.total`、`workDirectory`（無ければ一番近い既存の親）への書き込みと空き容量、targetから`MMT_API_URL/health`への到達。
 - 確認はtargetに何も残さない（作業ディレクトリも作らない。書き込み確認の一時ファイルはすぐ消す）。
 - GPUはnvidia-smiが報告した値だけを返す。nvidia-smiが無ければ`gpus=null`で、GPUを設定したtargetではNG、CPUだけのtargetでは「なし」。
 - 画面は検出したGPUのindexと確認に通ったRuntimeを候補として示す。targetの`gpuIds`・`runtimeKinds`は管理者が「選んだ候補を保存」を押したときだけ変わる。
@@ -547,9 +547,9 @@ SDKとworkerは同じ収集処理`mado_tracking.system_metrics`を使う。名�
 
 | 名前 | 内容 |
 |---|---|
-| `system.cpu.percent` | 計算機全体のCPU使用率。前回値との差分で求める |
+| `system.cpu.percent` | コンピュータ全体のCPU使用率。前回値との差分で求める |
 | `system.cpu.load1` | 1分のload average。`psutil`が無い環境だけで出す（従来の記録との互換） |
-| `system.memory.used_bytes`・`system.memory.percent` | 計算機全体のmemory |
+| `system.memory.used_bytes`・`system.memory.percent` | コンピュータ全体のmemory |
 | `system.process.memory_bytes` | 対象PIDと子孫processのRSS合計（PIDを指定したときだけ） |
 | `system.disk.used_bytes`・`system.disk.percent` | 作業ディレクトリのファイルシステム |
 | `system.disk.read_bytes_per_second`・`system.disk.write_bytes_per_second` | 物理disk全体の読み書き量 |
@@ -584,7 +584,7 @@ SDKとworkerは同じ収集処理`mado_tracking.system_metrics`を使う。名�
 | `system.gpu.<i>.power_watts` | `system/gpu_<i>_power_usage_watts` | 同じ |
 | `system.gpu.<i>.temperature_celsius` | （なし） | |
 
-MLflowのGPU値は`pynvml`が入っているときだけ出る。GPUの無い環境ではGPU系は出ない（上記の確認もGPUなしの計算機で行った）。
+MLflowのGPU値は`pynvml`が入っているときだけ出る。GPUの無い環境ではGPU系は出ない（上記の確認もGPUなしのコンピュータで行った）。
 
 公式MLflowでの確認は次で行う。
 
@@ -593,7 +593,7 @@ MLflowのGPU値は`pynvml`が入っているときだけ出る。GPUの無い環
 <MLflow 3の検証用venv>/bin/python -I scripts/mlflow3_checks/system_metrics.py --mado-api-url http://127.0.0.1:<検証API>
 ```
 
-venvには`mlflow`・`psutil`・`httpx`が要る（MLflow 3.0.0は`sqlalchemy<2.1`も）。既定は一時的なローカルMLflow storeへ記録する。`--mado-api-url`ではdev-loginでProjectと1時間の一時tokenを作ってMadoのMLflow APIへ記録し、最後にtokenを失効する。結果は`artifacts/verification/<日付>/system-metrics/mlflow-<版>-<local|mado>.json`。
+venvには`mlflow`・`psutil`・`httpx`が要る（MLflow 3.0.0は`sqlalchemy<2.1`も）。既定は一時的なローカルMLflow storeへ記録する。`--mado-api-url`ではdev-loginでProjectと1時間の一時tokenを作ってMadoのMLflow APIへ記録し、最後にtokenを失効する。結果は`artifacts/verification/<日付>/system-metrics/mlflow-<バージョン>-<local|mado>.json`。
 
 ## テストと型検証を実行する
 

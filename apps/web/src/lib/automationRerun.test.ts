@@ -21,7 +21,7 @@ const failedExecution = {
 };
 
 describe('自動実行の再実行', () => {
-  it('終わった実行は同じ版へ再実行でき、登録起動のruleは版を指定する', () => {
+  it('終わった実行は同じバージョンへ再実行でき、登録起動のruleはバージョンを指定する', () => {
     expect(canRerunExecution(failedExecution, registrationRule)).toBe(true);
     expect(rerunRequest(failedExecution, registrationRule)).toEqual({ modelVersionId: 'v1' });
   });

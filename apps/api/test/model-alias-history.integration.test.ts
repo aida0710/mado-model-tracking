@@ -81,7 +81,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     await harness?.close();
   });
 
-  it('native PUTで版を切り替えると旧版→新版・操作者・理由のeventが1件増え、同じ版の再設定では増えない', async () => {
+  it('native PUTでバージョンを切り替えると旧バージョン→新バージョン・操作者・理由のeventが1件増え、同じバージョンの再設定では増えない', async () => {
     const fixture = await registryFixture(harness);
     const [first, second] = fixture.versions;
     await entity<Model>(
@@ -186,7 +186,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     expect(response.status).toBe(422);
   });
 
-  it('MLflowのalias設定・解除、版の削除、Registered Modelの削除がそれぞれのsourceでeventを残す', async () => {
+  it('MLflowのalias設定・解除、バージョンの削除、Registered Modelの削除がそれぞれのsourceでeventを残す', async () => {
     const fixture = await registryFixture(harness);
     const mlflow = (path: string, method: string, body: unknown) =>
       request(harness.app, `${fixture.mlflowBase}/${path}`, {
@@ -429,7 +429,7 @@ describe.skipIf(!testDatabaseUrl)('alias変更の履歴（独立PostgreSQL）', 
     ).toBe(404);
   });
 
-  it('2つのtransactionで同時に切り替えても、previous_version_idは前のeventの版と連鎖する', async () => {
+  it('2つのtransactionで同時に切り替えても、previous_version_idは前のeventのバージョンと連鎖する', async () => {
     const fixture = await registryFixture(harness);
     const [first, second, third] = fixture.versions;
     const actor = { userId: fixture.editor.userId, tokenId: null };

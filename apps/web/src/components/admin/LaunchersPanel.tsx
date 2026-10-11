@@ -7,7 +7,7 @@ import { getFieldValue } from '../../lib/formValues';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { FormDialog } from '../FormDialog';
 import { Resource } from '../Feedback';
-import { AdminSectionHeader } from './AdminSectionHeader';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { LaunchersTable } from './LaunchersTable';
 import { LauncherTokenDialog } from '../../dialogs/LauncherTokenDialog';
 import { text } from '../../i18n/catalog';
@@ -33,7 +33,7 @@ export function LaunchersPanel() {
   };
   return (
     <section className="admin-launchers">
-      <AdminSectionHeader
+      <SettingsPageHeader
         section="launchers"
         actions={
           <>

@@ -22,15 +22,15 @@ const missingValueReasons: Record<PromotionCriterionReason, string> = {
   baseline_metric_missing: '基準に値なし',
   baseline_metric_not_finite: '基準の値がNaN/∞',
   baseline_zero: '基準が0',
-  baseline_missing: '基準版なし',
-  baseline_not_evaluated: '基準版の評価なし',
+  baseline_missing: '基準バージョンなし',
+  baseline_not_evaluated: '基準バージョンの評価なし',
 };
 
 export function formatReasonNumber(value: number): string {
   return String(Number(value.toPrecision(SIGNIFICANT_DIGITS)));
 }
 
-/** One criterion as `metricの基準との差=-0.000395833 ≤ 0`, or `… ≤ 0: 値なし（基準版なし）`. */
+/** One criterion as `metricの基準との差=-0.000395833 ≤ 0`, or `… ≤ 0: 値なし（基準バージョンなし）`. */
 export function describeCriterionResult(result: PromotionCriterionResult): string {
   const comparator = result.direction === 'higher' ? '≥' : '≤';
   const subject = `${result.metric}${modeSuffixes[result.mode]}`;

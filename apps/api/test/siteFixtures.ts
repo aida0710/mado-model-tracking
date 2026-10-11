@@ -83,6 +83,8 @@ export async function siteFixture(harness: Harness, overrides: Record<string, un
       cookie: fixture.administrator.cookie,
       body: {
         ...siteTargetInput(overrides),
+        // A global administrator's site that the Project's members run their Jobs on.
+        visibility: 'public',
         site: manual
           ? { accountMode: 'personal', workDirectory: '/work/mmt' }
           : automaticSiteSettings(launcher.launcher.id),

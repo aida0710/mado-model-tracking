@@ -82,7 +82,7 @@ const comparison: RunComparison = {
 };
 
 describe('比較表の行', () => {
-  it('モデル版と評価データセット版の行を先頭に置き、APIの行順と差分を保つ', () => {
+  it('モデルバージョンと評価データセットバージョンの行を先頭に置き、APIの行順と差分を保つ', () => {
     const rows = buildComparisonTableRows(comparison);
     expect(rows.map((row) => row.id)).toEqual([
       'modelVersion',

@@ -73,7 +73,7 @@ export function formatMlflowError(error: Error): MlflowErrorResponse {
       status: 409,
       body: {
         error_code: 'RESOURCE_ALREADY_EXISTS',
-        message: '同じ名前または版が既に登録されています',
+        message: '同じ名前またはバージョンが既に登録されています',
       },
     };
   }

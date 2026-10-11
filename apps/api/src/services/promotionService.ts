@@ -109,7 +109,7 @@ async function readPromotionAliases(
 
 /** The alias event's reason: which policy passed the version and on what numbers. */
 function automaticPromotionReason(policy: PromotionPolicy, judgement: Judgement): string {
-  const firstRelease = judgement.reason === 'baseline_missing_first_promotion' ? '（基準版なし）' : '';
+  const firstRelease = judgement.reason === 'baseline_missing_first_promotion' ? '（基準バージョンなし）' : '';
   const reason = `昇格policy「${policy.name}」の合格判定による自動昇格${firstRelease}: ${judgement.criteriaResults
     .map(describeCriterionResult)
     .join(', ')}`;

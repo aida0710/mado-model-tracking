@@ -41,5 +41,5 @@ GPUのあるTCSのサイトでは、`MAX_GPUS_PER_NODE`をノードのGPU数に�
 - `pjsub`は`[INFO] PJM 0000 pjsub Job 12345 submitted.`を出すので、IDだけを取り出します。バルクジョブも同じ形で、`pjdel 12345`で全サブジョブが外れます。
 - `-X`で、投入時の環境（`MMT_SPEC_DIR`など）がジョブへ渡ります。秘密は環境変数に載りません。`LD_LIBRARY_PATH`など一部の変数は`-X`でも渡らないので、要るものはbatch scriptで設定します。
 - `elapse`に達すると、ジョブの全プロセスにSIGXCPUが届き、10秒後にSIGKILLになります。batch scriptはrunnerをSIGXCPUを無視する状態で起動し、SIGXCPU（とSIGTERM）を受けたらrunnerへSIGTERMを送ります。制限時間の`TIMEOUT_NOTICE_SECONDS`前にも送ります。
-- 富岳のCPUはArm（A64FX）です。計算機のCPUを`arm64`にし、arm64を含むimageと、arm64のPython（runnerのPython）を使います。
+- 富岳のCPUはArm（A64FX）です。コンピュータのCPUを`arm64`にし、arm64を含むimageと、arm64のPython（runnerのPython）を使います。
 - batch scriptの出力は`$MMT_SPEC_DIR/scheduler.<サブジョブID>.log`です。

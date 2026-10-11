@@ -295,7 +295,7 @@ export class TaskService {
         gpuIds: input.gpuIds,
         gpuCount: input.gpuCount,
         runtime: code.runtime,
-        usage: { projectId, userId: registration.userId },
+        usage: { userId: registration.userId },
       });
   }
 

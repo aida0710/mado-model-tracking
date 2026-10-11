@@ -15,10 +15,10 @@ describe('Run詳細の出力モデル登録の表示', () => {
     expect(getRunOutputRegistrationState(run('running', null), null)).toEqual({ kind: 'none' });
     expect(getRunOutputRegistrationState(run('failed'), null)).toEqual({ kind: 'none' });
   });
-  it('登録済みは登録した版へのリンクを表示する', () => {
+  it('登録済みは登録したバージョンへのリンクを表示する', () => {
     expect(getRunOutputRegistrationState(run('finished'), registration({}))).toEqual({ kind: 'registered', modelVersionId: 'version' });
   });
-  it('学習コードが同じModelへ登録した場合は、その版を使ったことを表示する', () => {
+  it('学習コードが同じModelへ登録した場合は、そのバージョンを使ったことを表示する', () => {
     expect(getRunOutputRegistrationState(run('finished'), registration({ status: 'skipped', reason: 'already_registered_by_run' })))
       .toEqual({ kind: 'skipped', modelVersionId: 'version' });
   });

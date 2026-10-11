@@ -163,7 +163,7 @@ try {
   const newComment = thread.getByRole('textbox', { name: 'コメント' }).last();
   await thread.getByRole('button', { name: '投稿' }).click();
   await thread.getByText('本文を入力してください').waitFor();
-  await newComment.fill('学習率を **下げた** 版です。<img src=x onerror="alert(1)">');
+  await newComment.fill('学習率を **下げた** バージョンです。<img src=x onerror="alert(1)">');
   await thread.getByRole('button', { name: '投稿' }).click();
   const root = thread.locator('.comment-thread-group').first();
   await root.locator('strong', { hasText: '下げた' }).waitFor();
@@ -225,9 +225,9 @@ try {
   await admin.goto(`${projectBase}/models/${model.id}/versions/${version.id}`);
   const versionThread = admin.locator('.comment-thread');
   await versionThread.getByText('コメントはまだありません').waitFor();
-  await versionThread.getByRole('textbox', { name: 'コメント' }).fill('この版を本番候補にします');
+  await versionThread.getByRole('textbox', { name: 'コメント' }).fill('このバージョンを本番候補にします');
   await versionThread.getByRole('button', { name: '投稿' }).click();
-  await versionThread.locator('.comment-item', { hasText: 'この版を本番候補にします' }).waitFor();
+  await versionThread.locator('.comment-item', { hasText: 'このバージョンを本番候補にします' }).waitFor();
   const versionComments = await adminApi.get(
     `/projects/${project.id}/comments?targetType=model_version&targetId=${version.id}`,
   );

@@ -110,8 +110,8 @@ try {
   await page.getByRole('button', { name: 'コードを登録', exact: true }).click();
   await fill('名前', 'UI linear training');
   await submit();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('版', 'v1');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await fill('バージョン', 'v1');
   await select('ソース形式', 'inline');
   await fill('ファイルのパス', 'main.py');
   await page.getByRole('dialog').getByRole('button', { name: 'ファイルを追加', exact: true }).click();
@@ -130,8 +130,8 @@ try {
   await fill('名前', 'UI linear model');
   await fill('Family', 'ui-linear');
   await submit();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('版', 'v1');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await fill('バージョン', 'v1');
   await fill('Artifact ID', weightsArtifact.id);
   await submit();
   await page.getByRole('button', { name: 'v1', exact: true }).waitFor();
@@ -147,8 +147,8 @@ try {
   await fill('名前', 'UI linear points');
   await fill('Namespace', 'verification');
   await submit();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await fill('版', 'v1');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await fill('バージョン', 'v1');
   await fill('URI', `artifact://${pointsArtifact.id}`);
   await fill('Digest', `sha256:${pointsArtifact.sha256}`);
   await select('生成元Run', preparationRun.id);
@@ -167,9 +167,9 @@ try {
   await fill('Run名', 'UI training enqueue');
   await select('Experiments', experimentId);
   await select('実行種別', 'training');
-  await select('モデル版', modelVersion.id);
-  await select('コード版', codeVersion.id);
-  await select('入力データセット版', [datasetVersion.id]);
+  await select('モデルバージョン', modelVersion.id);
+  await select('コードバージョン', codeVersion.id);
+  await select('入力データセットバージョン', [datasetVersion.id]);
   await page.getByRole('dialog').getByRole('button', { name: '次へ', exact: true }).click();
   await select('Compute target', localTarget.id);
   await page.getByRole('dialog').getByRole('button', { name: '次へ', exact: true }).click();

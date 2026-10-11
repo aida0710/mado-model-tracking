@@ -14,7 +14,7 @@ export const computeText = {
   workerStatus: '接続状態',
   workerOnline: 'オンライン',
   workerOffline: 'オフライン',
-  workerVersion: '版',
+  workerVersion: 'バージョン',
   workerHostname: 'ホスト名',
   workerToken: 'トークン',
   workerTargets: '対象target',
@@ -143,7 +143,7 @@ export const targetCheckCodeHints = {
   docker_daemon_unreachable: 'Docker daemonが起動しているか確認してください',
   container_cli_missing: 'コンテナを使う場合は導入してください',
   container_flags_missing:
-    'execに必要なオプション（--containall、--no-mount、--nvなど）がありません。新しい版へ更新してください',
+    'execに必要なオプション（--containall、--no-mount、--nvなど）がありません。新しいバージョンへ更新してください',
   nvidia_smi_missing: 'GPUを使う場合はNVIDIAドライバとnvidia-smiを導入してください',
   nvidia_smi_failed: 'nvidia-smiが失敗しました。ドライバの状態を確認してください',
   work_directory_not_writable: 'SSHユーザーが書き込めるディレクトリを指定してください',

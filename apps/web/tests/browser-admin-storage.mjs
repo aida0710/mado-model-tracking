@@ -1,5 +1,6 @@
-// Browser check for /admin/storage: create a backend, run its connection test, change the default,
-// and pick backends in the Project forms. The storage API is mocked here until it is integrated.
+// Browser check for 全体管理 → ストレージ (/settings/storage): create a backend, run its connection
+// test, change the default, and pick backends in the Project forms. The storage API is mocked here
+// until it is integrated.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
@@ -102,8 +103,11 @@ try {
 
   await page.goto(`${webUrl}/projects/${api.state.project.id}/experiments`);
   // The sidebar lists each global administration screen under 「全体管理」.
-  await page.getByRole('link', { name: 'ストレージ', exact: true }).click();
-  await page.waitForURL(/\/admin\/storage$/);
+  await page
+    .getByRole('group', { name: '全体管理', exact: true })
+    .getByRole('link', { name: 'ストレージ', exact: true })
+    .click();
+  await page.waitForURL(/\/settings\/storage$/);
   await page.getByRole('heading', { name: 'ストレージ', exact: true }).waitFor();
   await page.getByRole('cell', { name: '/var/lib/mmt/artifacts' }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/01-admin-storage.png`, fullPage: true });
@@ -167,13 +171,15 @@ try {
   await page.screenshot({ path: `${outputDirectory}/07-new-project-default.png` });
   await projectDialog.getByRole('button', { name: 'キャンセル' }).click();
 
-  // Someone who is not a global administrator gets no links, and /admin sends them back.
+  // Someone who is not a global administrator gets no 全体管理 links, and the storage section sends
+  // them to their account in 全体設定. The user menu still offers 全体設定.
   api.state.user.isAdmin = false;
-  await page.goto(`${webUrl}/admin/storage`);
-  await page.waitForURL(/\/projects\/[^/]+\/experiments$/);
+  await page.goto(`${webUrl}/settings/storage`);
+  await page.waitForURL(/\/settings\/account$/);
   assert.equal(await page.getByRole('link', { name: 'ストレージ', exact: true }).count(), 0);
   await page.getByRole('button', { name: 'ユーザーメニュー', exact: true }).click();
   assert.equal(await page.getByRole('menuitem', { name: '全体管理', exact: true }).count(), 0);
+  await page.getByRole('menuitem', { name: '全体設定', exact: true }).waitFor();
   await page.screenshot({ path: `${outputDirectory}/08-non-admin.png` });
 
   assert.deepEqual(pageErrors, []);

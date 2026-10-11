@@ -38,12 +38,12 @@ export const computeTarget: ComputeTarget = {
   supportsArray: false,
   queueTimeoutSeconds: null,
   ownerUserId: null,
+  visibility: 'public',
 };
-// The ssh target as GET /targets lists it: global, so it has no owner and serves every Project.
+// The ssh target as GET /targets lists it: one from before owners, public to every Project.
 export const computeTargetDetails: ComputeTargetDetails = {
   ...computeTarget,
   ownerName: null,
-  projectIds: [],
   site: null,
   siteAccountMode: null,
 };

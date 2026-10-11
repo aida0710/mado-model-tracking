@@ -33,6 +33,8 @@ import type { JobService } from './jobService.js';
 import type { RunCompletionService } from './runCompletionService.js';
 import type { RunOutputDeclarationService } from './runOutputDeclarationService.js';
 import { runColumns } from '../repositories/runListProjection.js';
+import { canRunQueuedJob, TARGET_NOT_AVAILABLE_MESSAGE } from './siteAccess.js';
+import { failUnstartedJob } from './siteJobEnding.js';
 
 // A busy target should not block claims for other targets in the same queue.
 const CLAIM_CANDIDATE_LIMIT = 100;
@@ -145,6 +147,16 @@ export class WorkerService {
           [job.targetId],
         );
         if (!target) continue;
+        // The computer may have turned private since the Job was created; the Job fails rather
+        // than wait for a computer that will never take it, as a site submission does.
+        if (!(await canRunQueuedJob(connection, job))) {
+          await failUnstartedJob(connection, this.runCompletion, {
+            job,
+            endReason: 'submit_failed',
+            error: TARGET_NOT_AVAILABLE_MESSAGE,
+          });
+          continue;
+        }
         const occupancy = (await first<{ count: number }>(
           connection,
           "SELECT count(*)::int AS count FROM jobs WHERE target_id=$1 AND status IN ('claimed','running')",

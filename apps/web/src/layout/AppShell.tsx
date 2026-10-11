@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Navigate, Outlet, useNavigate, useParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import type { Project } from '@mmt/contracts';
@@ -11,6 +11,7 @@ import { Loading, Resource } from '../components/Feedback';
 import { PageHeader } from '../components/PageHeader';
 import { ProjectCreateDialog } from '../dialogs/ProjectCreateDialog';
 import { canCreateProject } from '../lib/permissions';
+import { projectToOpen, readLastProjectId, rememberLastProjectId } from '../lib/lastOpenedProject';
 import { text } from '../i18n/catalog';
 import { TopBar } from './TopBar';
 import { ProjectBar } from './ProjectBar';
@@ -33,6 +34,9 @@ export function AppShell() {
   };
   // A Project id from the URL that the user cannot open gets no Project navigation or alerts.
   const openProject = projects.value?.find((project) => project.id === projectId);
+  useEffect(() => {
+    if (openProject) rememberLastProjectId(openProject.id);
+  }, [openProject]);
   const navigation = useNavigation(openProject?.id, openProject?.role);
   // The Project switcher heads the full sidebar; with the rail or the drawer it is the bar under
   // the header.
@@ -65,8 +69,8 @@ export function AppShell() {
               // A list being reloaded may still lack a Project just created, or still hold one
               // just archived; wait for it instead of showing the wrong screen.
               if (!project && projects.loading) return <Loading />;
-              if (!projectId && items[0])
-                return <Navigate replace to={projectHomePath(items[0].id)} />;
+              const projectAtHome = projectId ? undefined : projectToOpen(items, readLastProjectId());
+              if (projectAtHome) return <Navigate replace to={projectHomePath(projectAtHome.id)} />;
               return project ? (
                 <ProjectContext.Provider
                   value={{ project, projects: items, reloadProjects: projects.reload }}

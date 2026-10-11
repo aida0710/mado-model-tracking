@@ -25,7 +25,7 @@ API serverの端末で対話的に実行します。ユーザー名とパスワ�
 npm run bootstrap-admin -w @mmt/api
 ```
 
-同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。ローカルアカウントの利用者は、右上のユーザーメニュー（アバター）の「パスワードを変更」（`/account/password`）からいつでも変更できます。
+同じユーザー名が既にあれば、全体管理者・有効に戻してパスワードを置き換え、そのユーザーのsessionを失効させます。作成・再設定したアカウントは次のログインでパスワードの変更が必要で、変更するまで`GET /api/auth/config`・`GET /api/auth/me`・`POST /api/auth/change-password`・`POST /api/auth/logout`以外は403 `password_change_required`になります。パスワードを変更すると、同じユーザーのほかのsessionは失効します。ローカルアカウントの利用者は、右上のユーザーメニュー（アバター）の「パスワードの変更」（`/settings/account/password`）からいつでも変更できます。
 
 ### SSOへの移行手順
 
@@ -37,10 +37,10 @@ migration 010はsessionに`auth_method`を必須で追加します。migration�
 
 ### ユーザーを止める・戻す（退職・異動）
 
-1. 全体管理者がブラウザでサイドバーの「全体管理」→「ユーザー」（`/admin/users`）を開き、対象の行で「無効化」を押します。そのユーザーのsessionは直ちに終了し、API token（MLflow互換APIを含む）も直ちに401になります。SSOユーザーはAuthentik側でもgroupから外します。外さずに再有効化すると、次回loginでgroup由来の全体roleに戻ります。
+1. 全体管理者がブラウザでサイドバーの「全体管理」→「ユーザー」（`/settings/users`）を開き、対象の行で「無効化」を押します。そのユーザーのsessionは直ちに終了し、API token（MLflow互換APIを含む）も直ちに401になります。SSOユーザーはAuthentik側でもgroupから外します。外さずに再有効化すると、次回loginでgroup由来の全体roleに戻ります。
 2. 戻すときは同じ行で「有効化」を押します。API tokenは再び使えますが、終了したsessionは戻りません（再loginが必要）。
 3. 最後の有効な全体管理者は無効化・降格できません（409 `last_global_admin`）。先に別の管理者を用意します。
-4. ユーザーは削除しません。Runやモデル版の作成者の記録を保つためです。
+4. ユーザーは削除しません。Runやモデルバージョンの作成者の記録を保つためです。
 
 ### ローカルアカウントのパスワードを忘れた
 
@@ -111,9 +111,9 @@ OIDC_TOKEN_SYNC_MAX_AGE_SECONDS=604800
 
 対応表に書いたgroupも`OIDC_ALLOWED_GROUPS`に入れてください。許可groupに無いgroupだけを持つ人は、対応表に関係なくloginできません。
 
-以前の版から更新するときは、`OIDC_ALLOWED_GROUPS`を足してから再起動してください（無いとAPIが起動しません）。`OIDC_ADMIN_GROUP`だけの設定は、そのまま同じ全体管理者の判定になります。
+以前のバージョンから更新するときは、`OIDC_ALLOWED_GROUPS`を足してから再起動してください（無いとAPIが起動しません）。`OIDC_ADMIN_GROUP`だけの設定は、そのまま同じ全体管理者の判定になります。
 
-migration 042を含む版へ更新するときは、先に`MMT_SESSION_ENCRYPTION_KEY`を`.env`へ足します（無いとAPIが起動しません）。042はtokenを持たない既存のSSO sessionを失効させるので、SSOの利用者は更新後に一度ログインし直します。Local sessionはそのまま使えます。鍵を変えると、保存済みのtokenを復号できないSSO sessionは次の再確認で失効し、再ログインになります。
+migration 042を含むバージョンへ更新するときは、先に`MMT_SESSION_ENCRYPTION_KEY`を`.env`へ足します（無いとAPIが起動しません）。042はtokenを持たない既存のSSO sessionを失効させるので、SSOの利用者は更新後に一度ログインし直します。Local sessionはそのまま使えます。鍵を変えると、保存済みのtokenを復号できないSSO sessionは次の再確認で失効し、再ログインになります。
 
 ### Userと全体roleの同期規則
 
@@ -242,7 +242,7 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 
 ### Artifact保存先の全体設定
 
-- 保存先は全体管理者が `/admin/storage-backends`（画面は「全体管理」→「ストレージ」、`/admin/storage`）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4／v2）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
+- 保存先は全体管理者が `/admin/storage-backends`（画面は「全体管理」→「ストレージ」、`/settings/storage`）で追加する。種類は filesystem と S3。S3 は endpoint、region、bucket、prefix、path-style、署名（v4／v2）、TLS 検証と CA、checksum の扱い（既定 WHEN_REQUIRED）、単一PUTの part size（5MiB〜512MiB、既定8MiB）を設定する。
 - 環境変数（`ARTIFACT_FILESYSTEM_ROOT`、`S3_*`）由来の `filesystem` と `s3` は従来どおり使え、画面では読み取り専用で表示される。DB へは写さない。
 - secret を持つ S3 保存先を作るには `MMT_STORAGE_SECRET_KEY`（base64 の 32 byte）を API の環境に設定する。生成例: `openssl rand -base64 32`。値は `.env` だけに置き、worklog やチケットへ書かない。
 - **鍵を変えると、保存済みの secret は復号できなくなる。** 起動時に `storage_backend_unavailable`（名前と理由だけ）がログに出て、その保存先の Artifact は 503 になる。鍵を変えたら、各 S3 保存先の secret を PATCH で入れ直す（鍵の自動ローテーションは未実装）。
@@ -251,17 +251,17 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - multipart が動かない S3 互換ストレージでは、保存先の `multipartEnabled` を false にする。Artifact は API の一時ディレクトリ（`os.tmpdir()`）へ書いてから 1 回の PUT で送るので、1 件 5GiB まで・一時ディレクトリに同じ容量が要る。再開可能な upload（upload session、MLflow の multipart）はこの保存先では 422 `multipart_unsupported` になる。
 - 既定の保存先（`/admin/storage-settings`）は新規Projectの作成フォームの初期選択だけを変える。既存Projectの保存先は「プロジェクト設定」で個別に変える。既存Artifactは保存時の保存先から読み続ける。
 - 保存先をやめるときは `enabled:false` にする（既存Artifactは読めるが、新規保存は拒否）。既定のままでは無効にできないので、先に既定を切り替える。Artifact が参照している保存先の種類・bucket・endpoint・prefix・rootPath は変えられない（409）。
-- DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。署名の版は保存先の設定から使われるので、v2 の保存先もこの手順で確かめる（[検証手順](verification.md) の「実S3の保存・取得を確認する」）。
+- DB 上の S3 保存先の実機確認: `MMT_VERIFY_S3_BACKEND=<名前> MMT_DATABASE_URL=... MMT_STORAGE_SECRET_KEY=... MMT_VERIFY_S3_CONFIRM=write-and-delete npx tsx scripts/verify_s3_artifacts.ts`。結果は `artifacts/verification/<日付>/s3/` に値を含めずに出る。署名のバージョンは保存先の設定から使われるので、v2 の保存先もこの手順で確かめる（[検証手順](verification.md) の「実S3の保存・取得を確認する」）。
 - API プロセスが複数ある構成では、設定変更は変更を受けたプロセスで即時に効き、他のプロセスは未知の保存先名を読んだときに読み直す。有効/無効や part size の変更を全プロセスへ確実に反映するには API を再起動する。
 
 ### Artifactの削除と回収（garbage collection）
 
-- 削除できるのは Project admin だけ（Web は Run の Artifacts で開いたファイルの「⋯」メニュー → 確認、API は `DELETE /projects/:p/artifacts/:a`、MLflow SDK は `delete_artifacts`）。editor 以下は 403。登録モデル版・CodeVersion・DatasetVersion・保持中の checkpoint（`retained=true` か再開元）から参照されている Artifact は 409 `artifact_in_use` で消せない。参照元を確かめて、不要なら参照元の側を先に片付ける。
+- 削除できるのは Project admin だけ（Web は Run の Artifacts で開いたファイルの「⋯」メニュー → 確認、API は `DELETE /projects/:p/artifacts/:a`、MLflow SDK は `delete_artifacts`）。editor 以下は 403。登録モデルバージョン・CodeVersion・DatasetVersion・保持中の checkpoint（`retained=true` か再開元）から参照されている Artifact は 409 `artifact_in_use` で消せない。参照元を確かめて、不要なら参照元の側を先に片付ける。
 - 削除は即時に一覧・取得から消えるが、blob は `MMT_ARTIFACT_DELETE_GRACE_DAYS`（既定 7 日）残る。誤削除に気付いたら猶予中に blob を退避できる（DB の行は残るので `artifacts.storage_key` と `artifact_deletions` で場所が分かる）。画面からの復元はない。
 - 回収は API プロセス内の `ArtifactGarbageCollector` が 10 分ごとに行う。同じ周回で、upload session の期限切れ処理、session の無い 7 日以上前の未完了 multipart upload の abort、24 時間更新の無い filesystem の書きかけ staging（`.upload`・`.tmp`）の削除も行う（以前の `ArtifactUploadSweeper` の周期処理はこの中に入った）。API を複数動かす場合は全プロセスで動くが、同じ blob の二重削除は成功扱いなので害は無い。
 - blob を消せなかったときは `{"event":"artifact_blob_removal_failed","artifactId":…,"name":…}` がログに出て、`artifact_deletions.removal_attempts` と `last_removal_error`（エラー名だけ）が増える。次の周回で再試行する。続く場合は保存先の Delete 権限と疎通、無効化・削除した保存先でないかを確かめる。未回収の一覧: `SELECT artifact_id,removal_attempts,last_removal_error FROM artifact_deletions WHERE blob_removed_at IS NULL`。
 - S3 の必要権限に DeleteObject を含める。multipart を後から無効にした保存先では、未完了 multipart upload を API から abort できないので、bucket の AbortIncompleteMultipartUpload の lifecycle rule に任せる。
-- プロジェクト設定の「Artifactの使用量」（`GET /projects/:p/artifact-usage`）に、保存先ごとの件数・容量、削除待ち、参照されていない古い版の量が出る。古い版は自動では消さない（decisions.md）。消すなら Project admin が個別に削除する。
+- プロジェクト設定の「Artifactの使用量」（`GET /projects/:p/artifact-usage`）に、保存先ごとの件数・容量、削除待ち、参照されていない古いバージョンの量が出る。古いバージョンは自動では消さない（decisions.md）。消すなら Project admin が個別に削除する。
 
 ### Projectのアーカイブと完全な削除
 
@@ -269,7 +269,7 @@ DBとArtifactsは同時点でバックアップします。DBだけのrestoreで
 - 公開範囲: 新しいProjectの既定は public（有効な人のユーザー全員が editor として使える。admin はメンバーだけ）。migration 054 より前からある Project は private のまま。Service Account と launcher には public の権限は付かない。
 - アーカイブ（Project admin。Web はプロジェクト設定の最下部か、全体管理 → プロジェクトの行。API は `POST /projects/:p/archive`）は Project を一覧・API から隠すだけで、データは残る。待機中・実行中の Job があると 409 `project_has_active_jobs` なので、先に Job を止める。アーカイブ中は Project 限定の API token（worker・Service Account を含む）が 401 になり、Sweep の scheduler・webhook のフック・自動実行・自動昇格も止まる（全体管理者が所有者でも）。全体管理 → プロジェクトの「元に戻す」（`POST /admin/projects/:p/restore`）で戻る。
 - 完全な削除（全体管理者。アーカイブ済みだけ。`DELETE /admin/projects/:p`）は元に戻せない。DB の行は 1 つの transaction で消え、Artifact の blob は `purged_project_blobs` に移って、上の garbage collector が `MMT_ARTIFACT_DELETE_GRACE_DAYS` の後に消す。猶予中なら `SELECT backend,storage_key FROM purged_project_blobs WHERE project_id=$1 AND removed_at IS NULL` で場所が分かるので退避できる。消せなかった blob は `{"event":"artifact_blob_removal_failed","purgedProjectBlobId":…,"name":…}` がログに出て、`removal_attempts` と `last_removal_error` が増え、次の周回で再試行する。
-- 完全な削除の後も残るもの: `projects` の行（名前だけの墓標）、監査ログ、失効させた API token、無効化した Service Account。site の計算機に置いた Dataset のキャッシュなど、API の外にあるものは消えない。
+- 完全な削除の後も残るもの: `projects` の行（名前だけの墓標）、監査ログ、失効させた API token、無効化した Service Account。site のコンピュータに置いた Dataset のキャッシュなど、API の外にあるものは消えない。
 - Run・metrics が多い Project では削除の transaction が長くなる（行数に比例）。利用の少ない時間に行う。
 
 ### 保存先のディレクトリ候補
@@ -345,7 +345,7 @@ installがすること:
 - `~/.config/systemd/user/mado-tracking-worker@.service` を書き、`systemctl --user daemon-reload` → `enable --now mado-tracking-worker@<worker-id>.service`。
 - state directoryの既定は、手で起動していたworkerと同じ `~/.local/state/mado-tracking-worker/<sha256(worker-id)の先頭16桁>`。手動起動から移るときも実行中Jobのjournalを引き継ぐ。別の場所なら `--state-dir`。
 - worker IDは英数字・`.`・`_`・`-`の64文字まで（systemdのinstance名とファイル名に使うため）。
-- `--target-ids`（env fileの`MMT_WORKER_TARGET_IDS`）は省略できるが、Compute画面の「接続を確認」（target checks）をclaimするのは`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけ。未設定のworkerは確認をclaimしない（[worker手順](worker.md)の「Compute targetの接続を確認する」）。
+- `--target-ids`（env fileの`MMT_WORKER_TARGET_IDS`）は省略できるが、全体設定の「コンピュータ」の「接続を確認」（target checks）をclaimするのは`MMT_WORKER_TARGET_IDS`にそのtargetを含むworkerだけ。未設定のworkerは確認をclaimしない（[worker手順](worker.md)の「Compute targetの接続を確認する」）。
 
 system unitにする場合は root で `--systemd-system --service-user <account>`。env fileは `/etc/mado-tracking-worker/<id>.env`（root、600）、stateは `/var/lib/mado-tracking-worker/<id>`（service userの所有、700）。手で置く場合の雛形は `deploy/worker/mado-tracking-worker@.service` と `deploy/worker/worker.env.example`。
 
@@ -359,7 +359,7 @@ mado-tracking-worker status --worker-id gpu-host-1     # unit状態、worker loc
 journalctl --user -u mado-tracking-worker@gpu-host-1 -f
 ```
 
-doctorは、env fileとstate directoryのmode、APIへの到達（`/api/health`）、tokenのscope（`GET /api/auth/token`。Job tokenは不可）、`~/.ssh`・秘密鍵（group/otherの権限なし）・known_hosts（group/other書き込み不可）を確かめる。errorがあれば終了コード1。Compute画面の「Workers」に版とホスト名が出ることも確認する。
+doctorは、env fileとstate directoryのmode、APIへの到達（`/api/health`）、tokenのscope（`GET /api/auth/token`。Job tokenは不可）、`~/.ssh`・秘密鍵（group/otherの権限なし）・known_hosts（group/other書き込み不可）を確かめる。errorがあれば終了コード1。Compute画面の「Workers」にバージョンとホスト名が出ることも確認する。
 
 ### 4. 更新する
 
@@ -380,11 +380,11 @@ SSH targetだけを使うworkerは `docker compose --profile worker up -d worker
 - local executorのJobはcontainerと一緒に止まるため、composeでは使わない。
 - 確認は `docker compose --profile worker run --rm worker doctor`。
 
-## 外部の計算機（site）とフック
+## 外部のコンピュータ（site）とフック
 
 siteの考え方と手順は[sites.md](sites.md)、フックは[hooks.md](hooks.md)。ここではサーバー側で用意するものをまとめる。
 
-- launcher: 「全体管理」→「ランチャー」（`/admin/launchers`）で登録してtokenを発行し、`docker compose --profile launcher up -d launcher`で動かす。起動設定（`launcher.toml`。APIのURL・tokenファイル・状態の置き場）は`MMT_LAUNCHER_CONFIG_DIR`、tokenファイル（mode 600）は`MMT_LAUNCHER_SECRETS_DIR`にread-onlyでmountする。担当の計算機の設定・job shell・鍵の依頼は巡回のたびにAPIから読む。launcherが作った鍵（秘密鍵）、known_hosts、投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せず、鍵も作り直しになり公開鍵を登録し直す）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。tokenが漏れたら「全体管理」→「ランチャー」の「tokenを作り直す」で古いtokenを止める。
+- launcher: 「全体管理」→「ランチャー」（`/settings/launchers`）で登録してtokenを発行し、`docker compose --profile launcher up -d launcher`で動かす。起動設定（`launcher.toml`。APIのURL・tokenファイル・状態の置き場）は`MMT_LAUNCHER_CONFIG_DIR`、tokenファイル（mode 600）は`MMT_LAUNCHER_SECRETS_DIR`にread-onlyでmountする。担当のコンピュータの設定・job shell・鍵の依頼は巡回のたびにAPIから読む。launcherが作った鍵（秘密鍵）、known_hosts、投入の記録はvolume `launcher-state`（消すと、届かなかった報告を送り直せず、鍵も作り直しになり公開鍵を登録し直す）。設定の書き方は[deploy/sites](../deploy/sites/README.md)。tokenが漏れたら「全体管理」→「ランチャー」の「tokenを作り直す」で古いtokenを止める。
 - runner用の公開hostname: LANの外の計算ノードが報告するhostnameは、画面やSSOと分けて、Job tokenの要求と署名付きwebhookだけを通す（[deploy/edge](../deploy/edge/README.md)）。
 - Forgejo（ジョブのgit repoとcontainer registry）: `docker compose --profile forge up -d forgejo`。`SECRET_KEY`は先に作ったファイル（`MMT_FORGEJO_SECRET_KEY_FILE`）から読む。鍵が無いとForgejoは公開されている既定値を使うので、必ず作り、backupにも含める（[deploy/forgejo](../deploy/forgejo/README.md)）。公式のbase imageは[images/base](../images/base/README.md)。
 - `MMT_HOOK_SECRET_KEY`（base64の32 byte、`openssl rand -base64 32`）: webhookのフックのsecretを暗号化する。無いとwebhookのフックを作れない。鍵を替えると、それまでのwebhookのフックは503 `hook_secret_key_missing`になるので、作り直して送り手のsecretも替える。
@@ -405,7 +405,7 @@ Runが終端（finished/failed/canceled）になったときの後処理（出�
 
 MLflowのRunは終端から`RUNNING`へ戻して再び終端にできるため、同じRunでhandlerが2回以上呼ばれることがあります。handlerは二重に処理しないように作ります。
 
-plugin outboxへのイベント投入はhandlerではありません。状態が変わるたび（run.startedを含む）と、終端Runへの出力・Dataset追加の再送で積まれ、失敗するとRunの変更ごと戻ります。終端への遷移はRunを`FOR UPDATE`でlockするので、同じRunへの出力モデル登録と直列になり、終端イベントの`run.outputModelVersionIds`には確定済みの版が入ります。
+plugin outboxへのイベント投入はhandlerではありません。状態が変わるたび（run.startedを含む）と、終端Runへの出力・Dataset追加の再送で積まれ、失敗するとRunの変更ごと戻ります。終端への遷移はRunを`FOR UPDATE`でlockするので、同じRunへの出力モデル登録と直列になり、終端イベントの`run.outputModelVersionIds`には確定済みのバージョンが入ります。
 
 ## 通知（Slack・Webhook・メール）
 
@@ -481,7 +481,7 @@ API serverは30秒ごとに次を確かめ、見つけたらProjectの「運用�
 | 変数 | 既定 | 意味 |
 |---|---|---|
 | `MMT_TOKEN_MAX_LIFETIME_DAYS` | `365` | 新しいAPI tokenの期限の上限。期限を省略したtokenはこの日数で切れる。1〜3650 |
-| `MMT_REPORT_SNAPSHOT_MAX_BYTES` | `52428800` | 共有レポートの1つの版で「作成時点で固定」したブロックの固定データ（JSONのUTF-8）の合計の上限（バイト）。超える保存は413 `report_snapshot_too_large` で版を作らない。1ブロックは別に5MiB（`REPORT_SNAPSHOT_BLOCK_MAX_BYTES`、定数）まで。正の整数 |
+| `MMT_REPORT_SNAPSHOT_MAX_BYTES` | `52428800` | 共有レポートの1つのバージョンで「作成時点で固定」したブロックの固定データ（JSONのUTF-8）の合計の上限（バイト）。超える保存は413 `report_snapshot_too_large` でバージョンを作らない。1ブロックは別に5MiB（`REPORT_SNAPSHOT_BLOCK_MAX_BYTES`、定数）まで。正の整数 |
 | `MMT_CSV_EXPORT_MAX_ROWS` | `50000` | `POST /projects/:p/runs/search/export.csv`の最大行数。超えた分は省き、応答ヘッダ`X-MMT-Export-Truncated: true`とCSV末尾の`# truncated: ...`行で示す。正の整数 |
 | `MMT_CHECKPOINT_KEEP_COUNT` | `5` | Runごとに既定の一覧へ出すcheckpointの数（1以上）。超えた古いcheckpointは`retained=false`になり、一覧の既定表示から外れる。Artifactは消さないので再開には使える |
 | `MMT_ARTIFACT_DELETE_GRACE_DAYS` | `7` | 削除したArtifactのblobをgarbage collectorが保存先から消すまでの日数。0〜3650（0は次の周回で消す） |

@@ -44,7 +44,7 @@ describe('datasetFolderProgress', () => {
   });
   const [wav, big] = entries.map((entry) => entry.artifactPath);
 
-  it('取消したファイルがあると版の作成へ進まず、そのファイルを残りとして返す', () => {
+  it('取消したファイルがあるとバージョンの作成へ進まず、そのファイルを残りとして返す', () => {
     const progress = datasetFolderProgress(entries, [
       { id: '1', path: wav!, status: 'completed', artifact: { id: 'artifact-a' } },
       { id: '2', path: big!, status: 'canceled', artifact: null },
@@ -54,7 +54,7 @@ describe('datasetFolderProgress', () => {
     expect([...progress.storedArtifactIds.values()]).toEqual(['artifact-a']);
   });
 
-  it('残りを除いた一覧では、保存済みのファイルだけで版を作れる', () => {
+  it('残りを除いた一覧では、保存済みのファイルだけでバージョンを作れる', () => {
     const progress = datasetFolderProgress(entries.slice(0, 1), [
       { id: '1', path: wav!, status: 'completed', artifact: { id: 'artifact-a' } },
       { id: '2', path: big!, status: 'canceled', artifact: null },

@@ -89,7 +89,7 @@ export function artifactRootUri(owner: ArtifactOwner): string {
 
 export function nativeArtifactPath(location: ArtifactLocation): string {
   if (location.owner.kind === 'model-version')
-    throw new DomainError(409, '登録モデル版のArtifactは変更できません', 'conflict');
+    throw new DomainError(409, '登録モデルバージョンのArtifactは変更できません', 'conflict');
   const path =
     location.owner.kind === 'run' ? location.path : `models/${location.owner.id}/${location.path}`;
   return validateArtifactPath(path);

@@ -33,7 +33,7 @@
     },
     {
       "name": "registry",
-      "description": "Model・Code・Datasetの版（版は不変）"
+      "description": "Model・Code・Datasetのバージョン（バージョンは不変）"
     },
     {
       "name": "automation",
@@ -61,7 +61,7 @@
     },
     {
       "name": "execution",
-      "description": "Job・計算機・worker"
+      "description": "Job・コンピュータ・worker"
     },
     {
       "name": "worker",
@@ -69,7 +69,7 @@
     },
     {
       "name": "sites",
-      "description": "site（外部の計算機）の設定・job shell・個人設定・鍵・array・手動投入・runnerの報告"
+      "description": "site（外部のコンピュータ）の設定・job shell・個人設定・鍵・array・手動投入・runnerの報告"
     },
     {
       "name": "launcher",
@@ -105,7 +105,7 @@
     },
     {
       "name": "reports",
-      "description": "共有レポートと版の履歴"
+      "description": "共有レポートとバージョンの履歴"
     },
     {
       "name": "sync",
@@ -6046,7 +6046,7 @@
         "tags": [
           "registry"
         ],
-        "summary": "ModelVersionを取得（別Modelの版は404）",
+        "summary": "ModelVersionを取得（別Modelのバージョンは404）",
         "security": [
           {
             "sessionCookie": []
@@ -6088,7 +6088,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -6326,7 +6326,7 @@
         "tags": [
           "registry"
         ],
-        "summary": "ModelVersionを登録（版は不変）",
+        "summary": "ModelVersionを登録（バージョンは不変）",
         "security": [
           {
             "sessionCookie": []
@@ -7945,7 +7945,7 @@
         "tags": [
           "evaluation"
         ],
-        "summary": "基準版との評価比較",
+        "summary": "基準バージョンとの評価比較",
         "security": [
           {
             "sessionCookie": []
@@ -7987,7 +7987,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -10424,7 +10424,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -10603,7 +10603,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -11788,7 +11788,7 @@
         "tags": [
           "automation"
         ],
-        "summary": "ruleを既存の版・上流Runへ手動適用",
+        "summary": "ruleを既存のバージョン・上流Runへ手動適用",
         "security": [
           {
             "sessionCookie": []
@@ -22870,7 +22870,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機（ComputeTarget）一覧。projectIdでそのProjectで使えるものだけ",
+        "summary": "コンピュータ（ComputeTarget）の詳細。使えるものと管理するもの。projectIdでそのProjectで使えるものだけ",
         "security": [
           {
             "sessionCookie": []
@@ -22999,7 +22999,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機を登録（全体管理者、または自分の計算機を足す研究者）",
+        "summary": "コンピュータを登録（足した人が所有者。全体管理者でない人はsiteだけ）",
         "security": [
           {
             "sessionCookie": []
@@ -23145,6 +23145,14 @@
                       }
                     ]
                   },
+                  "visibility": {
+                    "default": "private",
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "private"
+                    ]
+                  },
                   "site": {
                     "type": "object",
                     "properties": {
@@ -23296,17 +23304,6 @@
                     },
                     "additionalProperties": false
                   },
-                  "personal": {
-                    "type": "boolean"
-                  },
-                  "projectIds": {
-                    "maxItems": 100,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  },
                   "jobShell": {
                     "type": "string"
                   }
@@ -23424,10 +23421,102 @@
               "local_executor_disabled",
               "site_settings_invalid",
               "site_launcher_invalid",
-              "target_not_owned",
-              "target_project_forbidden",
               "invalid_request",
               "invalid_reference"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "一時的に処理できない",
+            "x-mmt-error-codes": [
+              "oidc_unavailable",
+              "internal_error"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/targets/overview": {
+      "get": {
+        "operationId": "getTargetsOverview",
+        "tags": [
+          "execution"
+        ],
+        "summary": "すべてのコンピュータの名前・種類・所有者・公開範囲・状態（接続先は含まない）",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerToken": [
+              "read"
+            ]
+          }
+        ],
+        "x-mmt-access": {
+          "kind": "signedIn",
+          "scope": "read"
+        },
+        "x-mmt-job-token": "forbidden",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ComputeTargetOverview"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "認証されていない",
+            "x-mmt-error-codes": [
+              "authentication_required",
+              "invalid_token",
+              "basic_auth_unsupported",
+              "identity_sync_required"
+            ],
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "権限がない",
+            "x-mmt-error-codes": [
+              "password_change_required",
+              "insufficient_scope",
+              "job_token_forbidden"
             ],
             "content": {
               "application/json": {
@@ -23460,7 +23549,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機を変更（全体管理者か所有者）",
+        "summary": "コンピュータを変更（公開範囲を含む。全体管理者か所有者）",
         "security": [
           {
             "sessionCookie": []
@@ -23609,6 +23698,13 @@
                       }
                     ]
                   },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "public",
+                      "private"
+                    ]
+                  },
                   "site": {
                     "type": "object",
                     "properties": {
@@ -23811,6 +23907,7 @@
             "x-mmt-error-codes": [
               "target_owner_required",
               "session_required",
+              "target_admin_required",
               "password_change_required",
               "invalid_origin",
               "insufficient_scope",
@@ -23874,425 +23971,9 @@
               "local_executor_disabled",
               "site_settings_invalid",
               "site_launcher_invalid",
+              "target_owner_missing",
               "invalid_request",
               "invalid_reference"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "一時的に処理できない",
-            "x-mmt-error-codes": [
-              "oidc_unavailable",
-              "internal_error"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/targets/{id}/projects": {
-      "put": {
-        "operationId": "putTargetsByIdProjects",
-        "tags": [
-          "sites"
-        ],
-        "summary": "自分の計算機を共有するProject",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerToken": [
-              "admin"
-            ]
-          }
-        ],
-        "x-mmt-access": {
-          "kind": "signedIn",
-          "scope": "admin"
-        },
-        "x-mmt-job-token": "forbidden",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "対象のID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "projectIds": {
-                    "maxItems": 100,
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "format": "uuid"
-                    }
-                  }
-                },
-                "required": [
-                  "projectIds"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ComputeTargetDetails"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "要求を読めない",
-            "x-mmt-error-codes": [
-              "invalid_json"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "認証されていない",
-            "x-mmt-error-codes": [
-              "authentication_required",
-              "invalid_token",
-              "basic_auth_unsupported",
-              "identity_sync_required"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "権限がない",
-            "x-mmt-error-codes": [
-              "target_owner_required",
-              "session_required",
-              "password_change_required",
-              "invalid_origin",
-              "insufficient_scope",
-              "job_token_forbidden"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "見つからない（他Projectのものを含む）",
-            "x-mmt-error-codes": [
-              "not_found"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "現在の状態と衝突する",
-            "x-mmt-error-codes": [
-              "already_exists"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "大きすぎる",
-            "x-mmt-error-codes": [
-              "body_too_large"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "入力が不正",
-            "x-mmt-error-codes": [
-              "target_not_owned",
-              "target_project_forbidden",
-              "invalid_request",
-              "invalid_reference"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "一時的に処理できない",
-            "x-mmt-error-codes": [
-              "oidc_unavailable",
-              "internal_error"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/targets/shareable-projects": {
-      "get": {
-        "operationId": "getTargetsShareableProjects",
-        "tags": [
-          "sites"
-        ],
-        "summary": "自分の計算機を足すときに共有できるProject（自分がeditor以上のもの）",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerToken": [
-              "admin"
-            ]
-          }
-        ],
-        "x-mmt-access": {
-          "kind": "signedIn",
-          "scope": "admin"
-        },
-        "x-mmt-job-token": "forbidden",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ShareableProject"
-                      }
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "認証されていない",
-            "x-mmt-error-codes": [
-              "authentication_required",
-              "invalid_token",
-              "basic_auth_unsupported",
-              "identity_sync_required"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "権限がない",
-            "x-mmt-error-codes": [
-              "session_required",
-              "password_change_required",
-              "insufficient_scope",
-              "job_token_forbidden"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "一時的に処理できない",
-            "x-mmt-error-codes": [
-              "oidc_unavailable",
-              "internal_error"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/targets/{id}/shareable-projects": {
-      "get": {
-        "operationId": "getTargetsByIdShareableProjects",
-        "tags": [
-          "sites"
-        ],
-        "summary": "自分の計算機を共有できるProject（所有者がeditor以上のもの）",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerToken": [
-              "read"
-            ]
-          }
-        ],
-        "x-mmt-access": {
-          "kind": "signedIn",
-          "scope": "read"
-        },
-        "x-mmt-job-token": "forbidden",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "対象のID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ShareableProject"
-                      }
-                    }
-                  },
-                  "required": [
-                    "items"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "認証されていない",
-            "x-mmt-error-codes": [
-              "authentication_required",
-              "invalid_token",
-              "basic_auth_unsupported",
-              "identity_sync_required"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "権限がない",
-            "x-mmt-error-codes": [
-              "target_owner_required",
-              "session_required",
-              "password_change_required",
-              "insufficient_scope",
-              "job_token_forbidden"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "見つからない（他Projectのものを含む）",
-            "x-mmt-error-codes": [
-              "not_found"
-            ],
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "入力が不正",
-            "x-mmt-error-codes": [
-              "target_not_owned",
-              "invalid_request"
             ],
             "content": {
               "application/json": {
@@ -24325,7 +24006,7 @@
         "tags": [
           "sites"
         ],
-        "summary": "siteのjob shellの版（新しい順）",
+        "summary": "siteのjob shellのバージョン（新しい順）",
         "security": [
           {
             "sessionCookie": []
@@ -24395,6 +24076,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
@@ -24454,7 +24136,7 @@
         "tags": [
           "sites"
         ],
-        "summary": "job shellの次の版を保存（同じ内容なら今の版を返す）",
+        "summary": "job shellの次のバージョンを保存（同じ内容なら今のバージョンを返す）",
         "security": [
           {
             "sessionCookie": []
@@ -24645,7 +24327,7 @@
         "tags": [
           "sites"
         ],
-        "summary": "job shellの版（内容つき）",
+        "summary": "job shellのバージョン（内容つき）",
         "security": [
           {
             "sessionCookie": []
@@ -24676,7 +24358,7 @@
             "name": "shellId",
             "in": "path",
             "required": true,
-            "description": "job shellの版のID",
+            "description": "job shellのバージョンのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -24713,6 +24395,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
@@ -24981,6 +24664,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
@@ -25147,6 +24831,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "invalid_origin",
               "session_required",
@@ -25279,6 +24964,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "invalid_origin",
               "session_required",
@@ -25425,6 +25111,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
@@ -25578,6 +25265,7 @@
             "x-mmt-error-codes": [
               "target_owner_required",
               "session_required",
+              "target_not_available",
               "password_change_required",
               "invalid_origin",
               "insufficient_scope",
@@ -25760,6 +25448,7 @@
             "x-mmt-error-codes": [
               "target_owner_required",
               "session_required",
+              "target_not_available",
               "password_change_required",
               "invalid_origin",
               "insufficient_scope",
@@ -25935,6 +25624,7 @@
             "x-mmt-error-codes": [
               "target_owner_required",
               "session_required",
+              "target_not_available",
               "password_change_required",
               "insufficient_scope",
               "job_token_forbidden"
@@ -26508,7 +26198,7 @@
         "tags": [
           "execution"
         ],
-        "summary": "計算機の接続確認を依頼",
+        "summary": "コンピュータの接続確認を依頼",
         "security": [
           {
             "sessionCookie": []
@@ -30670,6 +30360,7 @@
           "403": {
             "description": "権限がない",
             "x-mmt-error-codes": [
+              "target_not_available",
               "password_change_required",
               "api_token_required",
               "insufficient_scope",
@@ -38250,7 +37941,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -38378,7 +38069,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -38581,7 +38272,7 @@
             "name": "v",
             "in": "path",
             "required": true,
-            "description": "版または保存ビューのID",
+            "description": "バージョンまたは保存ビューのID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -38853,7 +38544,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "レポートを作成（版1。固定するブロックのデータを取り込む）",
+        "summary": "レポートを作成（バージョン1。固定するブロックのデータを取り込む）",
         "security": [
           {
             "sessionCookie": []
@@ -39826,7 +39517,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "レポートと版の内容（既定は現在の版）",
+        "summary": "レポートとバージョンの内容（既定は現在のバージョン）",
         "security": [
           {
             "sessionCookie": []
@@ -39964,7 +39655,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "レポートの新しい版を保存（baseRevisionが現在の版と違えば409）",
+        "summary": "レポートの新しいバージョンを保存（baseRevisionが現在のバージョンと違えば409）",
         "security": [
           {
             "sessionCookie": []
@@ -40965,7 +40656,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "レポートの版の履歴（新しい順）",
+        "summary": "レポートのバージョンの履歴（新しい順）",
         "security": [
           {
             "sessionCookie": []
@@ -41095,7 +40786,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "版の固定データ（作成時点で固定したブロック）",
+        "summary": "バージョンの固定データ（作成時点で固定したブロック）",
         "security": [
           {
             "sessionCookie": []
@@ -41235,7 +40926,7 @@
         "tags": [
           "reports"
         ],
-        "summary": "過去の版の内容で新しい版を作る",
+        "summary": "過去のバージョンの内容で新しいバージョンを作る",
         "security": [
           {
             "sessionCookie": []
@@ -50094,6 +49785,13 @@
                 "type": "null"
               }
             ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ]
           }
         },
         "required": [
@@ -50117,7 +49815,8 @@
           "cpuArch",
           "supportsArray",
           "queueTimeoutSeconds",
-          "ownerUserId"
+          "ownerUserId",
+          "visibility"
         ],
         "additionalProperties": false
       },
@@ -50240,18 +49939,18 @@
               }
             ]
           },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
           "ownerName": {
             "type": [
               "string",
               "null"
             ]
-          },
-          "projectIds": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            }
           },
           "site": {
             "anyOf": [
@@ -50300,10 +49999,131 @@
           "supportsArray",
           "queueTimeoutSeconds",
           "ownerUserId",
+          "visibility",
           "ownerName",
-          "projectIds",
           "site",
           "siteAccountMode"
+        ],
+        "additionalProperties": false
+      },
+      "ComputeTargetOverview": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "executor": {
+            "type": "string",
+            "enum": [
+              "ssh",
+              "local",
+              "site"
+            ]
+          },
+          "submissionMode": {
+            "type": "string",
+            "enum": [
+              "automatic",
+              "manual"
+            ]
+          },
+          "cpuArch": {
+            "type": "string",
+            "enum": [
+              "amd64",
+              "arm64"
+            ]
+          },
+          "supportsArray": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "private"
+            ]
+          },
+          "ownerUserId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ownerName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usable": {
+            "type": "boolean"
+          },
+          "canManage": {
+            "type": "boolean"
+          },
+          "launcher": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "lastSeenAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "revoked": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "name",
+                  "lastSeenAt",
+                  "revoked"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "executor",
+          "submissionMode",
+          "cpuArch",
+          "supportsArray",
+          "enabled",
+          "visibility",
+          "ownerUserId",
+          "ownerName",
+          "usable",
+          "canManage",
+          "launcher"
         ],
         "additionalProperties": false
       },
@@ -57875,23 +57695,6 @@
           "role",
           "status",
           "createdAt"
-        ],
-        "additionalProperties": false
-      },
-      "ShareableProject": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
         ],
         "additionalProperties": false
       },

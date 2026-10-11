@@ -229,8 +229,13 @@ export {
   SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS,
 } from './siteExecution.js';
 export type {
+  ComputeTargetLauncherStatus,
+  ComputeTargetOverview,
+  ComputeTargetVisibility,
+} from './computeTargetAccess.js';
+export { COMPUTE_TARGET_VISIBILITIES } from './computeTargetAccess.js';
+export type {
   ComputeTargetDetails,
-  ComputeTargetSharing,
   ComputeTargetSiteFields,
   Launcher,
   LauncherConfiguration,
@@ -242,7 +247,6 @@ export type {
   LauncherKeyPublish,
   LauncherSite,
   ManualSiteConfiguration,
-  ShareableProject,
   SiteAccountMode,
   SiteConnection,
   SiteConnectionCheck,
@@ -337,6 +341,7 @@ export {
   hookWebhookPath,
 } from './hooks.js';
 import type { CpuArch, JobEndReason, JobPhase, SiteSubmissionMode } from './siteExecution.js';
+import type { ComputeTargetVisibility } from './computeTargetAccess.js';
 import type { ExecutionRuntime, ExecutionRuntimeKind } from './executionRuntime.js';
 import type { ExecutionMode, ExecutionSnapshot } from './experimentTasks.js';
 import type { TaskOutputModel } from './experimentTasks.js';
@@ -581,8 +586,13 @@ export interface ComputeTarget {
   supportsArray: boolean;
   /** Sites: a Job still in the scheduler queue after this many seconds fails as queue_timeout. */
   queueTimeoutSeconds: number | null;
-  /** null: managed by global administrators; otherwise the researcher who added the site. */
+  /**
+   * Whoever added the computer; null for one from before owners, which global administrators
+   * manage. Its owner and global administrators change it.
+   */
   ownerUserId: string | null;
+  /** Public: every Project's Jobs; private: its owner's and their Service Accounts' only. */
+  visibility: ComputeTargetVisibility;
 }
 export interface Job {
   id: string;

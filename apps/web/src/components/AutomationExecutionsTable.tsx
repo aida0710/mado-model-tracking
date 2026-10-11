@@ -115,7 +115,8 @@ export function AutomationExecutionsTable({
           {
             key: 'model',
             priority: 'secondary',
-            header: text.modelVersion,
+            // Each cell names the model, so the header needs only the shorter word.
+            header: text.version,
             render: column((execution) => (
               <ModelVersionLink
                 projectId={projectId}

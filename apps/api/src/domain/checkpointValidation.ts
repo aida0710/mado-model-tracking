@@ -105,7 +105,7 @@ export function assertResumableFrom(
   if (!checkpointRun.codeId || checkpointRun.codeId !== run.codeId)
     throw new DomainError(
       422,
-      'checkpointは元のRunと同じCodeの版で再開してください',
+      'checkpointは元のRunと同じCodeのバージョンで再開してください',
       'checkpoint_code_mismatch',
     );
 }

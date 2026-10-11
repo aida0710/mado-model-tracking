@@ -26,10 +26,10 @@ describe('alias履歴に残す昇格条件の説明', () => {
     );
   });
 
-  it('基準版のない初回合格は、値の代わりに理由を日本語で書く', () => {
+  it('基準バージョンのない初回合格は、値の代わりに理由を日本語で書く', () => {
     expect(
       describeCriterionResult(result({ observed: null, baseline: null, reason: 'baseline_missing' })),
-    ).toBe('maeの基準との差 ≤ 0: 値なし（基準版なし）');
+    ).toBe('maeの基準との差 ≤ 0: 値なし（基準バージョンなし）');
   });
 
   it('絶対値の条件は指標名と値だけを書く', () => {

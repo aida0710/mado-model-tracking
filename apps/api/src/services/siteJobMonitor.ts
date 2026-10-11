@@ -3,7 +3,7 @@ import { rows, transaction, type Database } from '../db/database.js';
 import { jobColumns } from '../repositories/jobRepository.js';
 import { PollingLoop } from './pollingLoop.js';
 import type { RunCompletionService } from './runCompletionService.js';
-import { failUnstartedSiteJob } from './siteJobEnding.js';
+import { failUnstartedJob } from './siteJobEnding.js';
 
 // Queue limits are minutes to days, so checking twice a minute is precise enough.
 const MONITOR_INTERVAL_MS = 30 * 1000;
@@ -68,7 +68,7 @@ export class SiteJobMonitor {
         [MONITOR_BATCH_SIZE, SITE_SUBMISSION_REPORT_TIMEOUT_SECONDS],
       );
       for (const job of expired)
-        await failUnstartedSiteJob(
+        await failUnstartedJob(
           connection,
           this.runCompletion,
           job.phase === 'submitted'

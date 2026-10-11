@@ -4,7 +4,7 @@ import { first, rows, type Connection } from '../db/database.js';
 // The Compute page shows recent history only.
 const CHECK_LIST_LIMIT = 10;
 const checkColumns = 'id,target_id,user_id,requested_by,status,message,created_at,finished_at';
-const NO_LAUNCHER_MESSAGE = 'launcherが応答しませんでした（止まっているか、この計算機の担当ではありません）';
+const NO_LAUNCHER_MESSAGE = 'launcherが応答しませんでした（止まっているか、このコンピュータの担当ではありません）';
 
 /** Checks no launcher answered in time fail, so a stopped launcher is visible. */
 export async function expireStaleConnectionChecks(connection: Connection): Promise<void> {

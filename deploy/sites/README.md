@@ -1,6 +1,6 @@
 # サイトのjob shellとlauncher
 
-外部実行（使い方は[docs/sites.md](../../docs/sites.md)、背景は[設計案](../../docs/design/external-execution.md)）で、計算機（site）ごとに使う`job.sh`の例と、launcherの起動設定の例です。計算機の接続先・アカウント・job shellは、trackingのWeb（Compute画面）で設定します。計算機を追加するとき、ここの`job.sh`を雛形として選べます。launcher（手動投入の計算機では本人の`mado-tracking submit`）は、投入のたびに、siteのログインノード（直実行ならそのホスト）でWebのjob shellの今の版を実行します。
+外部実行（使い方は[docs/sites.md](../../docs/sites.md)、背景は[設計案](../../docs/design/external-execution.md)）で、コンピュータ（site）ごとに使う`job.sh`の例と、launcherの起動設定の例です。コンピュータの接続先・アカウント・job shellは、trackingのWeb（Compute画面）で設定します。コンピュータを追加するとき、ここの`job.sh`を雛形として選べます。launcher（手動投入のコンピュータでは本人の`mado-tracking submit`）は、投入のたびに、siteのログインノード（直実行ならそのホスト）でWebのjob shellの今のバージョンを実行します。
 
 `examples/`の値（キュー名、資源タイプ、グループの指定、hostname、path）はすべて例です。実際のサイトの資料で確かめてから使ってください。
 
@@ -51,8 +51,8 @@ launcherが渡す環境変数と、読み取る最後の行の決まりは[job_s
 - 依頼の値は環境変数だけで受け取り、スクリプトの文字列に埋め込みません（`eval`もしません）。job shellが書き出すbatch script（`$MMT_SPEC_DIR/batch.sh`、直実行は`run.sh`）は定数の文字列で、計算ノードで環境変数から値を読みます。
 - 値はスケジューラへ渡す前に検証します。数は符号と先頭の0のない10進数、pathは英数字と`._/+@-`だけ、グループ名などは英数字と`._-`だけです。オプションの値は別々の引数として渡し、シェルを通しません。
 - tokenなどの秘密は仕様の置き場のファイル（600）にだけあります。引数、スケジューラのオプション（`qsub -v`など）、環境変数には載りません。そのため、ジョブへ環境変数を渡しても秘密は渡りません。PBSとGrid Engineの例は`-v`で渡す名前をpathと数に限り、SlurmとTCSの例は投入時の環境をそのまま渡します（`--export=ALL`、`-X`）。
-- job shellはコンテナの外で、投入したアカウントの権限で動きます。job shellと全体設定を変えられるのは計算機の所有者と全体管理者（全体の計算機は全体管理者）だけで、保存のたびに新しい版になり、監査ログ（`site.job_shell.create`）に残ります。共用アカウントのホストでは、job shellが他の人のJobの秘密ファイルも読めます（利用者どうしは隔離しません）。
-- 本人のアカウントで投入する計算機では、所有者のjob shellが各利用者のアカウントで動きます。trackingの全体管理者の権限（またはtrackingのDB）を得た人も、job shellを書き換えて同じことができます。launcherの公開鍵を登録する前に、そのことを利用者に伝えてください。サイトが許せば、authorized_keysの行の先頭に`from="<launcherのホストのアドレス>"`を付けると、鍵が漏れても他のホストからは使えません。
+- job shellはコンテナの外で、投入したアカウントの権限で動きます。job shellと全体設定を変えられるのはコンピュータの所有者と全体管理者（全体のコンピュータは全体管理者）だけで、保存のたびに新しいバージョンになり、監査ログ（`site.job_shell.create`）に残ります。共用アカウントのホストでは、job shellが他の人のJobの秘密ファイルも読めます（利用者どうしは隔離しません）。
+- 本人のアカウントで投入するコンピュータでは、所有者のjob shellが各利用者のアカウントで動きます。trackingの全体管理者の権限（またはtrackingのDB）を得た人も、job shellを書き換えて同じことができます。launcherの公開鍵を登録する前に、そのことを利用者に伝えてください。サイトが許せば、authorized_keysの行の先頭に`from="<launcherのホストのアドレス>"`を付けると、鍵が漏れても他のホストからは使えません。
 - スケジューラの自動再実行は止めます（PBSとGrid Engineは`-r n`、Slurmは`--no-requeue`、TCSは`--norestart`）。再実行はtrackingが行います。スケジューラが同じJobをもう一度起動しても、2つ目のrunnerは`runner_conflict`で拒否されます。
 
 ## 時間切れの扱い
@@ -73,13 +73,13 @@ runnerはSIGTERMを受けるとコンテナを止め、`endReason: 'timed_out'`�
 
 trackingへ報告するのはrunnerだけです。batch scriptがrunnerを起動する前に止まると（moduleが無い、pathが見えないなど）、Jobは「投入済み」のまま残ります。投入済みのJobには応答途絶の判定をしないためです。
 
-- 計算機の「待ち行列の上限」（`queueTimeoutSeconds`）を設定すると、上限を過ぎたJobは失敗（`queue_timeout`）になります。
+- コンピュータの「待ち行列の上限」（`queueTimeoutSeconds`）を設定すると、上限を過ぎたJobは失敗（`queue_timeout`）になります。
 - 原因は`$MMT_SPEC_DIR/scheduler.*.log`（直実行は`runner.<番号>.log`）に残ります。仕様の置き場は`<作業ディレクトリ>/.mmt-submissions/<最初のJob ID>`です。
 - 例のbatch scriptは、runnerを起動する前の処理を最小限にしています。書き換えるときも、runnerの前に失敗しうる処理を増やさないでください。runnerの実行ファイルが無いときは、ログインノードのjob shellが投入の前に失敗にします。
 
 ## launcherの起動設定（launcher.toml）
 
-launcherは起動に要るものだけを1つのTOMLから読みます（`mado-tracking-launcher --config <path>`か`MMT_LAUNCHER_CONFIG`）。担当の計算機の設定・job shell・鍵の依頼・接続確認は、巡回のたびに`GET /api/launcher/config`で読むので、Webで変えても再起動は要りません。読み方の正本は`python/src/mado_tracking/site/launcher_config.py`です。
+launcherは起動に要るものだけを1つのTOMLから読みます（`mado-tracking-launcher --config <path>`か`MMT_LAUNCHER_CONFIG`）。担当のコンピュータの設定・job shell・鍵の依頼・接続確認は、巡回のたびに`GET /api/launcher/config`で読むので、Webで変えても再起動は要りません。読み方の正本は`python/src/mado_tracking/site/launcher_config.py`です。
 
 | 項目 | 内容 |
 |---|---|
@@ -90,16 +90,16 @@ launcherは起動に要るものだけを1つのTOMLから読みます（`mado-t
 | `registry_secret_file` | 任意。全siteのrunnerがimageをSIFへ変換するときに使う、読み取り専用tokenのJSON（`{"username", "password"}`、mode 600） |
 
 - tokenとregistryのファイルは、launcherの実行ユーザーが所有し、groupとotherが読めないようにします（そうでなければlauncherが拒みます）。
-- launcherのtokenは`/api/launcher/*`にしか届きません。どのProjectのJobでも、担当の計算機（Webでそのlauncherを選んだ計算機）への投入を受け取ります。Projectごとのtokenは要りません。
-- 古い形式（`launcher_id`、`[[projects]]`、`[[sites]]`）の設定は、起動の時点で拒みます。計算機ごとの値はWebの全体設定へ移してください。
+- launcherのtokenは`/api/launcher/*`にしか届きません。どのProjectのJobでも、担当のコンピュータ（Webでそのlauncherを選んだコンピュータ）への投入を受け取ります。Projectごとのtokenは要りません。
+- 古い形式（`launcher_id`、`[[projects]]`、`[[sites]]`）の設定は、起動の時点で拒みます。コンピュータごとの値はWebの全体設定へ移してください。
 
 ## 鍵と接続確認
 
-自動投入の計算機では、launcherがログイン用の鍵（ed25519）を`<state_directory>/keys/<鍵のID>`に作り、公開鍵だけをAPIへ送ります。秘密鍵はlauncherのホストから出ません。
+自動投入のコンピュータでは、launcherがログイン用の鍵（ed25519）を`<state_directory>/keys/<鍵のID>`に作り、公開鍵だけをAPIへ送ります。秘密鍵はlauncherのホストから出ません。
 
 | アカウント方式 | 鍵 | 公開鍵を登録する人 |
 |---|---|---|
-| 共用 | 計算機に1つ | 所有者（全体の計算機では全体管理者）が、共用アカウントの`~/.ssh/authorized_keys`へ |
+| 共用 | コンピュータに1つ | 所有者（全体のコンピュータでは全体管理者）が、共用アカウントの`~/.ssh/authorized_keys`へ |
 | 本人 | 利用者ごとに1つ（「自分の設定」でアカウント名を保存したとき） | 各利用者が、自分のアカウントへ（サイトの利用者ポータルなど） |
 
 - 公開鍵の注記は`mmt-launcher:<launcherの名前>:<鍵のID>`です。authorized_keysの中で、どのlauncherのどの鍵かを見分けられます。
@@ -107,22 +107,22 @@ launcherは起動に要るものだけを1つのTOMLから読みます（`mado-t
 - 公開鍵がまだ登録されていないなどでsiteが鍵を拒んだとき（`Permission denied`）や、ホスト鍵がknown_hostsに無いとき（`Host key verification failed`）、launcherは巡回ごとに、そのアカウントへ1回だけログインを試します。その巡回の同じアカウントへの残りの投入は試さずに失敗にし、待ち行列からの取消は600秒待ってから試し直します（その前に、そのアカウントへの投入か接続確認のログインが通れば、取消もすぐ再開します。公開鍵を登録したら「接続確認」を押すと早く戻ります）。失敗したログインが重なるとアカウントやアドレスを止めるsiteがあるためです。応答がない・接続が切れたときは、投入の準備を3回まで試します。
 - 鍵を作り直すと、古い鍵はすぐ失効し、launcherが手元のファイルも消します。新しい公開鍵を登録し直すまで、そのアカウントへの投入は失敗します。
 - 状態の置き場を失うと、launcherは同じ鍵のIDで鍵を作り直し、新しい公開鍵を送ります（監査ログ`site.key.publish`）。登録し直すまで投入は失敗します。
-- known_hostsはWebの全体設定のものだけを使います（`<state_directory>/known-hosts/<計算機のID>`へ書き出します）。`ssh-keyscan`の出力は、サイトが公開しているホスト鍵の指紋と照らしてから貼ってください。
+- known_hostsはWebの全体設定のものだけを使います（`<state_directory>/known-hosts/<コンピュータのID>`へ書き出します）。`ssh-keyscan`の出力は、サイトが公開しているホスト鍵の指紋と照らしてから貼ってください。
 
-## 手動投入の計算機（`mado-tracking submit`）
+## 手動投入のコンピュータ（`mado-tracking submit`）
 
-投入方式が「手動」の計算機には、launcherは投入しません。ログインに一時パスワード（OTP）が要るsiteや、launcherから入れないPCです。Jobを依頼した本人が、その計算機の上で自分のAPI token（`MMT_API_URL`、`MMT_API_TOKEN`）を使って実行します。
+投入方式が「手動」のコンピュータには、launcherは投入しません。ログインに一時パスワード（OTP）が要るsiteや、launcherから入れないPCです。Jobを依頼した本人が、そのコンピュータの上で自分のAPI token（`MMT_API_URL`、`MMT_API_TOKEN`）を使って実行します。
 
 ```sh
-mado-tracking submit --site <計算機のID> --dry-run      # 待っている件数と設定を見る
-mado-tracking submit --site <計算機のID>                # 待っている自分のJobを1回投入する
-mado-tracking submit --site <計算機のID> --watch        # 止めるまで繰り返す（PC）
-mado-tracking submit --site <計算機のID> --watch --all  # 所有者: 共有した計算機の全員のJob
+mado-tracking submit --site <コンピュータのID> --dry-run      # 待っている件数と設定を見る
+mado-tracking submit --site <コンピュータのID>                # 待っている自分のJobを1回投入する
+mado-tracking submit --site <コンピュータのID> --watch        # 止めるまで繰り返す（PC）
+mado-tracking submit --site <コンピュータのID> --watch --all  # 所有者: 共有したコンピュータの全員のJob
 ```
 
 - job shell・作業ディレクトリ・runnerのPython・変数は、Webの全体設定と自分の設定から読みます。設定ファイルは要りません。`--work-dir`と`--var NAME=VALUE`は、その回だけ上に重ねます。
 - `--watch`は`--interval`（既定10秒）ごとに繰り返し、SIGINTかSIGTERMで止まります。`--watch`を使わなければ何も常駐しません。
-- `--all`は計算機の所有者だけが使えます。所有者のPCの上で、所有者のアカウントで全員のJobを動かすので、共有する相手を選んでください。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
+- `--all`はコンピュータの所有者だけが使えます。所有者のPCの上で、所有者のアカウントで全員のJobを動かすので、共有する相手を選んでください。`--all`で受け取るのは、使ったtokenのProjectのJobだけです（書き込みのtokenはProjectごとに作るため）。複数のProjectに共有したときは、Projectごとにそのtokenで`--watch --all`を動かします。
 
 ## サイトで試す
 
@@ -140,7 +140,7 @@ env MMT_SPEC_DIR=<作業ディレクトリ>/try-spec MMT_RUNNER=<作業ディレ
 
 最後の行がジョブIDだけで、ジョブが終わった後に`<作業ディレクトリ>/try-spec/scheduler.*.log`へ`index=0 ...`と`index=1 ...`が出れば、約束どおりです。取消は`MMT_SCHEDULER_JOB_ID=<ID> sh -c '<取消コマンド>'`で確かめます。
 
-上の手順はログインした対話のshellで動かすので、profileが足したPATHも見えます。launcherから投入する計算機では、launcherと同じ非対話のsessionでもスケジューラのコマンドが見えるかを、`ssh <アカウント>@<ログインノード> 'command -v qsub'`（Slurmは`sbatch`、TCSは`pjsub`）で確かめてください。
+上の手順はログインした対話のshellで動かすので、profileが足したPATHも見えます。launcherから投入するコンピュータでは、launcherと同じ非対話のsessionでもスケジューラのコマンドが見えるかを、`ssh <アカウント>@<ログインノード> 'command -v qsub'`（Slurmは`sbatch`、TCSは`pjsub`）で確かめてください。
 
 ## launcherをDocker composeで動かす
 
@@ -159,5 +159,5 @@ docker compose --profile launcher logs -f launcher
 | `MMT_LAUNCHER_UID`、`MMT_LAUNCHER_GID` | `10002` | — | 上のファイルの所有者に合わせてbuildします |
 | volume `launcher-state` | — | `/var/lib/mado-tracking-launcher` | `launcher.toml`の`state_directory`にします。消すと、投入中の記録と未送信の報告を失い、鍵も作り直しになります |
 
-- composeの中から同じホストのAPIを使うときは、`api_url = "http://api:4182"`です。runnerに渡すURLは、計算機ごとの「runnerから見たAPIのURL」です。
+- composeの中から同じホストのAPIを使うときは、`api_url = "http://api:4182"`です。runnerに渡すURLは、コンピュータごとの「runnerから見たAPIのURL」です。
 - 動かす前に`docker compose --profile launcher run --rm launcher --once`で、1回だけ巡回を試せます。

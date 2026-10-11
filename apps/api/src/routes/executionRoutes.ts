@@ -3,7 +3,6 @@ import type { JobService } from '../services/jobService.js';
 import type { TargetService } from '../services/targetService.js';
 import type { WorkerService } from '../services/workerService.js';
 import {
-  computeTargetSharingSchema,
   targetCreateSchema,
   targetListQuerySchema,
   targetUpdateSchema,
@@ -46,6 +45,10 @@ export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
       ),
     }),
   );
+  // Ahead of every /:id route; a GET /:id added later must come after it.
+  routes.get('/overview', async (context) =>
+    context.json({ items: await targets.overview(principal(context)) }),
+  );
   routes.post('/', async (context) =>
     context.json(
       await targets.create(
@@ -64,14 +67,6 @@ export function targetRoutes(targets: TargetService): Hono<ApiEnvironment> {
         await jsonBody(context, targetUpdateSchema),
         requestMetadata(context),
       ),
-    ),
-  );
-  routes.put('/:id/projects', async (context) =>
-    context.json(
-      await targets.replaceProjects(principal(context), uuidParam(context, 'id'), {
-        projectIds: (await jsonBody(context, computeTargetSharingSchema)).projectIds,
-        metadata: requestMetadata(context),
-      }),
     ),
   );
   return routes;

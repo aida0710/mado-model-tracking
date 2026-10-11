@@ -14,7 +14,7 @@ API tokenの画面で対象Projectのtokenを作成します。記録するユ�
 | Experiment・Run・params・metrics・tags・既存入力Datasetの記録 | `runs:write` |
 | 入力Datasetの新規登録 | `runs:write`と`registry:write` |
 | Artifactのアップロード | `artifacts:write` |
-| Logged Models・モデル版・aliasの登録や変更 | `registry:write` |
+| Logged Models・モデルバージョン・aliasの登録や変更 | `registry:write` |
 
 Authentikのログインはブラウザでの操作に使います。Pythonの記録には個人tokenまたはService Account tokenを使い、失効・期限・Projectへの所属・scopeはリクエストごとに確認します。自動実行やworkerなど、人の異動で止めたくない記録には、Projectの設定画面「Service Accounts」で作ったService Accountのtokenを使います。tokenの期限は最長365日です。
 
@@ -83,7 +83,7 @@ SDK 3.0.0と3.17.0は、開き直すときに`runs/update`へ`status=RUNNING`と
 
 Job付きRunは、終了後に記録を足すと`INVALID_STATE`になり、再開もできません。Jobの学習を途中から続けるときは、checkpointから新しいRunとして再開してください（Jobのcheckpoint再開）。
 
-ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデル版が参照するArtifactは保持します。
+ArtifactはProjectで選んだS3互換ストレージまたはファイルシステムに保存します。SDKへストレージの認証情報を渡す必要はありません。アップロード・ダウンロードはAPIを経由し、大きいファイルはストリームで転送します。同じRun内の同じpathへ再保存すると、新しいArtifactを保存してpathの参照を切り替えます。既存のモデルバージョンが参照するArtifactは保持します。
 
 ### 大きいファイルのmultipart upload
 
@@ -124,11 +124,11 @@ loaded = mlflow.pyfunc.load_model("models:/regression@candidate")
 print(loaded.predict(features))
 ```
 
-入力Datasetのname・digest・source・schema・contextをDatasetVersionとRunへ結び付け、lineageに残します。Datasetのsource URLからデータ本体を自動取得する処理はありません。Model Registryへの登録は既存のモデル版登録処理を通り、生成元Run、親モデル、Artifactの参照を固定します。
+入力Datasetのname・digest・source・schema・contextをDatasetVersionとRunへ結び付け、lineageに残します。Datasetのsource URLからデータ本体を自動取得する処理はありません。Model Registryへの登録は既存のモデルバージョン登録処理を通り、生成元Run、親モデル、Artifactの参照を固定します。
 
-MLflowのCreateModelVersionとネイティブの`POST /projects/:p/models/:id/versions`（version省略時）は、Modelごとに同じ番号の系列から採番します。交互に登録しても番号は重複せず、削除した版の番号は再利用しません（MLflowと同じ）。明示した整数版で登録した場合は、続きの番号がその版の次まで進みます。整数でない版（`v1`など）と19桁以上の数字は採番の計算から除外します。
+MLflowのCreateModelVersionとネイティブの`POST /projects/:p/models/:id/versions`（version省略時）は、Modelごとに同じ番号の系列から採番します。交互に登録しても番号は重複せず、削除したバージョンの番号は再利用しません（MLflowと同じ）。明示した整数バージョンで登録した場合は、続きの番号がそのバージョンの次まで進みます。整数でないバージョン（`v1`など）と19桁以上の数字は採番の計算から除外します。
 
-MLflowから登録した版は、モデル一式のArtifactを版ごとに固定して読み出します。元のRunのファイルを上書きしたり、Logged Modelを削除したりしても、登録した版の内容は変わりません。モデルの読み込みは`models:/名前/版`または`models:/名前@alias`を使います。lineage画面には入力Dataset、生成元Run、Logged Model、登録したモデル版の関係を表示します。
+MLflowから登録したバージョンは、モデル一式のArtifactをバージョンごとに固定して読み出します。元のRunのファイルを上書きしたり、Logged Modelを削除したりしても、登録したバージョンの内容は変わりません。モデルの読み込みは`models:/名前/バージョン`または`models:/名前@alias`を使います。lineage画面には入力Dataset、生成元Run、Logged Model、登録したモデルバージョンの関係を表示します。
 
 Logged Modelの取得・検索では全メトリクスを返します。メトリクスの条件検索は過去の評価も含む保存点の一致で判定し、並び替えにはtimestamp、stepの順で選ぶ最新評価を使います。Runの最新値を選ぶ規則とは分けています。
 
@@ -139,9 +139,9 @@ client = mlflow.MlflowClient()
 client.create_registered_model("qwen3", tags={"mmt.model_family": "qwen3"})
 ```
 
-`mmt.code_version_id`で既定のCodeVersionを指定できます。モデル本体のArtifactが複数候補に当てはまる場合は、`mmt.weights_path`でモデル内の相対pathを指定します。モデルと実行コードの系列・Projectの対応は既存の検証を通ります。登録済み版の実行設定はtagを書き換えて変更できません。
+`mmt.code_version_id`で既定のCodeVersionを指定できます。モデル本体のArtifactが複数候補に当てはまる場合は、`mmt.weights_path`でモデル内の相対pathを指定します。モデルと実行コードの系列・Projectの対応は既存の検証を通ります。登録済みバージョンの実行設定はtagを書き換えて変更できません。
 
-複数ファイルを使うモデルは、`MLmodel`のflavorが示す保存済みディレクトリをモデル本体として扱います。この場合のモデル版は`MLmodel`と一式のArtifactを保持します。推論コードでは`mlflow.pyfunc.load_model()`で版を読み込んでください。単一の重みファイルを読むコードには`mmt.weights_path`を明示します。Hugging Face・TensorFlowなどの実モデルでの確認は別途必要です。
+複数ファイルを使うモデルは、`MLmodel`のflavorが示す保存済みディレクトリをモデル本体として扱います。この場合のモデルバージョンは`MLmodel`と一式のArtifactを保持します。推論コードでは`mlflow.pyfunc.load_model()`でバージョンを読み込んでください。単一の重みファイルを読むコードには`mmt.weights_path`を明示します。Hugging Face・TensorFlowなどの実モデルでの確認は別途必要です。
 
 ## モデルを評価する
 
@@ -162,7 +162,7 @@ with mlflow.start_run():
 
 既定の評価器は、行ごとのscoreを返すmetricがあるときだけ`eval_results_table.json`を保存します。回帰の組み込みmetricだけでは表は作られません。行ごとの結果を残したい場合は、`mlflow.models.make_metric`で`MetricValue(scores=...)`を返すmetricを`extra_metrics`に加えてください。例は`python/examples/mlflow_evaluation.py`です。
 
-自動評価のJobでは、`mlflow.start_run()`がJobのRunに接続するので、評価結果は新しいRunを作らずにJobのRunへ入ります。評価するモデル版はworkerが渡す`MMT_MODEL_VERSION_FILE`から読み、`mlflow-artifacts:/model-versions/<版のID>/artifacts`で読み込みます。この版の`metadata.mlflow.loggedModelId`を`model_id`に渡すと、metricsが元のLogged Modelにも付きます。公式SDKの`MlflowClient.get_model_version()`は応答の`model_id`を捨てるため（SDKの`ModelVersion.from_proto`の未実装）、SDKの版オブジェクトからは取れません。
+自動評価のJobでは、`mlflow.start_run()`がJobのRunに接続するので、評価結果は新しいRunを作らずにJobのRunへ入ります。評価するモデルバージョンはworkerが渡す`MMT_MODEL_VERSION_FILE`から読み、`mlflow-artifacts:/model-versions/<バージョンのID>/artifacts`で読み込みます。このバージョンの`metadata.mlflow.loggedModelId`を`model_id`に渡すと、metricsが元のLogged Modelにも付きます。公式SDKの`MlflowClient.get_model_version()`は応答の`model_id`を捨てるため（SDKの`ModelVersion.from_proto`の未実装）、SDKのバージョンオブジェクトからは取れません。
 
 公式SDKの`evaluate()`は、評価器の中で1回、終了時に`model_id`付きでもう1回、同じmetricを送ります（`mlflow/models/evaluation/base.py`）。このため各metricの履歴には同じ値が2点、timestampを変えて残ります。最新値は同じなので、比較や一覧の表示には影響しません。
 
@@ -172,7 +172,7 @@ with mlflow.start_run():
 
 音声ファイルは`mlflow.log_artifact`で保存します。SDKはPythonの`mimetypes`で判定したContent-Typeを送り、サーバーはその値をそのまま保存して返します。手元の確認ではwavが`audio/x-wav`、flacが`audio/flac`でした。SDKが`application/octet-stream`を送った場合（`mimetypes`が拡張子を知らない環境）は、拡張子から`audio/wav`や`audio/flac`を推定します。Range要求には206で一部だけを返すので、プレイヤーのシークに使えます。nativeのcontent URL（`GET /projects/:p/artifacts/:a/content`）も、MLflowから保存した音声を同じContent-Typeのままinline・Range対応で返します。
 
-`log_image(image, key=..., step=...)`で記録した画像は、通常のArtifactとして保存したうえで、Runのmediaとしてkeyとstepで引けるようにします（nativeの`GET /api/projects/:p/runs/:r/media?key=...`、step順）。公式SDKが同じ呼び出しで保存する縮小版（`compressed.webp`）は、同じ項目のthumbnailになります。ファイル名の形式はSDKの版で違い、3.0.0は`images/<key>%step%<step>%timestamp%<ms>%<uuid>.png`、3.17.0以降は`images/<key>+step+<step>+timestamp+<ms>+<uuid>.png`です。どちらも読みます。
+`log_image(image, key=..., step=...)`で記録した画像は、通常のArtifactとして保存したうえで、Runのmediaとしてkeyとstepで引けるようにします（nativeの`GET /api/projects/:p/runs/:r/media?key=...`、step順）。公式SDKが同じ呼び出しで保存する縮小バージョン（`compressed.webp`）は、同じ項目のthumbnailになります。ファイル名の形式はSDKのバージョンで違い、3.0.0は`images/<key>%step%<step>%timestamp%<ms>%<uuid>.png`、3.17.0以降は`images/<key>+step+<step>+timestamp+<ms>+<uuid>.png`です。どちらも読みます。
 
 MLflow 3.0.0のSDKは、keyの`/`を`#`に置き換えたままURLへ載せるため、`#`より後ろが送られずファイル名が切れます。3.0.0では`/`を含まないkey（`eval_mel`など）を使ってください。3.17.0以降は`/`を`~`にするので問題ありません。
 
@@ -182,7 +182,7 @@ MLflow 3.0.0のSDKは、keyの`/`を`#`に置き換えたままURLへ載せる�
 
 ## 自作のpyfuncモデルを登録する
 
-`mlflow.pyfunc.PythonModel`を継承したモデルを、複数のファイルやディレクトリを`artifacts`に指定して保存できます。登録した版は`models:/名前@alias`で読み込めます。`mlflow.artifacts.download_artifacts("models:/名前@alias")`は、`MLmodel`・`python_model.pkl`と、指定したファイル・ディレクトリの全体を元のbytesのまま返します。
+`mlflow.pyfunc.PythonModel`を継承したモデルを、複数のファイルやディレクトリを`artifacts`に指定して保存できます。登録したバージョンは`models:/名前@alias`で読み込めます。`mlflow.artifacts.download_artifacts("models:/名前@alias")`は、`MLmodel`・`python_model.pkl`と、指定したファイル・ディレクトリの全体を元のbytesのまま返します。
 
 ## 検索で使える条件
 
@@ -194,9 +194,9 @@ MLflow 3.0.0のSDKは、keyの`/`を`#`に置き換えたままURLへ載せる�
 | `search_model_versions` | `name`・`run_id`・`model_id`・`source_path`・`version`・時刻・`tags`の比較。`IN`/`NOT IN`は`name`・`run_id`・`model_id`・`source_path` |
 | `search_registered_models` | `name`・時刻・`tags`の比較。`IN`/`NOT IN`は使えません |
 
-`IN`/`NOT IN`の値は`run_id IN ('a', 'b')`のように括弧で囲み、引用符付きの文字列をカンマで区切ります。括弧のない値や空の一覧はエラーになります。`NOT IN`はSQLの規則に従い、値が無い版（生成元Runの無い版の`run_id`など）には一致しません。
+`IN`/`NOT IN`の値は`run_id IN ('a', 'b')`のように括弧で囲み、引用符付きの文字列をカンマで区切ります。括弧のない値や空の一覧はエラーになります。`NOT IN`はSQLの規則に従い、値が無いバージョン（生成元Runの無いバージョンの`run_id`など）には一致しません。
 
-`get_latest_versions`は使えます。stageごとに最新の版を返し、削除した版は含めません。
+`get_latest_versions`は使えます。stageごとに最新のバージョンを返し、削除したバージョンは含めません。
 
 ## 認証方式の対応状況
 
@@ -247,10 +247,10 @@ JobのRunに追加したSDKのparamsは記録用の`recordedParameters`へ保存
 | Run・nested Run・params・metrics・tags | 対応 | 記録、paramsの上書き拒否、metric履歴、検索、削除と復元 |
 | Artifactの転送 | 対応 | 6MiB・空ファイル・日本語pathのアップロードとダウンロード、hashの一致 |
 | multipart upload（`mpu/*`） | 対応 | 3.17.0はserver-infoから自動で、3.0.0は`MLFLOW_ENABLE_PROXY_MULTIPART_UPLOAD=true`で、5MiBのchunk2個に分けて送信。両方のserver-infoのpath、downloadのhash一致 |
-| Logged Model・Model Registry・alias | 対応 | sklearnモデルの保存と読み込み、版の登録、`models:/名前@alias`の読み込み |
+| Logged Model・Model Registry・alias | 対応 | sklearnモデルの保存と読み込み、バージョンの登録、`models:/名前@alias`の読み込み |
 | scikit-learn autolog | 対応 | params・metrics・入力Dataset・Logged Modelの自動記録 |
 | `mlflow.models.evaluate` | 対応 | RunとLogged Modelへのmetrics、`eval_results_table.json`の保存と一覧 |
-| 登録をきっかけにした自動評価 | 対応 | モデル版の登録からCPUのJobで`evaluate()`を実行し、実行記録が1件、評価結果がJobのRunだけに入る |
+| 登録をきっかけにした自動評価 | 対応 | モデルバージョンの登録からCPUのJobで`evaluate()`を実行し、実行記録が1件、評価結果がJobのRunだけに入る |
 | `log_table`・`log_image`・`log_dict`・`log_text`・`log_figure` | 対応 | 一覧、ダウンロードした内容、PNGのContent-Type |
 | 音声Artifact（wav・flac） | 対応 | Content-Typeの保持、Range要求の206、nativeのinline表示 |
 | `log_image(key=, step=)`・`log_table`（画像列）のmedia索引 | 対応 | `scripts/mlflow3_checks/media_steps.py`。3 stepの画像がstep順に3件・thumbnail付きで並び、表の画像セルがArtifactに解決される（3.0.0はkeyに`/`を含めない） |
@@ -259,7 +259,7 @@ JobのRunに追加したSDKのparamsは記録用の`recordedParameters`へ保存
 | webhooks（`create_webhook`など） | 未対応 | 3.17.0は404 `ENDPOINT_NOT_FOUND`の`MlflowException`になる。3.0.0のSDKにはAPIがない |
 | Tracing（`search_traces`、`@mlflow.trace`） | 未対応 | `search_traces`は404 `ENDPOINT_NOT_FOUND`の`MlflowException`になる。`@mlflow.trace`を付けた関数は結果を返し、Runも正常に終わる。traceの送信失敗はSDKが警告のログを出すだけ |
 
-`mlflow.models.evaluate`（回帰）とsklearn autologは、どちらの版でもTracingのAPI（`/api/2.0/mlflow/traces`・`/api/3.0/mlflow/traces`）を呼びませんでした。Tracingを使うコードを動かした場合も、上の表のとおり学習・評価は止まりません。
+`mlflow.models.evaluate`（回帰）とsklearn autologは、どちらのバージョンでもTracingのAPI（`/api/2.0/mlflow/traces`・`/api/3.0/mlflow/traces`）を呼びませんでした。Tracingを使うコードを動かした場合も、上の表のとおり学習・評価は止まりません。
 
 MLflow UIが図の間引きに使う`ajax-api/2.0/mlflow/metrics/get-history-bulk-interval`は実装していません。公式SDKはこのAPIを呼びません。同じ目的にはnativeの`POST /api/projects/:p/metrics/series`（等幅bucketの平均・min・max、x軸 step / relative_time / wall_time / metric）を使います。`get-history`の頁送りは変えていません。
 
@@ -288,7 +288,7 @@ MMT_VERIFY_API_URL=http://127.0.0.1:47070 artifacts/verification/mlflow3-venv/bi
 
 確認の処理は`scripts/mlflow3_checks/`に分けています。`evaluation.py`が評価と自動評価、`rich_artifacts.py`が表・画像・音声、`pyfunc_model.py`が自作pyfuncとsearch_runs、`common.py`が共通の部品です。自動評価の確認では`python/examples/mlflow_evaluation.py`をそのまま評価コードとして登録して動かします。`rich_artifacts.py`は`matplotlib`・`pandas`・`PyYAML`・`Pillow`を使います。どれも`mlflow`（skinnyではない方）を入れると一緒に入ります。
 
-stepごとのmediaは単独の`scripts/mlflow3_checks/media_steps.py`で確かめます。テスト専用DBの検証用APIへ記録し、結果を`artifacts/verification/<日付>/media-steps/mlflow-<版>.json`へ保存します。
+stepごとのmediaは単独の`scripts/mlflow3_checks/media_steps.py`で確かめます。テスト専用DBの検証用APIへ記録し、結果を`artifacts/verification/<日付>/media-steps/mlflow-<バージョン>.json`へ保存します。
 
 ```bash
 MMT_VERIFY_API_PORT=47080 MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55490/mmt_test \

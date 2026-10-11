@@ -105,7 +105,7 @@
   }
 }
 
-/* Global administration (/admin/<section>): storage backends, the Project list, and the backend
+/* 全体管理 (/settings/<section>): storage backends, the Project list, and the backend
    name in the Project backend picker. */
 .admin-storage .table-scroll {
   margin-bottom: 16px;
@@ -297,7 +297,7 @@
   padding: 10px 14px;
   color: var(--text);
 }
-.user-menu-popover a.user-menu-administration {
+.user-menu-popover a.user-menu-settings {
   border-top: 1px solid var(--border);
 }
 .user-menu-popover a:hover,

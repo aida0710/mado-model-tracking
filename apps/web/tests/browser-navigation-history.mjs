@@ -72,8 +72,8 @@ const runLink = (taskIndex, runIndex) => page.getByRole('link', { name: `History
 async function openCodeEditor(version) {
   await page.getByRole('heading', { name: 'Code', exact: true }).waitFor();
   await page.getByRole('button', { name: api.state.codeVersions[0].version, exact: true }).waitFor();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  await dialog().getByLabel('版').fill(version);
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  await dialog().getByLabel('バージョン').fill(version);
   const editor = dialog().getByRole('textbox', { name: 'コードエディタ: main.py', exact: true });
   await editor.focus();
   await editor.press('ControlOrMeta+End');
@@ -98,7 +98,7 @@ try {
   await historyMove('back');
   await keepEditing().click();
   assert.equal(page.url(), codeUrl);
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'unsaved-back');
+  assert.equal(await dialog().getByLabel('バージョン').inputValue(), 'unsaved-back');
   assert.ok((await dialog().locator('.view-lines').textContent()).replace(/\u00a0/g, ' ').includes('kept navigation'));
   await historyMove('back');
   await discard().click();
@@ -106,8 +106,8 @@ try {
   await page.evaluate(() => window.history.forward());
   await page.waitForURL(projectBase + '/codes');
   await page.getByRole('heading', { name: 'Code', exact: true }).waitFor();
-  await page.getByRole('button', { name: '版を作成', exact: true }).click();
-  assert.equal(await dialog().getByLabel('版').inputValue(), '');
+  await page.getByRole('button', { name: 'バージョンを作成', exact: true }).click();
+  assert.equal(await dialog().getByLabel('バージョン').inputValue(), '');
   await dialog().getByRole('button', { name: '閉じる', exact: true }).click();
   await page.getByRole('link', { name: 'Models', exact: true }).click();
   await page.evaluate(() => window.history.back());
@@ -115,7 +115,7 @@ try {
   await openCodeEditor('unsaved-forward');
   await historyMove('forward');
   await keepEditing().click();
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'unsaved-forward');
+  assert.equal(await dialog().getByLabel('バージョン').inputValue(), 'unsaved-forward');
   await historyMove('forward');
   await discard().click();
   await page.waitForURL(projectBase + '/models');
@@ -125,7 +125,7 @@ try {
   await openCodeEditor('unsaved-link');
   await activateModelsLink();
   await keepEditing().click();
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'unsaved-link');
+  assert.equal(await dialog().getByLabel('バージョン').inputValue(), 'unsaved-link');
   await activateModelsLink();
   await discard().click();
   await page.waitForURL(projectBase + '/models');
@@ -187,10 +187,10 @@ try {
   await historyMove('back');
   await keepEditing().click();
   assert.equal(await page.getByTestId('task-edit-form').getByLabel('名前').inputValue(), 'unsaved-task-name');
-  await dialog().getByLabel('版').fill('nested-unsaved');
+  await dialog().getByLabel('バージョン').fill('nested-unsaved');
   await historyMove('back');
   await keepEditing().click();
-  assert.equal(await dialog().getByLabel('版').inputValue(), 'nested-unsaved');
+  assert.equal(await dialog().getByLabel('バージョン').inputValue(), 'nested-unsaved');
   await historyMove('back');
   await discard().click();
   await runLink(2, 1).waitFor();

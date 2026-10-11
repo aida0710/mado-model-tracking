@@ -340,7 +340,7 @@ describe.skipIf(!testDatabaseUrl)('Run終端handlerの共通入口（独立Postg
     };
   }
 
-  it('作成・PATCHの応答と終端handlerに渡るRunは出力モデル版を持つ', async () => {
+  it('作成・PATCHの応答と終端handlerに渡るRunは出力モデルバージョンを持つ', async () => {
     const fixture = await setup();
     const handler = outputModelRecorder();
     const services = servicesWith([handler]);
@@ -389,7 +389,7 @@ describe.skipIf(!testDatabaseUrl)('Run終端handlerの共通入口（独立Postg
     expect(handler.outputs).toEqual([[secondVersion.id]]);
   });
 
-  it('出力モデル版の登録中にMLflow UpdateRunで終端にすると、登録の確定を待ってから版入りで終端になる', async () => {
+  it('出力モデルバージョンの登録中にMLflow UpdateRunで終端にすると、登録の確定を待ってからバージョン入りで終端になる', async () => {
     const fixture = await setup();
     const handler = outputModelRecorder();
     const services = servicesWith([handler]);

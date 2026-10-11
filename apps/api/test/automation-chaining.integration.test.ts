@@ -22,7 +22,7 @@ import {
   type ContainerFixture,
 } from './containerFixtures.js';
 
-describe.skipIf(!testDatabaseUrl)('自動実行の多段連鎖と既存版への手動適用（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('自動実行の多段連鎖と既存バージョンへの手動適用（独立PostgreSQL）', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await createHarness();
@@ -501,7 +501,7 @@ describe.skipIf(!testDatabaseUrl)('自動実行の多段連鎖と既存版への
     expect(crossProject.status).toBe(404);
   });
 
-  it('既存の版への手動適用はProject adminだけが行え、実行中は409、無効ruleは422、attemptが増える', async () => {
+  it('既存のバージョンへの手動適用はProject adminだけが行え、実行中は409、無効ruleは422、attemptが増える', async () => {
     const fixture = await chainFixture();
     const model = await registerModel(fixture, 'registered-before-rule');
     const { inference, evaluation } = await inferenceAndEvaluationRules(fixture);
@@ -566,7 +566,7 @@ describe.skipIf(!testDatabaseUrl)('自動実行の多段連鎖と既存版への
     ]);
   });
 
-  it('連鎖ruleの手動適用は上流Run（triggerRunId）を受け、評価コードを直した新しいruleで基準版の推論から評価を回せる', async () => {
+  it('連鎖ruleの手動適用は上流Run（triggerRunId）を受け、評価コードを直した新しいruleで基準バージョンの推論から評価を回せる', async () => {
     const fixture = await chainFixture();
     const { inference, evaluation } = await inferenceAndEvaluationRules(fixture);
     const model = await registerModel(fixture);

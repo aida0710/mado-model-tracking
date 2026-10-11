@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { AdminProject } from '@mmt/contracts';
 import { ResponsiveTable } from '../ResponsiveTable';
-import { ProjectVisibilityLabel } from '../ProjectVisibilityLabel';
+import { VisibilityLabel } from '../VisibilityLabel';
 import { formatDate } from '../../lib/format';
 import { projectHomePath } from '../../layout/navigationLinks';
 import { text, textTemplates } from '../../i18n/catalog';
@@ -41,7 +41,7 @@ export function AdminProjectsTable({
           key: 'visibility',
           priority: 'primary',
           header: text.projectVisibility,
-          render: (project) => <ProjectVisibilityLabel visibility={project.visibility} />,
+          render: (project) => <VisibilityLabel visibility={project.visibility} />,
         },
         {
           key: 'members',

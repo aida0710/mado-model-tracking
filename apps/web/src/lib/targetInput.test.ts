@@ -11,7 +11,6 @@ import {
   BYTES_PER_GIB,
   buildTargetCreate,
   buildTargetInput,
-  changedTargetSharing,
   newTargetFormValues,
   targetFormValues,
   updateTargetValues,
@@ -22,7 +21,6 @@ const manualSite: ComputeTargetDetails = {
   ...siteTarget,
   ownerUserId: 'alice',
   ownerName: 'Alice',
-  projectIds: [],
   site: ownedSiteDetails.site,
   siteAccountMode: 'personal',
 };
@@ -138,51 +136,44 @@ describe('siteの全体設定', () => {
   });
 });
 
-describe('計算機の追加', () => {
-  it('研究者は自分のsiteから、全体管理者は全体のssh targetから始める', () => {
-    expect(newTargetFormValues('personal')).toMatchObject({ executor: 'site', ownership: 'personal' });
-    expect(newTargetFormValues('global')).toMatchObject({ executor: 'ssh', ownership: 'global' });
+describe('コンピュータの追加', () => {
+  const researcher = { canAddSshOrLocal: false };
+  const administrator = { canAddSshOrLocal: true };
+
+  it('研究者はsiteから、全体管理者はssh targetから始め、どちらも既定はPrivate', () => {
+    expect(newTargetFormValues(researcher)).toMatchObject({ executor: 'site', visibility: 'private' });
+    expect(newTargetFormValues(administrator)).toMatchObject({ executor: 'ssh', visibility: 'private' });
   });
 
-  it('自分のsiteは共有するProjectと最初のjob shellを付けて追加する', () => {
+  it('siteは選んだ公開範囲と最初のjob shellを付けて追加する', () => {
     const values = {
-      ...newTargetFormValues('personal'),
+      ...newTargetFormValues(researcher),
       name: 'Lab server',
       submissionMode: 'manual',
-      projectIds: ['p1', 'p2'],
+      visibility: 'public',
       jobShell: '#!/bin/sh\nexec "$MMT_RUNNER" "$MMT_SPEC_DIR"\n',
     };
     expect(buildTargetCreate(values)).toMatchObject({
       executor: 'site',
-      personal: true,
-      projectIds: ['p1', 'p2'],
+      visibility: 'public',
       jobShell: '#!/bin/sh\nexec "$MMT_RUNNER" "$MMT_SPEC_DIR"\n',
       site: { connection: null, accountMode: 'personal' },
     });
   });
 
-  it('全体のsiteは共有先を送らず、どのProjectからも使える', () => {
-    const values = {
-      ...newTargetFormValues('global'),
-      name: 'Cluster',
-      executor: 'site',
-      submissionMode: 'manual',
-      projectIds: ['p1'],
-      jobShell: '#!/bin/sh\n',
-    };
-    const created = buildTargetCreate(values);
-    expect(created.personal).toBe(false);
-    expect(created).not.toHaveProperty('projectIds');
+  it('公開範囲はPublicかPrivateだけを送る', () => {
+    const values = { ...newTargetFormValues(researcher), name: 'PC', jobShell: '#!/bin/sh\n' };
+    expect(() => buildTargetCreate({ ...values, visibility: 'shared' })).toThrow();
   });
 
   it('job shellの無いsiteは追加しない', () => {
-    const values = { ...newTargetFormValues('personal'), name: 'PC', submissionMode: 'manual' };
+    const values = { ...newTargetFormValues(researcher), name: 'PC', submissionMode: 'manual' };
     expect(() => buildTargetCreate({ ...values, jobShell: '  \n' })).toThrow('job shell');
   });
 
-  it('ssh targetの追加にはsiteの設定・所有・job shellを付けない', () => {
+  it('ssh targetの追加にはsiteの設定・job shellを付けない', () => {
     const created = buildTargetCreate({
-      ...newTargetFormValues('global'),
+      ...newTargetFormValues(administrator),
       name: 'GPU',
       host: 'gpu.invalid',
       username: 'mmt',
@@ -191,14 +182,26 @@ describe('計算機の追加', () => {
       workDirectory: '/work',
       jobShell: '#!/bin/sh\n',
     });
+    expect(created).toMatchObject({ executor: 'ssh', visibility: 'private' });
     expect(created).not.toHaveProperty('site');
-    expect(created).not.toHaveProperty('personal');
     expect(created).not.toHaveProperty('jobShell');
+  });
+
+  it('編集では今の公開範囲から始め、変えた公開範囲を送る', () => {
+    const values = targetFormValues(ownedSiteDetails);
+    expect(values.visibility).toBe('public');
+    expect(buildTargetInput({ ...values, visibility: 'private' }, ownedSiteDetails).visibility).toBe(
+      'private',
+    );
   });
 });
 
 describe('job shellの雛形', () => {
-  const start = { ...newTargetFormValues('personal'), name: 'Cluster', siteRuntimeKinds: ['docker'] };
+  const start = {
+    ...newTargetFormValues({ canAddSshOrLocal: false }),
+    name: 'Cluster',
+    siteRuntimeKinds: ['docker'],
+  };
 
   it('雛形を選ぶと内容・取消コマンド・array・GPUの渡し方・Runtimeが入り、ほかはそのまま', () => {
     const next = updateTargetValues(start, { ...start, jobShellTemplate: 'slurm' });
@@ -229,21 +232,5 @@ describe('job shellの雛形', () => {
     expect(updateTargetValues(edited, { ...edited, jobShellTemplate: '' }).jobShell).toBe(
       '#!/bin/sh\n# edited\n',
     );
-  });
-});
-
-describe('自分の計算機の共有先', () => {
-  it('共有するProjectが変わったときだけ送る', () => {
-    const values = targetFormValues(ownedSiteDetails);
-    expect(changedTargetSharing(values, ownedSiteDetails)).toBeNull();
-    expect(changedTargetSharing({ ...values, projectIds: ['project', 'other'] }, ownedSiteDetails)).toEqual(
-      ['project', 'other'],
-    );
-    expect(changedTargetSharing({ ...values, projectIds: [] }, ownedSiteDetails)).toEqual([]);
-  });
-
-  it('全体の計算機には共有先が無いので送らない', () => {
-    const values = { ...targetFormValues(globalSiteDetails), projectIds: ['project'] };
-    expect(changedTargetSharing(values, globalSiteDetails)).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ import { Check, ChevronsUpDown, Plus } from 'lucide-react';
 import type { Project } from '@mmt/contracts';
 import { usePopover } from '../hooks/usePopover';
 import { useAnchoredPopover } from '../hooks/useAnchoredPopover';
-import { ProjectVisibilityLabel } from '../components/ProjectVisibilityLabel';
+import { VisibilityLabel } from '../components/VisibilityLabel';
 import { filterProjects, shouldOfferProjectFilter } from '../lib/projectFilter';
 import { isListNavigationKey, moveActiveIndex } from '../lib/listNavigation';
 import { isComposingKey } from '../lib/imeComposition';
@@ -150,7 +150,7 @@ export function ProjectSwitcher({
         <span id={valueId} className="project-switcher-value">
           {project ? project.name : text.projectSwitcherPlaceholder}
         </span>
-        {project && <ProjectVisibilityLabel visibility={project.visibility} iconOnly />}
+        {project && <VisibilityLabel visibility={project.visibility} iconOnly />}
         <ChevronsUpDown size={14} aria-hidden="true" className="project-switcher-chevron" />
       </button>
       {isOpen && (
@@ -237,7 +237,7 @@ function SwitcherEntryContent({ entry, isCurrent }: { entry: SwitcherEntry; isCu
         data-current={isCurrent}
       />
       <span className="project-switcher-name">{entry.project.name}</span>
-      <ProjectVisibilityLabel visibility={entry.project.visibility} iconOnly />
+      <VisibilityLabel visibility={entry.project.visibility} iconOnly />
       <span className="project-switcher-role">{text[entry.project.role]}</span>
     </>
   );

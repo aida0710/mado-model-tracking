@@ -239,6 +239,11 @@
     padding: 22px 0 0;
   }
 }
+/* The design system gives labels 150px; the longest ones (入力データセットバージョン: 13 characters at
+   12px) need about 160px, or their last character wraps alone. */
+.details-list > div {
+  grid-template-columns: 170px minmax(0, 1fr);
+}
 @media (width < 640px) {
   .details-list > div {
     grid-template-columns: 112px minmax(0, 1fr);

@@ -80,7 +80,7 @@ export async function assertDatasetVersionsNotArchived(
   if (archivedNames.length)
     throw new DomainError(
       422,
-      `archive済みDatasetの版は新しいRunの入力に使えません: ${archivedNames.join(', ')}`,
+      `archive済みDatasetのバージョンは新しいRunの入力に使えません: ${archivedNames.join(', ')}`,
       'dataset_archived',
     );
 }

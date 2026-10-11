@@ -1,7 +1,7 @@
 import { text } from '../i18n/catalog';
 
 /**
- * 重なった3枚の層の印。上の層は強調色、下の2枚は文字と同じ色で、記録が版として積み重なる様子を表す。
+ * 重なった3枚の層の印。上の層は強調色、下の2枚は文字と同じ色で、記録がバージョンとして積み重なる様子を表す。
  * 形はブラウザのタブのアイコン（public/favicon.svg）と同じ。色と大きさは styles/productLogo.css の .product-mark。
  */
 export function TrackingMark() {

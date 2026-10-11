@@ -125,7 +125,7 @@ export class ModelVersionService {
     await requireModelsRead(this.database, { principal, projectId });
     const version = await findModelVersion(this.database, { projectId, ...reference });
     if (!version.artifactUri)
-      invalidParameter('このnativeモデル版にはMLflowモデル一式がありません');
+      invalidParameter('このnativeモデルバージョンにはMLflowモデル一式がありません');
     return version.artifactUri;
   }
 
@@ -202,7 +202,7 @@ export class ModelVersionService {
           ['mmt.model_family', 'mmt.code_version_id', 'mmt.weights_path'].includes(reference.key)
         ) {
           if (reference.value !== version.tags[reference.key])
-            conflict('登録済み版の実行設定tagは変更できません');
+            conflict('登録済みバージョンの実行設定tagは変更できません');
           return;
         }
         await this.ensureMetadata(connection, version);

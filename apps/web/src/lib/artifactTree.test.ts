@@ -95,7 +95,7 @@ describe('artifactTree', () => {
     expect(rows.map((row) => row.name)).toEqual(['..', '../secret.txt']);
   });
 
-  it('以前の版は同じpathの別の版だけで、ほかのpathを含めない', () => {
+  it('以前のバージョンは同じpathの別のバージョンだけで、ほかのpathを含めない', () => {
     const current = artifact('3', 'eval/result.json');
     const versions = [
       current,

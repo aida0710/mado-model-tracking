@@ -2,7 +2,7 @@
 export const launchersText = {
   launchers: 'ランチャー',
   launchersDescription:
-    'ランチャーは、自動投入の計算機へSSHで入ってJobを投入します。ランチャーごとにtokenを1本発行し、ランチャーのホストのtoken_fileに置きます。計算機・鍵・job shellの設定は、ランチャーがWebから読みます。',
+    'ランチャーは、自動投入のコンピュータへSSHで入ってJobを投入します。ランチャーごとにtokenを1本発行し、ランチャーのホストのtoken_fileに置きます。コンピュータ・鍵・job shellの設定は、ランチャーがWebから読みます。',
   newLauncher: 'ランチャーを登録',
   noLaunchers: 'ランチャーはまだ登録されていません。',
   launcherStatus: '状態',
@@ -21,7 +21,7 @@ export const launchersText = {
   launcherTokenValue: 'ランチャーのtoken',
   launcherConfigExample: 'launcher.tomlの例',
   launcherConfigExampleHint:
-    'launcher.tomlには起動に要るものだけを書きます。担当する計算機・鍵・job shellは、ランチャーがWebから読みます。',
+    'launcher.tomlには起動に要るものだけを書きます。担当するコンピュータ・鍵・job shellは、ランチャーがWebから読みます。',
   launcherConfigApiUrlComment:
     'ランチャーから届くtrackingのURL。同じcomposeの中で動かすときはAPIのURL（例: http://api:4182）',
   launcherConfigTokenFileComment: '上のtokenだけを書いたファイル（mode 600、ランチャーのユーザーの所有）',
@@ -38,6 +38,6 @@ export const launchersTextTemplates = {
   launcherRotateConfirm: (name: string) =>
     `「${name}」の今のtokenを失効させ、新しいtokenを発行します。ランチャーのtoken_fileを新しいtokenに置き換えるまで、このランチャーは投入できません。`,
   launcherRevokeConfirm: (name: string) =>
-    `「${name}」とそのtokenを失効させます。このランチャーを選んだ計算機のJobは、別のランチャーを選ぶまで投入されません。`,
+    `「${name}」とそのtokenを失効させます。このランチャーを選んだコンピュータのJobは、別のランチャーを選ぶまで投入されません。`,
   launcherConfigHeader: (name: string) => `mado-tracking-launcher「${name}」の設定`,
 };

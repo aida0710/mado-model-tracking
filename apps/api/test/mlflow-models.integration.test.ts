@@ -370,7 +370,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     expect((await duplicate.json()).code).toBe('resource_already_exists');
   });
 
-  it('PENDING/FAILEDモデルや任意URIはnative版とautomationを作らない', async () => {
+  it('PENDING/FAILEDモデルや任意URIはnativeバージョンとautomationを作らない', async () => {
     await entity(await fixture.createRegistered(), 200);
     const pending = await fixture.createLogged();
     expect((await fixture.register(pending.model.info.model_id)).status).toBe(409);
@@ -411,7 +411,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     expect(events.rows[0].count).toBe(0);
   });
 
-  it('registered版はnative weights Artifact・全ファイルmanifest・source Runとautomation eventを保存する', async () => {
+  it('registeredバージョンはnative weights Artifact・全ファイルmanifest・source Runとautomation eventを保存する', async () => {
     const ready = await fixture.readyModel();
     await entity(await fixture.createRegistered(), 200);
     const registered = await entity<VersionResponse>(
@@ -448,7 +448,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     });
   });
 
-  it('異なる重みの複数版を作り、native aliasとMLflow aliasが同じ版を指す', async () => {
+  it('異なる重みの複数バージョンを作り、native aliasとMLflow aliasが同じバージョンを指す', async () => {
     await entity(await fixture.createRegistered(), 200);
     const first = await fixture.readyModel({ weights: 'first-weights' });
     const second = await fixture.readyModel({ weights: 'second-weights' });
@@ -519,7 +519,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     ).toBe(404);
   });
 
-  it('同じModelへの並行登録で数字版を原子採番しautomationを各版で一度処理する', async () => {
+  it('同じModelへの並行登録で数字バージョンを原子採番しautomationを各バージョンで一度処理する', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     const responses = await Promise.all(
@@ -542,7 +542,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     ).toBe(6);
   });
 
-  it('JavaScriptの安全整数を超える数字版を文字列のまま採番・検索する', async () => {
+  it('JavaScriptの安全整数を超える数字バージョンを文字列のまま採番・検索する', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     await harness.database.query('UPDATE models SET next_version=$1', ['9007199254740993']);
@@ -566,7 +566,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     expect(found.model_versions.map((version) => version.version)).toEqual(['9007199254740993']);
   });
 
-  it('補助metadataの保存失敗はnative版・採番・automation eventを同時にrollbackする', async () => {
+  it('補助metadataの保存失敗はnativeバージョン・採番・automation eventを同時にrollbackする', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     await harness.database.query(
@@ -711,7 +711,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     expect(registered.model_version.version).toBe('1');
   });
 
-  it('description/tag/stageだけを変更し、native weightsと版のmetadataは不変のまま保持する', async () => {
+  it('description/tag/stageだけを変更し、native weightsとバージョンのmetadataは不変のまま保持する', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     await entity(await fixture.register(ready.model.info.model_id), 200);
@@ -773,7 +773,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     });
   });
 
-  it('削除した版のaliasを消し、参照を保持したnative版は残し採番を再利用しない', async () => {
+  it('削除したバージョンのaliasを消し、参照を保持したnativeバージョンは残し採番を再利用しない', async () => {
     await entity(await fixture.createRegistered(), 200);
     const ready = await fixture.readyModel();
     await entity(await fixture.register(ready.model.info.model_id), 200);
@@ -815,7 +815,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     ).toBe('2');
   });
 
-  it('版検索はrun_id INとname NOT INで絞り込み、括弧のないINと非対応fieldのINは422にする', async () => {
+  it('バージョン検索はrun_id INとname NOT INで絞り込み、括弧のないINと非対応fieldのINは422にする', async () => {
     await entity(await fixture.createRegistered('Classifier'), 200);
     await entity(await fixture.createRegistered('Regressor'), 200);
     const otherRun = await entity<Run>(
@@ -868,7 +868,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     expect((await search(fixture.registryEndpoint, "name IN ('Classifier')")).status).toBe(422);
   });
 
-  it('registered-models/searchは表示するModelの数に関係なく版を1回のSQLで取得する', async () => {
+  it('registered-models/searchは表示するModelの数に関係なくバージョンを1回のSQLで取得する', async () => {
     const names = ['Alpha', 'Beta', 'Gamma'];
     const ready = await fixture.readyModel();
     for (const name of names) {
@@ -957,7 +957,7 @@ describe.skipIf(!testDatabaseUrl)('MLflow 3 Logged Models / native Model Registr
     ).rows[0]!.version;
   }
 
-  it('保護aliasはProject adminでもMLflow互換APIの設定・解除・版とModelの削除でPERMISSION_DENIEDになる', async () => {
+  it('保護aliasはProject adminでもMLflow互換APIの設定・解除・バージョンとModelの削除でPERMISSION_DENIEDになる', async () => {
     await protectedChampion();
     const attempts: [string, string, Record<string, string>][] = [
       ['POST', `${fixture.registryEndpoint}/alias`, { name: 'Classifier', alias: 'champion', version: '2' }],

@@ -95,7 +95,7 @@ MMT_CHROMIUM_PATH=/path/to/chromium \
 node scripts/verify_container_browser.mjs
 ```
 
-`MMT_VERIFY_CONTAINER_IMAGE`で同じNodeコマンドを使える別のdigest固定イメージへ変更できます。`artifacts/verification/<日付>/containers/container-integration.json`に結果を保存します。browser検証はそのProjectを使い、画面からDockerのコード版と無効なルールを新規登録し、有効／無効の切り替えを実APIで確認します。検証後はルールを無効に戻し、同じディレクトリへ結果と画像を保存します。
+`MMT_VERIFY_CONTAINER_IMAGE`で同じNodeコマンドを使える別のdigest固定イメージへ変更できます。`artifacts/verification/<日付>/containers/container-integration.json`に結果を保存します。browser検証はそのProjectを使い、画面からDockerのコードバージョンと無効なルールを新規登録し、有効／無効の切り替えを実APIで確認します。検証後はルールを無効に戻し、同じディレクトリへ結果と画像を保存します。
 
 GPUは使用しません。Singularity/Apptainerの起動・停止・SIF照合はPythonのテストで確認し、実SIF runtimeでの実行確認とは区別します。
 
@@ -114,27 +114,27 @@ PYTHONPATH=python/src python/.venv/bin/python scripts/verify_pipeline.py
 
 APIは`scripts/serve_mlflow_verification.ts`でloopbackの47001に起動します（`MMT_VERIFY_PIPELINE_API_PORT`で変更）。workerは同じprocess内で`--once`と同じ処理（復帰または1件claim）を繰り返し、Service Accountのworker token（`read`・`worker:execute`・`artifacts:write`・`registry:write`）を使います。Jobごとにvenvを作り`httpx`をインストールするので、pipがパッケージを取得できる環境で実行します。Jobのworkspaceは`var/verification-pipeline/<時刻>/`に残ります。
 
-各コード版は`python/examples/`の`training.py`・`inference.py`・`evaluation.py`をそのまま入れ、`pipeline_entry.py`から起動します。`pipeline_entry.py`は、実行コードに渡ったtokenの種類（`GET /auth/token`の`job`）をログに出し、parametersに`jobTokenProbeRunId`があれば、そのRunへのmetricの書き込みを試してから例を実行します。
+各コードバージョンは`python/examples/`の`training.py`・`inference.py`・`evaluation.py`をそのまま入れ、`pipeline_entry.py`から起動します。`pipeline_entry.py`は、実行コードに渡ったtokenの種類（`GET /auth/token`の`job`）をログに出し、parametersに`jobTokenProbeRunId`があれば、そのRunへのmetricの書き込みを試してから例を実行します。
 
 | 段階 | 確認すること |
 |---|---|
-| `setup` | Project、local target（python・docker）、Service Account 2件（worker用・自動実行の所有者用、どちらもadmin）、コード版（学習・失敗する学習・推論・評価v1と評価v2-strict）、正解セット2版（metadataにサンプルを書いた版と、`reference.json`をuploadした`artifacts`の版）、Model 2件（系列`linear`と`linear-declared`）、出力モデル設定付きの学習Taskを登録する。ruleと昇格policy（`autoPromote=true`、対象・基準alias＝`production`）は、global adminでないProject adminのユーザーが作る |
+| `setup` | Project、local target（python・docker）、Service Account 2件（worker用・自動実行の所有者用、どちらもadmin）、コードバージョン（学習・失敗する学習・推論・評価v1と評価v2-strict）、正解セット2バージョン（metadataにサンプルを書いたバージョンと、`reference.json`をuploadした`artifacts`のバージョン）、Model 2件（系列`linear`と`linear-declared`）、出力モデル設定付きの学習Taskを登録する。ruleと昇格policy（`autoPromote=true`、対象・基準alias＝`production`）は、global adminでないProject adminのユーザーが作る |
 | `owner_transfer` | 4件のruleとpolicyの所有者をService Accountへ移し、作成者をProjectから外す。作成者は403になり、ruleの`runAsKind`は`service` |
 | `training` | 学習TaskのRunが`finished`、`train.loss`40点が下がり、`model/weights.json`が残る。`training.py`はTaskの出力モデル設定を読んで自分では登録しない |
 | `job_token_scope` | 実行コードのtokenはJob token（`job=true`）で、別Runへの書き込みは403 `job_token_forbidden`。別Runには何も記録されない |
-| `output_registration` | Task側の登録が`registered`、版の`sourceRunId`が学習Run、Runの出力はその1版だけ |
-| `inference` | 推論ruleがその版で1回起動し、Runの作成者はService Account。WAV 3件と出力DatasetVersionが残る |
+| `output_registration` | Task側の登録が`registered`、バージョンの`sourceRunId`が学習Run、Runの出力はその1バージョンだけ |
+| `inference` | 推論ruleがそのバージョンで1回起動し、Runの作成者はService Account。WAV 3件と出力DatasetVersionが残る |
 | `evaluation` | 評価ruleが推論Runを上流に1回起動し、`upstreamDatasetVersionIds`が推論の出力。metricsが残り、コードは`MMT_UPSTREAM_RUN_ID`を読む |
-| `auto_promotion` | 判定が`passed`（`baseline_missing_first_promotion`）、`promoted=true`。`production`がその版を指し、alias履歴の最新は`source=promotion_policy`・判定ID付き・操作者はService Account。`model-versions/:id/evaluations`に推論と評価がfinishedで並ぶ |
-| `second_round_against_baseline` | 評価v2-strictのruleを足してから2回目の学習を流す。2版目の判定は基準版＝1版目で`passed`、`production`が2版目へ切り替わり、alias履歴は2件 |
-| `manual_apply_and_comparison` | v2-strictのruleを1版目の推論Runへ手動適用（`source=manual`）し、`evaluation-comparison`（候補＝2版目、`baselineVersionId`＝1版目、同じruleと評価コード版）が`ok` |
+| `auto_promotion` | 判定が`passed`（`baseline_missing_first_promotion`）、`promoted=true`。`production`がそのバージョンを指し、alias履歴の最新は`source=promotion_policy`・判定ID付き・操作者はService Account。`model-versions/:id/evaluations`に推論と評価がfinishedで並ぶ |
+| `second_round_against_baseline` | 評価v2-strictのruleを足してから2回目の学習を流す。2バージョン目の判定は基準バージョン＝1バージョン目で`passed`、`production`が2バージョン目へ切り替わり、alias履歴は2件 |
+| `manual_apply_and_comparison` | v2-strictのruleを1バージョン目の推論Runへ手動適用（`source=manual`）し、`evaluation-comparison`（候補＝2バージョン目、`baselineVersionId`＝1バージョン目、同じruleと評価コードバージョン）が`ok` |
 | `declared_outputs_and_staged_reference` | 系列`linear-declared`の流れ。推論は`result.json` version 2で出力Datasetを宣言し（WAVは`container/inference/audio/`）、評価はworkerが用意した正解セット（`MMT_INPUT_DATASET_DIRS`の`reference.json`）で採点して、metricsを`result.json`で返す |
-| `failed_training_skips_downstream` | 実行中に版を登録してから失敗する学習。Runは`failed`、保留していた推論は`skipped`（`source_run_unsuccessful`） |
-| `container_bulk_outputs` | Dockerがあるときだけ。`alpine`（digest固定、`MMT_VERIFY_CONTAINER_IMAGE`で変更）の推論ruleを1版目へ手動適用し、1000ファイルを`artifactsManifest`で出す。1000件がArtifactになり、出力Datasetが登録され、targetへの`output-archive`は1回、ファイル単位の`output`は0回 |
+| `failed_training_skips_downstream` | 実行中にバージョンを登録してから失敗する学習。Runは`failed`、保留していた推論は`skipped`（`source_run_unsuccessful`） |
+| `container_bulk_outputs` | Dockerがあるときだけ。`alpine`（digest固定、`MMT_VERIFY_CONTAINER_IMAGE`で変更）の推論ruleを1バージョン目へ手動適用し、1000ファイルを`artifactsManifest`で出す。1000件がArtifactになり、出力Datasetが登録され、targetへの`output-archive`は1回、ファイル単位の`output`は0回 |
 
-結果は`artifacts/verification/<日付>/pipeline/pipeline-integration.json`に、段階ごとの`status`（`passed`・`failed`・`not_run`）、所要秒数、確認したIDと値を保存します。APIのログは同じディレクトリの`api.log`です。成功系（`owner_transfer`〜`manual_apply_and_comparison`）の途中で失敗すると、後の段階は`not_run`になります。最後の3段階は成功系と別の版を使うので、成功系の結果にかかわらず実行します。Dockerやimageが無いときの`container_bulk_outputs`は`not_run`で、失敗に数えません。1件でも失敗すれば終了コードは1です。
+結果は`artifacts/verification/<日付>/pipeline/pipeline-integration.json`に、段階ごとの`status`（`passed`・`failed`・`not_run`）、所要秒数、確認したIDと値を保存します。APIのログは同じディレクトリの`api.log`です。成功系（`owner_transfer`〜`manual_apply_and_comparison`）の途中で失敗すると、後の段階は`not_run`になります。最後の3段階は成功系と別のバージョンを使うので、成功系の結果にかかわらず実行します。Dockerやimageが無いときの`container_bulk_outputs`は`not_run`で、失敗に数えません。1件でも失敗すれば終了コードは1です。
 
-`scripts/verify_pipeline_smoke.py`は同じスクリプトの短い版で、2回目・手動適用・`result.json`・コンテナを除いた9段階を流します（port 47001、`MMT_VERIFY_SMOKE_API_PORT`で変更。結果は`pipeline-smoke/pipeline-smoke.json`）。
+`scripts/verify_pipeline_smoke.py`は同じスクリプトの短いバージョンで、2回目・手動適用・`result.json`・コンテナを除いた9段階を流します（port 47001、`MMT_VERIFY_SMOKE_API_PORT`で変更。結果は`pipeline-smoke/pipeline-smoke.json`）。
 
 2026-10-08に全13段階（smokeは9段階）が成功しました。CPUのJobは1件あたり約5秒（venv作成と`httpx`のインストールを含む）、コンテナの1000ファイルは約30秒でした。
 
@@ -154,18 +154,18 @@ node apps/web/tests/browser-pipeline.mjs
 | 段階 | 画面で行うこと |
 |---|---|
 | `login_and_password_change` | ローカルアカウントでログインし、初回のパスワード変更を済ませる |
-| `storage_connection_test` | 全体管理 → ストレージ（`/admin/storage`）で、filesystemの保存先の接続テストが「すべての段階が成功しました」 |
+| `storage_connection_test` | 全体管理 → ストレージ（`/settings/storage`）で、filesystemの保存先の接続テストが「すべての段階が成功しました」 |
 | `project_creation` | プロジェクトがまだ無い画面の「プロジェクトを作成」 |
 | `api_setup` | 画面の無い準備をAPIで行う: local executorのtarget（画面ではdevelopment modeでしか選べない）、Experiment、正解セット、出力Dataset、Model |
 | `service_account_worker` | 設定 → Service Accountを作成し、tokenを発行してworkerを起動する |
-| `code_versions` | Code画面で学習・推論・評価のコード版をinlineのファイルで作る（ファイルは貼り付けで入れ、保存内容が元のファイルと一致する） |
+| `code_versions` | Code画面で学習・推論・評価のコードバージョンをinlineのファイルで作る（ファイルは貼り付けで入れ、保存内容が元のファイルと一致する） |
 | `automation_rules_and_policy` | 推論rule（モデル登録）、評価rule（上流ruleの成功）、昇格policy（自動昇格なし）を作る |
 | `training_task_with_output_model` | 出力モデル（既存のModel、`model/weights.json`）付きの学習Taskを作る |
-| `first_run_to_evaluation` | Taskを通常実行し、Finished → 版1の自動登録 → モデル版画面で推論・評価がFinished、metricsが表示される |
+| `first_run_to_evaluation` | Taskを通常実行し、Finished → バージョン1の自動登録 → モデルバージョン画面で推論・評価がFinished、metricsが表示される |
 | `first_promotion_with_reason` | 昇格の判定（合格）から、理由を入れて`production`へ昇格する |
-| `second_run_baseline_comparison` | 2回目の版で「基準版との評価比較」に基準（`production`）の値が並び、理由を入れて昇格する |
+| `second_run_baseline_comparison` | 2回目のバージョンで「基準バージョンとの評価比較」に基準（`production`）の値が並び、理由を入れて昇格する |
 | `alias_history` | Models画面のAliasの履歴に2回の昇格と理由が残る |
-| `viewer_through_group_binding` | 設定 → Authentik groupでgroupにViewerを付け、そのユーザーでログインする。モデル版画面は見られるが、操作は再読み込みだけで、rule・policyの作成ボタンが無い。aliasの変更はAPIでも403 |
+| `viewer_through_group_binding` | 設定 → Authentik groupでgroupにViewerを付け、そのユーザーでログインする。モデルバージョン画面は見られるが、操作は再読み込みだけで、rule・policyの作成ボタンが無い。aliasの変更はAPIでも403 |
 
 結果は`artifacts/verification/<日付>/pipeline/browser-pipeline.json`（段階ごとの結果と所要秒数）と、同じディレクトリの`browser-pipeline-server.log`・`browser-pipeline-worker.log`です。2026-10-08に全13段階が成功しました（約1分）。
 
@@ -193,7 +193,7 @@ Run・nested Run、paramsの不変性、メトリクス履歴/検索、6MiB・�
 あわせて次も確認します。
 
 - `mlflow.models.evaluate`のmetricsがRunとLogged Modelに入り、`eval_results_table.json`が一覧に出る
-- 評価ルールを付けた登録モデルへ版を登録すると、`python/examples/mlflow_evaluation.py`がCPUのJobで動き、実行記録が1件、評価結果がJobのRunだけに入る（新しいRunを作らない）
+- 評価ルールを付けた登録モデルへバージョンを登録すると、`python/examples/mlflow_evaluation.py`がCPUのJobで動き、実行記録が1件、評価結果がJobのRunだけに入る（新しいRunを作らない）
 - `log_table`・`log_image`・`log_dict`・`log_text`・`log_figure`の一覧と内容。wav・flacのContent-Typeの保持とRangeの206、nativeのcontent URLでのinline表示
 - 自作pyfuncの複数ファイルモデルを`models:/名前@alias`で読み込んだ予測値の一致、`download_artifacts("models:/名前@alias")`のhash一致、`mlflow.search_runs`のpandas出力
 - 見送ったAPIの挙動。webhooksと`search_traces`が404 `ENDPOINT_NOT_FOUND`の`MlflowException`になること、`@mlflow.trace`を付けた関数を含むRunが正常に終わること。評価とautologがTracingのAPIを呼んだかどうかも結果に記録する
@@ -202,9 +202,9 @@ Run・nested Run、paramsの不変性、メトリクス履歴/検索、6MiB・�
 
 検証終了時に一時tokenを失効し、ルールを無効化します。結果は`artifacts/verification/<日付>/mlflow3/sdk-integration.json`へ保存します。`MMT_VERIFY_API_URL`を省略するとWebの`/api` proxyを通るため、通常は省略します。専用test schemaで試す場合は`MMT_TEST_DATABASE_URL`を設定して`node_modules/.bin/tsx scripts/serve_mlflow_verification.ts`を起動し、検証APIをloopback4184へ指定します。停止すると専用schemaを削除します。
 
-2026-10-08にはPython 3.13.15でMLflow 3.0.0＋scikit-learn 1.6.1、MLflow 3.17.0＋scikit-learn 1.9.1の両方を検証しました。版別の結果は`sdk-3.0-integration.json`と`sdk-3.17-integration.json`です。未検証の他ライブラリ・実HF/TFモデル・実GPUの動作はこの結果に含めません。
+2026-10-08にはPython 3.13.15でMLflow 3.0.0＋scikit-learn 1.6.1、MLflow 3.17.0＋scikit-learn 1.9.1の両方を検証しました。バージョン別の結果は`sdk-3.0-integration.json`と`sdk-3.17-integration.json`です。未検証の他ライブラリ・実HF/TFモデル・実GPUの動作はこの結果に含めません。
 
-評価・表/画像/音声・自作pyfunc・見送ったAPIの確認は、同日に両方の版で再実行して全件成功しました。このときは開発APIではなく専用test schemaのAPIをloopbackの47120で起動し、`MMT_VERIFY_API_URL`で指定しました。
+評価・表/画像/音声・自作pyfunc・見送ったAPIの確認は、同日に両方のバージョンで再実行して全件成功しました。このときは開発APIではなく専用test schemaのAPIをloopbackの47120で起動し、`MMT_VERIFY_API_URL`で指定しました。
 
 TypeScriptの公式protobuf検証2件は、上記の`artifacts/verification/mlflow3-venv/bin/python`を使います。別のSDK環境を使う場合は`MMT_TEST_MLFLOW_PYTHON`にそのPythonの絶対パスを指定して`npm test`を実行します。SDKが未インストールの場合はこの2件だけskipします。
 
@@ -226,9 +226,9 @@ SDKで作成したRunのメトリクス/params、モデル一式のArtifact、�
 PYTHONPATH=python/src python/.venv/bin/python scripts/verify_workbench.py
 ```
 
-公開Gitリポジトリの固定commitを読み込み、編集・削除したファイルを実CPU workerで実行します。通常とテストのコマンド、Task改版後も固定されるqueued Job、古いrevisionの409、失敗テストと再実行、実行前のsource ZIPとmanifest、履歴を確認します。コード自身がmain.pyを書き換えた場合も、ZIPが実行前の内容を保つことを照合します。検証用tokenは最後に失効し、targetを無効にします。結果は`artifacts/verification/<日付>/workbench/task-integration.json`です。
+公開Gitリポジトリの固定commitを読み込み、編集・削除したファイルを実CPU workerで実行します。通常とテストのコマンド、Taskの新しいバージョンを保存したあとも固定されるqueued Job、古いrevisionの409、失敗テストと再実行、実行前のsource ZIPとmanifest、履歴を確認します。コード自身がmain.pyを書き換えた場合も、ZIPが実行前の内容を保つことを照合します。検証用tokenは最後に失効し、targetを無効にします。結果は`artifacts/verification/<日付>/workbench/task-integration.json`です。
 
-ブラウザからCompute/plugin登録、Monacoの編集・改版、Task作成・テスト・学習・推論を確認する場合は、開発APIとworkerのlocal executorを許可します。`.env`の`MMT_WORKBENCH_PLUGIN_TOKEN`に検証専用の値を用意してAPIを起動し、別terminalでloopbackのHTTP fixtureを起動します。
+ブラウザからCompute/plugin登録、Monacoでの編集と新しいバージョンの保存、Task作成・テスト・学習・推論を確認する場合は、開発APIとworkerのlocal executorを許可します。`.env`の`MMT_WORKBENCH_PLUGIN_TOKEN`に検証専用の値を用意してAPIを起動し、別terminalでloopbackのHTTP fixtureを起動します。
 
 ```bash
 python/.venv/bin/python scripts/serve_workbench_plugin.py
@@ -248,7 +248,7 @@ HTTP fixtureはMadoのprotocol・metrics・Dataset importを確認するため�
 
 2026-10-08の追加機能では、API・ストレージ366件、Web98件、Python316件、実Docker20件が成功しました。S3接続fixtureの2件はskipです。型検査・build・ruff・strict mypy、wheel/sdistの45ファイルと現ソースの一致も確認しました。
 
-実APIとCPU workerの5 Jobで、Task改版、通常・失敗テスト、旧版の再実行、Git差分、実行前ZIP、2件ずつの履歴取得を確認しました。実ブラウザでは8 Jobを実行し、Monacoで編集した係数によるメトリクスの7→10の変化、学習モデルを別の推論コードで読み込んだ予測値の一致、Compute/plugin管理、manifest・metrics・Dataset importを確認しました。ブラウザ回帰5本では未保存編集の戻る・進む、ネストした編集、保存待ちと履歴ページ切替も検証しています。公式MLflow 3.17.0の実SDK結合は再確認済みです。
+実APIとCPU workerの5 Jobで、Taskの新しいバージョンの保存、通常・失敗テスト、旧バージョンの再実行、Git差分、実行前ZIP、2件ずつの履歴取得を確認しました。実ブラウザでは8 Jobを実行し、Monacoで編集した係数によるメトリクスの7→10の変化、学習モデルを別の推論コードで読み込んだ予測値の一致、Compute/plugin管理、manifest・metrics・Dataset importを確認しました。ブラウザ回帰5本では未保存編集の戻る・進む、ネストした編集、保存待ちと履歴ページ切替も検証しています。公式MLflow 3.17.0の実SDK結合は再確認済みです。
 
 実Authentik、SSH/GPU、実S3、実SIF runtime、本番Madoへの接続はこの結果に含みません。
 
@@ -311,7 +311,7 @@ npx tsx apps/web/tests/browser-artifact-upload.mjs
 
 ## 全体管理画面の保存先を確認する
 
-保存先APIはブラウザ内でmockし、サイドバーの「全体管理」→「ストレージ」（`/admin/storage`）で、保存先の作成（署名v2）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→プロジェクト切替の「プロジェクトを作成」で開いたダイアログの初期選択→全体管理者以外の拒否表示（`/admin/storage`から戻され、サイドバーとユーザーメニューに全体管理が出ない）、を確かめます。
+保存先APIはブラウザ内でmockし、サイドバーの「全体管理」→「ストレージ」（`/settings/storage`）で、保存先の作成（署名v2）→secretが「設定済み」とだけ出る→接続テストの段階表示→既定の切替（確認dialog）→プロジェクト切替の「プロジェクトを作成」で開いたダイアログの初期選択→全体管理者以外の拒否表示（`/settings/storage`から自分のアカウント（`/settings/account`）へ移され、サイドバーとユーザーメニューに全体管理が出ない。ユーザーメニューには「全体設定」が出る）、を確かめます。
 
 ```bash
 MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
@@ -327,11 +327,11 @@ node apps/web/tests/browser-admin-storage.mjs
 
 | 場面 | 確かめること |
 |---|---|
-| サイドバー | プロジェクトの最後の組が「プロジェクト管理」（Plugins、プロジェクト設定）で、全体管理者には「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く |
+| サイドバー | プロジェクトの組の最後が「プロジェクト管理」（Plugins、プロジェクト設定）で、その下に「全体設定」の組（アカウント、コンピュータ）、全体管理者にはさらに「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く |
 | プロジェクト切替 | ボタンにフォーカスして↓で開くと、今のProjectが選ばれた状態で一覧へフォーカスが移る。↑↓・Home・Endで移り、Endは最後の「プロジェクトを作成」。Escで閉じてボタンへ戻り、Enterで開いて別のProjectを開ける。PrivateのProjectに鍵が付く。ドロップダウンが画面の内側に収まる。ライト・ダークの両方で撮影する |
 | 絞り込み | Projectが8件以上になると絞り込みの入力が出てフォーカスが入り、入力した語で一覧が絞られ、Enterで開ける |
 | 作成 | 切替の「プロジェクトを作成」から、Privateを選ぶと「メンバー（任意）」が出る。ユーザーを検索して2人足し、Roleを変え、1人を外して作成すると、`POST /projects`に`visibility: private`と残した1人の`members`が送られ、作ったProjectが開く |
-| 全体管理 → プロジェクト | `/admin`が`/admin/projects`へ移る。アーカイブの確認に「データは残り元に戻せる」とあり、待機中・実行中のJobの409は案内の文言になる。「アーカイブ済みも表示」でアーカイブ済みの行が出て、名前はリンクにならない。元に戻す、もう一度アーカイブ、完全に削除（プロジェクト名を正しく入れるまで押せない） |
+| 全体管理 → プロジェクト | 旧URLの`/admin`が`/settings/projects`へ移る。アーカイブの確認に「データは残り元に戻せる」とあり、待機中・実行中のJobの409は案内の文言になる。「アーカイブ済みも表示」でアーカイブ済みの行が出て、名前はリンクにならない。元に戻す、もう一度アーカイブ、完全に削除（プロジェクト名を正しく入れるまで押せない） |
 | プロジェクト設定 | ViewerはPublic/Privateを変えられず、アーカイブの欄も無い。Project adminがアーカイブすると別のProjectへ移る。メンバー欄にPrivateの注記が出る |
 | ディレクトリ候補 | 保存先の追加でfilesystemを選び、ルートディレクトリに`/srv/mmt/`と打つと子のディレクトリが候補に出る。↓・Enterで選べ、Escは候補だけを閉じてダイアログは残る。無いパスには「まだありません」、ファイルには「ディレクトリではありません」の注記が出る。相対パスの候補をクリックすると絶対パスが入る |
 | 390px幅 | プロジェクトバーの切替が画面の内側に開き、全体管理のプロジェクト一覧も横にスクロールしない |
@@ -347,17 +347,42 @@ node apps/web/tests/browser-projects-admin.mjs
 
 2026-10-11に通過しました（mockのAPIです。APIの公開範囲・アーカイブ・ディレクトリ候補の規則はAPIのテストで確かめます）。
 
-## Webで足す計算機（site）をブラウザで確認する
+## 全体設定のサイドバー・ユーザーメニュー・旧URLを確認する
 
-`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）でCompute画面と全体管理の「ランチャー」（`/admin/launchers`）を開きます。確認する項目は次のとおりです。
+`apps/web/tests/browser-settings-shell.mjs`は、mockのAPI（`tests/browserApi.mjs`）で全体設定（`/settings/<項目>`）を、全体管理者でない利用者と全体管理者の両方で開きます。Webの開発サーバーだけを別のportで起動します。
+
+| 場面 | 確かめること |
+|---|---|
+| 全体管理者でない利用者 | プロジェクトの画面のサイドバーの最後の組が「全体設定」（アカウント、コンピュータ）で、「全体管理」の組は無い。ユーザーメニューは「アカウント」「パスワードの変更」「全体設定」の3つ。「全体設定」で`/settings/account`が開き、見出しの上に「全体設定」、サイドバーは「全体設定」の組だけ。「パスワードの変更」（`/settings/account/password`）の間もサイドバーは「アカウント」に印が付く |
+| 旧URLと全体管理の拒否 | `/settings`・`/account`は`/settings/account`へ、`/account/password`は`/settings/account/password`へ移る。`/admin`・`/admin/users`・`/settings/users`・知らない項目は`/settings/account`へ移る。移ったあとの「戻る」で旧URLへ戻らない |
+| SSOの利用者 | ユーザーメニューに「パスワードの変更」が無く、`/settings/account/password`は`/settings/account`へ移る |
+| 全体管理者 | サイドバーの「全体設定」の下に「全体管理」の組（プロジェクト、ユーザー、ストレージ、ランチャー、監査ログ）が続く。`/admin`は`/settings/projects`へ、`/admin/launchers?…`は問い合わせ文字列ごと`/settings/launchers?…`へ、知らない`/admin/<項目>`は`/settings/projects`へ移る。全体管理の見出しの上は「全体管理」 |
+| アイコンだけの列・ドロワー | 1100px幅のアイコンだけの列に全体設定と全体管理の7項目が名前のツールチップつきで並ぶ。390px幅のドロワーでも同じ組が出て、「コンピュータ」で全体設定へ移れる |
+
+```bash
+(cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:9 npx vite --port 47310 --strictPort --host 127.0.0.1) &
+MMT_PLAYWRIGHT_MODULE=/path/to/playwright/index.mjs \
+MMT_CHROMIUM_PATH=/path/to/chromium \
+MMT_WEB_URL=http://127.0.0.1:47310 \
+MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/settings-shell \
+node apps/web/tests/browser-settings-shell.mjs
+```
+
+2026-10-11に通過しました（mockのAPIです。全体管理のAPIが全体管理者以外を拒否することはAPIのテストで確かめます）。
+
+## Webで足すコンピュータ（site）をブラウザで確認する
+
+`apps/web/tests/browser-site-computers.mjs`は、mockのAPI（`tests/browserApi.mjs`）で全体設定の「コンピュータ」（`/settings/computers`）、プロジェクトのCompute画面、全体管理の「ランチャー」（`/settings/launchers`）を開きます。確認する項目は次のとおりです。
 
 - ランチャーの登録（tokenを一度だけ表示）、tokenの作り直し、失効
-- 全体管理者が雛形（Slurm）から計算機を足すときの送信内容
+- 全体管理者が雛形（Slurm）からPublicのコンピュータを足すときの送信内容（公開範囲の既定はPrivate）
 - 共用アカウントの公開鍵、接続確認、鍵の作り直し
-- job shellの版（同じ内容なら新しい版を作らない、新しい版、過去の版の表示）
-- 研究者が自分のPC（手動投入）を足してProjectへ共有すること、所有者だけに出る`--watch --all`の案内、共有の解除
-- 本人アカウントの計算機での、自分のアカウント名と公開鍵
-- Jobのjob shellの版、`?projectId=`の一覧、390px幅で横にスクロールしないこと
+- job shellのバージョン（同じ内容なら新しいバージョンを作らない、新しいバージョン、過去のバージョンの表示）
+- 研究者が自分のPC（手動投入、既定のPrivate）を足すこと、所有者だけに出る`--watch --all`の案内、編集でPublicにすること
+- 他の人のPrivateのコンピュータは一覧に出るが、詳細を開けず接続先も出ないこと。全体管理者は編集できるが「使えない」と出ること
+- プロジェクトのComputeは自分が使えるものの読み取りだけの一覧で、全体設定の「コンピュータ」へのリンクがあること
+- 本人アカウントのコンピュータでの、自分のアカウント名と公開鍵
+- Jobのjob shellのバージョン、`?projectId=`の一覧、390px幅で横にスクロールしないこと
 
 ```bash
 (cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47129 npx vite --port 47120 --strictPort --host 127.0.0.1) &
@@ -367,11 +392,11 @@ MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/site-computers-web \
 node apps/web/tests/browser-site-computers.mjs
 ```
 
-2026-10-10に通過しました（mockのAPIです。実際のlauncherが鍵を作る流れはAPIとPythonのテストで確かめます）。
+2026-10-11に通過しました（mockのAPIです。実際のlauncherが鍵を作る流れはAPIとPythonのテストで確かめます）。
 
-## Webで足す計算機（site）を実APIでブラウザ確認する
+## Webで足すコンピュータ（site）を実APIでブラウザ確認する
 
-`apps/web/tests/browser-site-computers-api.mjs`は、`mmt_test`の一時schemaを使う開発モード（`AUTH_MODE=development`）のAPI（47140）を自分で起動し、実際の記録を作ってCompute画面・Jobs画面・全体管理の「ランチャー」（`/admin/launchers`）を確かめます。終わるとschemaを消します。WebはViteを47141で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
+`apps/web/tests/browser-site-computers-api.mjs`は、`mmt_test`の一時schemaを使う開発モード（`AUTH_MODE=development`）のAPI（47140）を自分で起動し、実際の記録を作って全体設定の「コンピュータ」（`/settings/computers`）・Jobs画面・全体管理の「ランチャー」（`/settings/launchers`）を確かめます。終わるとschemaを消します。WebはViteを47141で起動しておきます。APIをTypeScriptのソースから起動するので`tsx`で実行します。
 
 ```bash
 (cd apps/web && MMT_WEB_API_PROXY_TARGET=http://127.0.0.1:47140 npx vite --port 47141 --strictPort --host 127.0.0.1) &
@@ -382,24 +407,25 @@ MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/site-computers-api-web \
 npx tsx apps/web/tests/browser-site-computers-api.mjs
 ```
 
-開発モードのログインで、全体管理者（`admin@localhost`）と、2つのProjectのEditorである研究者2人（Alice・Bob）を作ります。画面の無い準備（Project、メンバー、Dockerのコード版）はAPIで作ります。コード版のimageはdigest固定の例で、pullしません。launcherと`mado-tracking submit`の側（公開鍵の送信、接続確認の報告、claimとreport）は、それぞれのtokenでAPIを直接呼びます。確認する項目は次のとおりです。
+開発モードのログインで、全体管理者（`admin@localhost`）と、2つのProjectのEditorである研究者2人（Alice・Bob）を作ります。画面の無い準備（Project、メンバー、Dockerのコードバージョン）はAPIで作ります。コードバージョンのimageはdigest固定の例で、pullしません。launcherと`mado-tracking submit`の側（公開鍵の送信、接続確認の報告、claimとreport）は、それぞれのtokenでAPIを直接呼びます。確認する項目は次のとおりです。
 
 | 場面 | 確かめること |
 |---|---|
 | launcher | 登録するとtokenを一度だけ表示し、閉じると画面にも一覧のAPIにも出ない。launcher.tomlにtokenを書かない。tokenを作り直すと古いtokenは401、新しいtokenで`GET /launcher/config`が通る。失効させると新しいtokenも401 |
-| 全体の計算機 | 全体管理者がPBSの雛形から、本人アカウントの自動投入の計算機を足す（job shellは雛形のまま版1、取消コマンド・array・runtimeは雛形の値）。Dockerの雛形から共用アカウントの計算機も足し、共用の鍵は「作成待ち」で、接続確認は押せない |
+| Publicのsite | 全体管理者がPBSの雛形から、本人アカウントの自動投入のコンピュータをPublicで足す（所有者は全体管理者、job shellは雛形のままバージョン1、取消コマンド・array・runtimeは雛形の値）。Dockerの雛形から共用アカウントのコンピュータも足し、共用の鍵は「作成待ち」で、接続確認は押せない |
 | 自分の設定 | Editorがアカウント名と`GROUP`を保存すると、自分の鍵が「作成待ち」で出て、接続確認は押せない。launcherが公開鍵を送ると、公開鍵とauthorized_keysの案内に変わる。接続確認でlauncherに渡るアカウント・作業ディレクトリ・変数が画面で入れた値で、失敗の報告が結果に出る。管理者の「利用者の設定」に、アカウント・変数・鍵の状態が出る |
 | 共用アカウント | 研究者には「自分の設定はありません」の案内だけが出る（入力、鍵、利用者の設定、job shellの編集が無い）。APIも個人設定を422で拒む |
-| 自分のPC | 研究者が手動投入のPCを足し、2つのProjectのうち1つへ共有する（選択肢は自分がEditor以上のProjectで、全体管理者だけのProjectは出ない）。所有者には`--watch --all`まで3つのコマンドと、`--all`で受け取るのはtokenのProjectのJobだという案内が出る |
-| job shell | 編集して保存すると版2になり、版の履歴に2つの版が出て、版1も表示できる |
-| 共有 | 同じProjectの別のメンバーには、Jobの実行先の選択肢にそのPCが出る。共有していないProjectには出ない（`?projectId=`の一覧も同じで、そのProjectでJobを作るとAPIが422 `target_not_available`） |
-| 手動投入 | そのPCで作ったJobは手動投入待ちになる。所有者には`--watch --all`のコマンドと`--all`の範囲の案内が出る。所有者でない依頼者には、自分のJobと同じ`mado-tracking submit --site <ID>`と、「この計算機は○○さんの計算機です。所有者が--watch --allで待ち受けている計算機（所有者のPCなど）では、所有者の側で投入されます」の補足が出る（計算機の詳細にも同じ補足）。所有者のtokenで`--all`のclaimをすると版2のjob shellで投入され、Jobの詳細に「job shellの版」v2が出る |
-| 共有の編集 | 全体管理者がそのPCを編集すると、共有先の選択肢は所有者のProjectで、全体管理者のProjectではない。所有者が共有先にBを足すと、BのメンバーもJobの実行先に選べる。所有者がBのViewerになると、Bは印付きで選択肢に残り、外して保存できる（Jobが終わっていない間も、実行の設定を変えない編集は通る） |
-| 390px幅 | 自分のPCの詳細、自分の設定と鍵、計算機の追加のダイアログ、Jobの詳細、launcherの一覧で、横にスクロールしない |
+| 自分のPC | 研究者が手動投入のPCを足す（公開範囲は既定のPrivate、共有先の欄は無い）。所有者には`--watch --all`まで3つのコマンドと、`--all`で受け取るのはtokenのProjectのJobだという案内が出る |
+| job shell | 編集して保存するとバージョン2になり、バージョンの履歴に2つのバージョンが出て、バージョン1も表示できる |
+| Private | 別の研究者には、一覧にそのPCが「Private」「使えない」で出るが、詳細は開けず作業ディレクトリも出ない。Jobの実行先の選択肢にも出ず、Jobを作るとAPIが422 `target_not_available` |
+| Public | 所有者がPublicにすると、どちらのProjectでも実行先に選べる（`?projectId=`の一覧も同じ） |
+| 手動投入 | そのPCで作ったJobは手動投入待ちになる。所有者には`--watch --all`のコマンドと`--all`の範囲の案内が出る。所有者でない依頼者には、自分のJobと同じ`mado-tracking submit --site <ID>`と、「このコンピュータは○○さんのコンピュータです。所有者が--watch --allで待ち受けているコンピュータ（所有者のPCなど）では、所有者の側で投入されます」の補足が出る（コンピュータの詳細にも同じ補足）。所有者のtokenで`--all`のclaimをするとバージョン2のjob shellで投入され、Jobの詳細に「job shellのバージョン」v2が出る |
+| 公開範囲の編集 | 全体管理者がそのPCを編集すると、今の公開範囲（Public）が選ばれている。所有者がPrivateに戻すと、どちらのProjectの一覧からも消え、監査ログに`compute_target.update`（`visibility:{from,to}`）が残る（Jobが終わっていない間も、実行の設定を変えない編集は通る） |
+| 390px幅 | 自分のPCの詳細、自分の設定と鍵、コンピュータの追加のダイアログ、Jobの詳細、launcherの一覧で、横にスクロールしない |
 
 開発サーバーは、ファイルが変わると開いている画面をHMRで作り直します。そのため、走らせている間はWebのファイルを書き換えないでください。ファイルが変わる環境（作業コピーへの同期など）では、`npx vite build --outDir <dir>`したものを、同じ`MMT_WEB_API_PROXY_TARGET`で`npx vite preview --outDir <dir> --port 47141 --strictPort --host 127.0.0.1`して配ります。
 
-実際のlauncher（ssh-keygen・SSH）、スケジューラ、`mado-tracking submit`のプロセスは使いません（それらがAPIへ送るものを同じ形で送ります）。2026-10-10に通過しました（Playwright 1.56.1、Chromium 141。Webは`vite preview`で配ったbuild）。
+実際のlauncher（ssh-keygen・SSH）、スケジューラ、`mado-tracking submit`のプロセスは使いません（それらがAPIへ送るものを同じ形で送ります）。2026-10-11に通過しました（Webは`vite`の開発サーバー）。
 
 ## 探索結果の分析（平行座標・パラメータ重要度・散布図）をブラウザで確認する
 
@@ -432,7 +458,7 @@ MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/reports-web \
 node apps/web/tests/browser-reports.mjs
 ```
 
-Markdown・グループの平均と範囲の図（固定と最新）・平行座標・音声の聴き比べ・保存ビューのRun一覧を埋め込んで保存できること、保存後にmetricsを足すと最新の図だけ変わること、2つのタブで同時に編集すると後の保存が衝突の案内になること、過去の版は読み取り専用で戻すと新しい版になること、コメント、viewerは閲覧とコメントの閲覧だけになること、アーカイブで一覧の既定表示から外れることを確かめます。
+Markdown・グループの平均と範囲の図（固定と最新）・平行座標・音声の聴き比べ・保存ビューのRun一覧を埋め込んで保存できること、保存後にmetricsを足すと最新の図だけ変わること、2つのタブで同時に編集すると後の保存が衝突の案内になること、過去のバージョンは読み取り専用で戻すと新しいバージョンになること、コメント、viewerは閲覧とコメントの閲覧だけになること、アーカイブで一覧の既定表示から外れることを確かめます。
 
 ## Runの説明文とコメントをブラウザで確認する
 
@@ -446,6 +472,6 @@ MMT_SCREENSHOT_DIR=artifacts/verification/<日付>/comments-web \
 node apps/web/tests/browser-comments.mjs
 ```
 
-説明文の8000文字超過は送信前に止まること、保存した説明文とMLflowの`runs/get`の`mlflow.note.content`が同じこと、`<script>`・`onerror`・`javascript:`リンクが実行されず文字として出ること、外部画像は読み込まずリンクになること、コメントの投稿・返信・編集（編集済み表示）・削除（「削除されました」）、viewerには入力欄と操作が出ないこと、モデル版の詳細ページに別のスレッドが出ることを確かめます。
+説明文の8000文字超過は送信前に止まること、保存した説明文とMLflowの`runs/get`の`mlflow.note.content`が同じこと、`<script>`・`onerror`・`javascript:`リンクが実行されず文字として出ること、外部画像は読み込まずリンクになること、コメントの投稿・返信・編集（編集済み表示）・削除（「削除されました」）、viewerには入力欄と操作が出ないこと、モデルバージョンの詳細ページに別のスレッドが出ることを確かめます。
 
 `apps/api/test/harness.ts`はWebのOriginを`http://127.0.0.1:5182`に固定するため、別portのWebから使うときはOriginを付け替える検証用の小さなserverが要ります（2026-10-08の検証では`/tmp`に置いて使い、リポジトリには入れていない）。

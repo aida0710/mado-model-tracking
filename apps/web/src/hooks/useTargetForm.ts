@@ -1,32 +1,27 @@
 import { useState } from 'react';
 import type { ComputeTargetDetails } from '@mmt/contracts';
 import { executionApi } from '../api/execution';
-import { siteComputersApi } from '../api/siteComputers';
 import type { FormValues } from '../types/form';
 import {
   buildTargetCreate,
   buildTargetInput,
-  changedTargetSharing,
   newTargetFormValues,
   targetFormValues,
   updateTargetValues,
-  type TargetOwnership,
 } from '../lib/targetInput';
 import { useMutation } from './useMutation';
 
-/**
- * The target dialog's values and save. An edit of an owned computer saves the target first and
- * then, if they changed, the Projects it is shared with (a separate PUT).
- */
+/** The target dialog's values and save: POST for a new computer, PATCH for an edited one. */
 export function useTargetForm({
   target,
-  newOwnership,
+  canAddSshOrLocal,
 }: {
   target?: ComputeTargetDetails;
-  newOwnership: TargetOwnership;
+  /** Whether a new computer starts as an ssh target (global administrators) or a site. */
+  canAddSshOrLocal: boolean;
 }) {
   const [values, setValues] = useState(() =>
-    target ? targetFormValues(target) : newTargetFormValues(newOwnership),
+    target ? targetFormValues(target) : newTargetFormValues({ canAddSshOrLocal }),
   );
   const mutation = useMutation();
   function changeValues(next: FormValues) {
@@ -34,13 +29,11 @@ export function useTargetForm({
     mutation.clearError();
   }
   function save(): Promise<ComputeTargetDetails | undefined> {
-    return mutation.run(async () => {
-      if (!target) return executionApi.createTarget(buildTargetCreate(values));
-      const input = buildTargetInput(values, target);
-      const projectIds = changedTargetSharing(values, target);
-      const saved = await executionApi.updateTarget(target.id, input);
-      return projectIds ? siteComputersApi.setProjects(target.id, { projectIds }) : saved;
-    });
+    return mutation.run(() =>
+      target
+        ? executionApi.updateTarget(target.id, buildTargetInput(values, target))
+        : executionApi.createTarget(buildTargetCreate(values)),
+    );
   }
   return { ...mutation, values, changeValues, save };
 }

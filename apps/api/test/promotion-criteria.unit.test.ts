@@ -107,7 +107,7 @@ describe('昇格基準の判定', () => {
     ]);
   });
 
-  it('基準版が無くmissing_baseline=passなら、delta系は合格扱いで初回昇格の理由を残す', () => {
+  it('基準バージョンが無くmissing_baseline=passなら、delta系は合格扱いで初回昇格の理由を残す', () => {
     const result = judge(
       { candidate: { accuracy: 0.9 }, baseline: null },
       [criterion({ mode: 'delta', threshold: 0 }), criterion({ threshold: 0.8 })],
@@ -121,7 +121,7 @@ describe('昇格基準の判定', () => {
     ]);
   });
 
-  it('基準版が無くても絶対値の基準は判定し、満たさなければfailedになる', () => {
+  it('基準バージョンが無くても絶対値の基準は判定し、満たさなければfailedになる', () => {
     const result = judge({ candidate: { accuracy: 0.5 }, baseline: null }, [criterion({ threshold: 0.8 })], {
       status: 'baseline_missing',
       missingBaseline: 'pass',
@@ -130,7 +130,7 @@ describe('昇格基準の判定', () => {
     expect(result.reason).toBe('criteria_failed');
   });
 
-  it('基準版が無くmissing_baseline=failなら、delta系の基準でfailed(baseline_missing)になる', () => {
+  it('基準バージョンが無くmissing_baseline=failなら、delta系の基準でfailed(baseline_missing)になる', () => {
     const result = judge(
       { candidate: { accuracy: 0.9 }, baseline: null },
       [criterion({ mode: 'relative_delta', threshold: 0 })],
@@ -140,7 +140,7 @@ describe('昇格基準の判定', () => {
     expect(result.criteriaResults[0]).toMatchObject({ outcome: 'failed', reason: 'baseline_missing' });
   });
 
-  it('基準版に同じruleの評価が無ければdelta系はinsufficient、絶対値だけなら判定できる', () => {
+  it('基準バージョンに同じruleの評価が無ければdelta系はinsufficient、絶対値だけなら判定できる', () => {
     const relative = judge({ candidate: { accuracy: 0.9 }, baseline: null }, [criterion({ mode: 'delta', threshold: 0 })], {
       status: 'baseline_not_evaluated',
     });

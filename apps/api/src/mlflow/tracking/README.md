@@ -12,7 +12,7 @@ ExperimentとRunはnativeのUUIDをIDとして返す。既定Experiment ID `0`�
 ## 保存と認可
 
 読む操作にはProject viewerと`read`、Run/Experimentを書く操作にはeditorと`runs:write`が必要。
-Dataset入力の新規native版の登録には、既存Registryと同じ`registry:write`も要求する。
+Dataset入力の新規nativeバージョンの登録には、既存Registryと同じ`registry:write`も要求する。
 登録済みDatasetの入力追加には`runs:write`を使う。
 
 Run parametersはstringで不変。同じ値の再送は成功する。
@@ -34,7 +34,7 @@ log-batchはparams・tags・metricsとモデルmetricsを同じtransactionへ保
 get/searchも同じ保存時点からmetadata・metrics・入出力を返す。
 
 記録時はExperiment、Run、モデルの順にlockを取る。RunにはFOR NO KEY UPDATEを使い、
-Registryが版を登録する際のRun FK KEY SHAREと両立させる。
+Registryがバージョンを登録する際のRun FK KEY SHAREと両立させる。
 Artifactのsource Runとモデルの同時転送・出力記録も同じ順で処理する。
 
 Datasetのdigest・source・schema・profile・contextは補助tableとnative DatasetVersionへ保存し、
@@ -69,5 +69,5 @@ MMT_TEST_DATABASE_URL=postgresql://mmt@127.0.0.1:55483/mmt_test \
   ../../node_modules/.bin/vitest run test/mlflow-tracking.integration.test.ts
 ```
 
-担当テストは認可、版とJob実行設定の保持、競合、保存失敗、retry、検索・paginationと実SDK protobufによるデコードを検証する。
+担当テストは認可、バージョンとJob実行設定の保持、競合、保存失敗、retry、検索・paginationと実SDK protobufによるデコードを検証する。
 全体の外部HTTP SDK試験、UI確認、commitは親担当が実施する。

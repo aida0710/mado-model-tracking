@@ -9,6 +9,7 @@ export * from './audit.js';
 export * from './chartPanels.js';
 export * from './checkpoints.js';
 export * from './comments.js';
+export * from './computeTargetAccess.js';
 export * from './datasetContent.js';
 export * from './evaluation.js';
 export * from './execution.js';

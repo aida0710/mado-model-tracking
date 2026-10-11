@@ -8,13 +8,13 @@ import { UsersPanel } from '../components/admin/UsersPanel';
 import { useAuth } from '../hooks/useAuth';
 import { isGlobalAdmin } from '../lib/permissions';
 import {
-  adminSectionPath,
-  DEFAULT_ADMIN_SECTION,
+  DEFAULT_SETTINGS_SECTION,
   isAdminSection,
+  settingsSectionPath,
   type AdminSection,
-} from '../layout/adminSections';
+} from '../layout/settingsSections';
 
-// Each section heads itself (AdminSectionHeader) with its own actions; the sidebar switches them.
+// Each section heads itself (SettingsPageHeader) with its own actions; the sidebar switches them.
 const ADMIN_SECTION_PANELS: Record<AdminSection, ComponentType> = {
   projects: ProjectsPanel,
   users: UsersPanel,
@@ -24,14 +24,14 @@ const ADMIN_SECTION_PANELS: Record<AdminSection, ComponentType> = {
 };
 
 /**
- * Global administration (/admin/<section>). The API refuses everyone else, so they are sent home.
+ * 全体設定 → 全体管理 (/settings/<section>), for global administrators. Anyone else, whom the API
+ * would refuse, and an unknown section land on the user's own account in 全体設定.
  */
 export function AdminPage() {
   const auth = useAuth();
   const { section } = useParams();
-  if (!isGlobalAdmin(auth.user)) return <Navigate replace to="/" />;
-  if (!isAdminSection(section))
-    return <Navigate replace to={adminSectionPath(DEFAULT_ADMIN_SECTION)} />;
+  if (!isGlobalAdmin(auth.user) || !isAdminSection(section))
+    return <Navigate replace to={settingsSectionPath(DEFAULT_SETTINGS_SECTION)} />;
   const Panel = ADMIN_SECTION_PANELS[section];
   return <Panel />;
 }

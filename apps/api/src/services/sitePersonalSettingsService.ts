@@ -28,7 +28,7 @@ export class SitePersonalSettingsService {
   async listAll(principal: Principal, targetId: string): Promise<SitePersonalSettings[]> {
     requireScope(principal, 'read');
     const target = await findSiteTarget(this.database, targetId);
-    await requireTargetManager(this.database, principal, target);
+    requireTargetManager(principal, target);
     return listPersonalSettings(this.database, targetId);
   }
 
@@ -44,7 +44,7 @@ export class SitePersonalSettingsService {
     targetId: string,
     request: { input: SitePersonalSettingsInput; metadata: RequestMetadata },
   ): Promise<SitePersonalSettings> {
-    requireSession(principal, '計算機の自分の設定');
+    requireSession(principal, 'コンピュータの自分の設定');
     return transaction(this.database, async (connection) => {
       const target = await findSiteTarget(connection, targetId, { lock: true });
       await requireTargetUser(connection, principal, target);
@@ -54,7 +54,7 @@ export class SitePersonalSettingsService {
       if (target.submissionMode === 'automatic' && site.accountMode === 'shared')
         throw new DomainError(
           422,
-          'この計算機は共用アカウントで動くので、自分の設定は使いません',
+          'このコンピュータは共用アカウントで動くので、自分の設定は使いません',
           'site_settings_invalid',
         );
       const owner = { targetId, userId: principal.user.id };
@@ -71,7 +71,7 @@ export class SitePersonalSettingsService {
       if (target.submissionMode === 'automatic' && site.accountMode === 'personal' && !settings.accountName)
         throw new DomainError(
           422,
-          'この計算機は本人のアカウントで動くので、アカウント名が必要です',
+          'このコンピュータは本人のアカウントで動くので、アカウント名が必要です',
           'site_settings_invalid',
         );
       await savePersonalSettings(connection, settings);
@@ -99,7 +99,7 @@ export class SitePersonalSettingsService {
 
   /** Deleting one's settings also revokes one's key for the site. */
   async deleteOwn(principal: Principal, targetId: string, metadata: RequestMetadata): Promise<void> {
-    requireSession(principal, '計算機の自分の設定');
+    requireSession(principal, 'コンピュータの自分の設定');
     await transaction(this.database, async (connection) => {
       const target = await findSiteTarget(connection, targetId, { lock: true });
       await requireTargetUser(connection, principal, target);

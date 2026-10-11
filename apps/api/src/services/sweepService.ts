@@ -342,7 +342,7 @@ export class SweepService {
       targetId,
       gpuIds: input.gpuIds ?? task.gpuIds,
       runtime: code.runtime,
-      usage: { projectId: launch.projectId, userId: launch.userId },
+      usage: { userId: launch.userId },
     });
   }
 

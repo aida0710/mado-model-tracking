@@ -36,7 +36,6 @@ import {
   nameSchema,
   targetPatchSchema,
   targetSchema,
-  uniqueIdsSchema,
   uuidSchema,
 } from './validation.js';
 
@@ -129,7 +128,6 @@ export const sitePersonalSettingsInputSchema = z.strictObject({
   workDirectory: sitePathSchema.nullable().optional(),
   variables: siteVariablesSchema.optional(),
 });
-export const computeTargetSharingSchema = z.strictObject({ projectIds: uniqueIdsSchema.max(100) });
 export const siteKeyRotateSchema = z.strictObject({ personal: z.boolean() });
 export const siteConnectionCheckRequestSchema = z.strictObject({ personal: z.boolean() });
 export const siteConnectionCheckQuerySchema = z.strictObject({
@@ -210,8 +208,6 @@ export function validateSiteSettings(
 // POST /targets and PATCH /targets/:id take a site's settings with the ComputeTarget fields.
 export const targetCreateSchema = targetSchema.extend({
   site: siteSettingsInputSchema.optional(),
-  personal: z.boolean().optional(),
-  projectIds: uniqueIdsSchema.max(100).optional(),
   jobShell: jobShellContentSchema.optional(),
 });
 export const targetUpdateSchema = targetPatchSchema.extend({

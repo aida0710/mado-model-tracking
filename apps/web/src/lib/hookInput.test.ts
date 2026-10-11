@@ -94,14 +94,14 @@ describe('フックの作成の入力', () => {
     expect(template).not.toHaveProperty('retryOnFailure');
   });
 
-  it('分ける入力はarrayの個数とファイルを持つ入力の版が必要', () => {
+  it('分ける入力はarrayの個数とファイルを持つ入力のバージョンが必要', () => {
     expect(() => buildHookInput({ ...siteValues, arraySize: '' }, catalog)).toThrow('arrayの個数');
     expect(() =>
       buildHookInput(
         { ...siteValues, inputDatasetVersionIds: ['dataset-v1'], datasetPartitionVersionId: 'dataset-v1' },
         catalog,
       ),
-    ).toThrow('ファイルを持つ版');
+    ).toThrow('ファイルを持つバージョン');
   });
 
   it('きっかけごとに意味のある絞り込みだけを送る', () => {
@@ -134,7 +134,7 @@ describe('フックの作成の入力', () => {
     expect(hookFilterFields('webhook')).toEqual([]);
   });
 
-  it('きっかけのRunのモデル版は、Runから起きるきっかけ（終了・arrayの終了・checkpoint）だけが引き継ぐ', () => {
+  it('きっかけのRunのモデルバージョンは、Runから起きるきっかけ（終了・arrayの終了・checkpoint）だけが引き継ぐ', () => {
     const inheriting = { ...values, modelVersionId: INHERIT_MODEL_VERSION };
     for (const trigger of ['run_finished', 'array_finished', 'checkpoint_saved'])
       expect(buildHookInput({ ...inheriting, trigger }, catalog).template).toMatchObject({
@@ -149,7 +149,7 @@ describe('フックの作成の入力', () => {
     expect(updated.modelVersionId).toBe('');
   });
 
-  it('モデル版の登録では、固定の版を送らずに登録された版で起動する', () => {
+  it('モデルバージョンの登録では、固定のバージョンを送らずに登録されたバージョンで起動する', () => {
     const template = buildHookInput(
       { ...values, trigger: 'model_registered', modelVersionId: 'qwen-v1' },
       catalog,
@@ -157,7 +157,7 @@ describe('フックの作成の入力', () => {
     expect(template).toMatchObject({ modelVersionId: null, inheritModelVersion: false });
   });
 
-  it('コード版が対応しないモデル系列の版や絞り込みを拒否する', () => {
+  it('コードバージョンが対応しないモデル系列のバージョンや絞り込みを拒否する', () => {
     expect(buildHookInput({ ...values, modelVersionId: 'qwen-v1' }, catalog).template.modelVersionId).toBe(
       'qwen-v1',
     );
@@ -199,7 +199,7 @@ describe('フックの作成の入力', () => {
     ).toThrow();
   });
 
-  it('コード版を変えるとtargetとGPUを外し、入力から外した版はarrayで分ける版からも外す', () => {
+  it('コードバージョンを変えるとtargetとGPUを外し、入力から外したバージョンはarrayで分けるバージョンからも外す', () => {
     expect(
       updateHookValues({ previous: values, next: { ...values, kind: 'training' }, catalog }),
     ).toMatchObject({ codeVersionId: '', targetId: '', gpuIds: [] });

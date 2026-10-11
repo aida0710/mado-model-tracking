@@ -1,9 +1,11 @@
 import {
+  COMPUTE_TARGET_VISIBILITIES,
   CPU_ARCHES,
   DEFAULT_DATASET_CACHE_MAX_BYTES,
   SITE_SUBMISSION_MODES,
   type ComputeTarget,
   type ComputeTargetDetails,
+  type ComputeTargetVisibility,
   type CpuArch,
   type ExecutionRuntimeKind,
   type SiteSubmissionMode,
@@ -59,15 +61,11 @@ const NON_SITE_SETTINGS = {
   queueTimeoutSeconds: null,
 } as const satisfies Partial<CreateTarget>;
 
-/**
- * Who may use a site: every Project (a global computer, which only global administrators add), or
- * its owner and the Projects the owner shares it with.
- */
-export type TargetOwnership = 'global' | 'personal';
-export const TARGET_OWNERSHIPS: readonly TargetOwnership[] = ['global', 'personal'];
+// A new computer serves its owner until they open it to everyone (the API's default too).
+const DEFAULT_TARGET_VISIBILITY: ComputeTargetVisibility = 'private';
 
 /** A target's own fields with a site's global settings, as both POST and PATCH take them. */
-export type TargetInput = Omit<CreateTarget, 'personal' | 'projectIds' | 'jobShell'>;
+export type TargetInput = Omit<CreateTarget, 'jobShell'>;
 
 export function datasetCacheGiB(target: Pick<ComputeTarget, 'datasetCacheMaxBytes'>): string {
   return String(Math.max(1, Math.round(target.datasetCacheMaxBytes / BYTES_PER_GIB)));
@@ -96,6 +94,10 @@ export function buildTargetInput(values: FormValues, previous?: ComputeTarget): 
         ? previous.datasetCacheMaxBytes
         : parsePositiveInteger(cacheGiB) * BYTES_PER_GIB,
     cpuArch: parseChoice<CpuArch>(getFieldValue(values, 'cpuArch'), CPU_ARCHES),
+    visibility: parseChoice<ComputeTargetVisibility>(
+      getFieldValue(values, 'visibility'),
+      COMPUTE_TARGET_VISIBILITIES,
+    ),
   };
   if (executor === 'site')
     return {
@@ -127,38 +129,11 @@ export function buildTargetInput(values: FormValues, previous?: ComputeTarget): 
   };
 }
 
-/**
- * POST /targets. A new site also takes its first job shell and whose it is: a researcher's own
- * site is shared with the Projects chosen here, a global one serves every Project.
- */
+/** POST /targets: whoever adds the computer owns it; a new site also takes its first job shell. */
 export function buildTargetCreate(values: FormValues): CreateTarget {
   const target = buildTargetInput(values);
   if (target.executor !== 'site') return target;
-  const personal =
-    parseChoice<TargetOwnership>(getFieldValue(values, 'ownership'), TARGET_OWNERSHIPS) ===
-    'personal';
-  return {
-    ...target,
-    personal,
-    ...(personal && { projectIds: getSelectedValues(values, 'projectIds') }),
-    jobShell: parseJobShellContent(getFieldValue(values, 'jobShell')),
-  };
-}
-
-/**
- * The Projects to share an owned computer with when an edit changed them (PUT
- * /targets/:id/projects), or null when there is nothing to send.
- */
-export function changedTargetSharing(
-  values: FormValues,
-  target: Pick<ComputeTargetDetails, 'ownerUserId' | 'projectIds'>,
-): string[] | null {
-  if (target.ownerUserId === null) return null;
-  const projectIds = [...new Set(getSelectedValues(values, 'projectIds'))];
-  const isUnchanged =
-    projectIds.length === target.projectIds.length &&
-    projectIds.every((projectId) => target.projectIds.includes(projectId));
-  return isUnchanged ? null : projectIds;
+  return { ...target, jobShell: parseJobShellContent(getFieldValue(values, 'jobShell')) };
 }
 
 /** The form with a template's job shell and the settings that go with it. */
@@ -182,15 +157,14 @@ export function updateTargetValues(previous: FormValues, next: FormValues): Form
 }
 
 /**
- * The form values of a new target. A researcher adds only a site of their own; a global
- * administrator starts from a global ssh target and may choose a site of either kind.
+ * The form values of a new target, private until chosen otherwise. A researcher adds only sites; a
+ * global administrator starts from an ssh target and may choose any executor.
  */
-export function newTargetFormValues(ownership: TargetOwnership): FormValues {
+export function newTargetFormValues({ canAddSshOrLocal }: { canAddSshOrLocal: boolean }): FormValues {
   return {
     name: '',
-    executor: ownership === 'personal' ? 'site' : 'ssh',
-    ownership,
-    projectIds: [],
+    executor: canAddSshOrLocal ? 'ssh' : 'site',
+    visibility: DEFAULT_TARGET_VISIBILITY,
     host: '',
     port: String(SSH_DEFAULT_PORT),
     username: '',
@@ -224,8 +198,7 @@ export function targetFormValues(target: ComputeTargetDetails): FormValues {
   return {
     name: target.name,
     executor: target.executor,
-    ownership: target.ownerUserId === null ? 'global' : 'personal',
-    projectIds: target.projectIds,
+    visibility: target.visibility,
     host: target.host,
     port: String(target.port),
     username: target.username,

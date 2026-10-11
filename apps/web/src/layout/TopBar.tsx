@@ -12,8 +12,6 @@ import { OperationsAlertBadge } from '../components/OperationsAlertBadge';
 import { text } from '../i18n/catalog';
 import { NavigationDrawer } from './NavigationDrawer';
 
-export { ACCOUNT_PATH, ACCOUNT_PASSWORD_PATH } from '../components/UserMenu';
-
 /**
  * The header: the app name, theme, the signed-in user and logout. The screen navigation sits in
  * the sidebar or the rail; below --bp-md this header opens it in the drawer.

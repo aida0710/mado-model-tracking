@@ -25,6 +25,7 @@ export async function sweepFixture(harness: Harness) {
         maxConcurrentJobs: SWEEP_TARGET_MAX_CONCURRENT_JOBS,
         enabled: true,
         executor: 'local',
+        visibility: 'public',
       },
     }),
   );

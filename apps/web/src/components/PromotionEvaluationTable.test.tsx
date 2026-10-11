@@ -64,7 +64,7 @@ function render(
 }
 
 describe('判定履歴の表示', () => {
-  it('合格の判定に、基準ごとの値と閾値、候補版・基準版・評価Runへのリンクを表示する', () => {
+  it('合格の判定に、基準ごとの値と閾値、候補バージョン・基準バージョン・評価Runへのリンクを表示する', () => {
     const html = render([passed]);
     expect(html).toContain(promotionDecisionLabels.passed);
     expect(html).toContain('werの基準との差 ≤ -0.01');
@@ -77,7 +77,7 @@ describe('判定履歴の表示', () => {
     expect(html).not.toContain(text.promotionFirstRelease);
   });
 
-  it('基準aliasが未設定で合格した初回には印を付け、基準版とRunは空欄にする', () => {
+  it('基準aliasが未設定で合格した初回には印を付け、基準バージョンとRunは空欄にする', () => {
     const html = render([
       {
         ...passed,
@@ -115,7 +115,7 @@ describe('判定履歴の表示', () => {
     expect(html).not.toContain('candidate_metric_missing');
   });
 
-  it('基準版なしで合格した基準は、緑の「満たす」ではなく比較なしと理由を日本語で表示する', () => {
+  it('基準バージョンなしで合格した基準は、緑の「満たす」ではなく比較なしと理由を日本語で表示する', () => {
     const html = render([
       {
         ...passed,

@@ -156,7 +156,7 @@
   border-top: 1px solid var(--border);
   color: var(--link);
 }
-.project-visibility {
+.visibility-label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -167,7 +167,7 @@
 .sidebar-project .project-switcher-label,
 .sidebar-project .project-role,
 .sidebar-project .project-switcher-chevron,
-.sidebar-project .project-switcher-trigger .project-visibility {
+.sidebar-project .project-switcher-trigger .visibility-label {
   color: var(--header-text-muted);
 }
 .sidebar-project .project-switcher-trigger {

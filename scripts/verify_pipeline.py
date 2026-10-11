@@ -1192,7 +1192,7 @@ def success_path_stages() -> list[Stage]:
         ),
         Stage(
             "output_registration",
-            "Taskの出力モデル設定で版が自動登録される（training.pyは登録をTaskに任せる）",
+            "Taskの出力モデル設定でバージョンが自動登録される（training.pyは登録をTaskに任せる）",
             verify_output_registration,
         ),
         Stage(
@@ -1215,7 +1215,7 @@ def success_path_stages() -> list[Stage]:
         ),
         Stage(
             "auto_promotion",
-            "昇格policyが合格（基準なしの初回）と判定し、productionを自動で切り替え、alias履歴と版の評価一覧に残る",
+            "昇格policyが合格（基準なしの初回）と判定し、productionを自動で切り替え、alias履歴とバージョンの評価一覧に残る",
             lambda pipeline, details: verify_auto_promotion(
                 pipeline,
                 details,
@@ -1227,12 +1227,12 @@ def success_path_stages() -> list[Stage]:
         ),
         Stage(
             "second_round_against_baseline",
-            "2回目の学習の版を昇格済みの基準版と比べて判定し、再び自動昇格する",
+            "2回目の学習のバージョンを昇格済みの基準バージョンと比べて判定し、再び自動昇格する",
             verify_second_round,
         ),
         Stage(
             "manual_apply_and_comparison",
-            "評価コード版を変えたruleを基準版へ手動適用し、2つの版を同じ条件で比較できる",
+            "評価コードバージョンを変えたruleを基準バージョンへ手動適用し、2つのバージョンを同じ条件で比較できる",
             verify_manual_apply_comparison,
         ),
     ]
@@ -1247,7 +1247,7 @@ def independent_stages() -> list[Stage]:
         ),
         Stage(
             "failed_training_skips_downstream",
-            "学習がfailedなら保留中の版の推論はskipped（source_run_unsuccessful）",
+            "学習がfailedなら保留中のバージョンの推論はskipped（source_run_unsuccessful）",
             verify_failed_training,
         ),
         Stage(
@@ -1483,7 +1483,7 @@ def main(profile: Profile = FULL_PROFILE) -> int:
     ):
         try:
             with recorder.stage(
-                "setup", "Project・target・Service Account・コード版・正解セット・rule・policy・Taskの登録"
+                "setup", "Project・target・Service Account・コードバージョン・正解セット・rule・policy・Taskの登録"
             ) as details:
                 pipeline = prepare_project(admin_session, owner_session, work_directory, api_url)
                 set_up(pipeline, details, work_directory)

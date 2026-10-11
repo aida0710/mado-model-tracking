@@ -49,13 +49,15 @@ describe('checkpointの一覧と再開のAPI呼び出し', () => {
   });
 });
 
-describe('計算機の一覧と追加・編集のAPI呼び出し', () => {
-  it('Compute画面は見られる計算機を全部、実行先の選択はProjectで使える計算機だけを読む', async () => {
+describe('コンピュータの一覧と追加・編集のAPI呼び出し', () => {
+  it('Compute画面は見られるコンピュータを全部、実行先の選択はProjectで使えるコンピュータだけを読む', async () => {
     const fetch = stubJsonResponse({ items: [] });
     await executionApi.targets();
     await executionApi.projectTargets('project/1');
+    await executionApi.targetOverview();
     expect(fetch.mock.calls[0]?.[0]).toBe('/api/targets');
     expect(fetch.mock.calls[1]?.[0]).toBe('/api/targets?projectId=project%2F1');
+    expect(fetch.mock.calls[2]?.[0]).toBe('/api/targets/overview');
   });
 
   it('itemsの無い一覧を空として扱わない', async () => {
@@ -65,7 +67,7 @@ describe('計算機の一覧と追加・編集のAPI呼び出し', () => {
     });
   });
 
-  it('追加はsiteの全体設定・所有・最初のjob shellをPOSTし、編集は変えた値をPATCHする', async () => {
+  it('追加は公開範囲・siteの全体設定・最初のjob shellをPOSTし、編集は変えた値をPATCHする', async () => {
     const fetch = stubJsonResponse({ id: 'site' }, 201);
     const body = {
       name: 'PC',
@@ -87,9 +89,8 @@ describe('計算機の一覧と追加・編集のAPI呼び出し', () => {
       cpuArch: 'amd64' as const,
       supportsArray: false,
       queueTimeoutSeconds: null,
+      visibility: 'private' as const,
       site: { runnerPython: 'python3' },
-      personal: true,
-      projectIds: ['project'],
       jobShell: '#!/bin/sh\n',
     };
     await executionApi.createTarget(body);
@@ -102,11 +103,11 @@ describe('計算機の一覧と追加・編集のAPI呼び出し', () => {
     expect(JSON.parse(fetch.mock.calls[1]?.[1].body)).toEqual({ enabled: false });
   });
 
-  it('所有者がsite以外へ変えようとしたときの拒否を、サーバーの理由つきで返す', async () => {
-    stubJsonResponse({ error: '自分の計算機はsiteのままにしてください' }, 422);
+  it('全体管理者でない所有者がsite以外へ変えようとしたときの拒否を、サーバーの理由つきで返す', async () => {
+    stubJsonResponse({ error: '全体管理者でない人が持てるコンピュータはsiteだけです' }, 403);
     await expect(executionApi.updateTarget('pc', { executor: 'ssh' })).rejects.toMatchObject({
-      status: 422,
-      serverMessage: '自分の計算機はsiteのままにしてください',
+      status: 403,
+      serverMessage: '全体管理者でない人が持てるコンピュータはsiteだけです',
     });
   });
 });

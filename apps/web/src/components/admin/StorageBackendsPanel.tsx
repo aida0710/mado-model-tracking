@@ -7,7 +7,7 @@ import { useMutation } from '../../hooks/useMutation';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { ErrorNotice, Resource } from '../Feedback';
 import { StorageBackendDialog } from '../../dialogs/StorageBackendDialog';
-import { AdminSectionHeader } from './AdminSectionHeader';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { StorageBackendsTable } from './StorageBackendsTable';
 import { StorageTestResult } from './StorageTestResult';
 import { text, textTemplates } from '../../i18n/catalog';
@@ -29,7 +29,7 @@ export function StorageBackendsPanel() {
   };
   return (
     <section className="admin-storage">
-      <AdminSectionHeader
+      <SettingsPageHeader
         section="storage"
         actions={
           <>

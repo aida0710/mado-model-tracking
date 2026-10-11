@@ -1,6 +1,9 @@
-// Global administration (/admin/<section>), its users section, the user menu and the /account page.
+// 全体設定 (/settings/<section>): its two sidebar groups, the 全体管理 sections, the user menu and
+// the account page.
 export const adminText = {
+  globalSettings: '全体設定',
   administration: '全体管理',
+  settingsSectionComputers: 'コンピュータ',
   adminSectionProjects: 'プロジェクト',
   adminSectionUsers: 'ユーザー',
   adminSectionStorage: 'ストレージ',
@@ -54,6 +57,7 @@ export const adminText = {
   accountGroupsSso: 'Authentikのgroupが正本です。',
   accountNoGroups: '所属groupはありません',
   accountPassword: 'パスワード',
+  passwordChange: 'パスワードの変更',
   accountTokens: '自分のAPI token',
   accountTokenProject: 'プロジェクト',
   accountTokenAllProjects: 'すべて',

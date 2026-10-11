@@ -206,7 +206,7 @@ async function routeModelPipeline(route) {
       items: [
         summary({
           id: ids.baselineRun,
-          name: '基準版の評価',
+          name: '基準バージョンの評価',
           modelVersionId: ids.baseline,
           latestMetrics: { wer: 0.25, cer: 0.1 },
           automatic: true,

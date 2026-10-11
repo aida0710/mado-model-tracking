@@ -362,7 +362,7 @@ export class HookService {
       retryOnFailure: template.retryOnFailure,
       retryOnTimeout: template.retryOnTimeout,
       runtime: code.runtime,
-      usage: { projectId, userId: creation.userId },
+      usage: { userId: creation.userId },
     });
     if (template.arraySize !== null && target.executor !== 'site')
       throw new DomainError(422, 'arrayはsiteでだけ実行できます', 'site_target_required');

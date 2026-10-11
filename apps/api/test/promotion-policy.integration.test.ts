@@ -130,7 +130,7 @@ describe.skipIf(!testDatabaseUrl)('昇格policyと評価Run終端での自動判
     expect(await fixture.evaluations()).toEqual([]);
   });
 
-  it('editorが同じ版・同じ正解セット・同じコード版で手動作成した評価Runをfinishedにしても判定されない', async () => {
+  it('editorが同じバージョン・同じ正解セット・同じコードバージョンで手動作成した評価Runをfinishedにしても判定されない', async () => {
     const fixture = await promotionFixture(harness);
     const rule = await fixture.registerEvaluationRule('Evaluation A');
     await fixture.createPolicy(rule);
@@ -178,7 +178,7 @@ describe.skipIf(!testDatabaseUrl)('昇格policyと評価Run終端での自動判
     ]);
   });
 
-  it('基準版も同じruleの自動実行Runだけを使い、別ruleや手動の評価Runしか無ければinsufficientになる', async () => {
+  it('基準バージョンも同じruleの自動実行Runだけを使い、別ruleや手動の評価Runしか無ければinsufficientになる', async () => {
     const fixture = await promotionFixture(harness);
     const ruleB = await fixture.registerEvaluationRule('Evaluation B');
     const baseline = await fixture.registerVersion('1');
@@ -225,7 +225,7 @@ describe.skipIf(!testDatabaseUrl)('昇格policyと評価Run終端での自動判
     ]);
   });
 
-  it('手動retryで成功した評価Runも判定し、その版が基準になったときもretryのRunを基準に使う', async () => {
+  it('手動retryで成功した評価Runも判定し、そのバージョンが基準になったときもretryのRunを基準に使う', async () => {
     const fixture = await promotionFixture(harness);
     const rule = await fixture.registerEvaluationRule('Evaluation A');
     await fixture.createPolicy(rule);

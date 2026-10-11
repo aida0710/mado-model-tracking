@@ -35,7 +35,7 @@ const EMPTY_VIEW_STATE = {
   chartPanels: { version: 1, columns: 12, panels: [] },
 };
 
-describe.skipIf(!testDatabaseUrl)('共有レポートの版と権限（独立PostgreSQL）', () => {
+describe.skipIf(!testDatabaseUrl)('共有レポートのバージョンと権限（独立PostgreSQL）', () => {
   let harness: Harness;
   let fixture: Fixture;
   let secondEditor: Identity;
@@ -155,7 +155,7 @@ describe.skipIf(!testDatabaseUrl)('共有レポートの版と権限（独立Pos
     );
   }
 
-  it('編集ごとに版が増え、古いbaseRevisionは409で上書きせず、restoreは新しい版として戻す', async () => {
+  it('編集ごとにバージョンが増え、古いbaseRevisionは409で上書きせず、restoreは新しいバージョンとして戻す', async () => {
     const created = await createReport([markdown('# v1'), runTable({ runIds: [run.id] })]);
     expect(created.report).toMatchObject({
       title: 'Weekly results',
@@ -423,7 +423,7 @@ describe.skipIf(!testDatabaseUrl)('共有レポートの版と権限（独立Pos
     expect(events.rows[3]!.details).toMatchObject({ revision: 3, restoredFromRevision: 1 });
   });
 
-  it('版の内容はDBのtriggerで変更・削除できない', async () => {
+  it('バージョンの内容はDBのtriggerで変更・削除できない', async () => {
     const created = await createReport();
     for (const statement of [
       `UPDATE report_revisions SET title='changed' WHERE report_id=$1`,

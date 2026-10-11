@@ -6,7 +6,7 @@ import { useAdminUsers } from '../../hooks/useAdminUsers';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Dialog } from '../Dialog';
 import { Resource } from '../Feedback';
-import { AdminSectionHeader } from './AdminSectionHeader';
+import { SettingsPageHeader } from '../SettingsPageHeader';
 import { LocalUserDialog } from './LocalUserDialog';
 import { TemporaryPasswordNotice } from './TemporaryPasswordNotice';
 import { UsersTable, type UserAction } from './UsersTable';
@@ -74,7 +74,7 @@ export function UsersPanel() {
   const pending = pendingAction && confirmation(pendingAction);
   return (
     <section className="admin-users">
-      <AdminSectionHeader
+      <SettingsPageHeader
         section="users"
         actions={
           <>

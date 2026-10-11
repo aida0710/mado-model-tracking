@@ -60,8 +60,8 @@ function execution(overrides: Partial<ModelAutomationExecution>): ModelAutomatio
   };
 }
 
-describe('既存の版への手動適用', () => {
-  it('版の候補はruleの対象モデル系列の版だけにする', () => {
+describe('既存のバージョンへの手動適用', () => {
+  it('バージョンの候補はruleの対象モデル系列のバージョンだけにする', () => {
     const registry = {
       ...executionCatalog,
       modelVersions: [version('v1', 'Qwen3'), version('v2', 'Llama')],
@@ -85,7 +85,7 @@ describe('既存の版への手動適用', () => {
     expect(options.map((option) => option.value)).toEqual(['run-1']);
     expect(options[0]?.label).toContain('Qwen / v1');
   });
-  it('トリガーに合わせて版または上流Runを送る', () => {
+  it('トリガーに合わせてバージョンまたは上流Runを送る', () => {
     expect(manualExecutionRequest(registered, 'v1')).toEqual({ modelVersionId: 'v1' });
     expect(manualExecutionRequest(chained, 'run-1')).toEqual({ triggerRunId: 'run-1' });
   });

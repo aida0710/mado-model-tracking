@@ -1,17 +1,17 @@
 // Evaluation comparison panel. evaluation-baseline-comparison owns the entries.
 export const evaluationText = {
-  evaluationComparison: '基準版との評価比較',
+  evaluationComparison: '基準バージョンとの評価比較',
   baselineAlias: '基準alias',
-  baselineVersion: '基準版',
+  baselineVersion: '基準バージョン',
   noModelAliases: 'aliasが未設定です',
   comparisonBaselineMissing: '基準aliasが設定されていないため比較できません。',
   comparisonBaselineNotEvaluated:
-    '基準版に、同じ正解セットと評価コード版で完了した評価Runがありません。',
-  comparisonCandidateNotEvaluated: 'この版の完了した評価Runがありません。',
+    '基準バージョンに、同じ正解セットと評価コードバージョンで完了した評価Runがありません。',
+  comparisonCandidateNotEvaluated: 'このバージョンの完了した評価Runがありません。',
   comparisonConditions: '比較条件',
   referenceDatasets: '正解セット',
   noReferenceDatasets: 'なし',
-  evaluationCodeVersion: '評価コード版',
+  evaluationCodeVersion: '評価コードバージョン',
   evaluationRule: '評価ルール',
   candidateEvaluationRun: '候補の評価Run',
   baselineEvaluationRun: '基準の評価Run',
@@ -24,15 +24,15 @@ export const evaluationText = {
   metricSourceRunLatest: 'Runの最新値',
   metricNotFinite: 'NaN/∞',
   noComparedMetrics: '比較できるメトリクスがありません',
-  baselineChoice: '基準にする版',
+  baselineChoice: '基準にするバージョン',
   baselineChoiceAliasGroup: 'aliasで選ぶ',
-  baselineChoiceVersionGroup: '版を直接選ぶ',
-  baselineIsCandidate: '基準がこの版自身なので、差はすべて0になります。別の版を選んでください。',
+  baselineChoiceVersionGroup: 'バージョンを直接選ぶ',
+  baselineIsCandidate: '基準がこのバージョン自身なので、差はすべて0になります。別のバージョンを選んでください。',
 } as const;
 
 export const evaluationTextTemplates = {
-  versionLabel: (version: string) => `版 ${version}`,
+  versionLabel: (version: string) => `バージョン ${version}`,
   baselineAliasOption: (alias: string, versionLabel: string) => `${alias}（${versionLabel}）`,
   baselineFallbackHint: (alias: string) =>
-    `${alias} はこの版を指しているため、直前に登録された版を基準にしています。`,
+    `${alias} はこのバージョンを指しているため、直前に登録されたバージョンを基準にしています。`,
 };
